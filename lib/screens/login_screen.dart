@@ -14,7 +14,7 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
   final _urlController = TextEditingController(text: 'https://navidrome.templo.cloud');
-  final _userController = TextEditingController();
+  final _userController = TextEditingController(text: 'thiago');
   final _passController = TextEditingController();
   bool _secure = true;
   bool _loading = false;
