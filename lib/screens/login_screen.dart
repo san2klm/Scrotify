@@ -15,7 +15,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
   final _urlController = TextEditingController(text: 'https://navidrome.templo.cloud');
   final _userController = TextEditingController(text: 'thiago');
-  final _passController = TextEditingController();
+  final _passController = TextEditingController(text: 'Narutoshippudenmas');
   bool _secure = true;
   bool _loading = false;
 

@@ -23,6 +23,8 @@ pubspec.lock
 **/.pub
 
 # Other
+.dart_tool/
+build/
 .DS_Store
 *.swp
 *.swo

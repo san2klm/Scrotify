@@ -19,18 +19,25 @@ class PlayerScreen extends StatefulWidget {
 
 class _PlayerScreenState extends State<PlayerScreen> {
   late AudioPlayer _player;
-  late int _currentIndex;
 
   bool _isPlaying = false;
   bool _shuffleEnabled = false;
   LoopMode _repeatMode = LoopMode.off;
 
-  Track get _track => widget.tracks[_currentIndex];
+  List<int> _playlist = [];
+
+  int get _currentIndex => (_player.currentIndex ?? 0).clamp(0, _playlist.length - 1);
+
+  Track get _track {
+    if (_playlist.isEmpty) {
+      return widget.tracks[widget.initialIndex.clamp(0, widget.tracks.length - 1)];
+    }
+    return widget.tracks[_playlist[_currentIndex]];
+  }
 
   @override
   void initState() {
     super.initState();
-    _currentIndex = widget.initialIndex;
     _player = AudioPlayer();
     _listenPlayer();
     _setupPlaylist();
@@ -39,37 +46,47 @@ class _PlayerScreenState extends State<PlayerScreen> {
   void _listenPlayer() {
     _player.playerStateStream.listen((state) {
       if (!mounted) return;
-      setState(() {
-        _isPlaying =
-            state.playing && state.processingState != ProcessingState.completed;
-      });
+      final isPlaying =
+          state.playing && state.processingState != ProcessingState.completed;
+      if (isPlaying != _isPlaying) {
+        setState(() => _isPlaying = isPlaying);
+      }
     });
 
-    _player.currentIndexStream.listen((idx) {
-      if (idx != null && idx != _currentIndex && mounted) {
-        setState(() => _currentIndex = idx);
-      }
+    _player.currentIndexStream.listen((index) {
+      if (mounted) setState(() {});
     });
   }
 
   Future<void> _setupPlaylist() async {
+    _playlist = List.generate(widget.tracks.length, (i) => i);
+    await _loadSources(initialIndex: widget.initialIndex);
+  }
+
+  Future<void> _loadSources({required int initialIndex}) async {
     final service = context.read<NavidromeService>();
-    final sources = widget.tracks
-        .map((t) => AudioSource.uri(Uri.parse(service.getStreamUrl(t.id))))
+    final sources = _playlist
+        .map((i) => AudioSource.uri(
+              Uri.parse(service.getStreamUrl(widget.tracks[i].id)),
+              tag: widget.tracks[i].id,
+            ))
         .toList();
 
     await _player.setAudioSource(
       ConcatenatingAudioSource(children: sources),
-      initialIndex: _currentIndex,
+      initialIndex: initialIndex,
     );
     await _player.setLoopMode(_repeatMode);
-    await _player.setShuffleModeEnabled(_shuffleEnabled);
+    await _player.setShuffleModeEnabled(false);
   }
 
   Future<void> _togglePlay() async {
     if (_isPlaying) {
       await _player.pause();
     } else {
+      if (_player.processingState == ProcessingState.completed) {
+        await _player.seek(Duration.zero, index: 0);
+      }
       await _player.play();
     }
   }
@@ -83,15 +100,35 @@ class _PlayerScreenState extends State<PlayerScreen> {
   Future<void> _skipPrevious() async {
     if (_player.hasPrevious) {
       await _player.seekToPrevious();
-    } else {
-      await _player.seek(Duration.zero);
     }
   }
 
   Future<void> _toggleShuffle() async {
+    final position = _player.position;
+    final currentOriginalIndex = _playlist[_currentIndex];
+    final wasPlaying = _isPlaying;
+
     _shuffleEnabled = !_shuffleEnabled;
-    await _player.setShuffleModeEnabled(_shuffleEnabled);
     setState(() {});
+
+    if (_shuffleEnabled) {
+      final remaining = <int>[
+        for (var i = 0; i < widget.tracks.length; i++)
+          if (i != currentOriginalIndex) i,
+      ]..shuffle();
+      _playlist = [currentOriginalIndex, ...remaining];
+      await _loadSources(initialIndex: 0);
+    } else {
+      _playlist = List.generate(widget.tracks.length, (i) => i);
+      await _loadSources(initialIndex: currentOriginalIndex);
+    }
+
+    if (position > Duration.zero) {
+      await _player.seek(position);
+    }
+    if (wasPlaying) {
+      await _player.play();
+    }
   }
 
   Future<void> _toggleRepeat() async {
@@ -102,6 +139,16 @@ class _PlayerScreenState extends State<PlayerScreen> {
     };
     await _player.setLoopMode(_repeatMode);
     setState(() {});
+  }
+
+  void _seekToFraction(double fraction) {
+    final duration =
+        _player.duration ?? Duration(seconds: int.tryParse(_track.duration) ?? 0);
+    if (duration.inMilliseconds == 0) return;
+    final target = Duration(
+      milliseconds: (duration.inMilliseconds * fraction.clamp(0.0, 1.0)).round(),
+    );
+    _player.seek(target);
   }
 
   String _format(Duration d) {
@@ -186,7 +233,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
                     icon: Icon(
                       Icons.shuffle,
                       size: 22,
-                      color: _shuffleEnabled ? Colors.greenAccent : Colors.white,
+                      color: _shuffleEnabled
+                          ? Colors.greenAccent
+                          : Colors.white,
                     ),
                     onPressed: _toggleShuffle,
                   ),
@@ -239,7 +288,22 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
                   return Column(
                     children: [
-                      _Waveform(progress: progress, barCount: 44, height: 40),
+                      LayoutBuilder(
+                        builder: (context, constraints) {
+                          final width = constraints.maxWidth;
+                          return GestureDetector(
+                            behavior: HitTestBehavior.opaque,
+                            onTapDown: (d) =>
+                                _seekToFraction(d.localPosition.dx / width),
+                            onHorizontalDragUpdate: (d) =>
+                                _seekToFraction(d.localPosition.dx / width),
+                            child: _Waveform(
+                                progress: progress,
+                                barCount: 44,
+                                height: 40),
+                          );
+                        },
+                      ),
                       const SizedBox(height: 8),
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
