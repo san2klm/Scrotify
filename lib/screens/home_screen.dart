@@ -10,21 +10,12 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-enum _MainTab { home, search, library, create }
-
-enum _ContentFilter { all, music, podcasts }
-
 enum _LibraryFilter { playlists, podcasts, albums, artists }
 
 class _HomeScreenState extends State<HomeScreen> {
   late Future<List<Track>> _futureTracks;
-
-  _MainTab _tab = _MainTab.home;
-  _ContentFilter _filter = _ContentFilter.all;
-  _LibraryFilter _libraryFilter = _LibraryFilter.playlists;
-
-  Track? _currentTrack;
-  bool _isPlaying = false;
+  _LibraryFilter _filter = _LibraryFilter.playlists;
+  bool _libraryCollapsed = false;
 
   @override
   void initState() {
@@ -32,55 +23,241 @@ class _HomeScreenState extends State<HomeScreen> {
     _futureTracks = context.read<NavidromeService>().getTracks();
   }
 
-  bool get _isTablet => MediaQuery.of(context).size.width >= 600;
-
-  void _openPlayer(List<Track> tracks, int index) {
-    setState(() {
-      _currentTrack = tracks[index];
-      _isPlaying = true;
-    });
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => PlayerScreen(tracks: tracks, initialIndex: index),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFF121212),
-      body: SafeArea(
-        bottom: false,
-        child: IndexedStack(
-          index: _tab.index,
-          children: [
-            _buildHomeTab(),
-            _buildSearchTab(),
-            _buildLibraryTab(),
-            _buildCreateTab(),
-          ],
-        ),
-      ),
-      bottomNavigationBar: Column(
-        mainAxisSize: MainAxisSize.min,
+      body: Row(
         children: [
-          _buildMiniPlayer(),
-          _buildBottomNav(),
+          if (!_libraryCollapsed) _buildLibraryPanel(),
+          Expanded(child: _buildMainPanel()),
+        ],
+      ),
+      bottomNavigationBar: _buildPlayerBar(),
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // Panel Izquierdo: Tu Biblioteca
+  // ---------------------------------------------------------------------------
+  Widget _buildLibraryPanel() {
+    return Container(
+      width: 280,
+      color: const Color(0xFF0A0A0A),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _libraryHeader(),
+          _libraryFilters(),
+          const Divider(height: 1, color: Colors.white12),
+          _librarySearchBar(),
+          Expanded(child: _libraryList()),
+        ],
+      ),
+    );
+  }
+
+  Widget _libraryHeader() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 20, 16, 12),
+      child: Row(
+        children: [
+          const Icon(Icons.arrow_back_ios_new, color: Colors.white54, size: 18),
+          const SizedBox(width: 16),
+          const Icon(Icons.arrow_forward_ios, color: Colors.white54, size: 18),
+          const Spacer(),
+          IconButton(
+            icon: const Icon(Icons.menu_open, color: Colors.white, size: 20),
+            tooltip: 'Colapsar biblioteca',
+            onPressed: () => setState(() => _libraryCollapsed = true),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _libraryFilters() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Row(
+        children: [
+          _chip('Playlists', _LibraryFilter.playlists),
+          _chip('Podcasts', _LibraryFilter.podcasts),
+          _chip('Álbumes', _LibraryFilter.albums),
+          _chip('Artistas', _LibraryFilter.artists),
+        ],
+      ),
+    );
+  }
+
+  Widget _chip(String label, _LibraryFilter value) {
+    final selected = _filter == value;
+    return Padding(
+      padding: const EdgeInsets.only(right: 8, bottom: 8),
+      child: ChoiceChip(
+        label: Text(label),
+        selected: selected,
+        showCheckmark: false,
+        backgroundColor: const Color(0xFF1F1F1F),
+        selectedColor: const Color(0xFF323232),
+        labelStyle: TextStyle(
+          color: selected ? Colors.white : Colors.white70,
+          fontSize: 12,
+        ),
+        onSelected: (_) => setState(() => _filter = value),
+      ),
+    );
+  }
+
+  Widget _librarySearchBar() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+      child: Row(
+        children: [
+          Expanded(
+            child: Container(
+              height: 38,
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              decoration: BoxDecoration(
+                color: const Color(0xFF242424),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Row(
+                children: [
+                  Icon(Icons.search, color: Colors.white54, size: 18),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: TextField(
+                      style: TextStyle(color: Colors.white, fontSize: 13),
+                      decoration: InputDecoration(
+                        hintText: 'Buscar en tu biblioteca',
+                        hintStyle: TextStyle(color: Colors.white38, fontSize: 13),
+                        border: InputBorder.none,
+                        isDense: true,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          IconButton(
+            icon: const Icon(Icons.swap_vert, color: Colors.white70, size: 20),
+            onPressed: () {},
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _libraryList() {
+    return FutureBuilder<List<Track>>(
+      future: _futureTracks,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(
+            child: CircularProgressIndicator(color: Colors.white),
+          );
+        }
+        if (snapshot.hasError || !snapshot.hasData) {
+          return const Center(
+            child: Text('Sin contenido', style: TextStyle(color: Colors.white54)),
+          );
+        }
+
+        final tracks = snapshot.data!.take(40).toList();
+        return ListView.builder(
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          itemCount: tracks.length + 1,
+          itemBuilder: (context, index) {
+            if (index == 0) {
+              return _libraryTile(
+                icon: Icons.favorite,
+                title: 'Liked Songs',
+                subtitle: 'Playlist · ${tracks.length} canciones',
+                background: const Color(0xFF353588),
+              );
+            }
+            final track = tracks[index - 1];
+            return _libraryTile(
+              icon: Icons.album,
+              title: track.album,
+              subtitle: 'Álbum · ${track.artist}',
+              background: Colors.grey.shade800,
+              albumArtUrl: track.albumArtUrl,
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _libraryTile({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required Color background,
+    String? albumArtUrl,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        children: [
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: background,
+              borderRadius: BorderRadius.circular(6),
+              image: albumArtUrl != null
+                  ? DecorationImage(
+                      image: NetworkImage(albumArtUrl),
+                      fit: BoxFit.cover,
+                    )
+                  : null,
+            ),
+            child: albumArtUrl == null
+                ? Icon(icon, color: Colors.white, size: 20)
+                : null,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                Text(
+                  subtitle,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(color: Colors.white54, fontSize: 12),
+                ),
+              ],
+            ),
+          ),
         ],
       ),
     );
   }
 
   // ---------------------------------------------------------------------------
-  // Pestañas
+  // Panel Central: Descubrimiento y Contenido
   // ---------------------------------------------------------------------------
-  Widget _buildHomeTab() {
+  Widget _buildMainPanel() {
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _buildTopHeader(),
-        _buildFilterPills(),
+        _mainTopBar(),
         Expanded(
           child: FutureBuilder<List<Track>>(
             future: _futureTracks,
@@ -96,7 +273,8 @@ class _HomeScreenState extends State<HomeScreen> {
                       style: TextStyle(color: Colors.white54)),
                 );
               }
-              return _buildFeed(snapshot.data!);
+              final tracks = snapshot.data!;
+              return _mainContent(tracks);
             },
           ),
         ),
@@ -104,273 +282,146 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildSearchTab() {
-    return Column(
-      children: [
-        _buildSearchHeader(),
-        Expanded(child: _buildSearchBody()),
-      ],
-    );
-  }
-
-  Widget _buildLibraryTab() {
-    return Column(
-      children: [
-        _buildLibraryHeader(),
-        _buildLibraryFilters(),
-        Expanded(
-          child: FutureBuilder<List<Track>>(
-            future: _futureTracks,
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                return const Center(
-                  child: CircularProgressIndicator(color: Colors.white),
-                );
-              }
-              if (snapshot.hasError || !snapshot.hasData) {
-                return const Center(
-                  child: Text('Sin contenido',
-                      style: TextStyle(color: Colors.white54)),
-                );
-              }
-              return _buildLibraryGrid(snapshot.data!);
-            },
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildCreateTab() {
+  Widget _mainTopBar() {
     return Padding(
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      padding: const EdgeInsets.fromLTRB(24, 16, 24, 8),
+      child: Row(
         children: [
-          const Text(
-            'Crear',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
+          if (_libraryCollapsed)
+            IconButton(
+              icon: const Icon(Icons.menu, color: Colors.white),
+              onPressed: () => setState(() => _libraryCollapsed = false),
             ),
+          IconButton(
+            icon: const Icon(Icons.home, color: Colors.white, size: 24),
+            onPressed: () {},
           ),
-          const SizedBox(height: 20),
-          _createCard(
-            icon: Icons.queue_music,
-            title: 'Playlist',
-            subtitle: 'Crea una lista con tus canciones favoritas',
-            gradient: const [Color(0xFF353588), Color(0xFF1DB954)],
+          IconButton(
+            icon: const Icon(Icons.explore_outlined, color: Colors.white, size: 24),
+            onPressed: () {},
           ),
-          const SizedBox(height: 12),
-          _createCard(
-            icon: Icons.blur_on,
-            title: 'Mezcla',
-            subtitle: 'Mezcla automática basada en tus gustos',
-            gradient: const [Color(0xFF5E35B1), Color(0xFF8E24AA)],
-          ),
-          const SizedBox(height: 12),
-          _createCard(
-            icon: Icons.album,
-            title: 'Álbum',
-            subtitle: 'Organiza un álbum con varias canciones',
-            gradient: const [Color(0xFF283593), Color(0xFF1E88E5)],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _createCard({
-    required IconData icon,
-    required String title,
-    required String subtitle,
-    required List<Color> gradient,
-  }) {
-    return InkWell(
-      onTap: () {},
-      borderRadius: BorderRadius.circular(12),
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        width: double.infinity,
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: gradient,
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 48,
-              height: 48,
+          const SizedBox(width: 16),
+          Expanded(
+            child: Container(
+              height: 44,
+              padding: const EdgeInsets.symmetric(horizontal: 16),
               decoration: BoxDecoration(
-                color: Colors.white24,
-                borderRadius: BorderRadius.circular(8),
+                color: const Color(0xFF242424),
+                borderRadius: BorderRadius.circular(24),
               ),
-              child: Icon(icon, color: Colors.white, size: 26),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              child: const Row(
                 children: [
-                  Text(
-                    title,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 17,
-                      fontWeight: FontWeight.bold,
+                  Icon(Icons.search, color: Colors.white54, size: 20),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: TextField(
+                      style: TextStyle(color: Colors.white, fontSize: 14),
+                      decoration: InputDecoration(
+                        hintText: 'What do you want to play?',
+                        hintStyle: TextStyle(color: Colors.white38, fontSize: 14),
+                        border: InputBorder.none,
+                      ),
                     ),
                   ),
-                  const SizedBox(height: 2),
-                  Text(
-                    subtitle,
-                    style: const TextStyle(color: Colors.white70, fontSize: 13),
-                  ),
+                  Icon(Icons.mic_none, color: Colors.white54, size: 20),
                 ],
               ),
             ),
-            const Icon(Icons.chevron_right, color: Colors.white70),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // ---------------------------------------------------------------------------
-  // Barra superior (Header de perfil + filtros)
-  // ---------------------------------------------------------------------------
-  Widget _buildTopHeader() {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-      child: Row(
-        children: [
+          ),
+          const SizedBox(width: 16),
+          IconButton(
+            icon: const Icon(Icons.add_circle_outline, color: Colors.white),
+            onPressed: () {},
+          ),
+          IconButton(
+            icon: const Icon(Icons.chat_bubble_outline, color: Colors.white),
+            onPressed: () {},
+          ),
+          IconButton(
+            icon: const Icon(Icons.history, color: Colors.white),
+            onPressed: () {},
+          ),
           const CircleAvatar(
-            radius: 20,
+            radius: 15,
             backgroundColor: Colors.deepPurple,
             child: Text('T', style: TextStyle(color: Colors.white)),
           ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Row(
-              children: [
-                const Text(
-                  'Buenas tardes',
-                  style: TextStyle(color: Colors.white70, fontSize: 13),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.keyboard_arrow_down,
-                      color: Colors.white70, size: 20),
-                  onPressed: () {},
-                ),
-              ],
-            ),
-          ),
-          IconButton(
-            icon: const Icon(Icons.notifications_outlined,
-                color: Colors.white, size: 22),
-            onPressed: () {},
-          ),
-          IconButton(
-            icon: const Icon(Icons.history, color: Colors.white, size: 22),
-            onPressed: () {},
-          ),
-          IconButton(
-            icon: const Icon(Icons.settings_outlined,
-                color: Colors.white, size: 22),
-            onPressed: () {},
-          ),
         ],
       ),
     );
   }
 
-  Widget _buildFilterPills() {
-    return SizedBox(
-      height: 40,
-      child: ListView(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 16),
+  Widget _mainContent(List<Track> tracks) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _pill('Todo', _ContentFilter.all),
-          _pill('Música', _ContentFilter.music),
-          _pill('Podcasts', _ContentFilter.podcasts),
+          Row(
+            children: [
+              _pill('AI'),
+              _pill('Music', selected: true),
+              _pill('Podcasts'),
+            ],
+          ),
+          const SizedBox(height: 16),
+          _quickAccessGrid(tracks),
+          const SizedBox(height: 24),
+          _sectionHeader('Recommended for today'),
+          const SizedBox(height: 12),
+          _recommendedGrid(tracks),
+          const SizedBox(height: 24),
+          _sectionHeader('Recommended Stations'),
+          const SizedBox(height: 12),
+          _stationsRow(tracks),
+          const SizedBox(height: 24),
+          _sectionHeader('Recents'),
+          const SizedBox(height: 12),
+          _recentsList(tracks),
+          const SizedBox(height: 24),
         ],
       ),
     );
   }
 
-  Widget _pill(String label, _ContentFilter value) {
-    final selected = _filter == value;
+  Widget _pill(String label, {bool selected = false}) {
     return Padding(
       padding: const EdgeInsets.only(right: 8),
-      child: GestureDetector(
-        onTap: () => setState(() => _filter = value),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 7),
-          decoration: BoxDecoration(
-            color: selected ? const Color(0xFF1DB954) : const Color(0xFF1F1F1F),
-            borderRadius: BorderRadius.circular(18),
-          ),
-          child: Text(
-            label,
-            style: TextStyle(
-              color: selected ? Colors.black : Colors.white,
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-            ),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+        decoration: BoxDecoration(
+          color: selected ? Colors.white : const Color(0xFF1F1F1F),
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: selected ? Colors.black : Colors.white,
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
           ),
         ),
       ),
     );
   }
 
-  // ---------------------------------------------------------------------------
-  // Feed central adaptativo
-  // ---------------------------------------------------------------------------
-  Widget _buildFeed(List<Track> tracks) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.symmetric(vertical: 12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _sectionHeader('Tus accesos rápidos', padH: 16),
-          const SizedBox(height: 12),
-          _buildQuickAccessGrid(tracks),
-          const SizedBox(height: 24),
-          _buildCarouselSection(
-            title: 'Preguardá los próximos lanzamientos',
-            tracks: tracks,
-            cardWidth: _isTablet ? 160 : 140,
-          ),
-          const SizedBox(height: 24),
-          _buildCarouselSection(
-            title: 'Tu DJ personal',
-            tracks: tracks.skip(5).toList(),
-            cardWidth: _isTablet ? 160 : 140,
-          ),
-          const SizedBox(height: 24),
-          _sectionHeader('Recientes', padH: 16),
-          const SizedBox(height: 12),
-          _buildRecents(tracks),
-          const SizedBox(height: 24),
-        ],
+  void _openPlayer(List<Track> tracks, int index) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => PlayerScreen(tracks: tracks, initialIndex: index),
       ),
     );
   }
 
-  Widget _buildQuickAccessGrid(List<Track> tracks) {
-    final items = tracks.take(_isTablet ? 8 : 6).toList();
+  Widget _quickAccessGrid(List<Track> tracks) {
+    final items = tracks.take(6).toList();
     return LayoutBuilder(
       builder: (context, constraints) {
-        final cols = _isTablet ? 4 : 2;
+        final cols = (constraints.maxWidth / 220).floor().clamp(2, 3);
         return GridView.builder(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
-          padding: const EdgeInsets.symmetric(horizontal: 16),
           gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: cols,
             childAspectRatio: 2.6,
@@ -384,7 +435,6 @@ class _HomeScreenState extends State<HomeScreen> {
                 label: 'Liked Songs',
                 color: const Color(0xFF353588),
                 icon: Icons.favorite,
-                onTap: () {},
               );
             }
             final track = items[index - 1];
@@ -455,107 +505,25 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildCarouselSection({
-    required String title,
-    required List<Track> tracks,
-    required double cardWidth,
-  }) {
-    final items = tracks.take(8).toList();
-    if (items.isEmpty) return const SizedBox.shrink();
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Text(
-            title,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-        ),
-        const SizedBox(height: 12),
-        SizedBox(
-          height: cardWidth + 52,
-          child: ListView.builder(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            itemCount: items.length,
-            itemBuilder: (context, index) {
-              final track = items[index];
-              return Padding(
-                padding: const EdgeInsets.only(right: 12),
-                child: SizedBox(
-                  width: cardWidth,
-                  child: _albumCard(track, tracks),
-                ),
-              );
-            },
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _albumCard(Track track, List<Track> allTracks) {
-    return InkWell(
-      onTap: () => _openPlayer(allTracks, allTracks.indexOf(track)),
-      borderRadius: BorderRadius.circular(8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(
-            child: Container(
-              width: double.infinity,
-              decoration: BoxDecoration(
-                color: Colors.grey.shade800,
-                borderRadius: BorderRadius.circular(8),
-                image: track.albumArtUrl != null
-                    ? DecorationImage(
-                        image: NetworkImage(track.albumArtUrl!),
-                        fit: BoxFit.cover,
-                      )
-                    : null,
-              ),
-              child: track.albumArtUrl == null
-                  ? const Icon(Icons.music_note, color: Colors.white54)
-                  : null,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            track.title,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 13,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          Text(
-            track.artist,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(color: Colors.white54, fontSize: 12),
-          ),
-        ],
+  Widget _sectionHeader(String title) {
+    return Text(
+      title,
+      style: const TextStyle(
+        color: Colors.white,
+        fontSize: 18,
+        fontWeight: FontWeight.bold,
       ),
     );
   }
 
-  Widget _buildRecents(List<Track> tracks) {
-    final items = tracks.take(_isTablet ? 8 : 4).toList();
+  Widget _recommendedGrid(List<Track> tracks) {
+    final items = tracks.take(10).toList();
     return LayoutBuilder(
       builder: (context, constraints) {
-        final cols = _isTablet ? 4 : 2;
+        final cols = (constraints.maxWidth / 170).floor().clamp(3, 6);
         return GridView.builder(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
-          padding: const EdgeInsets.symmetric(horizontal: 16),
           gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: cols,
             childAspectRatio: 0.72,
@@ -619,457 +587,207 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _sectionHeader(String title, {required double padH}) {
-    return Padding(
-      padding: EdgeInsets.symmetric(horizontal: padH),
-      child: Text(
-        title,
-        style: const TextStyle(
-          color: Colors.white,
-          fontSize: 18,
-          fontWeight: FontWeight.bold,
-        ),
-      ),
-    );
-  }
+  Widget _stationsRow(List<Track> tracks) {
+    final uniqueArtists = <String>{};
+    final artists = tracks
+        .where((t) => uniqueArtists.add(t.artist))
+        .take(6)
+        .toList();
 
-  // ---------------------------------------------------------------------------
-  // Pestaña Buscar
-  // ---------------------------------------------------------------------------
-  Widget _buildSearchHeader() {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
-      child: Row(
-        children: [
-          const Expanded(
-            child: Text(
-              'Buscar',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ),
-          IconButton(
-            icon: const Icon(Icons.camera_alt_outlined,
-                color: Colors.white, size: 24),
-            onPressed: () {},
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSearchBody() {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            height: 44,
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            decoration: BoxDecoration(
-              color: const Color(0xFF242424),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: const Row(
+    return SizedBox(
+      height: 180,
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        itemCount: artists.length,
+        itemBuilder: (context, index) {
+          final artist = artists[index];
+          return Padding(
+            padding: const EdgeInsets.only(right: 16),
+            child: Column(
               children: [
-                Icon(Icons.search, color: Colors.white54, size: 20),
-                SizedBox(width: 8),
-                Expanded(
-                  child: TextField(
-                    style: TextStyle(color: Colors.white, fontSize: 14),
-                    decoration: InputDecoration(
-                      hintText: '¿Qué quieres escuchar?',
-                      hintStyle: TextStyle(color: Colors.white38, fontSize: 14),
-                      border: InputBorder.none,
-                    ),
+                Container(
+                  width: 120,
+                  height: 120,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Colors.deepPurple.shade300,
+                    image: artist.albumArtUrl != null
+                        ? DecorationImage(
+                            image: NetworkImage(artist.albumArtUrl!),
+                            fit: BoxFit.cover,
+                          )
+                        : null,
                   ),
+                  child: artist.albumArtUrl == null
+                      ? const Center(
+                          child: Icon(Icons.person, color: Colors.white, size: 40),
+                        )
+                      : null,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  artist.artist,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const Text(
+                  'Estación',
+                  style: TextStyle(color: Colors.white54, fontSize: 11),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _recentsList(List<Track> tracks) {
+    final items = tracks.take(5).toList();
+    return Column(
+      children: [
+        for (final track in items)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            child: Row(
+              children: [
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade800,
+                    borderRadius: BorderRadius.circular(4),
+                    image: track.albumArtUrl != null
+                        ? DecorationImage(
+                            image: NetworkImage(track.albumArtUrl!),
+                            fit: BoxFit.cover,
+                          )
+                        : null,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        track.title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(color: Colors.white, fontSize: 14),
+                      ),
+                      Text(
+                        track.artist,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(color: Colors.white54, fontSize: 12),
+                      ),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.play_circle_outline,
+                      color: Colors.white, size: 28),
+                  onPressed: () => _openPlayer(tracks, tracks.indexOf(track)),
                 ),
               ],
             ),
           ),
-          const SizedBox(height: 24),
-          const Text(
-            'Explorar todo',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          const SizedBox(height: 12),
-          _buildGenreGrid(),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildGenreGrid() {
-    const genres = <(String, Color, IconData)>[
-      ('Pop', Color(0xFF8D67AB), Icons.star),
-      ('Rock', Color(0xFFE13300), Icons.local_fire_department),
-      ('Hip-Hop', Color(0xFFBA5D07), Icons.mic_external_on),
-      ('Electrónica', Color(0xFF503750), Icons.graphic_eq),
-      ('Jazz', Color(0xFF1E3264), Icons.music_note),
-      ('Clásica', Color(0xFF777777), Icons.piano),
-      ('Latina', Color(0xFFA56752), Icons.airport_shuttle),
-      ('Podcasts', Color(0xFF0D73EC), Icons.podcasts),
-    ];
-
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final cols = _isTablet ? 4 : 2;
-        return GridView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: cols,
-            childAspectRatio: 1.6,
-            crossAxisSpacing: 12,
-            mainAxisSpacing: 12,
-          ),
-          itemCount: genres.length,
-          itemBuilder: (context, index) {
-            final (label, color, icon) = genres[index];
-            return _genreCard(label, color, icon);
-          },
-        );
-      },
-    );
-  }
-
-  Widget _genreCard(String label, Color color, IconData icon) {
-    return InkWell(
-      onTap: () {},
-      borderRadius: BorderRadius.circular(8),
-      child: Container(
-        decoration: BoxDecoration(
-          color: color,
-          borderRadius: BorderRadius.circular(8),
-        ),
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(icon, color: Colors.white, size: 22),
-            Text(
-              label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 15,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ],
-        ),
-      ),
+      ],
     );
   }
 
   // ---------------------------------------------------------------------------
-  // Pestaña Tu Biblioteca
+  // Barra Inferior: Reproductor
   // ---------------------------------------------------------------------------
-  Widget _buildLibraryHeader() {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+  Widget _buildPlayerBar() {
+    return Container(
+      height: 72,
+      color: const Color(0xFF181818),
+      padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Row(
         children: [
-          const Text(
-            'Tu biblioteca',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          const Spacer(),
-          IconButton(
-            icon: const Icon(Icons.search, color: Colors.white, size: 24),
-            onPressed: () {},
-          ),
-          IconButton(
-            icon: const Icon(Icons.add, color: Colors.white, size: 24),
-            onPressed: () {},
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildLibraryFilters() {
-    return SizedBox(
-      height: 40,
-      child: ListView(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        children: [
-          _libraryChip('Playlists', _LibraryFilter.playlists),
-          _libraryChip('Podcasts', _LibraryFilter.podcasts),
-          _libraryChip('Álbumes', _LibraryFilter.albums),
-          _libraryChip('Artistas', _LibraryFilter.artists),
-        ],
-      ),
-    );
-  }
-
-  Widget _libraryChip(String label, _LibraryFilter value) {
-    final selected = _libraryFilter == value;
-    return Padding(
-      padding: const EdgeInsets.only(right: 8),
-      child: GestureDetector(
-        onTap: () => setState(() => _libraryFilter = value),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
-          decoration: BoxDecoration(
-            color: selected ? const Color(0xFF1DB954) : const Color(0xFF1F1F1F),
-            borderRadius: BorderRadius.circular(18),
-          ),
-          child: Text(
-            label,
-            style: TextStyle(
-              color: selected ? Colors.black : Colors.white,
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildLibraryGrid(List<Track> tracks) {
-    final items = tracks.take(40).toList();
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final cols = _isTablet ? 3 : 2;
-        return GridView.builder(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: cols,
-            childAspectRatio: 0.72,
-            crossAxisSpacing: 12,
-            mainAxisSpacing: 16,
-          ),
-          itemCount: items.length + 1,
-          itemBuilder: (context, index) {
-            if (index == 0) {
-              return _likedSongsCard(tracks.length);
-            }
-            final track = items[index - 1];
-            return _recommendedCard(track, tracks);
-          },
-        );
-      },
-    );
-  }
-
-  Widget _likedSongsCard(int total) {
-    return InkWell(
-      onTap: () {},
-      borderRadius: BorderRadius.circular(8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(
-            child: Container(
-              width: double.infinity,
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [Color(0xFF353588), Color(0xFF1DB954)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: const Icon(Icons.favorite, color: Colors.white, size: 40),
-            ),
-          ),
-          const SizedBox(height: 8),
-          const Text(
-            'Liked Songs',
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 13,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          Text(
-            'Playlist · $total canciones',
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(color: Colors.white54, fontSize: 12),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ---------------------------------------------------------------------------
-  // Barra de navegación inferior
-  // ---------------------------------------------------------------------------
-  Widget _buildBottomNav() {
-    return Container(
-      decoration: const BoxDecoration(
-        color: Color(0xFF0A0A0A),
-        border: Border(top: BorderSide(color: Colors.white10)),
-      ),
-      child: SafeArea(
-        top: false,
-        child: Row(
-          children: [
-            _navItem(Icons.home, Icons.home_outlined, 'Inicio', _MainTab.home),
-            _navItem(Icons.search, Icons.search, 'Buscar', _MainTab.search),
-            _navItem(Icons.library_music, Icons.library_music_outlined,
-                'Tu biblioteca', _MainTab.library),
-            _navItem(Icons.add_circle, Icons.add_circle_outline, 'Crear',
-                _MainTab.create),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _navItem(
-      IconData selectedIcon, IconData icon, String label, _MainTab tab) {
-    final selected = _tab == tab;
-    return Expanded(
-      child: InkWell(
-        onTap: () => setState(() => _tab = tab),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 10),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
+          const Icon(Icons.music_note, color: Colors.deepPurple, size: 28),
+          const SizedBox(width: 12),
+          const Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Icon(
-                selected ? selectedIcon : icon,
-                color: selected ? Colors.white : Colors.white54,
-                size: 26,
-              ),
-              const SizedBox(height: 2),
               Text(
-                label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
+                'Nada en reproducción',
                 style: TextStyle(
-                  color: selected ? Colors.white : Colors.white54,
-                  fontSize: 11,
-                  fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+                  color: Colors.white,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
                 ),
+              ),
+              Text(
+                'Selecciona algo para escuchar',
+                style: TextStyle(color: Colors.white54, fontSize: 12),
               ),
             ],
           ),
-        ),
-      ),
-    );
-  }
-
-  // ---------------------------------------------------------------------------
-  // Mini-reproductor flotante
-  // ---------------------------------------------------------------------------
-  Widget _buildMiniPlayer() {
-    final track = _currentTrack;
-    return GestureDetector(
-      onTap: () {
-        if (track != null) {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => PlayerScreen(
-                tracks: [track],
-                initialIndex: 0,
-              ),
+          const SizedBox(width: 16),
+          IconButton(
+            icon: const Icon(Icons.favorite_border, color: Colors.white70),
+            onPressed: () {},
+          ),
+          Expanded(
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.shuffle, color: Colors.white70, size: 20),
+                  onPressed: () {},
+                ),
+                const Icon(Icons.skip_previous, color: Colors.white, size: 28),
+                const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 12),
+                  child: Icon(Icons.play_circle_filled,
+                      color: Colors.white, size: 38),
+                ),
+                const Icon(Icons.skip_next, color: Colors.white, size: 28),
+                IconButton(
+                  icon: const Icon(Icons.repeat, color: Colors.white70, size: 20),
+                  onPressed: () {},
+                ),
+              ],
             ),
-          );
-        }
-      },
-      child: Container(
-        height: 60,
-        margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-        padding: const EdgeInsets.symmetric(horizontal: 8),
-        decoration: BoxDecoration(
-          color: const Color(0xFF282828),
-          borderRadius: BorderRadius.circular(12),
-          boxShadow: const [
-            BoxShadow(
-              color: Colors.black45,
-              blurRadius: 8,
-              offset: Offset(0, 2),
+          ),
+          IconButton(
+            icon: const Icon(Icons.format_quote, color: Colors.white70, size: 20),
+            onPressed: () {},
+          ),
+          IconButton(
+            icon: const Icon(Icons.queue_music, color: Colors.white70, size: 20),
+            onPressed: () {},
+          ),
+          IconButton(
+            icon: const Icon(Icons.volume_up, color: Colors.white70, size: 20),
+            onPressed: () {},
+          ),
+          const SizedBox(width: 8),
+          Container(
+            width: 90,
+            height: 4,
+            color: Colors.white24,
+            child: FractionallySizedBox(
+              alignment: Alignment.centerLeft,
+              widthFactor: 0.6,
+              child: Container(color: Colors.white),
             ),
-          ],
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(
-                color: Colors.grey.shade800,
-                borderRadius: BorderRadius.circular(6),
-                image: track?.albumArtUrl != null
-                    ? DecorationImage(
-                        image: NetworkImage(track!.albumArtUrl!),
-                        fit: BoxFit.cover,
-                      )
-                    : null,
-              ),
-              child: track?.albumArtUrl == null
-                  ? const Icon(Icons.music_note, color: Colors.deepPurple)
-                  : null,
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    track?.title ?? 'Nada en reproducción',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  Text(
-                    track?.artist ?? 'Selecciona algo para escuchar',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(color: Colors.white54, fontSize: 12),
-                  ),
-                ],
-              ),
-            ),
-            IconButton(
-              icon: const Icon(Icons.favorite_border,
-                  color: Colors.white70, size: 20),
-              onPressed: () {},
-            ),
-            IconButton(
-              iconSize: 36,
-              icon: Icon(
-                _isPlaying
-                    ? Icons.pause_circle_filled
-                    : Icons.play_circle_filled,
-                color: Colors.white,
-              ),
-              onPressed: () {
-                if (track != null) {
-                  setState(() => _isPlaying = !_isPlaying);
-                }
-              },
-            ),
-          ],
-        ),
+          ),
+          const SizedBox(width: 8),
+          IconButton(
+            icon: const Icon(Icons.fullscreen, color: Colors.white70, size: 18),
+            onPressed: () {},
+          ),
+        ],
       ),
     );
   }
