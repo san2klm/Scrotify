@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../services/navidrome_service.dart';
-import '../screens/home_screen.dart';
+import '../screens/home_shell.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -75,7 +75,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             if (mounted) {
                               Navigator.pushReplacement(
                                 context,
-                                MaterialPageRoute(builder: (_) => const HomeScreen()),
+                                MaterialPageRoute(builder: (_) => const HomeShell()),
                               );
                             }
                           } catch (e) {
