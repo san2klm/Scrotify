@@ -19,36 +19,76 @@ class PlayerScreen extends StatefulWidget {
 
 class _PlayerScreenState extends State<PlayerScreen> {
   late AudioPlayer _player;
-  late int _currentIndex;
+  int? _currentTrackIndex; // Índice en la playlist (puede ser reordenada por shuffle)
 
   bool _isPlaying = false;
   bool _shuffleEnabled = false;
   LoopMode _repeatMode = LoopMode.off;
 
-  Track get _track => widget.tracks[_currentIndex];
+  // Historial de canciones para navegación precisa
+  List<int> _playHistory = [];
+  int _historyPosition = -1;
+
+  Track? get _track {
+    if (_currentTrackIndex == null || 
+        _currentTrackIndex! < 0 || 
+        _currentTrackIndex! >= widget.tracks.length) {
+      return null;
+    }
+    return widget.tracks[_currentTrackIndex!];
+  }
 
   @override
   void initState() {
     super.initState();
-    _currentIndex = widget.initialIndex;
+    _currentTrackIndex = widget.initialIndex;
     _player = AudioPlayer();
+    
+    // Inicializar historial con la canción actual
+    _playHistory.add(widget.initialIndex);
+    _historyPosition = 0;
+    
     _listenPlayer();
     _setupPlaylist();
+  }
+
+  void _addToPlayHistory(int trackIndex) {
+    // Eliminar el futuro si estamos en medio del historial (ramificación)
+    if (_historyPosition < _playHistory.length - 1) {
+      _playHistory.removeRange(_historyPosition + 1, _playHistory.length);
+    }
+    
+    // Agregar nueva canción al historial
+    _playHistory.add(trackIndex);
+    _historyPosition++;
   }
 
   void _listenPlayer() {
     _player.playerStateStream.listen((state) {
       if (!mounted) return;
       setState(() {
-        _isPlaying =
-            state.playing && state.processingState != ProcessingState.completed;
+        _isPlaying = state.playing && 
+            state.processingState != ProcessingState.completed;
       });
     });
 
+    // Escuchar cambios de índice para actualizar el historial y UI
     _player.currentIndexStream.listen((idx) {
-      if (idx != null && idx != _currentIndex && mounted) {
-        setState(() => _currentIndex = idx);
+      if (idx == null || idx < 0 || idx >= widget.tracks.length) return;
+      
+      if (!mounted) return;
+      
+      final previousIndex = _currentTrackIndex;
+      
+      // Solo agregar al historial si es una canción diferente y no estamos en shuffle
+      // (con shuffle, just_audio maneja el orden internamente)
+      if (!_shuffleEnabled && previousIndex != idx) {
+        _addToPlayHistory(idx);
       }
+      
+      setState(() {
+        _currentTrackIndex = idx;
+      });
     });
   }
 
@@ -60,7 +100,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
     await _player.setAudioSource(
       ConcatenatingAudioSource(children: sources),
-      initialIndex: _currentIndex,
+      initialIndex: _currentTrackIndex!,
     );
     await _player.setLoopMode(_repeatMode);
     await _player.setShuffleModeEnabled(_shuffleEnabled);
@@ -81,17 +121,29 @@ class _PlayerScreenState extends State<PlayerScreen> {
   }
 
   Future<void> _skipPrevious() async {
-    if (_player.hasPrevious) {
+    // Con shuffle activado, usar el método nativo que respeta el orden aleatorio
+    if (_shuffleEnabled && _player.hasPrevious) {
       await _player.seekToPrevious();
+    } else if (!_shuffleEnabled && _historyPosition > 0) {
+      // Sin shuffle, volver al historial de reproducción
+      _historyPosition--;
+      final previousIndex = _playHistory[_historyPosition];
+      await _player.seek(Duration.zero, index: previousIndex);
+      setState(() {
+        _currentTrackIndex = previousIndex;
+      });
     } else {
+      // Si no hay canciones anteriores, volver al inicio de la actual
       await _player.seek(Duration.zero);
     }
   }
 
   Future<void> _toggleShuffle() async {
-    _shuffleEnabled = !_shuffleEnabled;
+    setState(() {
+      _shuffleEnabled = !_shuffleEnabled;
+    });
+    
     await _player.setShuffleModeEnabled(_shuffleEnabled);
-    setState(() {});
   }
 
   Future<void> _toggleRepeat() async {
@@ -118,7 +170,19 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final initialDuration = Duration(seconds: int.tryParse(_track.duration) ?? 0);
+    final track = _track;
+    
+    // Si no hay track disponible, mostrar pantalla de carga
+    if (track == null) {
+      return Scaffold(
+        backgroundColor: Colors.black,
+        body: Center(
+          child: CircularProgressIndicator(color: Colors.white),
+        ),
+      );
+    }
+
+    final initialDuration = Duration(seconds: int.tryParse(track.duration) ?? 0);
 
     return Scaffold(
       backgroundColor: Colors.black,
@@ -141,9 +205,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
                   aspectRatio: 1,
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(20),
-                    child: _track.albumArtUrl != null
+                    child: track.albumArtUrl != null
                         ? Image.network(
-                            _track.albumArtUrl!,
+                            track.albumArtUrl!,
                             fit: BoxFit.cover,
                           )
                         : const Icon(Icons.music_note,
@@ -154,20 +218,20 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
               const SizedBox(height: 24),
 
-              Text(
-                _track.title,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                _track.artist,
+               Text(
+                 track.title,
+                 maxLines: 1,
+                 overflow: TextOverflow.ellipsis,
+                 textAlign: TextAlign.center,
+                 style: const TextStyle(
+                   color: Colors.white,
+                   fontSize: 20,
+                   fontWeight: FontWeight.bold,
+                 ),
+               ),
+               const SizedBox(height: 4),
+               Text(
+                 track.artist,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 textAlign: TextAlign.center,
