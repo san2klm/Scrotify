@@ -60,6 +60,7 @@ class SettingsController extends ChangeNotifier {
   int _coverArtSize = 600;
   double _initialVolume = 0.7;
   bool _gapless = false;
+  Duration _crossfade = Duration.zero;
 
   // Red actual detectada. Si no se puede saber (sin NetworkManager, etc.) se
   // asume "casa" para no degradar la calidad sin motivo.
@@ -82,6 +83,7 @@ class SettingsController extends ChangeNotifier {
   int get coverArtSize => _coverArtSize;
   double get initialVolume => _initialVolume;
   bool get gapless => _gapless;
+  Duration get crossfade => _crossfade;
 
   bool get isMobileData => _network == ConnectivityResult.mobile;
   String get networkLabel => isMobileData ? 'Datos móviles' : 'WiFi / conexión fija';
@@ -137,6 +139,16 @@ class SettingsController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Crossfade entre canciones. `Duration.zero` = desactivado. Al activarlo en
+  /// Ajustes se usa el valor predeterminado de 5 s (ver `settings_screen.dart`).
+  void setCrossfade(Duration d) {
+    final clamped = Duration(milliseconds: d.inMilliseconds.clamp(0, 10000));
+    if (clamped == _crossfade) return;
+    _crossfade = clamped;
+    _save();
+    notifyListeners();
+  }
+
   // ---------------------------------------------------------------------------
   // Red
   // ---------------------------------------------------------------------------
@@ -188,6 +200,9 @@ class SettingsController extends ChangeNotifier {
       final rawVol = (data['initialVolume'] as num?)?.toDouble();
       _initialVolume = rawVol == null ? 0.7 : rawVol.clamp(0.0, 1.0).toDouble();
       _gapless = data['gapless'] as bool? ?? false;
+      final rawCf = (data['crossfade'] as num?)?.toInt() ?? 0;
+      _crossfade =
+          Duration(milliseconds: rawCf.clamp(0, 10000));
       notifyListeners();
     } catch (_) {
       // Silently ignore — los ajustes no son críticos.
@@ -205,6 +220,7 @@ class SettingsController extends ChangeNotifier {
         'coverArtSize': _coverArtSize,
         'initialVolume': _initialVolume,
         'gapless': _gapless,
+        'crossfade': _crossfade.inMilliseconds,
       }));
     } catch (_) {}
   }

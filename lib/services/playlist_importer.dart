@@ -408,4 +408,31 @@ class PlaylistImporter {
       unmatched: unmatched,
     );
   }
+
+  // ---------------------------------------------------------------------------
+  // Exportación de las canciones que no se encontraron
+  // ---------------------------------------------------------------------------
+
+  /// Genera un CSV (Título, Artista, Álbum) con [tracks], listo para guardar a
+  /// archivo. Útil para revisar qué canciones de la playlist no se importaron.
+  static String tracksToCsv(List<ImportTrack> tracks) {
+    final buffer = StringBuffer()..writeln('Titulo,Artista,Album');
+    for (final t in tracks) {
+      buffer.writeln([
+        _csvCell(t.title),
+        _csvCell(t.artist ?? ''),
+        _csvCell(t.album ?? ''),
+      ].join(','));
+    }
+    return buffer.toString().trimRight();
+  }
+
+  /// Escapa un valor CSV: si contiene comas, comillas o saltos, lo envuelve en
+  /// comillas y duplica las comillas internas.
+  static String _csvCell(String s) {
+    if (s.contains(',') || s.contains('"') || s.contains('\n')) {
+      return '"${s.replaceAll('"', '""')}"';
+    }
+    return s;
+  }
 }

@@ -514,12 +514,25 @@ class _VolumeBarState extends State<_VolumeBar> {
                   min: 0,
                   max: 1,
                   value: volume,
-                  onChanged: (v) => setState(() => _dragValue = v),
-                  onChangeEnd: (v) async {
-                    await widget.player.setVolume(v);
+                  // Aplicar en vivo mientras se arrastra: el audio sube/baja al
+                  // mismo tiempo que el pulgar, sin esperar a soltar.
+                  onChanged: (v) {
+                    setState(() => _dragValue = v);
+                    widget.player.setVolume(v);
+                  },
+                  onChangeEnd: (v) {
+                    widget.player.setVolume(v);
                     if (mounted) setState(() => _dragValue = null);
                   },
                 ),
+              ),
+            ),
+            SizedBox(
+              width: 38,
+              child: Text(
+                '${(volume * 100).round()}%',
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: Colors.white70, fontSize: 11),
               ),
             ),
           ],

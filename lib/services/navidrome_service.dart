@@ -166,7 +166,17 @@ class NavidromeService with ChangeNotifier {
   }
 
   String? get serverUrl => _url;
+  String? get username => _user;
   bool get connected => _connected;
+
+  /// Retorna las credenciales actuales si la sesión está conectada,
+  /// útil para compartirlas con el teléfono mediante emparejamiento.
+  ({String url, String username, String password})? get currentCredentials {
+    if (!_connected || _url == null || _user == null || _pass == null) {
+      return null;
+    }
+    return (url: _url!, username: _user!, password: _pass!);
+  }
 
   void _syncFromSettings() {
     final size = _settings!.coverArtSize;
