@@ -3,163 +3,22 @@ import 'dart:ui' show ImageFilter;
 import 'package:flutter/material.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:provider/provider.dart';
+
+import '../services/player_controller.dart';
 import '../services/navidrome_service.dart';
 
+/// Pantalla completa del reproductor. Es una vista del estado global de
+/// reproducción ([PlayerController]); al cerrar esta pantalla la música sigue
+/// sonando y queda reflejada en la barra persistente.
 class PlayerScreen extends StatefulWidget {
-  final List<Track> tracks;
-  final int initialIndex;
-
-  const PlayerScreen({
-    super.key,
-    required this.tracks,
-    required this.initialIndex,
-  });
+  const PlayerScreen({super.key});
 
   @override
   State<PlayerScreen> createState() => _PlayerScreenState();
 }
 
 class _PlayerScreenState extends State<PlayerScreen> {
-  late AudioPlayer _player;
-  int? _currentTrackIndex; // Índice en la playlist (puede ser reordenada por shuffle)
-
-  bool _isPlaying = false;
-  bool _shuffleEnabled = false;
-  LoopMode _repeatMode = LoopMode.off;
-
-  // Historial de canciones para navegación precisa
-  final List<int> _playHistory = [];
-  int _historyPosition = -1;
-
-  // Valor temporal mientras el usuario arrastra el thumb de progreso
   double? _dragValue;
-
-  Track? get _track {
-    if (_currentTrackIndex == null ||
-        _currentTrackIndex! < 0 ||
-        _currentTrackIndex! >= widget.tracks.length) {
-      return null;
-    }
-    return widget.tracks[_currentTrackIndex!];
-  }
-
-  @override
-  void initState() {
-    super.initState();
-    _currentTrackIndex = widget.initialIndex;
-    _player = AudioPlayer();
-
-    // Inicializar historial con la canción actual
-    _playHistory.add(widget.initialIndex);
-    _historyPosition = 0;
-
-    _listenPlayer();
-    _setupPlaylist();
-  }
-
-  void _addToPlayHistory(int trackIndex) {
-    // Eliminar el futuro si estamos en medio del historial (ramificación)
-    if (_historyPosition < _playHistory.length - 1) {
-      _playHistory.removeRange(_historyPosition + 1, _playHistory.length);
-    }
-
-    // Agregar nueva canción al historial
-    _playHistory.add(trackIndex);
-    _historyPosition++;
-  }
-
-  void _listenPlayer() {
-    _player.playerStateStream.listen((state) {
-      if (!mounted) return;
-      setState(() {
-        _isPlaying = state.playing &&
-            state.processingState != ProcessingState.completed;
-      });
-    });
-
-    // Escuchar cambios de índice para actualizar el historial y UI
-    _player.currentIndexStream.listen((idx) {
-      if (idx == null || idx < 0 || idx >= widget.tracks.length) return;
-
-      if (!mounted) return;
-
-      final previousIndex = _currentTrackIndex;
-
-      // Solo agregar al historial si es una canción diferente y no estamos en shuffle
-      // (con shuffle, just_audio maneja el orden internamente)
-      if (!_shuffleEnabled && previousIndex != idx) {
-        _addToPlayHistory(idx);
-      }
-
-      setState(() {
-        _currentTrackIndex = idx;
-      });
-    });
-  }
-
-  Future<void> _setupPlaylist() async {
-    final service = context.read<NavidromeService>();
-    final sources = widget.tracks
-        .map((t) => AudioSource.uri(Uri.parse(service.getStreamUrl(t.id))))
-        .toList();
-
-    await _player.setAudioSource(
-      ConcatenatingAudioSource(children: sources),
-      initialIndex: _currentTrackIndex!,
-    );
-    await _player.setLoopMode(_repeatMode);
-    await _player.setShuffleModeEnabled(_shuffleEnabled);
-  }
-
-  Future<void> _togglePlay() async {
-    if (_isPlaying) {
-      await _player.pause();
-    } else {
-      await _player.play();
-    }
-  }
-
-  Future<void> _skipNext() async {
-    if (_player.hasNext) {
-      await _player.seekToNext();
-    }
-  }
-
-  Future<void> _skipPrevious() async {
-    // Con shuffle activado, usar el método nativo que respeta el orden aleatorio
-    if (_shuffleEnabled && _player.hasPrevious) {
-      await _player.seekToPrevious();
-    } else if (!_shuffleEnabled && _historyPosition > 0) {
-      // Sin shuffle, volver al historial de reproducción
-      _historyPosition--;
-      final previousIndex = _playHistory[_historyPosition];
-      await _player.seek(Duration.zero, index: previousIndex);
-      setState(() {
-        _currentTrackIndex = previousIndex;
-      });
-    } else {
-      // Si no hay canciones anteriores, volver al inicio de la actual
-      await _player.seek(Duration.zero);
-    }
-  }
-
-  Future<void> _toggleShuffle() async {
-    setState(() {
-      _shuffleEnabled = !_shuffleEnabled;
-    });
-
-    await _player.setShuffleModeEnabled(_shuffleEnabled);
-  }
-
-  Future<void> _toggleRepeat() async {
-    _repeatMode = switch (_repeatMode) {
-      LoopMode.off => LoopMode.all,
-      LoopMode.all => LoopMode.one,
-      LoopMode.one => LoopMode.off,
-    };
-    await _player.setLoopMode(_repeatMode);
-    setState(() {});
-  }
 
   String _format(Duration d) {
     final minutes = d.inMinutes;
@@ -167,10 +26,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
     return '$minutes:${secs.toString().padLeft(2, '0')}';
   }
 
-  void _showContextMenu() {
-    final track = _track;
-    if (track == null) return;
-
+  void _showContextMenu(PlayerController player, String id) {
+    final nav = context.read<NavidromeService>();
+    final starred = nav.isStarred(id);
     showModalBottomSheet<void>(
       context: context,
       backgroundColor: const Color(0xFF1F1F1F),
@@ -195,31 +53,25 @@ class _PlayerScreenState extends State<PlayerScreen> {
                 leading: const Icon(Icons.playlist_add, color: Colors.white),
                 title: const Text('Añadir a una playlist',
                     style: TextStyle(color: Colors.white)),
-                onTap: () => Navigator.of(context).pop(),
+                onTap: () {
+                  Navigator.of(context).pop();
+                  _showAddToPlaylistSheet(nav);
+                },
               ),
               ListTile(
-                leading: const Icon(Icons.favorite_border, color: Colors.white),
-                title: const Text('Añadir a favoritos',
-                    style: TextStyle(color: Colors.white)),
-                onTap: () => Navigator.of(context).pop(),
-              ),
-              ListTile(
-                leading: const Icon(Icons.person_outline, color: Colors.white),
-                title: Text('Ir al artista · ${track.artist}',
-                    style: const TextStyle(color: Colors.white)),
-                onTap: () => Navigator.of(context).pop(),
-              ),
-              ListTile(
-                leading: const Icon(Icons.album_outlined, color: Colors.white),
-                title: Text('Ir al álbum · ${track.album}',
-                    style: const TextStyle(color: Colors.white)),
-                onTap: () => Navigator.of(context).pop(),
-              ),
-              ListTile(
-                leading: const Icon(Icons.share_outlined, color: Colors.white),
-                title: const Text('Compartir',
-                    style: TextStyle(color: Colors.white)),
-                onTap: () => Navigator.of(context).pop(),
+                leading: Icon(
+                  starred ? Icons.favorite : Icons.favorite_border,
+                  color: starred ? Colors.greenAccent : Colors.white,
+                ),
+                title: Text(
+                  starred ? 'Quitar de favoritos' : 'Añadir a favoritos',
+                  style: const TextStyle(color: Colors.white),
+                ),
+                onTap: () {
+                  Navigator.of(context).pop();
+                  final track = player.currentTrack;
+                  if (track != null) nav.toggleStar(track);
+                },
               ),
             ],
           ),
@@ -228,92 +80,192 @@ class _PlayerScreenState extends State<PlayerScreen> {
     );
   }
 
-  @override
-  void dispose() {
-    _player.dispose();
-    super.dispose();
+  void _showAddToPlaylistSheet(NavidromeService nav) {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: const Color(0xFF1F1F1F),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) {
+        return FutureBuilder<List<Playlist>>(
+          future: nav.getPlaylists(),
+          builder: (context, snapshot) {
+            final playlists = snapshot.data ?? <Playlist>[];
+            return SafeArea(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const SizedBox(height: 8),
+                  Container(
+                    width: 36,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.white24,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                  const ListTile(
+                    leading: Icon(Icons.library_music, color: Colors.white),
+                    title: Text('Selecciona una playlist',
+                        style: TextStyle(color: Colors.white)),
+                  ),
+                  if (snapshot.connectionState == ConnectionState.waiting)
+                    const Padding(
+                      padding: EdgeInsets.all(16),
+                      child: CircularProgressIndicator(color: Colors.white),
+                    )
+                  else if (playlists.isEmpty)
+                    const ListTile(
+                      title: Text('No tienes playlists',
+                          style: TextStyle(color: Colors.white54)),
+                    )
+                  else
+                    Flexible(
+                      child: ListView(
+                        shrinkWrap: true,
+                        children: [
+                          for (final p in playlists)
+                            ListTile(
+                              leading: const Icon(Icons.playlist_play,
+                                  color: Colors.white70),
+                              title: Text(p.name,
+                                  style: const TextStyle(color: Colors.white)),
+                              subtitle: Text('${p.songCount} canciones',
+                                  style:
+                                      const TextStyle(color: Colors.white54)),
+                              onTap: () async {
+                                Navigator.of(context).pop();
+                                final player =
+                                    context.read<PlayerController>();
+                                final track = player.currentTrack;
+                                if (track != null) {
+                                  await nav.updatePlaylist(
+                                    playlistId: p.id,
+                                    songIdsToAdd: [track.id],
+                                  );
+                                }
+                              },
+                            ),
+                        ],
+                      ),
+                    ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    final track = _track;
+    return Consumer<PlayerController>(
+      builder: (context, player, _) {
+        final track = player.currentTrack;
+        if (track == null) {
+          return const Scaffold(
+            backgroundColor: Colors.black,
+            body: Center(
+              child: Text('Nada en reproducción',
+                  style: TextStyle(color: Colors.white70)),
+            ),
+          );
+        }
 
-    // Si no hay track disponible, mostrar pantalla de carga
-    if (track == null) {
-      return const Scaffold(
-        backgroundColor: Colors.black,
-        body: Center(
-          child: CircularProgressIndicator(color: Colors.white),
-        ),
-      );
-    }
+        final playing = player.playing;
+        final repeatMode = player.repeatMode;
+        final shuffleEnabled = player.shuffleEnabled;
 
-    return Scaffold(
-      backgroundColor: const Color(0xFF121212),
-      body: Stack(
-        children: [
-          _buildAmbientBackground(track),
-          SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24),
-              child: Column(
-                children: [
-                  _buildHeader(),
-                  Expanded(
-                    child: Center(
-                      child: AspectRatio(
-                        aspectRatio: 1,
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(20),
-                          child: track.albumArtUrl != null
-                              ? Image.network(
-                                  track.albumArtUrl!,
-                                  fit: BoxFit.cover,
-                                )
-                              : Container(
-                                  color: Colors.grey.shade800,
-                                  child: const Icon(Icons.music_note,
-                                      size: 60, color: Colors.grey),
-                                ),
+        return Scaffold(
+          backgroundColor: const Color(0xFF121212),
+          body: Stack(
+            children: [
+              _buildAmbientBackground(track),
+              SafeArea(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  child: Column(
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          IconButton(
+                            icon: const Icon(Icons.keyboard_arrow_down,
+                                color: Colors.white, size: 32),
+                            onPressed: () => Navigator.of(context).pop(),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.more_horiz,
+                                color: Colors.white),
+                            onPressed: () => _showContextMenu(player, track.id),
+                          ),
+                        ],
+                      ),
+                      Expanded(
+                        child: Center(
+                          child: AspectRatio(
+                            aspectRatio: 1,
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(20),
+                              child: track.albumArtUrl != null
+                                  ? Image.network(track.albumArtUrl!,
+                                      fit: BoxFit.cover)
+                                  : Container(
+                                      color: Colors.grey.shade800,
+                                      child: const Icon(Icons.music_note,
+                                          size: 60, color: Colors.grey),
+                                    ),
+                            ),
+                          ),
                         ),
                       ),
-                    ),
+                      const SizedBox(height: 24),
+                      Text(
+                        track.title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        track.artist,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          color: Colors.white70,
+                          fontSize: 16,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      _buildProgressBar(player),
+                      const SizedBox(height: 8),
+                      _buildControls(
+                        player,
+                        playing: playing,
+                        repeatMode: repeatMode,
+                        shuffleEnabled: shuffleEnabled,
+                      ),
+                      const SizedBox(height: 16),
+                    ],
                   ),
-                  const SizedBox(height: 24),
-                  _Marquee(
-                    text: track.title,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    track.artist,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      color: Colors.white70,
-                      fontSize: 16,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  _buildProgressBar(),
-                  const SizedBox(height: 8),
-                  _buildControls(),
-                  const SizedBox(height: 16),
-                ],
+                ),
               ),
-            ),
+            ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 
-  Widget _buildAmbientBackground(Track track) {
+  Widget _buildAmbientBackground(dynamic track) {
     return Positioned.fill(
       child: track.albumArtUrl == null
           ? const SizedBox.shrink()
@@ -329,31 +281,13 @@ class _PlayerScreenState extends State<PlayerScreen> {
     );
   }
 
-  Widget _buildHeader() {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        IconButton(
-          icon: const Icon(Icons.keyboard_arrow_down,
-              color: Colors.white, size: 32),
-          onPressed: () => Navigator.of(context).pop(),
-        ),
-        IconButton(
-          icon: const Icon(Icons.more_horiz, color: Colors.white),
-          onPressed: _showContextMenu,
-        ),
-      ],
-    );
-  }
-
-  Widget _buildProgressBar() {
+  Widget _buildProgressBar(PlayerController player) {
     return StreamBuilder<Duration>(
-      stream: _player.positionStream,
+      stream: player.positionStream,
       builder: (context, snapshot) {
-        final trackDuration = _track != null
-            ? Duration(seconds: int.tryParse(_track!.duration) ?? 0)
-            : Duration.zero;
-        final duration = _player.duration ?? trackDuration;
+        final trackTime =
+            Duration(seconds: int.tryParse(player.currentTrack?.duration ?? '') ?? 0);
+        final duration = player.duration ?? trackTime;
         final position = snapshot.data ?? Duration.zero;
 
         final maxMs = duration.inMilliseconds == 0
@@ -380,7 +314,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                 value: currentMs,
                 onChanged: (v) => setState(() => _dragValue = v),
                 onChangeEnd: (v) async {
-                  await _player.seek(Duration(milliseconds: v.round()));
+                  await player.seek(Duration(milliseconds: v.round()));
                   if (mounted) setState(() => _dragValue = null);
                 },
               ),
@@ -392,13 +326,13 @@ class _PlayerScreenState extends State<PlayerScreen> {
                 children: [
                   Text(
                     _format(Duration(milliseconds: currentMs.round())),
-                    style: const TextStyle(
-                        color: Colors.white70, fontSize: 12),
+                    style:
+                        const TextStyle(color: Colors.white70, fontSize: 12),
                   ),
                   Text(
                     _format(duration),
-                    style: const TextStyle(
-                        color: Colors.white70, fontSize: 12),
+                    style:
+                        const TextStyle(color: Colors.white70, fontSize: 12),
                   ),
                 ],
               ),
@@ -409,7 +343,12 @@ class _PlayerScreenState extends State<PlayerScreen> {
     );
   }
 
-  Widget _buildControls() {
+  Widget _buildControls(
+    PlayerController player, {
+    required bool playing,
+    required LoopMode repeatMode,
+    required bool shuffleEnabled,
+  }) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
       children: [
@@ -417,117 +356,35 @@ class _PlayerScreenState extends State<PlayerScreen> {
           icon: Icon(
             Icons.shuffle,
             size: 22,
-            color: _shuffleEnabled ? Colors.greenAccent : Colors.white,
+            color: shuffleEnabled ? Colors.greenAccent : Colors.white,
           ),
-          onPressed: _toggleShuffle,
+          onPressed: player.toggleShuffle,
         ),
         IconButton(
-          icon: const Icon(Icons.skip_previous,
-              color: Colors.white, size: 34),
-          onPressed: _skipPrevious,
+          icon: const Icon(Icons.skip_previous, color: Colors.white, size: 34),
+          onPressed: player.skipPrevious,
         ),
         IconButton(
           iconSize: 60,
           icon: Icon(
-            _isPlaying
-                ? Icons.pause_circle_filled
-                : Icons.play_circle_filled,
+            playing ? Icons.pause_circle_filled : Icons.play_circle_filled,
             color: Colors.white,
           ),
-          onPressed: _togglePlay,
+          onPressed: player.togglePlay,
         ),
         IconButton(
           icon: const Icon(Icons.skip_next, color: Colors.white, size: 34),
-          onPressed: _skipNext,
+          onPressed: player.skipNext,
         ),
         IconButton(
           icon: Icon(
-            _repeatMode == LoopMode.one ? Icons.repeat_one : Icons.repeat,
+            repeatMode == LoopMode.one ? Icons.repeat_one : Icons.repeat,
             size: 22,
-            color: _repeatMode != LoopMode.off
-                ? Colors.greenAccent
-                : Colors.white,
+            color: repeatMode != LoopMode.off ? Colors.greenAccent : Colors.white,
           ),
-          onPressed: _toggleRepeat,
+          onPressed: player.toggleRepeat,
         ),
       ],
-    );
-  }
-}
-
-class _Marquee extends StatefulWidget {
-  final String text;
-  final TextStyle style;
-
-  const _Marquee({required this.text, required this.style});
-
-  @override
-  State<_Marquee> createState() => _MarqueeState();
-}
-
-class _MarqueeState extends State<_Marquee>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _controller;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller =
-        AnimationController(vsync: this, duration: const Duration(seconds: 8))
-          ..repeat();
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final painter = TextPainter(
-          text: TextSpan(text: widget.text, style: widget.style),
-          maxLines: 1,
-          textDirection: TextDirection.ltr,
-        )..layout();
-
-        final textWidth = painter.width;
-        if (textWidth <= constraints.maxWidth) {
-          return Text(
-            widget.text,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            textAlign: TextAlign.center,
-            style: widget.style,
-          );
-        }
-
-        const gap = 60.0;
-        final oneItem = textWidth + gap;
-
-        return ClipRect(
-          child: AnimatedBuilder(
-            animation: _controller,
-            builder: (context, _) {
-              final offset = _controller.value * oneItem;
-              return Transform.translate(
-                offset: Offset(-offset, 0),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(widget.text, style: widget.style),
-                    const SizedBox(width: gap),
-                    Text(widget.text, style: widget.style),
-                    const SizedBox(width: gap),
-                  ],
-                ),
-              );
-            },
-          ),
-        );
-      },
     );
   }
 }

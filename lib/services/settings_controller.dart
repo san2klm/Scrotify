@@ -1,0 +1,211 @@
+import 'dart:convert';
+import 'dart:io';
+
+import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:flutter/foundation.dart';
+import 'package:path_provider/path_provider.dart';
+
+/// Calidad de streaming. `lossless` transmite el archivo original (sin
+/// transcode, FLAC si el servidor lo tiene); el resto pide a Navidrome que
+/// transcodifique a MP3 con el bitrate indicado (`kbps`).
+enum AudioQuality {
+  lossless,
+  high320,
+  high192,
+  medium128,
+  low96;
+
+  /// Bitrate en kbps para el parámetro `maxBitRate` de Subsonic; `null` sin
+  /// pérdida (sin transcode).
+  int? get kbps => switch (this) {
+        AudioQuality.lossless => null,
+        AudioQuality.high320 => 320,
+        AudioQuality.high192 => 192,
+        AudioQuality.medium128 => 128,
+        AudioQuality.low96 => 96,
+      };
+
+  String get label => switch (this) {
+        AudioQuality.lossless => 'Sin pérdida',
+        AudioQuality.high320 => 'Muy alta',
+        AudioQuality.high192 => 'Alta',
+        AudioQuality.medium128 => 'Media',
+        AudioQuality.low96 => 'Baja',
+      };
+
+  String get subtitle => switch (this) {
+        AudioQuality.lossless => 'Archivo original (FLAC)',
+        AudioQuality.high320 => 'MP3 · 320 kbps',
+        AudioQuality.high192 => 'MP3 · 192 kbps',
+        AudioQuality.medium128 => 'MP3 · 128 kbps',
+        AudioQuality.low96 => 'MP3 · 96 kbps',
+      };
+
+  static AudioQuality fromName(String? name) => AudioQuality.values.firstWhere(
+        (q) => q.name == name,
+        orElse: () => AudioQuality.lossless,
+      );
+}
+
+/// Configuración global de la app (calidad de audio, portadas, volumen…).
+/// Persiste en `settings.json` en el directorio de documentos, siguiendo el
+/// mismo patrón que el historial y las playlists fijadas.
+///
+/// También escucha a `connectivity_plus` para saber si la red actual es datos
+/// móviles o una conexión de "casa" (WiFi/ethernet) y así elegir la calidad.
+class SettingsController extends ChangeNotifier {
+  AudioQuality _wifiQuality = AudioQuality.lossless;
+  AudioQuality _mobileQuality = AudioQuality.low96;
+  bool _autoSwitch = true;
+  int _coverArtSize = 600;
+  double _initialVolume = 0.7;
+  bool _gapless = false;
+
+  // Red actual detectada. Si no se puede saber (sin NetworkManager, etc.) se
+  // asume "casa" para no degradar la calidad sin motivo.
+  ConnectivityResult _network = ConnectivityResult.wifi;
+  // Para detectar transiciones WiFi ↔ móvil y notificar solo cuando cambia.
+  bool? _wasMobile;
+
+  SettingsController() {
+    _load();
+    _listenConnectivity();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Getters
+  // ---------------------------------------------------------------------------
+
+  AudioQuality get wifiQuality => _wifiQuality;
+  AudioQuality get mobileQuality => _mobileQuality;
+  bool get autoSwitch => _autoSwitch;
+  int get coverArtSize => _coverArtSize;
+  double get initialVolume => _initialVolume;
+  bool get gapless => _gapless;
+
+  bool get isMobileData => _network == ConnectivityResult.mobile;
+  String get networkLabel => isMobileData ? 'Datos móviles' : 'WiFi / conexión fija';
+
+  /// Calidad efectiva según el contexto de red.
+  AudioQuality get effectiveQuality =>
+      _autoSwitch ? (isMobileData ? _mobileQuality : _wifiQuality) : _wifiQuality;
+
+  // ---------------------------------------------------------------------------
+  // Setters (persisten y notifican)
+  // ---------------------------------------------------------------------------
+
+  void setWifiQuality(AudioQuality q) {
+    if (q == _wifiQuality) return;
+    _wifiQuality = q;
+    _save();
+    notifyListeners();
+  }
+
+  void setMobileQuality(AudioQuality q) {
+    if (q == _mobileQuality) return;
+    _mobileQuality = q;
+    _save();
+    notifyListeners();
+  }
+
+  void setAutoSwitch(bool value) {
+    if (value == _autoSwitch) return;
+    _autoSwitch = value;
+    _save();
+    notifyListeners();
+  }
+
+  void setCoverArtSize(int size) {
+    if (size == _coverArtSize) return;
+    _coverArtSize = size;
+    _save();
+    notifyListeners();
+  }
+
+  void setInitialVolume(double volume) {
+    final v = volume.clamp(0.0, 1.0).toDouble();
+    if (v == _initialVolume) return;
+    _initialVolume = v;
+    _save();
+    notifyListeners();
+  }
+
+  void setGapless(bool value) {
+    if (value == _gapless) return;
+    _gapless = value;
+    _save();
+    notifyListeners();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Red
+  // ---------------------------------------------------------------------------
+
+  void _listenConnectivity() {
+    final connectivity = Connectivity();
+    connectivity.onConnectivityChanged.listen(
+      (results) {
+        _updateNetwork(results.isEmpty ? ConnectivityResult.none : results.first);
+      },
+      onError: (_) {}, // Sin red disponible para consultar; mantener último valor.
+    );
+    // Valor inicial (fire-and-forget; si falla queda "casa").
+    connectivity.checkConnectivity().catchError(
+          (_) => const <ConnectivityResult>[],
+        ).then(
+          (results) => _updateNetwork(
+              results.isEmpty ? ConnectivityResult.wifi : results.first),
+        );
+  }
+
+  void _updateNetwork(ConnectivityResult result) {
+    // `none`/`bluetooth`/`other` → mantener la última clasificación conocida.
+    final known = result != ConnectivityResult.none &&
+        result != ConnectivityResult.bluetooth &&
+        result != ConnectivityResult.other;
+    if (known) _network = result;
+    final isMobile = _network == ConnectivityResult.mobile;
+    if (_wasMobile == null || _wasMobile != isMobile) {
+      _wasMobile = isMobile;
+      notifyListeners();
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Persistencia
+  // ---------------------------------------------------------------------------
+
+  Future<void> _load() async {
+    try {
+      final dir = await getApplicationDocumentsDirectory();
+      final file = File('${dir.path}/settings.json');
+      if (!await file.exists()) return;
+      final data = jsonDecode(await file.readAsString()) as Map<String, dynamic>;
+      _wifiQuality = AudioQuality.fromName(data['wifiQuality'] as String?);
+      _mobileQuality = AudioQuality.fromName(data['mobileQuality'] as String?);
+      _autoSwitch = data['autoSwitch'] as bool? ?? true;
+      _coverArtSize = (data['coverArtSize'] as num?)?.toInt() ?? 600;
+      final rawVol = (data['initialVolume'] as num?)?.toDouble();
+      _initialVolume = rawVol == null ? 0.7 : rawVol.clamp(0.0, 1.0).toDouble();
+      _gapless = data['gapless'] as bool? ?? false;
+      notifyListeners();
+    } catch (_) {
+      // Silently ignore — los ajustes no son críticos.
+    }
+  }
+
+  Future<void> _save() async {
+    try {
+      final dir = await getApplicationDocumentsDirectory();
+      final file = File('${dir.path}/settings.json');
+      await file.writeAsString(jsonEncode({
+        'wifiQuality': _wifiQuality.name,
+        'mobileQuality': _mobileQuality.name,
+        'autoSwitch': _autoSwitch,
+        'coverArtSize': _coverArtSize,
+        'initialVolume': _initialVolume,
+        'gapless': _gapless,
+      }));
+    } catch (_) {}
+  }
+}

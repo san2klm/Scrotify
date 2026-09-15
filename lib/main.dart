@@ -3,6 +3,8 @@ import 'package:just_audio_media_kit/just_audio_media_kit.dart';
 import 'package:provider/provider.dart';
 
 import 'services/navidrome_service.dart';
+import 'services/player_controller.dart';
+import 'services/settings_controller.dart';
 import 'screens/login_screen.dart';
 
 void main() {
@@ -15,8 +17,21 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ChangeNotifierProvider(
-      create: (_) => NavidromeService(),
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => SettingsController()),
+        ChangeNotifierProvider(
+          create: (ctx) => NavidromeService(
+            settings: ctx.read<SettingsController>(),
+          ),
+        ),
+        ChangeNotifierProvider<PlayerController>(
+          create: (ctx) => PlayerController(
+            ctx.read<NavidromeService>(),
+            ctx.read<SettingsController>(),
+          ),
+        ),
+      ],
       child: MaterialApp(
         title: 'Scrotify',
         debugShowCheckedModeBanner: false,
