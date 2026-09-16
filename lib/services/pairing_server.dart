@@ -14,7 +14,7 @@ import '../utils/crypto_helper.dart';
 /// - `GET /pair/status` → estado actual
 /// - `POST /pair/claim` → móvil reclama el código con su clave pública
 /// - Beacon UDP (puerto [kPairingDiscoveryPort]) para descubrimiento automático
-///   cuando el móvil solo escribe el código de 6 caracteres.
+///   por código y escaneo de radar de dispositivos en la misma red Wi-Fi.
 class PairingServer {
   static const int _defaultTtlSeconds = 300; // 5 min
 
@@ -23,6 +23,7 @@ class PairingServer {
   Timer? _expiryTimer;
 
   String? _hostIp;
+  List<String> _allLocalIps = [];
   int _port = 0;
   PairCode? _currentCode;
   DateTime? _expiresAt;
@@ -30,6 +31,7 @@ class PairingServer {
   String? _serverUrl; // URL del servidor Navidrome a compartir
   String? _username;
   String? _password;
+  String _deviceName = '';
   SimpleKeyPair? _ephemeralKeyPair; // clave efímera del PC para este emparejamiento
   final _statusController = StreamController<PairingStatus>.broadcast();
 
@@ -37,7 +39,9 @@ class PairingServer {
   Stream<PairingStatus> get statusStream => _statusController.stream;
   PairingStatus get status => _status;
   String? get hostIp => _hostIp;
+  List<String> get allLocalIps => _allLocalIps;
   int get port => _port;
+  String get deviceName => _deviceName;
   String? get currentCode => _currentCode?.value;
   String? get currentCodeFormatted => _currentCode?.formatted;
   String? get qrDataUri => _currentCode != null && _hostIp != null
@@ -54,6 +58,7 @@ class PairingServer {
     required String serverUrl,
     required String username,
     required String password,
+    String? customDeviceName,
     int ttlSeconds = _defaultTtlSeconds,
   }) async {
     await stop(); // limpiar cualquier instancia previa
@@ -61,6 +66,7 @@ class PairingServer {
     _serverUrl = serverUrl;
     _username = username;
     _password = password;
+    _deviceName = customDeviceName ?? _getDefaultDeviceName();
 
     // Generar código y clave efímera
     _currentCode = PairCode.generate();
@@ -72,8 +78,10 @@ class PairingServer {
     // Bind a puerto efímero en todas las interfaces
     _server = await HttpServer.bind(InternetAddress.anyIPv4, 0);
     _port = _server!.port;
-    _hostIp = await _getLocalIp();
-    debugPrint('PairingServer listening on $_hostIp:$_port (code: ${_currentCode?.value})');
+    _allLocalIps = await _getAllLocalIps();
+    _hostIp = _allLocalIps.isNotEmpty ? _allLocalIps.first : '127.0.0.1';
+    debugPrint(
+        'PairingServer listening on $_hostIp:$_port (device: $_deviceName, code: ${_currentCode?.value})');
 
     // Rutas HTTP
     _server!.listen(_handleRequest);
@@ -83,6 +91,17 @@ class PairingServer {
 
     // Iniciar beacon de descubrimiento UDP
     await _startDiscoveryBeacon();
+  }
+
+  String _getDefaultDeviceName() {
+    try {
+      final host = Platform.localHostname;
+      if (host.isNotEmpty) return host;
+    } catch (_) {}
+    if (Platform.isLinux) return 'PC Linux';
+    if (Platform.isWindows) return 'PC Windows';
+    if (Platform.isMacOS) return 'Mac';
+    return 'Computadora';
   }
 
   /// Detiene el servidor y limpia estado.
@@ -110,6 +129,7 @@ class PairingServer {
     _username = null;
     _password = null;
     _hostIp = null;
+    _allLocalIps = [];
     _port = 0;
   }
 
@@ -136,6 +156,7 @@ class PairingServer {
 
   Future<void> _handleStatus(HttpRequest req) async {
     final body = jsonEncode({
+      'deviceName': _deviceName,
       'serverUrl': _serverUrl,
       'status': _status.name,
       'code': _currentCode?.value,
@@ -224,7 +245,8 @@ class PairingServer {
     stop();
   }
 
-  Future<String> _getLocalIp() async {
+  Future<List<String>> _getAllLocalIps() async {
+    final ips = <String>[];
     try {
       final interfaces = await NetworkInterface.list(
         type: InternetAddressType.IPv4,
@@ -235,13 +257,15 @@ class PairingServer {
         for (final addr in iface.addresses) {
           if (addr.type == InternetAddressType.IPv4 &&
               !addr.isLoopback &&
-              !addr.address.startsWith('169.254.')) {
-            return addr.address;
+              !addr.address.startsWith('169.254.') &&
+              !ips.contains(addr.address)) {
+            ips.add(addr.address);
           }
         }
       }
     } catch (_) {}
-    return '127.0.0.1';
+    if (ips.isEmpty) ips.add('127.0.0.1');
+    return ips;
   }
 
   // ---------------------------------------------------------------------------
@@ -275,21 +299,45 @@ class PairingServer {
     try {
       final text = utf8.decode(dg.data);
       final json = jsonDecode(text) as Map<String, dynamic>;
-      if (json['app'] != kPairingDiscoveryAppTag || json['op'] != 'find') return;
+      if (json['app'] != kPairingDiscoveryAppTag) return;
 
-      final requestedCode = (json['code'] as String?)?.toUpperCase();
-      if (requestedCode == _currentCode!.value) {
+      final op = json['op'] as String?;
+
+      // 1. Búsqueda específica por código
+      if (op == 'find') {
+        final requestedCode = (json['code'] as String?)?.toUpperCase();
+        if (requestedCode == _currentCode!.value) {
+          final responsePayload = jsonEncode({
+            'app': kPairingDiscoveryAppTag,
+            'op': 'here',
+            'code': _currentCode!.value,
+            'port': _port,
+            'host': _hostIp,
+            'deviceName': _deviceName,
+            'serverUrl': _serverUrl,
+            'expiresIn': remainingSeconds,
+          });
+          final bytes = utf8.encode(responsePayload);
+          _discoverySocket?.send(bytes, dg.address, dg.port);
+          debugPrint(
+              'PairingServer: replied to code match query from ${dg.address.address}:${dg.port}');
+        }
+      }
+      // 2. Escaneo de radar / presencia en LAN
+      else if (op == 'discover') {
         final responsePayload = jsonEncode({
           'app': kPairingDiscoveryAppTag,
-          'op': 'here',
-          'code': _currentCode!.value,
+          'op': 'presence',
+          'deviceName': _deviceName,
+          'serverUrl': _serverUrl,
           'port': _port,
           'host': _hostIp,
+          'expiresIn': remainingSeconds,
         });
         final bytes = utf8.encode(responsePayload);
         _discoverySocket?.send(bytes, dg.address, dg.port);
         debugPrint(
-            'PairingServer: replied to discovery query from ${dg.address.address}:${dg.port}');
+            'PairingServer: replied to presence discovery from ${dg.address.address}:${dg.port}');
       }
     } catch (_) {}
   }

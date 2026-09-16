@@ -1,17 +1,23 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../services/jam_controller.dart';
 import '../services/navidrome_service.dart';
 import '../services/player_controller.dart';
+import '../services/secure_storage.dart';
 import '../widgets/persistent_player_bar.dart';
+import '../widgets/cover_art.dart';
+import '../widgets/pairing_panel.dart';
+import '../widgets/jam_dialog.dart';
+import '../widgets/server_activity_panel.dart';
+import '../widgets/track_context_menu.dart';
 import 'liked_songs_screen.dart';
 import 'playlist_detail_screen.dart';
 import 'album_detail_screen.dart';
 import 'artist_screen.dart';
 import 'settings_screen.dart';
 
-/// Interfaz móvil de Scrotify (estilo Spotify).
-/// Está pensada para pantallas estrechas (teléfonos) y se adapta a tablets
-/// mostrando más columnas en los carruseles y cuadrículas.
+/// Interfaz móvil de Scrotify (estilo Spotify AMOLED).
+/// Diseñada exclusivamente para pantallas táctiles de teléfonos.
 class MobileHomeScreen extends StatefulWidget {
   const MobileHomeScreen({super.key});
 
@@ -22,7 +28,7 @@ class MobileHomeScreen extends StatefulWidget {
 enum _HomeFilter { todo, musica, podcasts }
 
 class _MobileHomeScreenState extends State<MobileHomeScreen> {
-  int _tabIndex = 0;
+  int _tabIndex = 0; // 0 = Inicio, 1 = Búsqueda, 2 = Biblioteca
   _HomeFilter _filter = _HomeFilter.todo;
   late Future<List<Track>> _futureTracks;
   late Future<List<Playlist>> _futurePlaylists;
@@ -72,6 +78,76 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
     }
   }
 
+  void _openPairingModal() {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: const Color(0xFF0C0C10),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        side: BorderSide(color: Color(0xFF1E1E28), width: 1.2),
+      ),
+      builder: (ctx) => Padding(
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.of(ctx).viewInsets.bottom,
+          left: 18,
+          right: 18,
+          top: 16,
+        ),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 36,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.white24,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(height: 14),
+              Row(
+                children: [
+                  const Icon(Icons.qr_code_2_rounded,
+                      color: Color(0xFFA855F7), size: 22),
+                  const SizedBox(width: 8),
+                  const Text(
+                    'Vincular con tu PC',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const Spacer(),
+                  IconButton(
+                    icon: const Icon(Icons.close, color: Colors.white54, size: 20),
+                    onPressed: () => Navigator.of(ctx).pop(),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              PairingJoinPanel(
+                onCredentialsReceived: (creds) async {
+                  Navigator.of(ctx).pop();
+                  final nav = context.read<NavidromeService>();
+                  await nav.connectByUrl(creds.url, creds.username, creds.password);
+                  await SecureStorage.saveCredentials(
+                    serverUrl: creds.url,
+                    username: creds.username,
+                    password: creds.password,
+                  );
+                },
+              ),
+              const SizedBox(height: 20),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   void dispose() {
     _searchController.dispose();
@@ -80,7 +156,6 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Refrescar portadas cuando cambia la resolución configurada.
     final nav = context.watch<NavidromeService>();
     final version = nav.coverArtVersion;
     if (version != _coverArtVersion && _coverArtVersion >= 0) {
@@ -96,7 +171,6 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
     }
     _coverArtVersion = version;
 
-    // Refrescar lista de playlists tras importación/creación/borrado.
     final pVersion = nav.playlistVersion;
     if (pVersion != _playlistVersion && _playlistVersion >= 0) {
       _playlistVersion = pVersion;
@@ -112,14 +186,31 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
 
     return Scaffold(
       resizeToAvoidBottomInset: false,
-      backgroundColor: const Color(0xFF121212),
-      body: IndexedStack(
-        index: _tabIndex,
-        children: [
-          _buildHomeTab(),
-          _buildSearchTab(),
-          _buildLibraryTab(),
-        ],
+      backgroundColor: const Color(0xFF000000), // Pure AMOLED Black
+      body: SafeArea(
+        bottom: false,
+        child: Column(
+          children: [
+            // ---------------------------------------------------------------
+            // 1. BARRA SUPERIOR PERSISTENTE EN MÓVIL
+            // ---------------------------------------------------------------
+            _buildPersistentMobileHeader(nav),
+
+            // ---------------------------------------------------------------
+            // 2. CUERPO DE LAS PESTAÑAS (HACE SCROLL DEBAJO DE LA BARRA)
+            // ---------------------------------------------------------------
+            Expanded(
+              child: IndexedStack(
+                index: _tabIndex,
+                children: [
+                  _buildHomeTab(),
+                  _buildSearchTab(),
+                  _buildLibraryTab(),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
       bottomNavigationBar: SafeArea(
         top: false,
@@ -134,99 +225,140 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
     );
   }
 
-  // ---------------------------------------------------------------------------
-  // Pestaña Inicio
-  // ---------------------------------------------------------------------------
-  Widget _buildHomeTab() {
-    return FutureBuilder<List<Track>>(
-      future: _futureTracks,
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(
-            child: CircularProgressIndicator(color: Colors.white),
-          );
-        }
-        if (snapshot.hasError || !snapshot.hasData) {
-          return const Center(
-            child: Text(
-              'Sin contenido',
-              style: TextStyle(color: Colors.white54),
-            ),
-          );
-        }
-        final tracks = snapshot.data!;
-        return SafeArea(
-          bottom: false,
-          child: SingleChildScrollView(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _buildTopBar(),
-                _filterPills(),
-                const SizedBox(height: 16),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: _quickAccessGrid(tracks),
-                ),
-                const SizedBox(height: 24),
-                _sectionHeader('Preguardá los próximos lanzamientos'),
-                const SizedBox(height: 12),
-                _carousel(tracks),
-                const SizedBox(height: 24),
-                _sectionHeader('Your own personal DJ'),
-                const SizedBox(height: 12),
-                _carousel(tracks),
-                const SizedBox(height: 24),
-                _sectionHeader('Recientes'),
-                const SizedBox(height: 8),
-                _recentsList(),
-                const SizedBox(height: 24),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
+  // ===========================================================================
+  // BARRA SUPERIOR PERSISTENTE MÓVIL (HEADER FIJO)
+  // ===========================================================================
+  Widget _buildPersistentMobileHeader(NavidromeService nav) {
+    final username = nav.username ?? 'U';
+    final initial = username.isNotEmpty ? username[0].toUpperCase() : 'U';
 
-  Widget _buildTopBar() {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-      child: Row(
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 8, 12, 8),
+      decoration: const BoxDecoration(
+        color: Color(0xFF000000),
+        border: Border(
+          bottom: BorderSide(color: Color(0xFF14141A), width: 1),
+        ),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          const CircleAvatar(
-            radius: 16,
-            backgroundColor: Colors.deepPurple,
-            child: Text('T', style: TextStyle(color: Colors.white)),
-          ),
-          const SizedBox(width: 12),
-          const Expanded(
-            child: Text(
-              'Home',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 22,
-                fontWeight: FontWeight.bold,
+          Row(
+            children: [
+              // Avatar
+              Container(
+                width: 32,
+                height: 32,
+                decoration: const BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Color(0xFF7C3AED),
+                ),
+                child: Center(
+                  child: Text(
+                    initial,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 13,
+                    ),
+                  ),
+                ),
               ),
-            ),
+              const SizedBox(width: 10),
+
+              // Título según pestaña
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _tabIndex == 0
+                          ? 'Inicio'
+                          : _tabIndex == 1
+                              ? 'Buscar'
+                              : 'Tu Biblioteca',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    Text(
+                      nav.serverUrl != null
+                          ? Uri.tryParse(nav.serverUrl!)?.host ?? nav.serverUrl!
+                          : 'Navidrome',
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Color(0xFF10B981),
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              // Botón Comunidad & Chat del Servidor
+              IconButton(
+                tooltip: 'Comunidad del Servidor',
+                icon: const Icon(Icons.people_alt_outlined,
+                    color: Color(0xFF10B981), size: 21),
+                onPressed: () => ServerActivityPanel.show(context),
+              ),
+
+              // Botón rápido Jam (Social / Colaborativo)
+              Consumer<JamController>(
+                builder: (context, jam, _) {
+                  if (jam.inJam) {
+                    return IconButton(
+                      tooltip: 'Sesión Jam Activa',
+                      icon: Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF10B981).withValues(alpha: 0.2),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.speaker_group_rounded,
+                            color: Color(0xFF10B981), size: 18),
+                      ),
+                      onPressed: () => JamDialog.showAsBottomSheet(context),
+                    );
+                  }
+                  return IconButton(
+                    tooltip: 'Jam (Escucha grupal)',
+                    icon: const Icon(Icons.speaker_group_outlined,
+                        color: Color(0xFF10B981), size: 21),
+                    onPressed: () => JamDialog.showAsBottomSheet(context),
+                  );
+                },
+              ),
+
+              // Botón rápido Vincular PC
+              IconButton(
+                tooltip: 'Vincular con PC',
+                icon: const Icon(Icons.qr_code_2_rounded,
+                    color: Color(0xFFA855F7), size: 22),
+                onPressed: _openPairingModal,
+              ),
+
+              // Botón Ajustes
+              IconButton(
+                tooltip: 'Ajustes',
+                icon: const Icon(Icons.settings_outlined,
+                    color: Colors.white70, size: 20),
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const SettingsScreen()),
+                ),
+              ),
+            ],
           ),
-          IconButton(
-            icon: const Icon(Icons.history, color: Colors.white, size: 22),
-            onPressed: () {},
-          ),
-          IconButton(
-            icon: const Icon(Icons.notifications_none,
-                color: Colors.white, size: 22),
-            onPressed: () {},
-          ),
-          IconButton(
-            icon: const Icon(Icons.settings_outlined,
-                color: Colors.white, size: 22),
-            onPressed: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const SettingsScreen()),
-            ),
-          ),
+
+          // Píldoras de filtro en el Home
+          if (_tabIndex == 0) ...[
+            const SizedBox(height: 8),
+            _filterPills(),
+          ],
         ],
       ),
     );
@@ -234,10 +366,9 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
 
   Widget _filterPills() {
     return SizedBox(
-      height: 40,
+      height: 34,
       child: ListView(
         scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 16),
         children: [
           _pill('Todo', _HomeFilter.todo),
           _pill('Música', _HomeFilter.musica),
@@ -254,22 +385,82 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
       child: InkWell(
         borderRadius: BorderRadius.circular(16),
         onTap: () => setState(() => _filter = value),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
           decoration: BoxDecoration(
-            color: selected ? Colors.white : const Color(0xFF1F1F1F),
+            color: selected ? const Color(0xFF7C3AED) : const Color(0xFF0F0F14),
             borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: selected
+                  ? const Color(0xFFA855F7)
+                  : const Color(0xFF1E1E28),
+            ),
           ),
           child: Text(
             label,
             style: TextStyle(
-              color: selected ? Colors.black : Colors.white,
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
+              color: selected ? Colors.white : Colors.white70,
+              fontSize: 12,
+              fontWeight: selected ? FontWeight.bold : FontWeight.w500,
             ),
           ),
         ),
       ),
+    );
+  }
+
+  // ===========================================================================
+  // Pestaña Inicio (Mobile)
+  // ===========================================================================
+  Widget _buildHomeTab() {
+    return FutureBuilder<List<Track>>(
+      future: _futureTracks,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(
+            child: CircularProgressIndicator(
+              color: Color(0xFFA855F7),
+              strokeWidth: 2,
+            ),
+          );
+        }
+        if (snapshot.hasError || !snapshot.hasData) {
+          return const Center(
+            child: Text(
+              'Sin contenido disponible',
+              style: TextStyle(color: Colors.white54),
+            ),
+          );
+        }
+        final tracks = snapshot.data!;
+        return SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _quickAccessGrid(tracks),
+              const SizedBox(height: 24),
+              _sectionHeader('Recomendados para ti'),
+              const SizedBox(height: 12),
+              _carousel(tracks),
+              const SizedBox(height: 24),
+              _sectionHeader('Álbumes'),
+              const SizedBox(height: 12),
+              _albumsCarousel(),
+              const SizedBox(height: 24),
+              _sectionHeader('Artistas'),
+              const SizedBox(height: 12),
+              _artistsCarousel(),
+              const SizedBox(height: 24),
+              _sectionHeader('Escuchados recientemente'),
+              const SizedBox(height: 8),
+              _recentsList(),
+              const SizedBox(height: 24),
+            ],
+          ),
+        );
+      },
     );
   }
 
@@ -279,14 +470,14 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       crossAxisCount: 2,
-      childAspectRatio: 2.6,
-      crossAxisSpacing: 12,
-      mainAxisSpacing: 12,
+      childAspectRatio: 2.8,
+      crossAxisSpacing: 10,
+      mainAxisSpacing: 10,
       children: [
         _quickAccessCard(
-          label: 'Liked Songs',
-          color: const Color(0xFF353588),
-          icon: Icons.favorite,
+          label: 'Tus Me Gusta',
+          color: const Color(0xFF4C1D95),
+          icon: Icons.favorite_rounded,
           onTap: () => Navigator.push(
             context,
             MaterialPageRoute(builder: (_) => const LikedSongsScreen()),
@@ -295,7 +486,7 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
         for (final track in items)
           _quickAccessCard(
             label: track.album,
-            color: Colors.grey.shade800,
+            color: const Color(0xFF14141A),
             albumArtUrl: track.albumArtUrl,
             icon: Icons.album,
             onTap: () => _openPlayer(tracks, tracks.indexOf(track)),
@@ -315,19 +506,20 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
       onTap: onTap,
       borderRadius: BorderRadius.circular(8),
       child: Container(
-        padding: const EdgeInsets.all(8),
         decoration: BoxDecoration(
-          color: const Color(0xFF1F1F1F),
+          color: const Color(0xFF0C0C10),
           borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: const Color(0xFF1E1E26)),
         ),
         child: Row(
           children: [
             Container(
               width: 44,
-              height: 44,
+              height: double.infinity,
               decoration: BoxDecoration(
                 color: color,
-                borderRadius: BorderRadius.circular(6),
+                borderRadius:
+                    const BorderRadius.horizontal(left: Radius.circular(7)),
                 image: albumArtUrl != null
                     ? DecorationImage(
                         image: NetworkImage(albumArtUrl),
@@ -335,11 +527,11 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
                       )
                     : null,
               ),
-              child: albumArtUrl == null
+              child: albumArtUrl == null && icon != null
                   ? Icon(icon, color: Colors.white, size: 20)
                   : null,
             ),
-            const SizedBox(width: 12),
+            const SizedBox(width: 8),
             Expanded(
               child: Text(
                 label,
@@ -347,7 +539,7 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
                   color: Colors.white,
-                  fontSize: 13,
+                  fontSize: 12,
                   fontWeight: FontWeight.w600,
                 ),
               ),
@@ -358,13 +550,23 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
     );
   }
 
+  Widget _sectionHeader(String title) {
+    return Text(
+      title,
+      style: const TextStyle(
+        color: Colors.white,
+        fontSize: 17,
+        fontWeight: FontWeight.bold,
+      ),
+    );
+  }
+
   Widget _carousel(List<Track> tracks) {
-    final items = tracks.take(10).toList();
+    final items = tracks.take(8).toList();
     return SizedBox(
-      height: 176,
+      height: 180,
       child: ListView.builder(
         scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 16),
         itemCount: items.length,
         itemBuilder: (context, index) {
           final track = items[index];
@@ -372,29 +574,39 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
             padding: const EdgeInsets.only(right: 12),
             child: InkWell(
               onTap: () => _openPlayer(tracks, tracks.indexOf(track)),
+              onLongPress: () => TrackContextMenu.show(context, track),
               borderRadius: BorderRadius.circular(8),
-              child: SizedBox(
-                width: 128,
+              child: Container(
+                width: 125,
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF08080C),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: const Color(0xFF14141C)),
+                ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Expanded(
-                      child: Container(
-                        width: double.infinity,
-                        decoration: BoxDecoration(
-                          color: Colors.grey.shade800,
-                          borderRadius: BorderRadius.circular(8),
-                          image: track.albumArtUrl != null
-                              ? DecorationImage(
-                                  image: NetworkImage(track.albumArtUrl!),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(6),
+                        child: Container(
+                          width: double.infinity,
+                          color: const Color(0xFF14141A),
+                          child: track.albumArtUrl != null
+                              ? Image.network(
+                                  track.albumArtUrl!,
                                   fit: BoxFit.cover,
+                                  errorBuilder: (_, __, ___) => const Center(
+                                    child: Icon(Icons.music_note,
+                                        color: Colors.white38),
+                                  ),
                                 )
-                              : null,
+                              : const Center(
+                                  child: Icon(Icons.music_note,
+                                      color: Colors.white38),
+                                ),
                         ),
-                        child: track.albumArtUrl == null
-                            ? const Icon(Icons.music_note,
-                                color: Colors.white54)
-                            : null,
                       ),
                     ),
                     const SizedBox(height: 6),
@@ -405,15 +617,15 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
                       style: const TextStyle(
                         color: Colors.white,
                         fontSize: 12,
-                        fontWeight: FontWeight.w600,
+                        fontWeight: FontWeight.bold,
                       ),
                     ),
                     Text(
                       track.artist,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                          color: Colors.white54, fontSize: 11),
+                      style:
+                          const TextStyle(color: Colors.white54, fontSize: 10.5),
                     ),
                   ],
                 ),
@@ -425,171 +637,337 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
     );
   }
 
+  Widget _albumsCarousel() {
+    final nav = context.read<NavidromeService>();
+    return FutureBuilder<List<Album>>(
+      future: nav.getAlbums(),
+      builder: (context, snapshot) {
+        final albums = snapshot.data ?? [];
+        if (snapshot.connectionState == ConnectionState.waiting &&
+            albums.isEmpty) {
+          return const SizedBox(
+            height: 160,
+            child: Center(
+              child: CircularProgressIndicator(
+                  strokeWidth: 2, color: Color(0xFFA855F7)),
+            ),
+          );
+        }
+        if (albums.isEmpty) {
+          return const Text('Sin álbumes',
+              style: TextStyle(color: Colors.white54));
+        }
+        return SizedBox(
+          height: 175,
+          child: ListView.builder(
+            scrollDirection: Axis.horizontal,
+            itemCount: albums.length,
+            itemBuilder: (context, index) {
+              final album = albums[index];
+              return Padding(
+                padding: const EdgeInsets.only(right: 12),
+                child: InkWell(
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                        builder: (_) => AlbumDetailScreen(album: album)),
+                  ),
+                  borderRadius: BorderRadius.circular(8),
+                  child: Container(
+                    width: 120,
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF08080C),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: const Color(0xFF14141C)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(6),
+                            child: Container(
+                              width: double.infinity,
+                              color: const Color(0xFF14141A),
+                              child: album.coverArtUrl != null
+                                  ? Image.network(
+                                      album.coverArtUrl!,
+                                      fit: BoxFit.cover,
+                                    )
+                                  : const Icon(Icons.album,
+                                      color: Colors.white38),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          album.title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        Text(
+                          album.artist,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                              color: Colors.white54, fontSize: 10),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _artistsCarousel() {
+    final nav = context.read<NavidromeService>();
+    return FutureBuilder<List<Artist>>(
+      future: nav.getArtists().then(
+            (raw) => raw
+                .map((e) => Artist.fromJson(e as Map<String, dynamic>))
+                .toList(),
+          ),
+      builder: (context, snapshot) {
+        final artists = snapshot.data ?? <Artist>[];
+        if (snapshot.connectionState == ConnectionState.waiting &&
+            artists.isEmpty) {
+          return const SizedBox(
+            height: 140,
+            child: Center(
+              child: CircularProgressIndicator(
+                  strokeWidth: 2, color: Color(0xFFA855F7)),
+            ),
+          );
+        }
+        if (artists.isEmpty) {
+          return const Text('Sin artistas',
+              style: TextStyle(color: Colors.white54));
+        }
+        return SizedBox(
+          height: 145,
+          child: ListView.builder(
+            scrollDirection: Axis.horizontal,
+            itemCount: artists.length,
+            itemBuilder: (context, index) {
+              final artist = artists[index];
+              return Padding(
+                padding: const EdgeInsets.only(right: 12),
+                child: InkWell(
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                        builder: (_) => ArtistScreen(artist: artist)),
+                  ),
+                  borderRadius: BorderRadius.circular(8),
+                  child: SizedBox(
+                    width: 100,
+                    child: Column(
+                      children: [
+                        Expanded(
+                          child: Container(
+                            width: 100,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: const Color(0xFF140E24),
+                              border: Border.all(
+                                color: const Color(0xFFA855F7)
+                                    .withValues(alpha: 0.35),
+                                width: 1.2,
+                              ),
+                              image: artist.coverArtUrl != null
+                                  ? DecorationImage(
+                                      image: NetworkImage(artist.coverArtUrl!),
+                                      fit: BoxFit.cover,
+                                    )
+                                  : null,
+                            ),
+                            child: artist.coverArtUrl == null
+                                ? const Center(
+                                    child: Icon(Icons.person,
+                                        color: Colors.white38, size: 32),
+                                  )
+                                : null,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          artist.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        );
+      },
+    );
+  }
+
   Widget _recentsList() {
-    // `watch` para que la lista se actualice al reproducir canciones.
     final player = context.watch<PlayerController>();
-    final items = player.recentlyPlayed.take(6).toList();
+    final items = player.recentlyPlayed.take(5).toList();
     if (items.isEmpty) {
       return const Padding(
         padding: EdgeInsets.symmetric(vertical: 8),
         child: Text(
-          'Todavía no escuchaste nada',
-          style: TextStyle(color: Colors.white54),
+          'Todavía no has escuchado nada',
+          style: TextStyle(color: Colors.white38, fontSize: 12),
         ),
       );
     }
     return Column(
       children: [
         for (final track in items)
-          ListTile(
-            dense: true,
-            leading: Container(
-              width: 42,
-              height: 42,
-              decoration: BoxDecoration(
-                color: Colors.grey.shade800,
-                borderRadius: BorderRadius.circular(4),
-                image: track.albumArtUrl != null
-                    ? DecorationImage(
-                        image: NetworkImage(track.albumArtUrl!),
-                        fit: BoxFit.cover,
-                      )
-                    : null,
-              ),
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            child: Row(
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(6),
+                  child: Container(
+                    width: 38,
+                    height: 38,
+                    color: const Color(0xFF14141A),
+                    child: track.albumArtUrl != null
+                        ? Image.network(track.albumArtUrl!, fit: BoxFit.cover)
+                        : const Icon(Icons.music_note,
+                            color: Colors.white38, size: 18),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        track.title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      Text(
+                        track.artist,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                            color: Colors.white54, fontSize: 11),
+                      ),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.play_circle_fill_rounded,
+                      color: Color(0xFFA855F7), size: 26),
+                  onPressed: () {
+                    context.read<PlayerController>().playQueue([track], startIndex: 0);
+                  },
+                ),
+              ],
             ),
-            title: Text(
-              track.title,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(color: Colors.white, fontSize: 14),
-            ),
-            subtitle: Text(
-              track.artist,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(color: Colors.white54, fontSize: 12),
-            ),
-            trailing: IconButton(
-              icon: const Icon(Icons.play_circle_outline,
-                  color: Colors.white, size: 28),
-              onPressed: () =>
-                  player.playQueue(player.recentlyPlayed, startIndex: items.indexOf(track)),
-            ),
-            onTap: () =>
-                player.playQueue(player.recentlyPlayed, startIndex: items.indexOf(track)),
           ),
       ],
     );
   }
 
-  Widget _sectionHeader(String title) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: Text(
-        title,
-        style: const TextStyle(
-          color: Colors.white,
-          fontSize: 18,
-          fontWeight: FontWeight.bold,
-        ),
-      ),
-    );
-  }
-
-  // ---------------------------------------------------------------------------
-  // Pestaña Buscar
-  // ---------------------------------------------------------------------------
+  // ===========================================================================
+  // Pestaña Buscar (Mobile)
+  // ===========================================================================
   Widget _buildSearchTab() {
-    return SafeArea(
-      bottom: false,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Padding(
-            padding: EdgeInsets.fromLTRB(16, 12, 16, 4),
-            child: Text(
-              'Buscar',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 22,
-                fontWeight: FontWeight.bold,
-              ),
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+          child: Container(
+            height: 42,
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            decoration: BoxDecoration(
+              color: const Color(0xFF0F0F14),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: const Color(0xFF1E1E28)),
             ),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-            child: Container(
-              height: 42,
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.search, color: Colors.black54, size: 20),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: TextField(
-                      controller: _searchController,
-                      style: const TextStyle(color: Colors.black, fontSize: 14),
-                      textInputAction: TextInputAction.search,
-                      onChanged: _runSearch,
-                      decoration: const InputDecoration(
-                        hintText: '¿Qué quieres escuchar?',
-                        hintStyle:
-                            TextStyle(color: Colors.black38, fontSize: 14),
-                        border: InputBorder.none,
-                        isDense: true,
-                      ),
+            child: Row(
+              children: [
+                const Icon(Icons.search, color: Colors.white38, size: 19),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: TextField(
+                    controller: _searchController,
+                    style: const TextStyle(color: Colors.white, fontSize: 13),
+                    textInputAction: TextInputAction.search,
+                    onChanged: _runSearch,
+                    decoration: const InputDecoration(
+                      hintText: 'Canciones, álbumes o artistas',
+                      hintStyle: TextStyle(color: Colors.white30, fontSize: 13),
+                      border: InputBorder.none,
+                      isDense: true,
                     ),
                   ),
-                  const Icon(Icons.mic_none, color: Colors.black54, size: 20),
-                ],
-              ),
-            ),
-          ),
-          Expanded(
-            child: _searchResults == null
-                ? _buildExploreAll()
-                : _buildSearchResults(),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildExploreAll() {
-    return ListView(
-      children: [
-        const Padding(
-          padding: EdgeInsets.symmetric(horizontal: 16),
-          child: Text(
-            'Explorar todo',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
+                ),
+                if (_searchController.text.isNotEmpty)
+                  IconButton(
+                    icon: const Icon(Icons.close_rounded,
+                        size: 16, color: Colors.white38),
+                    onPressed: () {
+                      _searchController.clear();
+                      _runSearch('');
+                    },
+                  ),
+              ],
             ),
           ),
         ),
-        const SizedBox(height: 12),
-        _categoryGrid(),
+        Expanded(
+          child: _searchResults != null
+              ? _buildSearchResults()
+              : const Center(
+                  child: Text(
+                    'Busca tus canciones o artistas favoritos',
+                    style: TextStyle(color: Colors.white38, fontSize: 12.5),
+                  ),
+                ),
+        ),
       ],
     );
   }
 
   Widget _buildSearchResults() {
     final results = _searchResults!;
-    if (_searching) {
+    if (_searching && results.isEmpty) {
       return const Center(
-        child: CircularProgressIndicator(color: Colors.white),
+        child: CircularProgressIndicator(
+          color: Color(0xFFA855F7),
+          strokeWidth: 2,
+        ),
       );
     }
     if (results.isEmpty) {
       return const Center(
-        child: Text('Sin resultados',
-            style: TextStyle(color: Colors.white54)),
+        child: Text('Sin resultados', style: TextStyle(color: Colors.white54)),
       );
     }
 
@@ -598,39 +976,29 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
     final artists = results.artists;
 
     return ListView(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       children: [
         if (songs.isNotEmpty) ...[
           const _ResultHeader('Canciones'),
           for (final track in songs)
             ListTile(
               dense: true,
-              leading: Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade800,
-                  borderRadius: BorderRadius.circular(4),
-                  image: track.albumArtUrl != null
-                      ? DecorationImage(
-                          image: NetworkImage(track.albumArtUrl!),
-                          fit: BoxFit.cover,
-                        )
-                      : null,
-                ),
-                child: track.albumArtUrl == null
-                    ? const Icon(Icons.music_note,
-                        color: Colors.white54, size: 20)
-                    : null,
+              leading: CoverArt(
+                url: track.albumArtUrl,
+                width: 38,
+                height: 38,
+                borderRadius: 4,
+                fallbackIcon: Icons.music_note,
+                fallbackIconSize: 18,
+                fallbackColor: const Color(0xFF141418),
               ),
               title: Text(track.title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(color: Colors.white, fontSize: 14)),
+                  style: const TextStyle(color: Colors.white, fontSize: 13)),
               subtitle: Text('${track.artist} · ${track.album}',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(color: Colors.white54, fontSize: 12)),
-              onTap: () => _openPlayer(songs, songs.indexOf(track)),
+                  style: const TextStyle(color: Colors.white54, fontSize: 11)),
+              onTap: () {
+                context.read<PlayerController>().playQueue([track], startIndex: 0);
+              },
             ),
         ],
         if (albums.isNotEmpty) ...[
@@ -638,31 +1006,23 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
           for (final album in albums)
             ListTile(
               dense: true,
-              leading: Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade800,
-                  borderRadius: BorderRadius.circular(4),
-                  image: album.coverArtUrl != null
-                      ? DecorationImage(
-                          image: NetworkImage(album.coverArtUrl!),
-                          fit: BoxFit.cover,
-                        )
-                      : null,
-                ),
-                child: album.coverArtUrl == null
-                    ? const Icon(Icons.album, color: Colors.white54, size: 20)
-                    : null,
+              leading: CoverArt(
+                url: album.coverArtUrl,
+                width: 38,
+                height: 38,
+                borderRadius: 4,
+                fallbackIcon: Icons.album,
+                fallbackIconSize: 18,
+                fallbackColor: const Color(0xFF141418),
               ),
               title: Text(album.title,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(color: Colors.white, fontSize: 14)),
+                  style: const TextStyle(color: Colors.white, fontSize: 13)),
               subtitle: Text(album.artist,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(color: Colors.white54, fontSize: 12)),
+                  style: const TextStyle(color: Colors.white54, fontSize: 11)),
               onTap: () => Navigator.push(
                 context,
                 MaterialPageRoute(
@@ -675,22 +1035,21 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
           for (final artist in artists)
             ListTile(
               dense: true,
-              leading: CircleAvatar(
-                radius: 20,
-                backgroundColor: Colors.deepPurple.shade300,
-                backgroundImage: artist.coverArtUrl != null
-                    ? NetworkImage(artist.coverArtUrl!)
-                    : null,
-                child: artist.coverArtUrl == null
-                    ? const Icon(Icons.person, color: Colors.white, size: 20)
-                    : null,
+              leading: CoverArt(
+                url: artist.coverArtUrl,
+                width: 38,
+                height: 38,
+                circle: true,
+                fallbackIcon: Icons.person,
+                fallbackIconSize: 18,
+                fallbackColor: const Color(0xFF141418),
               ),
               title: Text(artist.name,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(color: Colors.white, fontSize: 14)),
+                  style: const TextStyle(color: Colors.white, fontSize: 13)),
               subtitle: const Text('Artista',
-                  style: TextStyle(color: Colors.white54, fontSize: 12)),
+                  style: TextStyle(color: Colors.white54, fontSize: 11)),
               onTap: () => Navigator.push(
                 context,
                 MaterialPageRoute(
@@ -702,412 +1061,97 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
     );
   }
 
-  Widget _categoryGrid() {
-    final categories = [
-      ('Rock', const Color(0xFFE13300)),
-      ('Pop', const Color(0xFF148A08)),
-      ('Hip-Hop', const Color(0xFF503750)),
-      ('Jazz', const Color(0xFF7358FF)),
-      ('Electrónica', const Color(0xFF8D67AB)),
-      ('Clásica', const Color(0xFF7D4B32)),
-    ];
-    return GridView.count(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      crossAxisCount: 2,
-      childAspectRatio: 1.6,
-      crossAxisSpacing: 12,
-      mainAxisSpacing: 12,
-      children: [
-        for (final category in categories)
-          Container(
-            decoration: BoxDecoration(
-              color: category.$2,
-              borderRadius: BorderRadius.circular(8),
-            ),
-            padding: const EdgeInsets.all(12),
-            child: Align(
-              alignment: Alignment.bottomLeft,
-              child: Text(
-                category.$1,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 15,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-          ),
-      ],
-    );
-  }
-
-  // ---------------------------------------------------------------------------
-  // Pestaña Tu Biblioteca
-  // ---------------------------------------------------------------------------
+  // ===========================================================================
+  // Pestaña Tu Biblioteca (Mobile)
+  // ===========================================================================
   Widget _buildLibraryTab() {
-    // `watch` para que el icono de fijar se actualice al tocar pin/unpin.
     final nav = context.watch<NavidromeService>();
     return FutureBuilder<List<Playlist>>(
       future: _futurePlaylists,
       builder: (context, snapshot) {
-        final playlists = snapshot.data ?? <Playlist>[];
-        final loading =
-            snapshot.connectionState == ConnectionState.waiting;
-        final pinned =
-            playlists.where((p) => nav.isPinnedPlaylist(p.id)).toList();
-        final rest =
-            playlists.where((p) => !nav.isPinnedPlaylist(p.id)).toList();
-
-        if (loading && playlists.isEmpty) {
-          return const Center(
-            child: CircularProgressIndicator(color: Colors.white),
-          );
-        }
-
-        return SafeArea(
-          bottom: false,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-                child: Row(
-                  children: [
-                    const Expanded(
-                      child: Text(
-                        'Tu biblioteca',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 22,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                    Text(
-                      '${playlists.length} playlists',
-                      style:
-                          const TextStyle(color: Colors.white54, fontSize: 13),
-                    ),
-                  ],
+        final playlists = snapshot.data ?? [];
+        return ListView(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          children: [
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF4C1D95),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: const Icon(Icons.favorite_rounded,
+                    color: Colors.white, size: 22),
+              ),
+              title: const Text('Tus Me Gusta',
+                  style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold)),
+              subtitle: const Text('Canciones favoritas',
+                  style: TextStyle(color: Colors.white54, fontSize: 12)),
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const LikedSongsScreen()),
+              ),
+            ),
+            const Divider(color: Color(0xFF14141A)),
+            for (final playlist in playlists) ...[
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: CoverArt(
+                  url: playlist.coverArtUrl,
+                  width: 44,
+                  height: 44,
+                  borderRadius: 6,
+                  fallbackIcon: Icons.queue_music,
+                  fallbackIconSize: 20,
+                  fallbackColor: const Color(0xFF14141A),
+                ),
+                title: Text(playlist.name,
+                    style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.w500)),
+                subtitle: Text(
+                  'Playlist · ${playlist.songCount} canciones',
+                  style: const TextStyle(color: Colors.white38, fontSize: 11.5),
+                ),
+                trailing: nav.isPinnedPlaylist(playlist.id)
+                    ? const Icon(Icons.push_pin,
+                        color: Color(0xFF10B981), size: 14)
+                    : null,
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => PlaylistDetailScreen(playlist: playlist),
+                  ),
                 ),
               ),
-              Expanded(
-                child: playlists.isEmpty
-                    ? const Center(
-                        child: Text(
-                          'Sin playlists',
-                          style: TextStyle(color: Colors.white54),
-                        ),
-                      )
-                    : ListView(
-                        padding: const EdgeInsets.only(bottom: 16),
-                        children: [
-                          const SizedBox(height: 8),
-                          // ── Liked Songs ──────────────────────────
-                          _likedSongsCard(),
-                          // ── Fijadas ─────────────────────────────
-                          if (pinned.isNotEmpty) ...[
-                            const _LibrarySectionLabel('Fijadas'),
-                            for (final p in pinned)
-                              _playlistListTile(p, pinned: true),
-                          ],
-                          // ── Playlists ───────────────────────────
-                          if (rest.isNotEmpty) ...[
-                            const _LibrarySectionLabel('Playlists'),
-                            for (final p in rest) _playlistListTile(p),
-                          ],
-                        ],
-                      ),
-              ),
             ],
-          ),
+          ],
         );
       },
     );
   }
 
-  Widget _likedSongsCard() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(8),
-        onTap: () => Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => const LikedSongsScreen()),
-        ),
-        child: Container(
-          height: 56,
-          decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              colors: [Color(0xFF353588), Color(0xFF4040AA)],
-            ),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: 14),
-          child: const Row(
-            children: [
-              Icon(Icons.favorite, color: Colors.white, size: 26),
-              SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  'Liked Songs',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 15,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-              Icon(Icons.chevron_right, color: Colors.white38),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _playlistListTile(Playlist playlist, {bool pinned = false}) {
-    return InkWell(
-      onTap: () => Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => PlaylistDetailScreen(playlist: playlist),
-        ),
-      ),
-      onLongPress: () => _showMobilePlaylistActions(playlist),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-        child: Row(
-          children: [
-            Container(
-              width: 52,
-              height: 52,
-              decoration: BoxDecoration(
-                color: Colors.grey.shade800,
-                borderRadius: BorderRadius.circular(6),
-                image: playlist.coverArtUrl != null
-                    ? DecorationImage(
-                        image: NetworkImage(playlist.coverArtUrl!),
-                        fit: BoxFit.cover,
-                      )
-                    : null,
-              ),
-              child: playlist.coverArtUrl == null
-                  ? const Icon(Icons.queue_music,
-                      color: Colors.white54, size: 22)
-                  : null,
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      if (pinned) ...[
-                        const Icon(Icons.push_pin,
-                            color: Colors.greenAccent, size: 13),
-                        const SizedBox(width: 3),
-                      ],
-                      Expanded(
-                        child: Text(
-                          playlist.name,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    'Playlist · ${playlist.songCount} canciones',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style:
-                        const TextStyle(color: Colors.white54, fontSize: 12),
-                  ),
-                ],
-              ),
-            ),
-            const Icon(Icons.chevron_right, color: Colors.white38, size: 20),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _showMobilePlaylistActions(Playlist playlist) {
-    final nav = context.read<NavidromeService>();
-    final pinned = nav.isPinnedPlaylist(playlist.id);
-    showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: const Color(0xFF1F1F1F),
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (context) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const SizedBox(height: 8),
-            Container(
-              width: 36,
-              height: 4,
-              decoration: BoxDecoration(
-                color: Colors.white24,
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            ListTile(
-              leading: const Icon(Icons.play_arrow, color: Colors.white),
-              title: const Text('Reproducir',
-                  style: TextStyle(color: Colors.white)),
-              onTap: () {
-                Navigator.of(context).pop();
-                _playMobilePlaylist(playlist.id);
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.shuffle, color: Colors.greenAccent),
-              title: const Text('Reproducir al azar',
-                  style: TextStyle(color: Colors.white)),
-              onTap: () {
-                Navigator.of(context).pop();
-                _playMobilePlaylistShuffled(playlist.id);
-              },
-            ),
-            ListTile(
-              leading: Icon(
-                pinned ? Icons.push_pin_outlined : Icons.push_pin,
-                color: Colors.white,
-              ),
-              title: Text(
-                pinned ? 'Quitar de arriba' : 'Fijar arriba',
-                style: const TextStyle(color: Colors.white),
-              ),
-              onTap: () {
-                Navigator.of(context).pop();
-                nav.togglePinPlaylist(playlist.id);
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.delete_outline, color: Colors.redAccent),
-              title: const Text('Eliminar playlist',
-                  style: TextStyle(color: Colors.redAccent)),
-              onTap: () {
-                Navigator.of(context).pop();
-                _confirmDeletePlaylist(playlist);
-              },
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Future<void> _playMobilePlaylist(String playlistId) async {
-    final tracks =
-        await context.read<NavidromeService>().getPlaylistTracks(playlistId);
-    if (mounted && tracks.isNotEmpty) {
-      context.read<PlayerController>().playQueue(tracks, startIndex: 0);
-    }
-  }
-
-  Future<void> _playMobilePlaylistShuffled(String playlistId) async {
-    final tracks =
-        await context.read<NavidromeService>().getPlaylistTracks(playlistId);
-    if (mounted && tracks.isNotEmpty) {
-      final player = context.read<PlayerController>();
-      player.playQueue(tracks, startIndex: 0);
-      await player.toggleShuffle();
-    }
-  }
-
-  Future<void> _confirmDeletePlaylist(Playlist playlist) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF1F1F1F),
-        title: const Text('¿Eliminar playlist?',
-            style: TextStyle(color: Colors.white)),
-        content: Text(
-          'Se borrará "${playlist.name}" permanentemente.',
-          style: const TextStyle(color: Colors.white70),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Cancelar', style: TextStyle(color: Colors.white70)),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('Eliminar', style: TextStyle(color: Colors.redAccent)),
-          ),
-        ],
-      ),
-    );
-    if (confirmed != true) return;
-    final nav = context.read<NavidromeService>();
-    try {
-      await nav.deletePlaylist(playlist.id);
-      nav.bumpPlaylists();
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Playlist eliminada', style: const TextStyle(color: Colors.white)),
-          backgroundColor: const Color(0xFF1F1F1F),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error: $e', style: const TextStyle(color: Colors.redAccent)),
-          backgroundColor: const Color(0xFF1F1F1F),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-    }
-  }
-
-    // ---------------------------------------------------------------------------
-  // Barra inferior: Mini-reproductor flotante + navegación
-  // ---------------------------------------------------------------------------
+  // ===========================================================================
+  // Barra Inferior de Navegación Móvil AMOLED
+  // ===========================================================================
   Widget _buildNavBar() {
     return Container(
-      height: 64,
+      height: 54,
       decoration: const BoxDecoration(
-        color: Color(0xFF0A0A0A),
-        border: Border(top: BorderSide(color: Colors.white12)),
+        color: Color(0xFF070709),
+        border: Border(top: BorderSide(color: Color(0xFF14141A), width: 1)),
       ),
       child: Row(
         children: [
           _navItem(Icons.home_rounded, 'Inicio', 0),
           _navItem(Icons.search_rounded, 'Buscar', 1),
-          _navItem(Icons.library_music_outlined, 'Tu biblioteca', 2),
-          Expanded(
-            child: InkWell(
-              onTap: _showCreateSheet,
-              child: const Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.add_circle_outline,
-                      color: Colors.white54, size: 24),
-                  SizedBox(height: 2),
-                  Text(
-                    'Crear',
-                    style: TextStyle(color: Colors.white54, fontSize: 10),
-                  ),
-                ],
-              ),
-            ),
-          ),
+          _navItem(Icons.library_music_rounded, 'Biblioteca', 2),
         ],
       ),
     );
@@ -1121,135 +1165,21 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(icon,
-                color: selected ? Colors.white : Colors.white54, size: 24),
+            Icon(
+              icon,
+              color: selected ? const Color(0xFFA855F7) : Colors.white38,
+              size: 22,
+            ),
             const SizedBox(height: 2),
             Text(
               label,
               style: TextStyle(
-                color: selected ? Colors.white : Colors.white54,
-                fontSize: 10,
+                color: selected ? Colors.white : Colors.white38,
+                fontSize: 10.5,
+                fontWeight: selected ? FontWeight.bold : FontWeight.normal,
               ),
             ),
           ],
-        ),
-      ),
-    );
-  }
-
-  void _showCreateSheet() {
-    showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: const Color(0xFF1F1F1F),
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (context) {
-        return SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const SizedBox(height: 8),
-              Container(
-                width: 36,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: Colors.white24,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-              ListTile(
-                leading:
-                    const Icon(Icons.playlist_add, color: Colors.white),
-                title: const Text('Nueva playlist',
-                    style: TextStyle(color: Colors.white)),
-                onTap: () {
-                  Navigator.of(context).pop();
-                  _promptNewPlaylist();
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.shuffle, color: Colors.white),
-                title: const Text('Crear mezcla',
-                    style: TextStyle(color: Colors.white)),
-                onTap: () => Navigator.of(context).pop(),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  void _promptNewPlaylist() {
-    final controller = TextEditingController();
-    showDialog<void>(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          backgroundColor: const Color(0xFF1F1F1F),
-          title: const Text('Nueva playlist',
-              style: TextStyle(color: Colors.white)),
-          content: TextField(
-            controller: controller,
-            autofocus: true,
-            style: const TextStyle(color: Colors.white),
-            decoration: const InputDecoration(
-              hintText: 'Nombre de la playlist',
-              hintStyle: TextStyle(color: Colors.white38),
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Cancelar',
-                  style: TextStyle(color: Colors.white70)),
-            ),
-            TextButton(
-              onPressed: () async {
-                final name = controller.text.trim();
-                if (name.isEmpty) return;
-                Navigator.of(context).pop();
-                try {
-                  await context.read<NavidromeService>().createPlaylist(name);
-                  if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Playlist "$name" creada')),
-                    );
-                  }
-                } catch (e) {
-                  if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Error: $e')),
-                    );
-                  }
-                }
-              },
-              child: const Text('Crear', style: TextStyle(color: Colors.white)),
-            ),
-          ],
-        );
-      },
-    );
-  }
-}
-
-class _LibrarySectionLabel extends StatelessWidget {
-  final String title;
-
-  const _LibrarySectionLabel(this.title);
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
-      child: Text(
-        title.toUpperCase(),
-        style: const TextStyle(
-          color: Colors.white54,
-          fontSize: 11,
-          fontWeight: FontWeight.w600,
-          letterSpacing: 1.2,
         ),
       ),
     );
@@ -1258,18 +1188,17 @@ class _LibrarySectionLabel extends StatelessWidget {
 
 class _ResultHeader extends StatelessWidget {
   final String title;
-
   const _ResultHeader(this.title);
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+      padding: const EdgeInsets.fromLTRB(4, 14, 4, 6),
       child: Text(
         title,
         style: const TextStyle(
-          color: Colors.white,
-          fontSize: 16,
+          color: Color(0xFFA855F7),
+          fontSize: 13,
           fontWeight: FontWeight.bold,
         ),
       ),

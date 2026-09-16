@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:crypto/crypto.dart';
 import 'package:path_provider/path_provider.dart';
 
+import '../models/jam_models.dart';
 import 'settings_controller.dart';
 
 class Track {
@@ -129,6 +130,65 @@ class SearchResults {
   });
 
   bool get isEmpty => songs.isEmpty && albums.isEmpty && artists.isEmpty;
+}
+
+/// Registro de lo que un usuario está escuchando en el servidor Navidrome en tiempo real.
+class NowPlayingEntry {
+  final String username;
+  final Track track;
+  final int minutesAgo;
+  final int? playerId;
+
+  NowPlayingEntry({
+    required this.username,
+    required this.track,
+    required this.minutesAgo,
+    this.playerId,
+  });
+
+  factory NowPlayingEntry.fromJson(
+      Map<String, dynamic> json, String? albumArtUrl) {
+    return NowPlayingEntry(
+      username: (json['username'] as String?) ?? 'Usuario',
+      track: Track.fromJson(json, albumArtUrl: albumArtUrl),
+      minutesAgo: (json['minutesAgo'] as num?)?.toInt() ?? 0,
+      playerId: (json['playerId'] as num?)?.toInt(),
+    );
+  }
+}
+
+/// Mensaje en el chat comunitario del servidor Navidrome.
+class ChatMessage {
+  final String username;
+  final DateTime time;
+  final String message;
+
+  ChatMessage({
+    required this.username,
+    required this.time,
+    required this.message,
+  });
+
+  factory ChatMessage.fromJson(Map<String, dynamic> json) {
+    final rawTime = json['time'];
+    DateTime time;
+    if (rawTime is num) {
+      time = DateTime.fromMillisecondsSinceEpoch(rawTime.toInt());
+    } else if (rawTime is String) {
+      final parsed = int.tryParse(rawTime);
+      time = parsed != null
+          ? DateTime.fromMillisecondsSinceEpoch(parsed)
+          : (DateTime.tryParse(rawTime) ?? DateTime.now());
+    } else {
+      time = DateTime.now();
+    }
+
+    return ChatMessage(
+      username: (json['username'] as String?) ?? 'Usuario',
+      time: time,
+      message: (json['message'] as String?) ?? '',
+    );
+  }
 }
 
 class NavidromeService with ChangeNotifier {
@@ -919,6 +979,186 @@ class NavidromeService with ChangeNotifier {
       url += '&format=mp3&maxBitRate=${q.kbps}';
     }
     return url;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Comunidad e Interacciones en el Servidor Navidrome
+  // ---------------------------------------------------------------------------
+
+  /// Obtiene lo que otros usuarios están escuchando en este servidor en tiempo real.
+  Future<List<NowPlayingEntry>> getNowPlaying() async {
+    if (!_connected) return [];
+    final (salt, token) = _auth();
+    final uri = Uri.parse('$_url/rest/getNowPlaying.view').replace(queryParameters: {
+      'u': _user!,
+      's': salt,
+      't': token,
+      'v': '1.16.1',
+      'c': 'Psysonic',
+      'f': 'json',
+    });
+
+    try {
+      final response = await _client.get(uri);
+      if (response.statusCode != 200) return [];
+      final data = jsonDecode(response.body);
+      final entries =
+          data['subsonic-response']?['nowPlaying']?['entry'] as List?;
+      if (entries == null) return [];
+
+      return entries
+          .map((j) => NowPlayingEntry.fromJson(
+                j as Map<String, dynamic>,
+                _coverArtUrl(j['coverArt'], salt, token),
+              ))
+          .toList();
+    } catch (e) {
+      debugPrint('NavidromeService.getNowPlaying error: $e');
+      return [];
+    }
+  }
+
+  /// Obtiene los mensajes del chat comunitario del servidor.
+  Future<List<ChatMessage>> getChatMessages({int? since}) async {
+    if (!_connected) return [];
+    final (salt, token) = _auth();
+    final params = <String, String>{
+      'u': _user!,
+      's': salt,
+      't': token,
+      'v': '1.16.1',
+      'c': 'Psysonic',
+      'f': 'json',
+      if (since != null) 'since': since.toString(),
+    };
+
+    final uri =
+        Uri.parse('$_url/rest/getChatMessages.view').replace(queryParameters: params);
+
+    try {
+      final response = await _client.get(uri);
+      if (response.statusCode != 200) return [];
+      final data = jsonDecode(response.body);
+      final rawList =
+          data['subsonic-response']?['chatMessages']?['chatMessage'] as List?;
+      if (rawList == null) return [];
+
+      return rawList
+          .map((j) => ChatMessage.fromJson(j as Map<String, dynamic>))
+          .toList();
+    } catch (e) {
+      debugPrint('NavidromeService.getChatMessages error: $e');
+      return [];
+    }
+  }
+
+  /// Envía un mensaje al chat comunitario del servidor.
+  Future<bool> addChatMessage(String message) async {
+    if (!_connected || message.trim().isEmpty) return false;
+    final (salt, token) = _auth();
+    final uri =
+        Uri.parse('$_url/rest/addChatMessage.view').replace(queryParameters: {
+      'u': _user!,
+      's': salt,
+      't': token,
+      'v': '1.16.1',
+      'c': 'Psysonic',
+      'f': 'json',
+      'message': message.trim(),
+    });
+
+    try {
+      final response = await _client.get(uri);
+      return response.statusCode == 200;
+    } catch (e) {
+      debugPrint('NavidromeService.addChatMessage error: $e');
+      return false;
+    }
+  }
+
+  /// Publica o anuncia una sesión Jam activa en el servidor Navidrome para que
+  /// cualquier usuario conectado a la misma instancia pueda descubrirla y unirse.
+  Future<void> publishServerJam(JamSessionState session) async {
+    if (!_connected) return;
+    try {
+      final payload = jsonEncode({
+        'tag': 'SCROTIFY_JAM',
+        'sessionId': session.sessionId,
+        'pin': session.pinCode,
+        'host': session.hostIp,
+        'port': session.port,
+        'hostName': session.hostName,
+        'title': 'Jam de ${session.hostName}',
+        'trackTitle': session.currentTrack?.title,
+        'trackArtist': session.currentTrack?.artist,
+        'albumArtUrl': session.currentTrack?.albumArtUrl,
+        'mode': session.mode.name,
+        'participantCount': session.participants.length,
+        'timestamp': DateTime.now().millisecondsSinceEpoch,
+      });
+
+      await addChatMessage('[JAM_LIVE]:$payload');
+    } catch (e) {
+      debugPrint('NavidromeService.publishServerJam error: $e');
+    }
+  }
+
+  /// Descubre sesiones Jam activas anunciadas en este servidor Navidrome.
+  Future<List<DiscoveredJamSession>> getServerActiveJams() async {
+    if (!_connected) return [];
+    final discovered = <String, DiscoveredJamSession>{};
+
+    try {
+      // 1. Buscar en mensajes de chat recientes
+      final messages = await getChatMessages();
+      final now = DateTime.now().millisecondsSinceEpoch;
+
+      for (final msg in messages.reversed) {
+        if (msg.message.startsWith('[JAM_LIVE]:')) {
+          try {
+            final jsonStr = msg.message.substring('[JAM_LIVE]:'.length);
+            final data = jsonDecode(jsonStr) as Map<String, dynamic>;
+            final ts = (data['timestamp'] as num?)?.toInt() ?? 0;
+
+            // Ignorar sesiones con más de 25 minutos sin actualización
+            if (now - ts < 25 * 60 * 1000) {
+              final host = (data['host'] as String?) ?? '127.0.0.1';
+              final port = (data['port'] as num?)?.toInt() ?? 0;
+              final pin = (data['pin'] as String?) ?? '';
+              final key = '$host:$port:$pin';
+
+              if (pin.isNotEmpty) {
+                final modeName =
+                    data['mode'] as String? ?? JamMode.partySpeaker.name;
+                final mode = JamMode.values.firstWhere(
+                  (m) => m.name == modeName,
+                  orElse: () => JamMode.partySpeaker,
+                );
+
+                discovered[key] = DiscoveredJamSession(
+                  host: host,
+                  port: port,
+                  pin: pin,
+                  sessionTitle: (data['title'] as String?) ??
+                      'Jam de ${data['hostName'] ?? "Comunidad"}',
+                  hostName: (data['hostName'] as String?) ?? msg.username,
+                  participantCount:
+                      (data['participantCount'] as num?)?.toInt() ?? 1,
+                  currentTrackTitle: data['trackTitle'] as String?,
+                  currentTrackArtist: data['trackArtist'] as String?,
+                  albumArtUrl: data['albumArtUrl'] as String?,
+                  mode: mode,
+                );
+              }
+            }
+          } catch (_) {}
+        }
+      }
+    } catch (e) {
+      debugPrint('NavidromeService.getServerActiveJams error: $e');
+    }
+
+    return discovered.values.toList();
   }
 
   void disconnect() async {

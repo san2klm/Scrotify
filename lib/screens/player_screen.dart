@@ -4,8 +4,12 @@ import 'package:flutter/material.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:provider/provider.dart';
 
+import '../services/jam_controller.dart';
 import '../services/player_controller.dart';
 import '../services/navidrome_service.dart';
+import '../widgets/jam_dialog.dart';
+import '../widgets/jam_queue_panel.dart';
+import '../widgets/track_context_menu.dart';
 
 /// Pantalla completa del reproductor. Es una vista del estado global de
 /// reproducción ([PlayerController]); al cerrar esta pantalla la música sigue
@@ -26,137 +30,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
     return '$minutes:${secs.toString().padLeft(2, '0')}';
   }
 
-  void _showContextMenu(PlayerController player, String id) {
-    final nav = context.read<NavidromeService>();
-    final starred = nav.isStarred(id);
-    showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: const Color(0xFF1F1F1F),
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (context) {
-        return SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const SizedBox(height: 8),
-              Container(
-                width: 36,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: Colors.white24,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-              ListTile(
-                leading: const Icon(Icons.playlist_add, color: Colors.white),
-                title: const Text('Añadir a una playlist',
-                    style: TextStyle(color: Colors.white)),
-                onTap: () {
-                  Navigator.of(context).pop();
-                  _showAddToPlaylistSheet(nav);
-                },
-              ),
-              ListTile(
-                leading: Icon(
-                  starred ? Icons.favorite : Icons.favorite_border,
-                  color: starred ? Colors.greenAccent : Colors.white,
-                ),
-                title: Text(
-                  starred ? 'Quitar de favoritos' : 'Añadir a favoritos',
-                  style: const TextStyle(color: Colors.white),
-                ),
-                onTap: () {
-                  Navigator.of(context).pop();
-                  final track = player.currentTrack;
-                  if (track != null) nav.toggleStar(track);
-                },
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  void _showAddToPlaylistSheet(NavidromeService nav) {
-    showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: const Color(0xFF1F1F1F),
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (ctx) {
-        return FutureBuilder<List<Playlist>>(
-          future: nav.getPlaylists(),
-          builder: (context, snapshot) {
-            final playlists = snapshot.data ?? <Playlist>[];
-            return SafeArea(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const SizedBox(height: 8),
-                  Container(
-                    width: 36,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: Colors.white24,
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
-                  const ListTile(
-                    leading: Icon(Icons.library_music, color: Colors.white),
-                    title: Text('Selecciona una playlist',
-                        style: TextStyle(color: Colors.white)),
-                  ),
-                  if (snapshot.connectionState == ConnectionState.waiting)
-                    const Padding(
-                      padding: EdgeInsets.all(16),
-                      child: CircularProgressIndicator(color: Colors.white),
-                    )
-                  else if (playlists.isEmpty)
-                    const ListTile(
-                      title: Text('No tienes playlists',
-                          style: TextStyle(color: Colors.white54)),
-                    )
-                  else
-                    Flexible(
-                      child: ListView(
-                        shrinkWrap: true,
-                        children: [
-                          for (final p in playlists)
-                            ListTile(
-                              leading: const Icon(Icons.playlist_play,
-                                  color: Colors.white70),
-                              title: Text(p.name,
-                                  style: const TextStyle(color: Colors.white)),
-                              subtitle: Text('${p.songCount} canciones',
-                                  style:
-                                      const TextStyle(color: Colors.white54)),
-                              onTap: () async {
-                                Navigator.of(context).pop();
-                                final player =
-                                    context.read<PlayerController>();
-                                final track = player.currentTrack;
-                                if (track != null) {
-                                  await nav.updatePlaylist(
-                                    playlistId: p.id,
-                                    songIdsToAdd: [track.id],
-                                  );
-                                }
-                              },
-                            ),
-                        ],
-                      ),
-                    ),
-                ],
-              ),
-            );
-          },
-        );
-      },
-    );
+  void _showContextMenu(PlayerController player, Track track) {
+    TrackContextMenu.show(context, track);
   }
 
   @override
@@ -196,10 +71,63 @@ class _PlayerScreenState extends State<PlayerScreen> {
                                 color: Colors.white, size: 32),
                             onPressed: () => Navigator.of(context).pop(),
                           ),
+                          Consumer<JamController>(
+                            builder: (context, jam, _) {
+                              if (jam.inJam) {
+                                return InkWell(
+                                  onTap: () =>
+                                      JamDialog.showAsBottomSheet(context),
+                                  borderRadius: BorderRadius.circular(20),
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 10, vertical: 4),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFF10B981)
+                                          .withValues(alpha: 0.15),
+                                      borderRadius: BorderRadius.circular(20),
+                                      border: Border.all(
+                                        color: const Color(0xFF10B981)
+                                            .withValues(alpha: 0.4),
+                                      ),
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Container(
+                                          width: 6,
+                                          height: 6,
+                                          decoration: const BoxDecoration(
+                                            shape: BoxShape.circle,
+                                            color: Color(0xFF10B981),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 6),
+                                        Text(
+                                          'Jam · ${jam.participants.length}',
+                                          style: const TextStyle(
+                                            color: Color(0xFF10B981),
+                                            fontSize: 11.5,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                );
+                              }
+                              return IconButton(
+                                icon: const Icon(Icons.speaker_group_outlined,
+                                    color: Colors.white70, size: 22),
+                                tooltip: 'Jam',
+                                onPressed: () =>
+                                    JamDialog.showAsBottomSheet(context),
+                              );
+                            },
+                          ),
                           IconButton(
                             icon: const Icon(Icons.more_horiz,
                                 color: Colors.white),
-                            onPressed: () => _showContextMenu(player, track.id),
+                            onPressed: () => _showContextMenu(player, track),
                           ),
                         ],
                       ),
@@ -244,6 +172,50 @@ class _PlayerScreenState extends State<PlayerScreen> {
                           fontSize: 16,
                         ),
                       ),
+                      Consumer<JamController>(
+                        builder: (context, jam, _) {
+                          if (jam.inJam && jam.currentTrackAddedBy != null) {
+                            final p = jam.currentTrackAddedBy!;
+                            return Padding(
+                              padding: const EdgeInsets.only(top: 6),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 10, vertical: 3),
+                                decoration: BoxDecoration(
+                                  color: Color(p.avatarColorValue)
+                                      .withValues(alpha: 0.18),
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(
+                                    color: Color(p.avatarColorValue)
+                                        .withValues(alpha: 0.4),
+                                    width: 0.8,
+                                  ),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    CircleAvatar(
+                                      radius: 4,
+                                      backgroundColor:
+                                          Color(p.avatarColorValue),
+                                    ),
+                                    const SizedBox(width: 6),
+                                    Text(
+                                      'Añadido al Jam por ${p.name}',
+                                      style: TextStyle(
+                                        color: Color(p.avatarColorValue),
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          }
+                          return const SizedBox.shrink();
+                        },
+                      ),
                       const SizedBox(height: 16),
                       _buildProgressBar(player),
                       const SizedBox(height: 8),
@@ -253,7 +225,40 @@ class _PlayerScreenState extends State<PlayerScreen> {
                         repeatMode: repeatMode,
                         shuffleEnabled: shuffleEnabled,
                       ),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 12),
+                      // Barra de utilidades inferior: Favoritos + Jam + Cola
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Consumer<NavidromeService>(
+                              builder: (context, nav, _) {
+                                final isStarred = nav.isStarred(track.id);
+                                return IconButton(
+                                  icon: Icon(
+                                    isStarred
+                                        ? Icons.favorite
+                                        : Icons.favorite_border,
+                                    color: isStarred
+                                        ? const Color(0xFF10B981)
+                                        : Colors.white60,
+                                    size: 22,
+                                  ),
+                                  onPressed: () => nav.toggleStar(track),
+                                );
+                              },
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.queue_music_rounded,
+                                  color: Colors.white70, size: 24),
+                              tooltip: 'Cola de reproducción',
+                              onPressed: () => JamQueuePanel.show(context),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 8),
                     ],
                   ),
                 ),

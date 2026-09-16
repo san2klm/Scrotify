@@ -2,10 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:provider/provider.dart';
 
+import '../services/jam_controller.dart';
 import '../services/navidrome_service.dart';
 import '../services/player_controller.dart';
 import '../screens/player_screen.dart';
 import 'cover_art.dart';
+import 'jam_dialog.dart';
+import 'jam_queue_panel.dart';
 
 /// Panel de control persistente (barra inferior del reproductor).
 /// Refleja el estado real del [PlayerController] y permite controlar la
@@ -115,7 +118,11 @@ class PersistentPlayerBar extends StatelessWidget {
               ),
             ),
 
-            // ── Right: volume + fullscreen ──
+            // ── Right: Jam + Queue + volume + fullscreen ──
+            _jamButton(context),
+            const SizedBox(width: 6),
+            _queueButton(context),
+            const SizedBox(width: 8),
             _VolumeBar(player),
             const SizedBox(width: 8),
             _openFullButton(context),
@@ -173,8 +180,79 @@ class PersistentPlayerBar extends StatelessWidget {
         player.skipNext,
         size: 24,
       ),
+      IconButton(
+        visualDensity: VisualDensity.compact,
+        padding: EdgeInsets.zero,
+        constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+        icon: const Icon(Icons.queue_music_rounded,
+            color: Colors.white70, size: 20),
+        onPressed: () => JamQueuePanel.show(context),
+      ),
       _openFullButton(context, up: true),
     ];
+  }
+
+  Widget _jamButton(BuildContext context) {
+    final jam = context.watch<JamController>();
+    if (jam.inJam) {
+      return InkWell(
+        onTap: () => JamDialog.show(context),
+        borderRadius: BorderRadius.circular(20),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+          decoration: BoxDecoration(
+            color: const Color(0xFF10B981).withValues(alpha: 0.15),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: const Color(0xFF10B981).withValues(alpha: 0.4),
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 7,
+                height: 7,
+                decoration: const BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Color(0xFF10B981),
+                ),
+              ),
+              const SizedBox(width: 6),
+              const Icon(Icons.speaker_group_rounded,
+                  color: Color(0xFF10B981), size: 15),
+              const SizedBox(width: 5),
+              Text(
+                'Jam · ${jam.participants.length}',
+                style: const TextStyle(
+                  color: Color(0xFF10B981),
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return IconButton(
+      tooltip: 'Iniciar o unirse a Jam',
+      visualDensity: VisualDensity.compact,
+      icon: const Icon(Icons.speaker_group_outlined,
+          color: Colors.white70, size: 20),
+      onPressed: () => JamDialog.show(context),
+    );
+  }
+
+  Widget _queueButton(BuildContext context) {
+    return IconButton(
+      tooltip: 'Cola de reproducción',
+      visualDensity: VisualDensity.compact,
+      icon: const Icon(Icons.queue_music_rounded,
+          color: Colors.white70, size: 21),
+      onPressed: () => JamQueuePanel.show(context),
+    );
   }
 
   // ---------------------------------------------------------------------------

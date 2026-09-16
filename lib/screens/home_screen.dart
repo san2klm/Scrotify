@@ -1,9 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../services/jam_controller.dart';
 import '../services/navidrome_service.dart';
+import '../services/pairing_server.dart';
 import '../services/player_controller.dart';
 import '../widgets/persistent_player_bar.dart';
 import '../widgets/cover_art.dart';
+import '../widgets/pairing_panel.dart';
+import '../widgets/jam_dialog.dart';
+import '../widgets/server_activity_panel.dart';
+import '../widgets/track_context_menu.dart';
 import 'liked_songs_screen.dart';
 import 'playlist_detail_screen.dart';
 import 'album_detail_screen.dart';
@@ -23,6 +29,7 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _libraryCollapsed = false;
   int _coverArtVersion = -1;
   int _playlistVersion = -1;
+  int _activeNavIndex = 0; // 0 = Inicio, 1 = Explorar
 
   final TextEditingController _searchController = TextEditingController();
   SearchResults? _searchResults;
@@ -63,6 +70,58 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  void _openPairingDialog() {
+    final nav = context.read<NavidromeService>();
+    final server = context.read<PairingServer>();
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF0C0C10),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+          side: const BorderSide(color: Color(0xFF1E1E28), width: 1.2),
+        ),
+        titlePadding: const EdgeInsets.fromLTRB(20, 16, 12, 0),
+        contentPadding: const EdgeInsets.all(20),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                color: const Color(0xFF7C3AED).withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Icon(Icons.qr_code_2_rounded,
+                  color: Color(0xFFA855F7), size: 20),
+            ),
+            const SizedBox(width: 10),
+            const Text(
+              'Vincular con tu Teléfono',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const Spacer(),
+            IconButton(
+              icon: const Icon(Icons.close, color: Colors.white54, size: 20),
+              onPressed: () => Navigator.of(ctx).pop(),
+            ),
+          ],
+        ),
+        content: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 420),
+          child: PairingSharePanel(
+            compact: true,
+            server: server,
+            onGetCredentials: () async => nav.currentCredentials,
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   void dispose() {
     _searchController.dispose();
@@ -71,7 +130,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Refrescar portadas cuando cambia la resolución configurada.
     final nav = context.watch<NavidromeService>();
     final version = nav.coverArtVersion;
     if (version != _coverArtVersion && _coverArtVersion >= 0) {
@@ -87,7 +145,6 @@ class _HomeScreenState extends State<HomeScreen> {
     }
     _coverArtVersion = version;
 
-    // Refrescar lista de playlists tras importación/creación/borrado.
     final pVersion = nav.playlistVersion;
     if (pVersion != _playlistVersion && _playlistVersion >= 0) {
       _playlistVersion = pVersion;
@@ -102,29 +159,361 @@ class _HomeScreenState extends State<HomeScreen> {
     _playlistVersion = pVersion;
 
     return Scaffold(
-      backgroundColor: const Color(0xFF121212),
-      body: Row(
+      backgroundColor: const Color(0xFF000000), // Pure AMOLED Black
+      body: Column(
         children: [
-          if (!_libraryCollapsed) _buildLibraryPanel(),
-          Expanded(child: _buildMainPanel()),
+          // -----------------------------------------------------------------
+          // 1. BARRA SUPERIOR PERSISTENTE (Global Header de extremo a extremo)
+          // -----------------------------------------------------------------
+          _buildPersistentGlobalTopBar(nav),
+
+          // -----------------------------------------------------------------
+          // 2. CUERPO: Panel Lateral de Biblioteca + Área Principal
+          // -----------------------------------------------------------------
+          Expanded(
+            child: Row(
+              children: [
+                if (!_libraryCollapsed) _buildLibraryPanel(),
+                Expanded(child: _buildMainPanel()),
+              ],
+            ),
+          ),
         ],
       ),
       bottomNavigationBar: const PersistentPlayerBar(),
     );
   }
 
-  // ---------------------------------------------------------------------------
+  // ===========================================================================
+  // BARRA SUPERIOR PERSISTENTE (GLOBAL HEADER)
+  // ===========================================================================
+  Widget _buildPersistentGlobalTopBar(NavidromeService nav) {
+    final username = nav.username ?? 'U';
+    final initial = username.isNotEmpty ? username[0].toUpperCase() : 'U';
+
+    return Container(
+      height: 60,
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      decoration: const BoxDecoration(
+        color: Color(0xFF07070A),
+        border: Border(
+          bottom: BorderSide(color: Color(0xFF181820), width: 1.2),
+        ),
+      ),
+      child: Row(
+        children: [
+          // Logo de Scrotify
+          InkWell(
+            onTap: () {
+              setState(() {
+                _searchResults = null;
+                _searchController.clear();
+                _activeNavIndex = 0;
+              });
+            },
+            borderRadius: BorderRadius.circular(8),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+              child: Row(
+                children: [
+                  Container(
+                    width: 32,
+                    height: 32,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: const Color(0xFF140E24),
+                      border: Border.all(
+                        color: const Color(0xFFA855F7).withValues(alpha: 0.5),
+                        width: 1.2,
+                      ),
+                    ),
+                    child: const Icon(
+                      Icons.graphic_eq_rounded,
+                      color: Color(0xFFA855F7),
+                      size: 18,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  const Text(
+                    'SCROTIFY',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 2,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          const SizedBox(width: 16),
+
+          // Botones de navegación persistentes
+          _navItem(
+            index: 0,
+            icon: Icons.home_rounded,
+            label: 'Inicio',
+            onTap: () {
+              setState(() {
+                _searchResults = null;
+                _searchController.clear();
+                _activeNavIndex = 0;
+              });
+            },
+          ),
+          const SizedBox(width: 6),
+          _navItem(
+            index: 1,
+            icon: Icons.explore_outlined,
+            label: 'Explorar',
+            onTap: () {
+              setState(() {
+                _activeNavIndex = 1;
+              });
+            },
+          ),
+
+          const SizedBox(width: 16),
+
+          // Barra de Búsqueda Omnibox Central
+          Expanded(
+            child: Center(
+              child: Container(
+                height: 38,
+                constraints: const BoxConstraints(maxWidth: 480),
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF0F0F14),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: const Color(0xFF1E1E28)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.search_rounded,
+                        color: Colors.white38, size: 18),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: TextField(
+                        controller: _searchController,
+                        style: const TextStyle(color: Colors.white, fontSize: 13),
+                        textInputAction: TextInputAction.search,
+                        onChanged: _runSearch,
+                        decoration: const InputDecoration(
+                          hintText: '¿Qué quieres escuchar hoy?',
+                          hintStyle:
+                              TextStyle(color: Colors.white30, fontSize: 13),
+                          border: InputBorder.none,
+                          isDense: true,
+                        ),
+                      ),
+                    ),
+                    if (_searchController.text.isNotEmpty)
+                      IconButton(
+                        icon: const Icon(Icons.close_rounded,
+                            size: 16, color: Colors.white38),
+                        onPressed: () {
+                          _searchController.clear();
+                          _runSearch('');
+                        },
+                      )
+                    else if (_searching)
+                      const SizedBox(
+                        width: 14,
+                        height: 14,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 1.8,
+                          color: Color(0xFFA855F7),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+
+          const SizedBox(width: 16),
+
+          // Botón Rápido: Jam (Sesión compartida / colaborativa)
+          Consumer<JamController>(
+            builder: (context, jam, _) {
+              if (jam.inJam) {
+                return FilledButton.tonalIcon(
+                  onPressed: () => JamDialog.show(context),
+                  style: FilledButton.styleFrom(
+                    backgroundColor:
+                        const Color(0xFF10B981).withValues(alpha: 0.18),
+                    foregroundColor: const Color(0xFF10B981),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      side: const BorderSide(
+                          color: Color(0xFF10B981), width: 0.8),
+                    ),
+                  ),
+                  icon: const Icon(Icons.speaker_group_rounded, size: 17),
+                  label: Text(
+                    'Jam (${jam.participants.length})',
+                    style: const TextStyle(
+                        fontSize: 12, fontWeight: FontWeight.bold),
+                  ),
+                );
+              }
+              return FilledButton.tonalIcon(
+                onPressed: () => JamDialog.show(context),
+                style: FilledButton.styleFrom(
+                  backgroundColor:
+                      const Color(0xFF10B981).withValues(alpha: 0.12),
+                  foregroundColor: const Color(0xFF10B981),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10)),
+                ),
+                icon: const Icon(Icons.speaker_group_outlined, size: 17),
+                label: const Text(
+                  'Jam',
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                ),
+              );
+            },
+          ),
+
+          const SizedBox(width: 8),
+
+          // Botón Rápido: Comunidad / Ahora sonando en el servidor
+          IconButton(
+            tooltip: 'Comunidad & Chat Navidrome',
+            style: IconButton.styleFrom(
+              backgroundColor: const Color(0xFF14141E),
+              foregroundColor: const Color(0xFF10B981),
+            ),
+            icon: const Icon(Icons.people_alt_rounded, size: 19),
+            onPressed: () => ServerActivityPanel.show(context),
+          ),
+
+          const SizedBox(width: 8),
+
+          // Botón Rápido: Vincular Teléfono (QR/LAN)
+          FilledButton.tonalIcon(
+            onPressed: _openPairingDialog,
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFF1A122E),
+              foregroundColor: const Color(0xFFA855F7),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10)),
+            ),
+            icon: const Icon(Icons.qr_code_2_rounded, size: 17),
+            label: const Text(
+              'Vincular celular',
+              style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+            ),
+          ),
+
+          const SizedBox(width: 10),
+
+          // Botón Ajustes
+          IconButton(
+            icon: const Icon(Icons.settings_outlined,
+                color: Colors.white70, size: 20),
+            tooltip: 'Ajustes',
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const SettingsScreen()),
+            ),
+          ),
+
+          const SizedBox(width: 6),
+
+          // Avatar de Usuario
+          Container(
+            width: 32,
+            height: 32,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: const Color(0xFF7C3AED),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFF7C3AED).withValues(alpha: 0.3),
+                  blurRadius: 8,
+                ),
+              ],
+            ),
+            child: Center(
+              child: Text(
+                initial,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 13,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _navItem({
+    required int index,
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+  }) {
+    final isSelected = _activeNavIndex == index && _searchResults == null;
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(10),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+        decoration: BoxDecoration(
+          color: isSelected ? const Color(0xFF181824) : Colors.transparent,
+          borderRadius: BorderRadius.circular(10),
+          border: isSelected
+              ? Border.all(
+                  color: const Color(0xFFA855F7).withValues(alpha: 0.35),
+                  width: 1)
+              : null,
+        ),
+        child: Row(
+          children: [
+            Icon(
+              icon,
+              size: 17,
+              color: isSelected ? const Color(0xFFA855F7) : Colors.white60,
+            ),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: TextStyle(
+                color: isSelected ? Colors.white : Colors.white60,
+                fontSize: 13,
+                fontWeight:
+                    isSelected ? FontWeight.bold : FontWeight.normal,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ===========================================================================
   // Panel Izquierdo: Tu Biblioteca
-  // ---------------------------------------------------------------------------
+  // ===========================================================================
   Widget _buildLibraryPanel() {
     return Container(
-      width: 280,
-      color: const Color(0xFF0A0A0A),
+      width: 270,
+      color: const Color(0xFF060608),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _libraryHeader(),
-          const Divider(height: 1, color: Colors.white12),
+          const Divider(height: 1, color: Color(0xFF1A1A22)),
           _librarySearchBar(),
           Expanded(child: _libraryList()),
         ],
@@ -134,15 +523,23 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _libraryHeader() {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 20, 16, 12),
+      padding: const EdgeInsets.fromLTRB(16, 14, 12, 10),
       child: Row(
         children: [
-          const Icon(Icons.arrow_back_ios_new, color: Colors.white54, size: 18),
-          const SizedBox(width: 16),
-          const Icon(Icons.arrow_forward_ios, color: Colors.white54, size: 18),
+          const Icon(Icons.library_music_rounded,
+              color: Color(0xFFA855F7), size: 18),
+          const SizedBox(width: 8),
+          const Text(
+            'Tu Biblioteca',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 14,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
           const Spacer(),
           IconButton(
-            icon: const Icon(Icons.menu_open, color: Colors.white, size: 20),
+            icon: const Icon(Icons.menu_open, color: Colors.white54, size: 18),
             tooltip: 'Colapsar biblioteca',
             onPressed: () => setState(() => _libraryCollapsed = true),
           ),
@@ -153,86 +550,59 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _librarySearchBar() {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-      child: Row(
-        children: [
-          Expanded(
-            child: Container(
-              height: 38,
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              decoration: BoxDecoration(
-                color: const Color(0xFF242424),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: const Row(
-                children: [
-                  Icon(Icons.search, color: Colors.white54, size: 18),
-                  SizedBox(width: 8),
-                  Expanded(
-                    child: TextField(
-                      style: TextStyle(color: Colors.white, fontSize: 13),
-                      decoration: InputDecoration(
-                        hintText: 'Buscar en tu biblioteca',
-                        hintStyle: TextStyle(color: Colors.white38, fontSize: 13),
-                        border: InputBorder.none,
-                        isDense: true,
-                      ),
-                    ),
-                  ),
-                ],
+      padding: const EdgeInsets.fromLTRB(12, 6, 12, 10),
+      child: Container(
+        height: 34,
+        padding: const EdgeInsets.symmetric(horizontal: 10),
+        decoration: BoxDecoration(
+          color: const Color(0xFF0F0F14),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: const Color(0xFF1E1E26)),
+        ),
+        child: const Row(
+          children: [
+            Icon(Icons.search, color: Colors.white38, size: 16),
+            SizedBox(width: 6),
+            Expanded(
+              child: TextField(
+                style: TextStyle(color: Colors.white, fontSize: 12),
+                decoration: InputDecoration(
+                  hintText: 'Buscar en playlists...',
+                  hintStyle: TextStyle(color: Colors.white24, fontSize: 12),
+                  border: InputBorder.none,
+                  isDense: true,
+                ),
               ),
             ),
-          ),
-          const SizedBox(width: 8),
-          IconButton(
-            icon: const Icon(Icons.swap_vert, color: Colors.white70, size: 20),
-            onPressed: () {},
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
 
   Widget _libraryList() {
-    // `watch` para que el icono de fijar se actualice al tocar pin/unpin.
     final nav = context.watch<NavidromeService>();
     return FutureBuilder<List<Playlist>>(
       future: _futurePlaylists,
       builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(
-            child: CircularProgressIndicator(color: Colors.white),
-          );
-        }
-
-        final playlists = snapshot.data ?? <Playlist>[];
-        final pinned =
-            playlists.where((p) => nav.isPinnedPlaylist(p.id)).toList();
-        final rest =
-            playlists.where((p) => !nav.isPinnedPlaylist(p.id)).toList();
-
+        final playlists = snapshot.data ?? [];
         return ListView(
-          padding: const EdgeInsets.symmetric(horizontal: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
           children: [
             _libraryTile(
-              icon: Icons.favorite,
-              title: 'Liked Songs',
-              subtitle: 'Playlist · canciones',
-              background: const Color(0xFF353588),
+              icon: Icons.favorite_rounded,
+              title: 'Tus me gusta',
+              subtitle: 'Canciones favoritas',
+              background: const Color(0xFF4C1D95),
               onTap: () => Navigator.push(
                 context,
                 MaterialPageRoute(
                     builder: (_) => const LikedSongsScreen()),
               ),
             ),
-            if (pinned.isNotEmpty) ...[
-              const _SidebarSectionHeader('Fijadas'),
-              for (final playlist in pinned)
-                _playlistTile(playlist, pinned: true),
-            ],
-            if (rest.isNotEmpty) ...[
-              const _SidebarSectionHeader('Playlists'),
-              for (final playlist in rest) _playlistTile(playlist),
+            const SizedBox(height: 4),
+            for (final playlist in playlists) ...[
+              _playlistTile(playlist, nav.isPinnedPlaylist(playlist.id)),
             ],
           ],
         );
@@ -240,8 +610,9 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _playlistTile(Playlist playlist, {bool pinned = false}) {
+  Widget _playlistTile(Playlist playlist, bool pinned) {
     return InkWell(
+      borderRadius: BorderRadius.circular(8),
       onTap: () => Navigator.push(
         context,
         MaterialPageRoute(
@@ -250,19 +621,19 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
       onLongPress: () => _showPlaylistActions(playlist),
       child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 4),
+        padding: const EdgeInsets.symmetric(vertical: 5, horizontal: 4),
         child: Row(
           children: [
             CoverArt(
               url: playlist.coverArtUrl,
-              width: 44,
-              height: 44,
+              width: 40,
+              height: 40,
               borderRadius: 6,
               fallbackIcon: Icons.queue_music,
-              fallbackIconSize: 20,
-              fallbackColor: Colors.grey.shade700,
+              fallbackIconSize: 18,
+              fallbackColor: const Color(0xFF1A1A24),
             ),
-            const SizedBox(width: 12),
+            const SizedBox(width: 10),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -271,7 +642,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     children: [
                       if (pinned) ...[
                         const Icon(Icons.push_pin,
-                            color: Colors.greenAccent, size: 13),
+                            color: Color(0xFF10B981), size: 12),
                         const SizedBox(width: 3),
                       ],
                       Expanded(
@@ -281,7 +652,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
                             color: Colors.white,
-                            fontSize: 14,
+                            fontSize: 13,
                             fontWeight: FontWeight.w500,
                           ),
                         ),
@@ -292,8 +663,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     'Playlist · ${playlist.songCount} canciones',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style:
-                        const TextStyle(color: Colors.white54, fontSize: 12),
+                    style: const TextStyle(color: Colors.white38, fontSize: 11),
                   ),
                 ],
               ),
@@ -309,9 +679,9 @@ class _HomeScreenState extends State<HomeScreen> {
     final pinned = nav.isPinnedPlaylist(playlist.id);
     showModalBottomSheet<void>(
       context: context,
-      backgroundColor: const Color(0xFF282828),
+      backgroundColor: const Color(0xFF0C0C10),
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
       builder: (context) => SafeArea(
         child: Column(
@@ -327,7 +697,7 @@ class _HomeScreenState extends State<HomeScreen> {
               },
             ),
             ListTile(
-              leading: const Icon(Icons.shuffle, color: Colors.greenAccent),
+              leading: const Icon(Icons.shuffle, color: Color(0xFF10B981)),
               title: const Text('Reproducir al azar',
                   style: TextStyle(color: Colors.white)),
               onTap: () {
@@ -378,7 +748,6 @@ class _HomeScreenState extends State<HomeScreen> {
     if (mounted && tracks.isNotEmpty) {
       final player = context.read<PlayerController>();
       player.playQueue(tracks, startIndex: 0);
-      // Activar shuffle después de que la cola esté lista
       await player.toggleShuffle();
     }
   }
@@ -387,7 +756,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF1F1F1F),
+        backgroundColor: const Color(0xFF141418),
         title: const Text('¿Eliminar playlist?',
             style: TextStyle(color: Colors.white)),
         content: Text(
@@ -415,10 +784,10 @@ class _HomeScreenState extends State<HomeScreen> {
       nav.bumpPlaylists();
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
+        const SnackBar(
           content: Text('Playlist eliminada',
-              style: const TextStyle(color: Colors.white)),
-          backgroundColor: const Color(0xFF1F1F1F),
+              style: TextStyle(color: Colors.white)),
+          backgroundColor: Color(0xFF1C1328),
           behavior: SnackBarBehavior.floating,
         ),
       );
@@ -428,7 +797,7 @@ class _HomeScreenState extends State<HomeScreen> {
         SnackBar(
           content: Text('Error: $e',
               style: const TextStyle(color: Colors.redAccent)),
-          backgroundColor: const Color(0xFF1F1F1F),
+          backgroundColor: const Color(0xFF1C1328),
           behavior: SnackBarBehavior.floating,
         ),
       );
@@ -445,20 +814,21 @@ class _HomeScreenState extends State<HomeScreen> {
   }) {
     return InkWell(
       onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
       child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 4),
+        padding: const EdgeInsets.symmetric(vertical: 5, horizontal: 4),
         child: Row(
           children: [
             CoverArt(
               url: albumArtUrl,
-              width: 44,
-              height: 44,
+              width: 40,
+              height: 40,
               borderRadius: 6,
               fallbackIcon: icon,
-              fallbackIconSize: 20,
+              fallbackIconSize: 18,
               fallbackColor: background,
             ),
-            const SizedBox(width: 12),
+            const SizedBox(width: 10),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -469,7 +839,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                       color: Colors.white,
-                      fontSize: 14,
+                      fontSize: 13,
                       fontWeight: FontWeight.w500,
                     ),
                   ),
@@ -477,7 +847,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     subtitle,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(color: Colors.white54, fontSize: 12),
+                    style: const TextStyle(color: Colors.white38, fontSize: 11),
                   ),
                 ],
               ),
@@ -488,37 +858,35 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // ---------------------------------------------------------------------------
-  // Panel Central: Descubrimiento y Contenido
-  // ---------------------------------------------------------------------------
+  // ===========================================================================
+  // Panel Central: Descubrimiento y Contenido AMOLED
+  // ===========================================================================
   Widget _buildMainPanel() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        _mainTopBar(),
-        Expanded(
-          child: _searchResults != null
-              ? _buildSearchResultsPanel()
-              : FutureBuilder<List<Track>>(
-                  future: _futureTracks,
-                  builder: (context, snapshot) {
-                    if (snapshot.connectionState == ConnectionState.waiting) {
-                      return const Center(
-                        child: CircularProgressIndicator(color: Colors.white),
-                      );
-                    }
-                    if (snapshot.hasError || !snapshot.hasData) {
-                      return const Center(
-                        child: Text('Error al cargar',
-                            style: TextStyle(color: Colors.white54)),
-                      );
-                    }
-                    final tracks = snapshot.data!;
-                    return _mainContent(tracks);
-                  },
-                ),
-        ),
-      ],
+    return Container(
+      color: const Color(0xFF000000), // AMOLED
+      child: _searchResults != null
+          ? _buildSearchResultsPanel()
+          : FutureBuilder<List<Track>>(
+              future: _futureTracks,
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(
+                    child: CircularProgressIndicator(
+                      color: Color(0xFFA855F7),
+                      strokeWidth: 2,
+                    ),
+                  );
+                }
+                if (snapshot.hasError || !snapshot.hasData) {
+                  return const Center(
+                    child: Text('Error al cargar contenido',
+                        style: TextStyle(color: Colors.white54)),
+                  );
+                }
+                final tracks = snapshot.data!;
+                return _mainContent(tracks);
+              },
+            ),
     );
   }
 
@@ -526,12 +894,16 @@ class _HomeScreenState extends State<HomeScreen> {
     final results = _searchResults!;
     if (_searching && results.isEmpty) {
       return const Center(
-        child: CircularProgressIndicator(color: Colors.white),
+        child: CircularProgressIndicator(
+          color: Color(0xFFA855F7),
+          strokeWidth: 2,
+        ),
       );
     }
     if (results.isEmpty) {
       return const Center(
-        child: Text('Sin resultados', style: TextStyle(color: Colors.white54)),
+        child: Text('Sin resultados para tu búsqueda',
+            style: TextStyle(color: Colors.white54)),
       );
     }
 
@@ -540,7 +912,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final artists = results.artists;
 
     return ListView(
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
       children: [
         if (songs.isNotEmpty) ...[
           const _SectionLabel('Canciones'),
@@ -554,20 +926,35 @@ class _HomeScreenState extends State<HomeScreen> {
                 borderRadius: 4,
                 fallbackIcon: Icons.music_note,
                 fallbackIconSize: 20,
-                fallbackColor: Colors.grey.shade800,
+                fallbackColor: const Color(0xFF141418),
               ),
               title: Text(track.title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(color: Colors.white, fontSize: 14)),
+                  style: const TextStyle(color: Colors.white, fontSize: 13.5)),
               subtitle: Text('${track.artist} · ${track.album}',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(color: Colors.white54, fontSize: 12)),
-              onTap: () => _openPlayer(songs, songs.indexOf(track)),
+                  style: const TextStyle(color: Colors.white54, fontSize: 11.5)),
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.more_horiz, color: Colors.white54),
+                    onPressed: () => TrackContextMenu.show(context, track),
+                  ),
+                  Text(
+                    _formatDuration(track.duration),
+                    style:
+                        const TextStyle(color: Colors.white38, fontSize: 11.5),
+                  ),
+                ],
+              ),
+              onTap: () {
+                context
+                    .read<PlayerController>()
+                    .playQueue([track], startIndex: 0);
+              },
             ),
         ],
         if (albums.isNotEmpty) ...[
+          const SizedBox(height: 16),
           const _SectionLabel('Álbumes'),
           for (final album in albums)
             ListTile(
@@ -579,16 +966,16 @@ class _HomeScreenState extends State<HomeScreen> {
                 borderRadius: 4,
                 fallbackIcon: Icons.album,
                 fallbackIconSize: 20,
-                fallbackColor: Colors.grey.shade800,
+                fallbackColor: const Color(0xFF141418),
               ),
               title: Text(album.title,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(color: Colors.white, fontSize: 14)),
+                  style: const TextStyle(color: Colors.white, fontSize: 13.5)),
               subtitle: Text(album.artist,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(color: Colors.white54, fontSize: 12)),
+                  style: const TextStyle(color: Colors.white54, fontSize: 11.5)),
               onTap: () => Navigator.push(
                 context,
                 MaterialPageRoute(
@@ -597,6 +984,7 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
         ],
         if (artists.isNotEmpty) ...[
+          const SizedBox(height: 16),
           const _SectionLabel('Artistas'),
           for (final artist in artists)
             ListTile(
@@ -608,14 +996,14 @@ class _HomeScreenState extends State<HomeScreen> {
                 circle: true,
                 fallbackIcon: Icons.person,
                 fallbackIconSize: 20,
-                fallbackColor: Colors.deepPurple.shade300,
+                fallbackColor: const Color(0xFF141418),
               ),
               title: Text(artist.name,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(color: Colors.white, fontSize: 14)),
+                  style: const TextStyle(color: Colors.white, fontSize: 13.5)),
               subtitle: const Text('Artista',
-                  style: TextStyle(color: Colors.white54, fontSize: 12)),
+                  style: TextStyle(color: Colors.white54, fontSize: 11.5)),
               onTap: () => Navigator.push(
                 context,
                 MaterialPageRoute(
@@ -627,148 +1015,31 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _mainTopBar() {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 16, 24, 8),
-      child: Row(
-        children: [
-          if (_libraryCollapsed)
-            IconButton(
-              icon: const Icon(Icons.menu, color: Colors.white),
-              onPressed: () => setState(() => _libraryCollapsed = false),
-            ),
-          IconButton(
-            icon: const Icon(Icons.home, color: Colors.white, size: 24),
-            onPressed: () {},
-          ),
-          IconButton(
-            icon: const Icon(Icons.explore_outlined, color: Colors.white, size: 24),
-            onPressed: () {},
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Container(
-              height: 44,
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              decoration: BoxDecoration(
-                color: const Color(0xFF242424),
-                borderRadius: BorderRadius.circular(24),
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.search, color: Colors.white54, size: 20),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: TextField(
-                      controller: _searchController,
-                      style: const TextStyle(color: Colors.white, fontSize: 14),
-                      textInputAction: TextInputAction.search,
-                      onChanged: _runSearch,
-                      decoration: const InputDecoration(
-                        hintText: 'What do you want to play?',
-                        hintStyle: TextStyle(color: Colors.white38, fontSize: 14),
-                        border: InputBorder.none,
-                      ),
-                    ),
-                  ),
-                  _searching
-                      ? const SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(
-                              strokeWidth: 2, color: Colors.white54),
-                        )
-                      : const Icon(Icons.mic_none,
-                          color: Colors.white54, size: 20),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(width: 16),
-          IconButton(
-            icon: const Icon(Icons.add_circle_outline, color: Colors.white),
-            onPressed: () {},
-          ),
-          IconButton(
-            icon: const Icon(Icons.chat_bubble_outline, color: Colors.white),
-            onPressed: () {},
-          ),
-          IconButton(
-            icon: const Icon(Icons.history, color: Colors.white),
-            onPressed: () {},
-          ),
-          IconButton(
-            icon: const Icon(Icons.settings_outlined, color: Colors.white),
-            tooltip: 'Ajustes',
-            onPressed: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const SettingsScreen()),
-            ),
-          ),
-          const CircleAvatar(
-            radius: 15,
-            backgroundColor: Colors.deepPurple,
-            child: Text('T', style: TextStyle(color: Colors.white)),
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _mainContent(List<Track> tracks) {
     return SingleChildScrollView(
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              _pill('AI'),
-              _pill('Music', selected: true),
-              _pill('Podcasts'),
-            ],
-          ),
-          const SizedBox(height: 16),
           _quickAccessGrid(tracks),
-          const SizedBox(height: 24),
-          _sectionHeader('Recommended for today'),
-          const SizedBox(height: 12),
+          const SizedBox(height: 28),
+          _sectionHeader('Recomendados para ti'),
+          const SizedBox(height: 14),
           _recommendedGrid(tracks),
-          const SizedBox(height: 24),
-          _sectionHeader('Álbumes'),
-          const SizedBox(height: 12),
+          const SizedBox(height: 28),
+          _sectionHeader('Álbumes destacados'),
+          const SizedBox(height: 14),
           _albumsCarousel(),
-          const SizedBox(height: 24),
-          _sectionHeader('Artistas'),
-          const SizedBox(height: 12),
+          const SizedBox(height: 28),
+          _sectionHeader('Artistas en tu biblioteca'),
+          const SizedBox(height: 14),
           _artistsCarousel(),
-          const SizedBox(height: 24),
-          _sectionHeader('Recientes'),
+          const SizedBox(height: 28),
+          _sectionHeader('Escuchados recientemente'),
           const SizedBox(height: 12),
           _recentsList(),
-          const SizedBox(height: 24),
+          const SizedBox(height: 32),
         ],
-      ),
-    );
-  }
-
-  Widget _pill(String label, {bool selected = false}) {
-    return Padding(
-      padding: const EdgeInsets.only(right: 8),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-        decoration: BoxDecoration(
-          color: selected ? Colors.white : const Color(0xFF1F1F1F),
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            color: selected ? Colors.black : Colors.white,
-            fontSize: 13,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
       ),
     );
   }
@@ -777,6 +1048,7 @@ class _HomeScreenState extends State<HomeScreen> {
     context.read<PlayerController>().playQueue(tracks, startIndex: index);
   }
 
+  // Tarjetas de Acceso Rápido AMOLED
   Widget _quickAccessGrid(List<Track> tracks) {
     final items = tracks.take(6).toList();
     return LayoutBuilder(
@@ -787,7 +1059,7 @@ class _HomeScreenState extends State<HomeScreen> {
           physics: const NeverScrollableScrollPhysics(),
           gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: cols,
-            childAspectRatio: 2.6,
+            childAspectRatio: 2.8,
             crossAxisSpacing: 12,
             mainAxisSpacing: 12,
           ),
@@ -795,9 +1067,9 @@ class _HomeScreenState extends State<HomeScreen> {
           itemBuilder: (context, index) {
             if (index == 0) {
               return _quickAccessCard(
-                label: 'Liked Songs',
-                color: const Color(0xFF353588),
-                icon: Icons.favorite,
+                label: 'Tus Me Gusta',
+                color: const Color(0xFF4C1D95),
+                icon: Icons.favorite_rounded,
                 onTap: () => Navigator.push(
                   context,
                   MaterialPageRoute(
@@ -808,7 +1080,7 @@ class _HomeScreenState extends State<HomeScreen> {
             final track = items[index - 1];
             return _quickAccessCard(
               label: track.album,
-              color: Colors.grey.shade800,
+              color: const Color(0xFF14141A),
               albumArtUrl: track.albumArtUrl,
               icon: Icons.album,
               onTap: () => _openPlayer(tracks, tracks.indexOf(track)),
@@ -822,27 +1094,28 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _quickAccessCard({
     required String label,
     required Color color,
-    IconData? icon,
+    required IconData icon,
     String? albumArtUrl,
-    VoidCallback? onTap,
+    required VoidCallback onTap,
   }) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(8),
+      borderRadius: BorderRadius.circular(10),
       child: Container(
-        padding: const EdgeInsets.all(8),
         decoration: BoxDecoration(
-          color: const Color(0xFF1F1F1F),
-          borderRadius: BorderRadius.circular(8),
+          color: const Color(0xFF0C0C10),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: const Color(0xFF1E1E26), width: 1),
         ),
         child: Row(
           children: [
             Container(
-              width: 44,
-              height: 44,
+              width: 52,
+              height: double.infinity,
               decoration: BoxDecoration(
                 color: color,
-                borderRadius: BorderRadius.circular(6),
+                borderRadius:
+                    const BorderRadius.horizontal(left: Radius.circular(9)),
                 image: albumArtUrl != null
                     ? DecorationImage(
                         image: NetworkImage(albumArtUrl),
@@ -851,7 +1124,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     : null,
               ),
               child: albumArtUrl == null
-                  ? Icon(icon, color: Colors.white, size: 20)
+                  ? Icon(icon, color: Colors.white, size: 22)
                   : null,
             ),
             const SizedBox(width: 12),
@@ -888,14 +1161,14 @@ class _HomeScreenState extends State<HomeScreen> {
     final items = tracks.take(10).toList();
     return LayoutBuilder(
       builder: (context, constraints) {
-        final cols = (constraints.maxWidth / 170).floor().clamp(3, 6);
+        final cols = (constraints.maxWidth / 160).floor().clamp(3, 6);
         return GridView.builder(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
           gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: cols,
-            childAspectRatio: 0.72,
-            crossAxisSpacing: 12,
+            childAspectRatio: 0.74,
+            crossAxisSpacing: 14,
             mainAxisSpacing: 16,
           ),
           itemCount: items.length,
@@ -911,46 +1184,56 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _recommendedCard(Track track, List<Track> allTracks) {
     return InkWell(
       onTap: () => _openPlayer(allTracks, allTracks.indexOf(track)),
-      borderRadius: BorderRadius.circular(8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(
-            child: Container(
-              width: double.infinity,
-              decoration: BoxDecoration(
-                color: Colors.grey.shade800,
+      borderRadius: BorderRadius.circular(10),
+      child: Container(
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: const Color(0xFF07070A),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: const Color(0xFF14141C)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: ClipRRect(
                 borderRadius: BorderRadius.circular(8),
-                image: track.albumArtUrl != null
-                    ? DecorationImage(
-                        image: NetworkImage(track.albumArtUrl!),
-                        fit: BoxFit.cover,
-                      )
-                    : null,
+                child: Container(
+                  width: double.infinity,
+                  color: const Color(0xFF14141A),
+                  child: track.albumArtUrl != null
+                      ? Image.network(
+                          track.albumArtUrl!,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => const Center(
+                            child: Icon(Icons.music_note, color: Colors.white38),
+                          ),
+                        )
+                      : const Center(
+                          child: Icon(Icons.music_note, color: Colors.white38),
+                        ),
+                ),
               ),
-              child: track.albumArtUrl == null
-                  ? const Icon(Icons.music_note, color: Colors.white54)
-                  : null,
             ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            track.title,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 13,
-              fontWeight: FontWeight.bold,
+            const SizedBox(height: 8),
+            Text(
+              track.title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 12.5,
+                fontWeight: FontWeight.bold,
+              ),
             ),
-          ),
-          Text(
-            track.artist,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(color: Colors.white54, fontSize: 12),
-          ),
-        ],
+            Text(
+              track.artist,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(color: Colors.white54, fontSize: 11),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -958,58 +1241,71 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _albumsCarousel() {
     final nav = context.read<NavidromeService>();
     return FutureBuilder<List<Album>>(
-      future: nav.getAlbums(limit: 15),
+      future: nav.getAlbums(),
       builder: (context, snapshot) {
-        final albums = snapshot.data ?? <Album>[];
+        final albums = snapshot.data ?? [];
         if (snapshot.connectionState == ConnectionState.waiting &&
             albums.isEmpty) {
           return const SizedBox(
-            height: 160,
-            child: Center(child: CircularProgressIndicator(color: Colors.white)),
+            height: 170,
+            child: Center(
+              child: CircularProgressIndicator(
+                  strokeWidth: 2, color: Color(0xFFA855F7)),
+            ),
           );
         }
         if (albums.isEmpty) {
-          return const Text('Sin álbumes',
+          return const Text('Sin álbumes disponibles',
               style: TextStyle(color: Colors.white54));
         }
         return SizedBox(
-          height: 170,
+          height: 180,
           child: ListView.builder(
             scrollDirection: Axis.horizontal,
             itemCount: albums.length,
             itemBuilder: (context, index) {
               final album = albums[index];
               return Padding(
-                padding: const EdgeInsets.only(right: 16),
+                padding: const EdgeInsets.only(right: 14),
                 child: InkWell(
                   onTap: () => Navigator.push(
                     context,
                     MaterialPageRoute(
                         builder: (_) => AlbumDetailScreen(album: album)),
                   ),
-                  borderRadius: BorderRadius.circular(8),
-                  child: SizedBox(
+                  borderRadius: BorderRadius.circular(10),
+                  child: Container(
                     width: 130,
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF07070A),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: const Color(0xFF14141C)),
+                    ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Expanded(
-                          child: Container(
-                            width: double.infinity,
-                            decoration: BoxDecoration(
-                              color: Colors.grey.shade800,
-                              borderRadius: BorderRadius.circular(8),
-                              image: album.coverArtUrl != null
-                                  ? DecorationImage(
-                                      image: NetworkImage(album.coverArtUrl!),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(6),
+                            child: Container(
+                              width: double.infinity,
+                              color: const Color(0xFF14141A),
+                              child: album.coverArtUrl != null
+                                  ? Image.network(
+                                      album.coverArtUrl!,
                                       fit: BoxFit.cover,
+                                      errorBuilder: (_, __, ___) =>
+                                          const Center(
+                                        child: Icon(Icons.album,
+                                            color: Colors.white38, size: 28),
+                                      ),
                                     )
-                                  : null,
+                                  : const Center(
+                                      child: Icon(Icons.album,
+                                          color: Colors.white38, size: 28),
+                                    ),
                             ),
-                            child: album.coverArtUrl == null
-                                ? const Icon(Icons.album,
-                                    color: Colors.white54, size: 32)
-                                : null,
                           ),
                         ),
                         const SizedBox(height: 6),
@@ -1056,7 +1352,10 @@ class _HomeScreenState extends State<HomeScreen> {
             artists.isEmpty) {
           return const SizedBox(
             height: 160,
-            child: Center(child: CircularProgressIndicator(color: Colors.white)),
+            child: Center(
+              child: CircularProgressIndicator(
+                  strokeWidth: 2, color: Color(0xFFA855F7)),
+            ),
           );
         }
         if (artists.isEmpty) {
@@ -1064,35 +1363,39 @@ class _HomeScreenState extends State<HomeScreen> {
               style: TextStyle(color: Colors.white54));
         }
         return SizedBox(
-          height: 170,
+          height: 160,
           child: ListView.builder(
             scrollDirection: Axis.horizontal,
             itemCount: artists.length,
             itemBuilder: (context, index) {
               final artist = artists[index];
               return Padding(
-                padding: const EdgeInsets.only(right: 16),
+                padding: const EdgeInsets.only(right: 14),
                 child: InkWell(
                   onTap: () => Navigator.push(
                     context,
                     MaterialPageRoute(
                         builder: (_) => ArtistScreen(artist: artist)),
                   ),
-                  borderRadius: BorderRadius.circular(80),
+                  borderRadius: BorderRadius.circular(10),
                   child: SizedBox(
-                    width: 120,
+                    width: 110,
                     child: Column(
                       children: [
                         Expanded(
                           child: Container(
-                            width: 120,
+                            width: 110,
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
-                              color: Colors.deepPurple.shade300,
+                              color: const Color(0xFF140E24),
+                              border: Border.all(
+                                color: const Color(0xFFA855F7)
+                                    .withValues(alpha: 0.35),
+                                width: 1.2,
+                              ),
                               image: artist.coverArtUrl != null
                                   ? DecorationImage(
-                                      image:
-                                          NetworkImage(artist.coverArtUrl!),
+                                      image: NetworkImage(artist.coverArtUrl!),
                                       fit: BoxFit.cover,
                                     )
                                   : null,
@@ -1100,19 +1403,20 @@ class _HomeScreenState extends State<HomeScreen> {
                             child: artist.coverArtUrl == null
                                 ? const Center(
                                     child: Icon(Icons.person,
-                                        color: Colors.white, size: 40),
+                                        color: Colors.white38, size: 36),
                                   )
                                 : null,
                           ),
                         ),
-                        const SizedBox(height: 8),
+                        const SizedBox(height: 6),
                         Text(
                           artist.name,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
+                          textAlign: TextAlign.center,
                           style: const TextStyle(
                             color: Colors.white,
-                            fontSize: 13,
+                            fontSize: 12,
                             fontWeight: FontWeight.w600,
                           ),
                         ),
@@ -1129,15 +1433,14 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _recentsList() {
-    // `watch` para que la lista se actualice al reproducir canciones.
     final player = context.watch<PlayerController>();
     final items = player.recentlyPlayed.take(6).toList();
     if (items.isEmpty) {
       return const Padding(
         padding: EdgeInsets.symmetric(vertical: 8),
         child: Text(
-          'Todavía no escuchaste nada',
-          style: TextStyle(color: Colors.white54),
+          'Todavía no has reproducido ninguna canción',
+          style: TextStyle(color: Colors.white38, fontSize: 12.5),
         ),
       );
     }
@@ -1148,18 +1451,16 @@ class _HomeScreenState extends State<HomeScreen> {
             padding: const EdgeInsets.symmetric(vertical: 4),
             child: Row(
               children: [
-                Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(
-                    color: Colors.grey.shade800,
-                    borderRadius: BorderRadius.circular(4),
-                    image: track.albumArtUrl != null
-                        ? DecorationImage(
-                            image: NetworkImage(track.albumArtUrl!),
-                            fit: BoxFit.cover,
-                          )
-                        : null,
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(6),
+                  child: Container(
+                    width: 40,
+                    height: 40,
+                    color: const Color(0xFF14141A),
+                    child: track.albumArtUrl != null
+                        ? Image.network(track.albumArtUrl!, fit: BoxFit.cover)
+                        : const Icon(Icons.music_note,
+                            color: Colors.white38, size: 20),
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -1171,24 +1472,28 @@ class _HomeScreenState extends State<HomeScreen> {
                         track.title,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style:
-                            const TextStyle(color: Colors.white, fontSize: 14),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                       Text(
                         track.artist,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
-                            color: Colors.white54, fontSize: 12),
+                            color: Colors.white54, fontSize: 11.5),
                       ),
                     ],
                   ),
                 ),
                 IconButton(
-                  icon: const Icon(Icons.play_circle_outline,
-                      color: Colors.white, size: 28),
-                  onPressed: () =>
-                      player.playQueue(player.recentlyPlayed, startIndex: items.indexOf(track)),
+                  icon: const Icon(Icons.play_circle_fill_rounded,
+                      color: Color(0xFFA855F7), size: 28),
+                  onPressed: () {
+                    context.read<PlayerController>().playQueue([track], startIndex: 0);
+                  },
                 ),
               ],
             ),
@@ -1196,45 +1501,29 @@ class _HomeScreenState extends State<HomeScreen> {
       ],
     );
   }
-}
 
-class _SectionLabel extends StatelessWidget {
-  final String title;
-
-  const _SectionLabel(this.title);
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(0, 12, 0, 4),
-      child: Text(
-        title,
-        style: const TextStyle(
-          color: Colors.white,
-          fontSize: 16,
-          fontWeight: FontWeight.bold,
-        ),
-      ),
-    );
+  String _formatDuration(String raw) {
+    final s = int.tryParse(raw) ?? 0;
+    final m = s ~/ 60;
+    final r = s % 60;
+    return '$m:${r.toString().padLeft(2, '0')}';
   }
 }
 
-class _SidebarSectionHeader extends StatelessWidget {
-  final String title;
-
-  const _SidebarSectionHeader(this.title);
+class _SectionLabel extends StatelessWidget {
+  final String label;
+  const _SectionLabel(this.label);
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
+      padding: const EdgeInsets.symmetric(vertical: 8),
       child: Text(
-        title,
+        label,
         style: const TextStyle(
-          color: Colors.white54,
-          fontSize: 11,
-          fontWeight: FontWeight.w600,
-          letterSpacing: 1.2,
+          color: Color(0xFFA855F7),
+          fontSize: 15,
+          fontWeight: FontWeight.bold,
         ),
       ),
     );

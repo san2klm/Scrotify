@@ -42,6 +42,49 @@ class QrData {
   String toString() => toUri();
 }
 
+/// Dispositivo PC descubierto en la red local.
+class DiscoveredPc {
+  final String host;
+  final int port;
+  final String deviceName;
+  final String serverUrl;
+  final String? code;
+  final int expiresIn;
+
+  const DiscoveredPc({
+    required this.host,
+    required this.port,
+    required this.deviceName,
+    required this.serverUrl,
+    this.code,
+    this.expiresIn = 300,
+  });
+
+  factory DiscoveredPc.fromJson(Map<String, dynamic> json, String fallbackHost) {
+    return DiscoveredPc(
+      host: (json['host'] as String?)?.isNotEmpty == true
+          ? json['host'] as String
+          : fallbackHost,
+      port: (json['port'] as num?)?.toInt() ?? 0,
+      deviceName: (json['deviceName'] as String?) ??
+          (json['name'] as String?) ??
+          'PC Desconocido',
+      serverUrl: (json['serverUrl'] as String?) ?? '',
+      code: json['code'] as String?,
+      expiresIn: (json['expiresIn'] as num?)?.toInt() ?? 300,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+        'host': host,
+        'port': port,
+        'deviceName': deviceName,
+        'serverUrl': serverUrl,
+        if (code != null) 'code': code,
+        'expiresIn': expiresIn,
+      };
+}
+
 /// Código de emparejamiento de 6 caracteres (A-Z0-9 sin ambiguos).
 class PairCode {
   static const _charset = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -89,14 +132,6 @@ class PairClaimRequest {
 }
 
 /// Response que devuelve el PC al móvil (credenciales cifradas):
-/// ```
-/// {
-///   "ephemeralPublicKey": "base64url...",  // 32 bytes X25519 del PC
-///   "nonce": "base64url...",                // 24 bytes XChaCha20
-///   "ciphertext": "base64url...",           // JSON cifrado: {"url":"...","user":"...","pass":"..."}
-///   "mac": "base64url..."                   // MAC Poly1305
-/// }
-/// ```
 class PairClaimResponse {
   final String ephemeralPublicKey;
   final String nonce;

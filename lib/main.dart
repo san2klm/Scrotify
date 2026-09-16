@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:just_audio_media_kit/just_audio_media_kit.dart';
 import 'package:provider/provider.dart';
 
+import 'services/jam_controller.dart';
 import 'services/navidrome_service.dart';
 import 'services/pairing_server.dart';
 import 'services/player_controller.dart';
@@ -36,6 +37,12 @@ class MyApp extends StatelessWidget {
             ctx.read<SettingsController>(),
           ),
         ),
+        ChangeNotifierProvider<JamController>(
+          create: (ctx) => JamController(
+            ctx.read<PlayerController>(),
+            ctx.read<NavidromeService>(),
+          ),
+        ),
       ],
       child: MaterialApp(
         title: 'Scrotify',
@@ -45,7 +52,7 @@ class MyApp extends StatelessWidget {
             seedColor: Colors.deepPurple,
             brightness: Brightness.dark,
           ),
-          scaffoldBackgroundColor: const Color(0xFF0F0B1E),
+          scaffoldBackgroundColor: const Color(0xFF000000),
           useMaterial3: true,
         ),
         home: const LoginScreen(),

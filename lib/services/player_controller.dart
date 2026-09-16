@@ -71,6 +71,12 @@ class PlayerController extends ChangeNotifier {
 
   List<Track> get queue => List.unmodifiable(_queue);
   List<Track> get recentlyPlayed => List.unmodifiable(_recentlyPlayed);
+  int get currentOrderPos => _pos;
+  List<int> get order => List.unmodifiable(_order);
+  List<Track> get orderedQueue => [
+        for (final idx in _order)
+          if (idx >= 0 && idx < _queue.length) _queue[idx]
+      ];
 
   int get _currentIndex => _pos >= 0 && _pos < _order.length ? _order[_pos] : -1;
 
@@ -222,6 +228,90 @@ class PlayerController extends ChangeNotifier {
     await _lead.play();
     _recordRecent(currentTrack!);
     _ensureWatchdog();
+    notifyListeners();
+  }
+
+  /// Añade una pista al final de la cola de reproducción.
+  /// Si no hay nada reproduciéndose, empieza a reproducirla.
+  Future<void> addToQueue(Track track) async {
+    _queue.add(track);
+    final newRealIndex = _queue.length - 1;
+    _order.add(newRealIndex);
+    if (_pos == -1) {
+      _pos = 0;
+      await _loadTrackOn(_lead, _currentIndex);
+      await _lead.setVolume(_volume);
+      await _lead.play();
+      _recordRecent(currentTrack!);
+      _ensureWatchdog();
+    }
+    notifyListeners();
+  }
+
+  /// Inserta una pista para sonar a continuación de la canción actual.
+  Future<void> addNextInQueue(Track track) async {
+    _queue.add(track);
+    final newRealIndex = _queue.length - 1;
+    if (_pos >= 0 && _pos < _order.length) {
+      _order.insert(_pos + 1, newRealIndex);
+    } else {
+      _order.add(newRealIndex);
+    }
+    if (_pos == -1) {
+      _pos = 0;
+      await _loadTrackOn(_lead, _currentIndex);
+      await _lead.setVolume(_volume);
+      await _lead.play();
+      _recordRecent(currentTrack!);
+      _ensureWatchdog();
+    }
+    notifyListeners();
+  }
+
+  /// Elimina una pista de la cola en la posición del orden dado.
+  void removeFromQueue(int orderIndex) {
+    if (orderIndex < 0 || orderIndex >= _order.length) return;
+    if (orderIndex == _pos) return; // No eliminar la canción que está sonando
+    _order.removeAt(orderIndex);
+    if (orderIndex < _pos) {
+      _pos--;
+    }
+    if (_fading && _fadeTargetPos == orderIndex) {
+      _cancelFade();
+    }
+    notifyListeners();
+  }
+
+  /// Reordena las pistas pendientes de la cola.
+  void reorderQueue(int oldOrderIndex, int newOrderIndex) {
+    if (oldOrderIndex < 0 || oldOrderIndex >= _order.length) return;
+    if (newOrderIndex < 0 || newOrderIndex >= _order.length) return;
+    if (oldOrderIndex == newOrderIndex) return;
+
+    final item = _order.removeAt(oldOrderIndex);
+    _order.insert(newOrderIndex, item);
+
+    if (_pos == oldOrderIndex) {
+      _pos = newOrderIndex;
+    } else if (oldOrderIndex < _pos && newOrderIndex >= _pos) {
+      _pos--;
+    } else if (oldOrderIndex > _pos && newOrderIndex <= _pos) {
+      _pos++;
+    }
+
+    if (_fading) {
+      _cancelFade();
+    }
+    notifyListeners();
+  }
+
+  /// Limpia la cola y detiene la reproducción.
+  void clearQueue() {
+    _cancelFade();
+    _queue.clear();
+    _order.clear();
+    _pos = -1;
+    _lead.stop();
     notifyListeners();
   }
 

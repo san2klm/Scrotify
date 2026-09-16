@@ -8,26 +8,101 @@ import 'package:http/http.dart' as http;
 import '../models/pairing_models.dart';
 import '../utils/crypto_helper.dart';
 
-/// PC encontrado en la red local que coincide con el código de emparejamiento.
-class DiscoveredPc {
-  final String host;
-  final int port;
-  final String code;
-
-  const DiscoveredPc({
-    required this.host,
-    required this.port,
-    required this.code,
-  });
-}
-
 /// Cliente de emparejamiento para el teléfono.
 ///
 /// Permite:
-/// 1. Encontrar un PC en la red local por su código de 6 caracteres (UDP broadcast).
-/// 2. Reclamar credenciales de forma segura (`POST /pair/claim` + sealed box).
-/// 3. Procesar un URI escaneado desde el QR.
+/// 1. Escanear la red Wi-Fi buscando computadoras con Scrotify en modo emparejamiento ([discoverPcs]).
+/// 2. Encontrar un PC en la red local por su código de 6 caracteres ([findPcByCode]).
+/// 3. Reclamar credenciales de forma segura vía HTTP + sealed-box ([claim]).
+/// 4. Procesar un URI escaneado desde el QR ([claimFromQr]).
 class PairingClient {
+  /// Escanea la red local por broadcast UDP buscando todas las instancias de
+  /// Scrotify activas en modo emparejamiento.
+  static Future<List<DiscoveredPc>> discoverPcs({
+    Duration timeout = const Duration(seconds: 3),
+  }) async {
+    final discovered = <String, DiscoveredPc>{};
+    RawDatagramSocket? socket;
+    Timer? timeoutTimer;
+    final completer = Completer<List<DiscoveredPc>>();
+
+    try {
+      socket = await RawDatagramSocket.bind(InternetAddress.anyIPv4, 0);
+      socket.broadcastEnabled = true;
+
+      socket.listen((event) {
+        if (event == RawSocketEvent.read) {
+          final dg = socket?.receive();
+          if (dg == null) return;
+          try {
+            final text = utf8.decode(dg.data);
+            final json = jsonDecode(text) as Map<String, dynamic>;
+            if (json['app'] == kPairingDiscoveryAppTag &&
+                (json['op'] == 'presence' || json['op'] == 'here')) {
+              final pc = DiscoveredPc.fromJson(json, dg.address.address);
+              if (pc.port > 0) {
+                final key = '${pc.host}:${pc.port}';
+                discovered[key] = pc;
+              }
+            }
+          } catch (_) {}
+        }
+      });
+
+      final queryPayload = jsonEncode({
+        'app': kPairingDiscoveryAppTag,
+        'op': 'discover',
+      });
+      final bytes = utf8.encode(queryPayload);
+
+      void sendBroadcasts() async {
+        try {
+          try {
+            socket?.send(bytes, InternetAddress.loopbackIPv4, kPairingDiscoveryPort);
+          } catch (_) {}
+          try {
+            socket?.send(bytes, InternetAddress('255.255.255.255'), kPairingDiscoveryPort);
+          } catch (_) {}
+
+          final interfaces = await NetworkInterface.list(
+            type: InternetAddressType.IPv4,
+            includeLoopback: false,
+          );
+          for (final iface in interfaces) {
+            for (final addr in iface.addresses) {
+              final parts = addr.address.split('.');
+              if (parts.length == 4) {
+                final subnetBcast = '${parts[0]}.${parts[1]}.${parts[2]}.255';
+                try {
+                  socket?.send(bytes, InternetAddress(subnetBcast), kPairingDiscoveryPort);
+                } catch (_) {}
+              }
+            }
+          }
+        } catch (_) {}
+      }
+
+      sendBroadcasts();
+      Timer(const Duration(milliseconds: 500), () => sendBroadcasts());
+      Timer(const Duration(milliseconds: 1200), () => sendBroadcasts());
+
+      timeoutTimer = Timer(timeout, () {
+        if (!completer.isCompleted) {
+          completer.complete(discovered.values.toList());
+        }
+      });
+
+      final result = await completer.future;
+      return result;
+    } catch (e) {
+      debugPrint('PairingClient.discoverPcs error: $e');
+      return discovered.values.toList();
+    } finally {
+      timeoutTimer?.cancel();
+      socket?.close();
+    }
+  }
+
   /// Busca un PC en la LAN que tenga activo el código [code].
   /// Emite tramas UDP broadcast a la red local y espera una respuesta unicast.
   static Future<DiscoveredPc?> findPcByCode(
@@ -56,18 +131,9 @@ class PairingClient {
             if (json['app'] == kPairingDiscoveryAppTag &&
                 json['op'] == 'here' &&
                 (json['code'] as String?)?.toUpperCase() == cleanCode) {
-              final port = json['port'] as int?;
-              final reportedHost = json['host'] as String?;
-              final host = (reportedHost != null && reportedHost.isNotEmpty)
-                  ? reportedHost
-                  : dg.address.address;
-
-              if (port != null && !completer.isCompleted) {
-                completer.complete(DiscoveredPc(
-                  host: host,
-                  port: port,
-                  code: cleanCode,
-                ));
+              final pc = DiscoveredPc.fromJson(json, dg.address.address);
+              if (pc.port > 0 && !completer.isCompleted) {
+                completer.complete(pc);
               }
             }
           } catch (_) {}
@@ -85,25 +151,14 @@ class PairingClient {
       // Enviar por broadcast general, loopback y broadcast de interfaces
       void sendBroadcasts() async {
         try {
-          // Loopback local (útil para pruebas en la misma máquina / emulador)
           try {
-            socket?.send(
-              bytes,
-              InternetAddress.loopbackIPv4,
-              kPairingDiscoveryPort,
-            );
+            socket?.send(bytes, InternetAddress.loopbackIPv4, kPairingDiscoveryPort);
           } catch (_) {}
 
-          // Broadcast general
           try {
-            socket?.send(
-              bytes,
-              InternetAddress('255.255.255.255'),
-              kPairingDiscoveryPort,
-            );
+            socket?.send(bytes, InternetAddress('255.255.255.255'), kPairingDiscoveryPort);
           } catch (_) {}
 
-          // Broadcasts dirigidos por interfaz
           final interfaces = await NetworkInterface.list(
             type: InternetAddressType.IPv4,
             includeLoopback: false,
@@ -112,14 +167,9 @@ class PairingClient {
             for (final addr in iface.addresses) {
               final parts = addr.address.split('.');
               if (parts.length == 4) {
-                // Heurística de broadcast para /24
                 final subnetBcast = '${parts[0]}.${parts[1]}.${parts[2]}.255';
                 try {
-                  socket?.send(
-                    bytes,
-                    InternetAddress(subnetBcast),
-                    kPairingDiscoveryPort,
-                  );
+                  socket?.send(bytes, InternetAddress(subnetBcast), kPairingDiscoveryPort);
                 } catch (_) {}
               }
             }

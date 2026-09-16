@@ -123,6 +123,30 @@ void main() {
       }
     });
 
+    test('UDP radar discoverPcs lists active PC on local network', () async {
+      final server = PairingServer();
+
+      try {
+        await server.start(
+          serverUrl: 'https://navidrome.templo.cloud',
+          username: 'demoUser',
+          password: 'demoPassword',
+          customDeviceName: 'Mi-Super-PC',
+        );
+
+        final list = await PairingClient.discoverPcs(
+          timeout: const Duration(seconds: 2),
+        );
+
+        expect(list.isNotEmpty, isTrue);
+        final found = list.firstWhere((p) => p.port == server.port);
+        expect(found.deviceName, 'Mi-Super-PC');
+        expect(found.serverUrl, 'https://navidrome.templo.cloud');
+      } finally {
+        await server.stop();
+      }
+    });
+
     test('PairingClient claim with invalid code fails', () async {
       final server = PairingServer();
 
