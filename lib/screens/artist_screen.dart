@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../services/navidrome_service.dart';
 import '../services/player_controller.dart';
+import '../widgets/cover_art.dart';
 import '../widgets/persistent_player_bar.dart';
 import 'album_detail_screen.dart';
 import '../utils/app_colors.dart';
@@ -317,22 +318,17 @@ class _ArtistScreenState extends State<ArtistScreen> {
             ),
             const SizedBox(width: 8),
             // Portada
-            Container(
+            CoverArt(
+              url: track.albumArtUrl,
+              artist: track.artist,
+              album: track.album,
+              title: track.title,
               width: 48,
               height: 48,
-              decoration: BoxDecoration(
-                color: context.bgElevated,
-                borderRadius: BorderRadius.circular(4),
-                image: track.albumArtUrl != null
-                    ? DecorationImage(
-                        image: NetworkImage(track.albumArtUrl!),
-                        fit: BoxFit.cover,
-                      )
-                    : null,
-              ),
-              child: track.albumArtUrl == null
-                  ? Icon(Icons.music_note, color: context.textMuted, size: 22)
-                  : null,
+              borderRadius: 4,
+              fallbackIcon: Icons.music_note,
+              fallbackIconSize: 22,
+              fallbackColor: context.bgElevated,
             ),
             const SizedBox(width: 12),
             // Info

@@ -6,6 +6,7 @@ import 'package:qr_flutter/qr_flutter.dart';
 
 import '../models/jam_models.dart';
 import '../services/jam_controller.dart';
+import '../services/theme_controller.dart';
 import 'cover_art.dart';
 import '../utils/app_colors.dart';
 
@@ -21,13 +22,14 @@ class JamDialog extends StatefulWidget {
   }
 
   static Future<void> showAsBottomSheet(BuildContext context) {
+    final theme = context.read<ThemeController>().active;
     return showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
-      backgroundColor: context.bgApp,
+      backgroundColor: theme.bgApp,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-        side: BorderSide(color: context.bgElevated, width: 1.2),
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        side: BorderSide(color: theme.bgElevated, width: 1.2),
       ),
       builder: (ctx) => Padding(
         padding: EdgeInsets.only(

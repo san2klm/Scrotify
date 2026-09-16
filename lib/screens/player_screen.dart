@@ -7,9 +7,13 @@ import 'package:provider/provider.dart';
 import '../services/jam_controller.dart';
 import '../services/player_controller.dart';
 import '../services/navidrome_service.dart';
+import '../services/cover_fallback_service.dart';
 import '../widgets/jam_dialog.dart';
 import '../widgets/jam_queue_panel.dart';
+import '../widgets/lyrics_follow_panel.dart';
+import '../widgets/lyrics_overlay.dart';
 import '../widgets/track_context_menu.dart';
+import '../widgets/cover_art.dart';
 import '../utils/app_colors.dart';
 
 /// Pantalla completa del reproductor. Es una vista del estado global de
@@ -24,6 +28,8 @@ class PlayerScreen extends StatefulWidget {
 
 class _PlayerScreenState extends State<PlayerScreen> {
   double? _dragValue;
+  bool _showLyrics = false;
+  bool _lyricsEverOpened = false;
 
   String _format(Duration d) {
     final minutes = d.inMinutes;
@@ -133,22 +139,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                         ],
                       ),
                       Expanded(
-                        child: Center(
-                          child: AspectRatio(
-                            aspectRatio: 1,
-                            child: ClipRRect(
-                              borderRadius: BorderRadius.circular(20),
-                              child: track.albumArtUrl != null
-                                  ? Image.network(track.albumArtUrl!,
-                                      fit: BoxFit.cover)
-                                  : Container(
-                                      color: context.bgElevated,
-                                      child: Icon(Icons.music_note,
-                                          size: 60, color: context.textMuted),
-                                    ),
-                            ),
-                          ),
-                        ),
+                        child: _buildCenterArea(context, track),
                       ),
                       const SizedBox(height: 24),
                       Text(
@@ -227,7 +218,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                         shuffleEnabled: shuffleEnabled,
                       ),
                       const SizedBox(height: 12),
-                      // Barra de utilidades inferior: Favoritos + Jam + Cola
+                      // Barra de utilidades inferior: Favoritos + Volumen + Karaoke + Letra + Cola
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 12),
                         child: Row(
@@ -250,11 +241,32 @@ class _PlayerScreenState extends State<PlayerScreen> {
                                 );
                               },
                             ),
-                            IconButton(
-                              icon: Icon(Icons.queue_music_rounded,
-                                  color: context.textSecondary, size: 24),
-                              tooltip: 'Cola de reproducción',
-                              onPressed: () => JamQueuePanel.show(context),
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                _PlayerVolumeBar(player: player),
+                                const SizedBox(width: 4),
+                                IconButton(
+                                  icon: Icon(Icons.music_note,
+                                      color: _showLyrics
+                                          ? context.accent
+                                          : context.textSecondary,
+                                      size: 24),
+                                  tooltip: 'Letra',
+                                  onPressed: () => setState(() {
+                                    _showLyrics = !_showLyrics;
+                                    if (_showLyrics) {
+                                      _lyricsEverOpened = true;
+                                    }
+                                  }),
+                                ),
+                                IconButton(
+                                  icon: Icon(Icons.queue_music_rounded,
+                                      color: context.textSecondary, size: 24),
+                                  tooltip: 'Cola de reproducción',
+                                  onPressed: () => JamQueuePanel.show(context),
+                                ),
+                              ],
                             ),
                           ],
                         ),
@@ -271,19 +283,151 @@ class _PlayerScreenState extends State<PlayerScreen> {
     );
   }
 
-  Widget _buildAmbientBackground(dynamic track) {
-    return Positioned.fill(
-      child: track.albumArtUrl == null
-          ? const SizedBox.shrink()
-          : ImageFiltered(
-              imageFilter: ImageFilter.blur(sigmaX: 60, sigmaY: 60),
-              child: Image.network(
-                track.albumArtUrl!,
-                fit: BoxFit.cover,
-                color: context.textPrimary.withAlpha(70),
-                colorBlendMode: BlendMode.modulate,
+  /// Ancho a partir del cual se considera pantalla grande:
+  /// portada a la izquierda y letra que sigue a la derecha.
+  static const double _wideBreakpoint = 750;
+
+  bool _isWide(BuildContext context) =>
+      MediaQuery.sizeOf(context).width >= _wideBreakpoint;
+
+  /// Zona central responsive:
+  /// - Pantalla chica: portada centrada con overlay de letra + blur.
+  /// - Pantalla grande + Letra activa: portada a la izquierda y
+  ///   letra que sigue la canción a la derecha.
+  Widget _buildCenterArea(BuildContext context, Track track) {
+    if (_isWide(context) && _showLyrics) {
+      return Row(
+        children: [
+          Expanded(
+            flex: 5,
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 420),
+                child: AspectRatio(
+                  aspectRatio: 1,
+                  child: _buildCoverImage(context, track),
+                ),
               ),
             ),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            flex: 6,
+            child: _lyricsEverOpened
+                ? LyricsFollowPanel(
+                    key: ValueKey('follow:${track.id}'),
+                    track: track,
+                  )
+                : const SizedBox.shrink(),
+          ),
+        ],
+      );
+    }
+
+    // Pantalla chica (comportamiento actual): overlay sobre la portada.
+    return Center(
+      child: AspectRatio(
+        aspectRatio: 1,
+        child: Stack(
+          children: [
+            _buildCoverImage(context, track),
+            // Blur progresivo para modo "Letra" (karaoke).
+            Positioned.fill(
+              child: TweenAnimationBuilder<double>(
+                tween: Tween<double>(
+                    begin: 0, end: _showLyrics ? 1.0 : 0.0),
+                duration: const Duration(milliseconds: 450),
+                curve: Curves.easeOut,
+                builder: (context, t, _) {
+                  if (t <= 0.01) {
+                    return const SizedBox.shrink();
+                  }
+                  return ClipRRect(
+                    borderRadius: BorderRadius.circular(20),
+                    child: BackdropFilter(
+                      filter: ImageFilter.blur(
+                          sigmaX: 19.5 * t, sigmaY: 19.5 * t),
+                      child: Container(
+                        color:
+                            Colors.black.withValues(alpha: 0.39 * t),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+            // Letra sobre la portada con blur:
+            // prioridad local de Navidrome > LRCLIB.
+            Positioned.fill(
+              child: AnimatedOpacity(
+                opacity: _showLyrics ? 1.0 : 0.0,
+                duration: const Duration(milliseconds: 350),
+                child: IgnorePointer(
+                  ignoring: !_showLyrics,
+                  child: _lyricsEverOpened
+                      ? ClipRRect(
+                          borderRadius: BorderRadius.circular(20),
+                          child: LyricsOverlay(
+                              key: ValueKey(track.id),
+                              track: track),
+                        )
+                      : const SizedBox.shrink(),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCoverImage(BuildContext context, Track track) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(20),
+      child: CoverArt(
+        url: track.albumArtUrl,
+        artist: track.artist,
+        album: track.album,
+        title: track.title,
+        width: double.infinity,
+        height: double.infinity,
+        borderRadius: 0,
+        fallbackIconSize: 60,
+        fallbackColor: context.bgElevated,
+      ),
+    );
+  }
+
+  Widget _buildAmbientBackground(Track track) {
+    return Positioned.fill(
+      child: FutureBuilder<String?>(
+        future: () async {
+          if (track.albumArtUrl != null && track.albumArtUrl!.isNotEmpty) {
+            return track.albumArtUrl;
+          }
+          return CoverFallbackService.instance.findCover(
+            artist: track.artist,
+            album: track.album,
+            title: track.title,
+            size: 300,
+          );
+        }(),
+        builder: (context, snapshot) {
+          final url = snapshot.data;
+          if (url == null || url.isEmpty) {
+            return const SizedBox.shrink();
+          }
+          return ImageFiltered(
+            imageFilter: ImageFilter.blur(sigmaX: 60, sigmaY: 60),
+            child: Image.network(
+              url,
+              fit: BoxFit.cover,
+              color: context.textPrimary.withAlpha(70),
+              colorBlendMode: BlendMode.modulate,
+            ),
+          );
+        },
+      ),
     );
   }
 
@@ -394,4 +538,97 @@ class _PlayerScreenState extends State<PlayerScreen> {
     );
   }
 }
+
+class _PlayerVolumeBar extends StatefulWidget {
+  final PlayerController player;
+  const _PlayerVolumeBar({required this.player});
+
+  @override
+  State<_PlayerVolumeBar> createState() => _PlayerVolumeBarState();
+}
+
+class _PlayerVolumeBarState extends State<_PlayerVolumeBar> {
+  double? _dragValue;
+  double _lastNonZeroVolume = 0.7;
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<double>(
+      stream: widget.player.volumeStream,
+      builder: (context, snapshot) {
+        final volume = (_dragValue ?? snapshot.data ?? widget.player.volume)
+            .clamp(0.0, 1.0)
+            .toDouble();
+        final muted = volume <= 0.001;
+
+        return Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            IconButton(
+              visualDensity: VisualDensity.compact,
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(minWidth: 26, minHeight: 26),
+              icon: Icon(
+                muted
+                    ? Icons.volume_off
+                    : volume < 0.5
+                        ? Icons.volume_down
+                        : Icons.volume_up,
+                color: context.textSecondary,
+                size: 18,
+              ),
+              onPressed: () {
+                if (muted) {
+                  widget.player.setVolume(
+                      _lastNonZeroVolume > 0.05 ? _lastNonZeroVolume : 0.5);
+                } else {
+                  _lastNonZeroVolume = volume;
+                  widget.player.setVolume(0.0);
+                }
+              },
+            ),
+            SizedBox(
+              width: 75,
+              child: SliderTheme(
+                data: SliderThemeData(
+                  trackHeight: 2.5,
+                  activeTrackColor: context.volumeAccent,
+                  inactiveTrackColor: context.waveformUnplayed,
+                  thumbColor: context.sliderThumb,
+                  thumbShape:
+                      const RoundSliderThumbShape(enabledThumbRadius: 4),
+                  overlayColor: context.accentDim,
+                  overlayShape:
+                      const RoundSliderOverlayShape(overlayRadius: 8),
+                ),
+                child: Slider(
+                  min: 0,
+                  max: 1,
+                  value: volume,
+                  onChanged: (v) {
+                    setState(() => _dragValue = v);
+                    widget.player.setVolume(v);
+                  },
+                  onChangeEnd: (v) {
+                    widget.player.setVolume(v);
+                    if (mounted) setState(() => _dragValue = null);
+                  },
+                ),
+              ),
+            ),
+            SizedBox(
+              width: 28,
+              child: Text(
+                '${(volume * 100).round()}%',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: context.textSecondary, fontSize: 10),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
 

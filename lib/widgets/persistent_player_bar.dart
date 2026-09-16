@@ -263,6 +263,9 @@ class PersistentPlayerBar extends StatelessWidget {
   Widget _artwork(BuildContext context, Track? track) {
     return CoverArt(
       url: track?.albumArtUrl,
+      artist: track?.artist,
+      album: track?.album,
+      title: track?.title,
       width: compact ? 44 : 56,
       height: compact ? 44 : 56,
       borderRadius: compact ? 8 : 6,

@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../services/navidrome_service.dart';
 import '../services/player_controller.dart';
+import '../widgets/cover_art.dart';
 import '../widgets/persistent_player_bar.dart';
 import '../utils/app_colors.dart';
 
@@ -104,23 +105,17 @@ class _LikedSongsScreenState extends State<LikedSongsScreen> {
                     final track = tracks[index];
                     final starred = nav.isStarred(track.id);
                     return ListTile(
-                      leading: Container(
+                      leading: CoverArt(
+                        url: track.albumArtUrl,
+                        artist: track.artist,
+                        album: track.album,
+                        title: track.title,
                         width: 40,
                         height: 40,
-                        decoration: BoxDecoration(
-                          color: context.bgElevated,
-                          borderRadius: BorderRadius.circular(4),
-                          image: track.albumArtUrl != null
-                              ? DecorationImage(
-                                  image: NetworkImage(track.albumArtUrl!),
-                                  fit: BoxFit.cover,
-                                )
-                              : null,
-                        ),
-                        child: track.albumArtUrl == null
-                            ? Icon(Icons.music_note,
-                                color: context.textMuted, size: 20)
-                            : null,
+                        borderRadius: 4,
+                        fallbackIcon: Icons.music_note,
+                        fallbackIconSize: 20,
+                        fallbackColor: context.bgElevated,
                       ),
                       title: Text(track.title,
                           maxLines: 1,

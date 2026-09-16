@@ -5,6 +5,7 @@ import 'dart:math';
 
 import 'package:flutter/foundation.dart';
 import 'package:just_audio/just_audio.dart';
+import 'package:media_kit/media_kit.dart' as mk;
 import 'package:path_provider/path_provider.dart';
 
 import 'navidrome_service.dart';
@@ -39,6 +40,34 @@ class PlayerController extends ChangeNotifier {
   final AudioPlayer _b = AudioPlayer();
   bool _useA = true;
 
+  // --- Modo Karaoke / Eliminación de voz (solo Desktop via media_kit) ---
+  mk.Player? _karaokePlayer;
+  StreamSubscription? _karaokePosSub;
+  StreamSubscription? _karaokeDurSub;
+  StreamSubscription? _karaokePlaySub;
+  StreamSubscription? _karaokeBufSub;
+  StreamSubscription? _karaokeCompSub;
+  bool _karaokeMode = false;
+  bool _vocalReduction = true;
+  final StreamController<Duration> _karaokePositionController =
+      StreamController<Duration>.broadcast();
+  final StreamController<Duration?> _karaokeDurationController =
+      StreamController<Duration?>.broadcast();
+  final StreamController<PlayerState> _karaokePlayerStateController =
+      StreamController<PlayerState>.broadcast();
+
+  /// Indica si la plataforma actual soporta el filtro de reducción de voz (Linux/Windows/macOS).
+  static bool get isVocalReductionSupported {
+    if (kIsWeb) return false;
+    return Platform.isLinux || Platform.isWindows || Platform.isMacOS;
+  }
+
+  /// True si el modo Karaoke con reproductor directo está activo.
+  bool get karaokeMode => _karaokeMode;
+
+  /// True si el filtro reductor de voz está activo.
+  bool get vocalReduction => _vocalReduction;
+
   /// Reproductor audible en este momento; sus streams son los públicos.
   AudioPlayer get _lead => _useA ? _a : _b;
 
@@ -69,6 +98,68 @@ class PlayerController extends ChangeNotifier {
   int _fadeTargetPos = -1;
   static const Duration _preRoll = Duration(seconds: 3);
 
+  // --- Apagado automático (sleep timer) ---
+  Timer? _sleepTimer;
+  Timer? _sleepTicker;
+  DateTime? _sleepEndsAt;
+
+  /// True si hay un apagado automático programado.
+  bool get hasSleepTimer => _sleepEndsAt != null;
+
+  /// Hora a la que se pausará la reproducción, o null si no hay timer.
+  DateTime? get sleepEndsAt => _sleepEndsAt;
+
+  /// Tiempo restante para el apagado, o null si no hay timer.
+  Duration? get sleepRemaining {
+    final end = _sleepEndsAt;
+    if (end == null) return null;
+    final rem = end.difference(DateTime.now());
+    return rem.isNegative ? Duration.zero : rem;
+  }
+
+  /// Texto corto para mostrar en la UI, p. ej. "Apagar en 15 min".
+  String get sleepLabel {
+    final rem = sleepRemaining;
+    if (rem == null) return 'Desactivado';
+    final mins = rem.inMinutes;
+    if (mins < 1) return 'Apagar en menos de 1 min';
+    if (mins >= 60) {
+      final h = rem.inHours;
+      final m = rem.inMinutes % 60;
+      return m == 0 ? 'Apagar en $h h' : 'Apagar en $h h $m min';
+    }
+    return 'Apagar en $mins min';
+  }
+
+  /// Programa el apagado automático tras [duration]: pausa la reproducción.
+  void setSleepTimer(Duration duration) {
+    cancelSleepTimer(silent: true);
+    _sleepEndsAt = DateTime.now().add(duration);
+    _sleepTimer = Timer(duration, () async {
+      _cancelFade();
+      try {
+        await _lead.pause();
+      } catch (_) {}
+      cancelSleepTimer();
+    });
+    // Avisa a la UI para refrescar el tiempo restante.
+    _sleepTicker = Timer.periodic(const Duration(seconds: 10), (_) {
+      if (_sleepEndsAt == null) return;
+      notifyListeners();
+    });
+    notifyListeners();
+  }
+
+  /// Cancela el apagado automático programado, si lo hay.
+  void cancelSleepTimer({bool silent = false}) {
+    _sleepTimer?.cancel();
+    _sleepTimer = null;
+    _sleepTicker?.cancel();
+    _sleepTicker = null;
+    _sleepEndsAt = null;
+    if (!silent) notifyListeners();
+  }
+
   List<Track> get queue => List.unmodifiable(_queue);
   List<Track> get recentlyPlayed => List.unmodifiable(_recentlyPlayed);
   int get currentOrderPos => _pos;
@@ -84,16 +175,25 @@ class PlayerController extends ChangeNotifier {
       _currentIndex >= 0 ? _queue[_currentIndex] : null;
   bool get hasTrack => currentTrack != null;
 
-  Stream<PlayerState> get playerStateStream => _lead.playerStateStream;
-  Stream<Duration> get positionStream => _lead.positionStream;
-  Stream<Duration?> get durationStream => _lead.durationStream;
+  Stream<PlayerState> get playerStateStream =>
+      _karaokeMode ? _karaokePlayerStateController.stream : _lead.playerStateStream;
+  Stream<Duration> get positionStream =>
+      _karaokeMode ? _karaokePositionController.stream : _lead.positionStream;
+  Stream<Duration?> get durationStream =>
+      _karaokeMode ? _karaokeDurationController.stream : _lead.durationStream;
   Stream<double> get volumeStream => _lead.volumeStream;
 
   bool get shuffleEnabled => _shuffleEnabled;
   LoopMode get repeatMode => _repeatMode;
-  bool get playing => _lead.playing;
-  Duration get position => _lead.position;
-  Duration? get duration => _lead.duration;
+  bool get playing => _karaokeMode
+      ? (_karaokePlayer?.state.playing ?? false)
+      : _lead.playing;
+  Duration get position => _karaokeMode
+      ? (_karaokePlayer?.state.position ?? Duration.zero)
+      : _lead.position;
+  Duration? get duration => _karaokeMode
+      ? _karaokePlayer?.state.duration
+      : _lead.duration;
   double get volume => _volume;
   bool get gapless => _settings.gapless;
 
@@ -356,8 +456,13 @@ class PlayerController extends ChangeNotifier {
   void _onCompleted() {
     _fadeGen++; // invalida rampas/pasos pendientes
     if (_repeatMode == LoopMode.one) {
-      unawaited(_lead.seek(Duration.zero));
-      unawaited(_lead.play());
+      if (_karaokeMode && _karaokePlayer != null) {
+        unawaited(_karaokePlayer!.seek(Duration.zero));
+        unawaited(_karaokePlayer!.play());
+      } else {
+        unawaited(_lead.seek(Duration.zero));
+        unawaited(_lead.play());
+      }
       notifyListeners();
       return;
     }
@@ -376,8 +481,17 @@ class PlayerController extends ChangeNotifier {
       return;
     }
     _pos = next;
-    unawaited(_loadCurrentAndPlay(_lead));
-    _recordRecent(currentTrack!);
+    if (_karaokeMode && _karaokePlayer != null) {
+      final t = currentTrack;
+      if (t != null) {
+        final url = _service.getStreamUrl(t.id, quality: _settings.effectiveQuality);
+        unawaited(_karaokePlayer!.open(mk.Media(url), play: true));
+        _recordRecent(t);
+      }
+    } else {
+      unawaited(_loadCurrentAndPlay(_lead));
+      _recordRecent(currentTrack!);
+    }
     notifyListeners();
   }
 
@@ -520,11 +634,147 @@ class PlayerController extends ChangeNotifier {
   }
 
   // ---------------------------------------------------------------------------
+  // Modo Karaoke & Reducción de Voz (Desktop / media_kit)
+  // ---------------------------------------------------------------------------
+
+  Future<void> _initKaraokePlayer() async {
+    if (_karaokePlayer != null) return;
+    final p = mk.Player(
+      configuration: const mk.PlayerConfiguration(
+        pitch: false,
+        title: 'Scrotify Karaoke',
+      ),
+    );
+    _karaokePlayer = p;
+    _karaokePosSub = p.stream.position.listen((pos) {
+      if (_karaokeMode) {
+        _karaokePositionController.add(pos);
+        notifyListeners();
+      }
+    });
+    _karaokeDurSub = p.stream.duration.listen((dur) {
+      if (_karaokeMode) {
+        _karaokeDurationController.add(dur);
+      }
+    });
+    _karaokePlaySub = p.stream.playing.listen((isPlaying) {
+      if (_karaokeMode) {
+        _karaokePlayerStateController.add(PlayerState(
+          isPlaying,
+          ProcessingState.ready,
+        ));
+        notifyListeners();
+      }
+    });
+    _karaokeBufSub = p.stream.buffering.listen((isBuffering) {
+      if (_karaokeMode && isBuffering) {
+        _karaokePlayerStateController.add(PlayerState(
+          _karaokePlayer?.state.playing ?? false,
+          ProcessingState.buffering,
+        ));
+      }
+    });
+    _karaokeCompSub = p.stream.completed.listen((completed) {
+      if (_karaokeMode && completed) {
+        _onCompleted();
+      }
+    });
+  }
+
+  /// Activa o desactiva el modo Karaoke con reproductor directo con filtro mpv.
+  Future<void> setKaraokeMode(bool enable) async {
+    if (_karaokeMode == enable) return;
+    if (enable && !isVocalReductionSupported) {
+      // Si no es soportado, simplemente encendemos la bandera de UI sin cambiar backend.
+      _karaokeMode = true;
+      notifyListeners();
+      return;
+    }
+
+    _cancelFade();
+    final currentPos = position;
+    final wasPlaying = playing;
+    final currentTr = currentTrack;
+
+    if (enable) {
+      await _lead.pause();
+      await _initKaraokePlayer();
+      _karaokeMode = true;
+      if (currentTr != null) {
+        final streamUrl = _service.getStreamUrl(currentTr.id,
+            quality: _settings.effectiveQuality);
+        await _applyVocalFilter(_vocalReduction);
+        await _karaokePlayer!.setVolume((_volume * 100).clamp(0.0, 100.0));
+        await _karaokePlayer!.open(mk.Media(streamUrl), play: wasPlaying);
+        if (currentPos > Duration.zero) {
+          await _karaokePlayer!.seek(currentPos);
+        }
+      }
+    } else {
+      Duration pos = Duration.zero;
+      if (_karaokePlayer != null) {
+        pos = _karaokePlayer!.state.position;
+        await _karaokePlayer!.pause();
+      }
+      _karaokeMode = false;
+      if (currentTr != null) {
+        await _loadTrackOn(_lead, _currentIndex);
+        await _lead.seek(pos);
+        if (wasPlaying) {
+          await _lead.play();
+        }
+      }
+    }
+    notifyListeners();
+  }
+
+  /// Conmuta el filtro reductor de voz (Center-Channel Vocal Removal).
+  Future<void> toggleVocalReduction() async {
+    _vocalReduction = !_vocalReduction;
+    if (_karaokeMode && _karaokePlayer != null) {
+      await _applyVocalFilter(_vocalReduction);
+    }
+    notifyListeners();
+  }
+
+  Future<void> _applyVocalFilter(bool enabled) async {
+    if (_karaokePlayer == null || !isVocalReductionSupported) return;
+    try {
+      final platform = _karaokePlayer!.platform;
+      if (platform is mk.NativePlayer) {
+        if (enabled) {
+          // Cadena FFmpeg lavfi optimizada y validada para mpv:
+          // 1. stereotools (lr>l-r): cancela el centro estereofónico
+          // 2. bandreject (1200Hz, Q=1.5): corte activo en frecuencias vocales
+          // 3. equalizers: atenuación de formantes y presencia vocal
+          // 4. extrastereo: refuerza los instrumentos en los laterales
+          const filter =
+              'lavfi=[stereotools=mode=lr>l-r:slev=1.4,'
+              'bandreject=f=1200:w=1.5:t=q,'
+              'equalizer=f=3000:t=q:w=1.5:g=-18,'
+              'equalizer=f=300:t=q:w=1.2:g=-10,'
+              'extrastereo=m=1.3]';
+          await platform.setProperty('af', filter);
+        } else {
+          await platform.setProperty('af', '');
+        }
+      }
+    } catch (e) {
+      debugPrint('Error applying vocal reduction filter: $e');
+    }
+  }
+
+  // ---------------------------------------------------------------------------
   // Control de reproducción
   // ---------------------------------------------------------------------------
 
   Future<void> togglePlay() async {
     if (currentTrack == null) return;
+    if (_karaokeMode && _karaokePlayer != null) {
+      await _karaokePlayer!.playOrPause();
+      notifyListeners();
+      return;
+    }
     if (_lead.playing) {
       _cancelFade();
       await _lead.pause();
@@ -542,35 +792,61 @@ class PlayerController extends ChangeNotifier {
     final next = _nextOrderPos(_pos);
     if (next == null) return;
     _pos = next;
-    await _loadCurrentAndPlay(_lead);
-    _recordRecent(currentTrack!);
+    if (_karaokeMode && _karaokePlayer != null) {
+      final t = currentTrack;
+      if (t != null) {
+        final url = _service.getStreamUrl(t.id, quality: _settings.effectiveQuality);
+        await _karaokePlayer!.open(mk.Media(url), play: true);
+        _recordRecent(t);
+      }
+    } else {
+      await _loadCurrentAndPlay(_lead);
+      _recordRecent(currentTrack!);
+    }
     notifyListeners();
   }
 
   Future<void> skipPrevious() async {
     _cancelFade();
-    if (_lead.position > const Duration(seconds: 3)) {
-      await _lead.seek(Duration.zero);
+    if (position > const Duration(seconds: 3)) {
+      await seek(Duration.zero);
       return;
     }
     if (_pos > 0) {
       _pos--;
-      await _loadCurrentAndPlay(_lead);
-      _recordRecent(currentTrack!);
+      if (_karaokeMode && _karaokePlayer != null) {
+        final t = currentTrack;
+        if (t != null) {
+          final url = _service.getStreamUrl(t.id, quality: _settings.effectiveQuality);
+          await _karaokePlayer!.open(mk.Media(url), play: true);
+          _recordRecent(t);
+        }
+      } else {
+        await _loadCurrentAndPlay(_lead);
+        _recordRecent(currentTrack!);
+      }
       notifyListeners();
     }
   }
 
   Future<void> seek(Duration target) async {
     _cancelFade();
-    await _lead.seek(target);
+    if (_karaokeMode && _karaokePlayer != null) {
+      await _karaokePlayer!.seek(target);
+    } else {
+      await _lead.seek(target);
+    }
   }
 
   Future<void> setVolume(double v) async {
     _volume = v.clamp(0.0, 1.0).toDouble();
-    // Durante un fundido la rampa converge a `_volume`; no clobberear el cruce.
-    if (!_fading) {
-      await _lead.setVolume(_volume);
+    if (_karaokeMode && _karaokePlayer != null) {
+      await _karaokePlayer!.setVolume((_volume * 100).clamp(0.0, 100.0));
+    } else {
+      // Durante un fundido la rampa converge a `_volume`; no clobberear el cruce.
+      if (!_fading) {
+        await _lead.setVolume(_volume);
+      }
     }
   }
 
@@ -617,6 +893,17 @@ class PlayerController extends ChangeNotifier {
   @override
   void dispose() {
     _watchdog?.cancel();
+    _sleepTimer?.cancel();
+    _sleepTicker?.cancel();
+    _karaokePosSub?.cancel();
+    _karaokeDurSub?.cancel();
+    _karaokePlaySub?.cancel();
+    _karaokeBufSub?.cancel();
+    _karaokeCompSub?.cancel();
+    _karaokePlayer?.dispose();
+    _karaokePositionController.close();
+    _karaokeDurationController.close();
+    _karaokePlayerStateController.close();
     _settings.removeListener(_onSettingsChanged);
     _a.dispose();
     _b.dispose();

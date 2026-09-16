@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:just_audio_media_kit/just_audio_media_kit.dart';
 import 'package:provider/provider.dart';
 
+import 'services/cover_fallback_service.dart';
 import 'services/jam_controller.dart';
 import 'services/navidrome_service.dart';
 import 'services/pairing_server.dart';
@@ -17,6 +18,8 @@ import 'screens/login_screen.dart';
 /// Psysonic): el primer frame ya usa el tema correcto, sin flash.
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // Limpia caché de portadas externas por si quedó null de versión anterior.
+  CoverFallbackService.instance.clearCache();
   // MediaKit con mpv solo hace falta en desktop. En Android/iOS just_audio
   // usa ExoPlayer/AVPlayer nativo y este init rompería el arranque.
   if (!kIsWeb && (Platform.isLinux || Platform.isWindows || Platform.isMacOS)) {

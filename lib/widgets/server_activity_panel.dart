@@ -380,6 +380,9 @@ class _ServerActivityPanelState extends State<ServerActivityPanel>
               // Portada pequeña
               CoverArt(
                 url: track.albumArtUrl,
+                artist: track.artist,
+                album: track.album,
+                title: track.title,
                 width: 42,
                 height: 42,
                 borderRadius: 8,

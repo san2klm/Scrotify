@@ -5,6 +5,7 @@ import '../models/jam_models.dart';
 import '../services/jam_controller.dart';
 import '../services/navidrome_service.dart';
 import '../services/player_controller.dart';
+import '../services/theme_controller.dart';
 import 'cover_art.dart';
 import '../utils/app_colors.dart';
 
@@ -13,13 +14,14 @@ class JamQueuePanel extends StatelessWidget {
   const JamQueuePanel({super.key});
 
   static void show(BuildContext context) {
+    final theme = context.read<ThemeController>().active;
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
-      backgroundColor: context.bgApp,
+      backgroundColor: theme.bgApp,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-        side: BorderSide(color: context.bgElevated, width: 1.2),
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        side: BorderSide(color: theme.bgElevated, width: 1.2),
       ),
       builder: (ctx) => const FractionallySizedBox(
         heightFactor: 0.85,
@@ -151,6 +153,9 @@ class JamQueuePanel extends StatelessWidget {
                 children: [
                   CoverArt(
                     url: currentTrack.albumArtUrl,
+                    artist: currentTrack.artist,
+                    album: currentTrack.album,
+                    title: currentTrack.title,
                     width: 44,
                     height: 44,
                     borderRadius: 8,
@@ -262,6 +267,9 @@ class JamQueuePanel extends StatelessWidget {
                                 ),
                                 CoverArt(
                                   url: item.track.albumArtUrl,
+                                  artist: item.track.artist,
+                                  album: item.track.album,
+                                  title: item.track.title,
                                   width: 40,
                                   height: 40,
                                   borderRadius: 8,
@@ -341,6 +349,9 @@ class JamQueuePanel extends StatelessWidget {
                                 ),
                                 CoverArt(
                                   url: track.albumArtUrl,
+                                  artist: track.artist,
+                                  album: track.album,
+                                  title: track.title,
                                   width: 40,
                                   height: 40,
                                   borderRadius: 8,

@@ -489,6 +489,9 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
             label: track.album,
             color: context.bgCard,
             albumArtUrl: track.albumArtUrl,
+            artist: track.artist,
+            album: track.album,
+            title: track.title,
             icon: Icons.album,
             onTap: () => _openPlayer(tracks, tracks.indexOf(track)),
           ),
@@ -501,6 +504,9 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
     required Color color,
     IconData? icon,
     String? albumArtUrl,
+    String? artist,
+    String? album,
+    String? title,
     VoidCallback? onTap,
   }) {
     return InkWell(
@@ -514,23 +520,20 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
         ),
         child: Row(
           children: [
-            Container(
+            SizedBox(
               width: 44,
               height: double.infinity,
-              decoration: BoxDecoration(
-                color: color,
-                borderRadius:
-                    const BorderRadius.horizontal(left: Radius.circular(7)),
-                image: albumArtUrl != null
-                    ? DecorationImage(
-                        image: NetworkImage(albumArtUrl),
-                        fit: BoxFit.cover,
-                      )
-                    : null,
+              child: CoverArt(
+                url: albumArtUrl,
+                artist: artist,
+                album: album,
+                title: title,
+                width: 44,
+                borderRadius: 7,
+                fallbackIcon: icon ?? Icons.music_note,
+                fallbackIconSize: 20,
+                fallbackColor: color,
               ),
-              child: albumArtUrl == null && icon != null
-                  ? Icon(icon, color: context.textPrimary, size: 20)
-                  : null,
             ),
             const SizedBox(width: 8),
             Expanded(
@@ -591,22 +594,14 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
                     Expanded(
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(6),
-                        child: Container(
-                          width: double.infinity,
-                          color: context.bgCard,
-                          child: track.albumArtUrl != null
-                              ? Image.network(
-                                  track.albumArtUrl!,
-                                  fit: BoxFit.cover,
-                                  errorBuilder: (_, __, ___) => Center(
-                                    child: Icon(Icons.music_note,
-                                        color: context.textMuted),
-                                  ),
-                                )
-                              : Center(
-                                  child: Icon(Icons.music_note,
-                                      color: context.textMuted),
-                                ),
+                        child: CoverArt(
+                          url: track.albumArtUrl,
+                          artist: track.artist,
+                          album: track.album,
+                          title: track.title,
+                          borderRadius: 0,
+                          fallbackIcon: Icons.music_note,
+                          fallbackColor: context.bgCard,
                         ),
                       ),
                     ),
@@ -844,17 +839,17 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
             padding: const EdgeInsets.symmetric(vertical: 4),
             child: Row(
               children: [
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(6),
-                  child: Container(
-                    width: 38,
-                    height: 38,
-                    color: context.bgCard,
-                    child: track.albumArtUrl != null
-                        ? Image.network(track.albumArtUrl!, fit: BoxFit.cover)
-                        : Icon(Icons.music_note,
-                            color: context.textMuted, size: 18),
-                  ),
+                CoverArt(
+                  url: track.albumArtUrl,
+                  artist: track.artist,
+                  album: track.album,
+                  title: track.title,
+                  width: 38,
+                  height: 38,
+                  borderRadius: 6,
+                  fallbackIcon: Icons.music_note,
+                  fallbackIconSize: 18,
+                  fallbackColor: context.bgCard,
                 ),
                 const SizedBox(width: 10),
                 Expanded(
@@ -986,6 +981,9 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
               dense: true,
               leading: CoverArt(
                 url: track.albumArtUrl,
+                artist: track.artist,
+                album: track.album,
+                title: track.title,
                 width: 38,
                 height: 38,
                 borderRadius: 4,

@@ -922,6 +922,9 @@ class _HomeScreenState extends State<HomeScreen> {
               dense: true,
               leading: CoverArt(
                 url: track.albumArtUrl,
+                artist: track.artist,
+                album: track.album,
+                title: track.title,
                 width: 40,
                 height: 40,
                 borderRadius: 4,
@@ -1083,6 +1086,9 @@ class _HomeScreenState extends State<HomeScreen> {
               label: track.album,
               color: context.bgCard,
               albumArtUrl: track.albumArtUrl,
+              artist: track.artist,
+              album: track.album,
+              title: track.title,
               icon: Icons.album,
               onTap: () => _openPlayer(tracks, tracks.indexOf(track)),
             );
@@ -1097,6 +1103,9 @@ class _HomeScreenState extends State<HomeScreen> {
     required Color color,
     required IconData icon,
     String? albumArtUrl,
+    String? artist,
+    String? album,
+    String? title,
     required VoidCallback onTap,
   }) {
     return InkWell(
@@ -1110,23 +1119,20 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
         child: Row(
           children: [
-            Container(
+            SizedBox(
               width: 52,
               height: double.infinity,
-              decoration: BoxDecoration(
-                color: color,
-                borderRadius:
-                    const BorderRadius.horizontal(left: Radius.circular(9)),
-                image: albumArtUrl != null
-                    ? DecorationImage(
-                        image: NetworkImage(albumArtUrl),
-                        fit: BoxFit.cover,
-                      )
-                    : null,
+              child: CoverArt(
+                url: albumArtUrl,
+                artist: artist,
+                album: album,
+                title: title,
+                width: 52,
+                borderRadius: 9,
+                fallbackIcon: icon,
+                fallbackIconSize: 22,
+                fallbackColor: color,
               ),
-              child: albumArtUrl == null
-                  ? Icon(icon, color: context.textPrimary, size: 22)
-                  : null,
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -1199,20 +1205,14 @@ class _HomeScreenState extends State<HomeScreen> {
             Expanded(
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(8),
-                child: Container(
-                  width: double.infinity,
-                  color: context.bgCard,
-                  child: track.albumArtUrl != null
-                      ? Image.network(
-                          track.albumArtUrl!,
-                          fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => Center(
-                            child: Icon(Icons.music_note, color: context.textMuted),
-                          ),
-                        )
-                      : Center(
-                          child: Icon(Icons.music_note, color: context.textMuted),
-                        ),
+                child: CoverArt(
+                  url: track.albumArtUrl,
+                  artist: track.artist,
+                  album: track.album,
+                  title: track.title,
+                  borderRadius: 0,
+                  fallbackIcon: Icons.music_note,
+                  fallbackColor: context.bgCard,
                 ),
               ),
             ),
@@ -1452,17 +1452,17 @@ class _HomeScreenState extends State<HomeScreen> {
             padding: const EdgeInsets.symmetric(vertical: 4),
             child: Row(
               children: [
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(6),
-                  child: Container(
-                    width: 40,
-                    height: 40,
-                    color: context.bgCard,
-                    child: track.albumArtUrl != null
-                        ? Image.network(track.albumArtUrl!, fit: BoxFit.cover)
-                        : Icon(Icons.music_note,
-                            color: context.textMuted, size: 20),
-                  ),
+                CoverArt(
+                  url: track.albumArtUrl,
+                  artist: track.artist,
+                  album: track.album,
+                  title: track.title,
+                  width: 40,
+                  height: 40,
+                  borderRadius: 6,
+                  fallbackIcon: Icons.music_note,
+                  fallbackIconSize: 20,
+                  fallbackColor: context.bgCard,
                 ),
                 const SizedBox(width: 12),
                 Expanded(

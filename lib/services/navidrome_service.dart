@@ -191,6 +191,27 @@ class ChatMessage {
   }
 }
 
+/// Línea de letra estructurada (OpenSubsonic).
+class LyricLineData {
+  final int startMs;
+  final String text;
+
+  const LyricLineData({required this.startMs, required this.text});
+}
+
+/// Bloque de letra estructurada devuelto por `getLyricsBySongId`.
+class StructuredLyricBlock {
+  final bool synced;
+  final String lang;
+  final List<LyricLineData> lines;
+
+  const StructuredLyricBlock({
+    required this.synced,
+    required this.lang,
+    required this.lines,
+  });
+}
+
 class NavidromeService with ChangeNotifier {
   NavidromeService({SettingsController? settings}) {
     if (settings != null) {
@@ -979,6 +1000,65 @@ class NavidromeService with ChangeNotifier {
       url += '&format=mp3&maxBitRate=${q.kbps}';
     }
     return url;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Letras locales (prioridad 1): getLyricsBySongId de Navidrome/OpenSubsonic.
+  // Usa letras embebidas o .lrc externos ya escaneados por el servidor.
+  // ---------------------------------------------------------------------------
+
+  /// Devuelve los bloques de letra estructurada para una canción.
+  /// Lista vacía si el servidor no tiene letra para ese `songId`.
+  Future<List<StructuredLyricBlock>> getLyricsBySongId(String songId) async {
+    if (!_connected) return [];
+    final (salt, token) = _auth();
+    final uri =
+        Uri.parse('$_url/rest/getLyricsBySongId.view').replace(queryParameters: {
+      'u': _user!,
+      's': salt,
+      't': token,
+      'v': '1.16.1',
+      'c': 'Psysonic',
+      'f': 'json',
+      'id': songId,
+    });
+
+    try {
+      final response = await _client.get(uri);
+      if (response.statusCode != 200) return [];
+      final data = jsonDecode(response.body);
+      final lyricsList =
+          data['subsonic-response']?['lyricsList'] as Map<String, dynamic>?;
+      if (lyricsList == null) return [];
+      final rawBlocks = lyricsList['structuredLyrics'];
+      if (rawBlocks == null) return [];
+      final blocks = _asList(rawBlocks);
+      final result = <StructuredLyricBlock>[];
+      for (final b in blocks) {
+        if (b is! Map) continue;
+        final map = b as Map<String, dynamic>;
+        final synced = map['synced'] == true;
+        final lang = (map['lang'] as String?) ?? '';
+        final rawLines = _asList(map['line']);
+        final lines = <LyricLineData>[];
+        for (final l in rawLines) {
+          if (l is! Map) continue;
+          final lm = l as Map<String, dynamic>;
+          final value = (lm['value'] as String?) ?? '';
+          if (value.trim().isEmpty) continue;
+          final start = (lm['start'] as num?)?.toInt() ?? 0;
+          lines.add(LyricLineData(startMs: start, text: value));
+        }
+        if (lines.isNotEmpty) {
+          result.add(StructuredLyricBlock(
+              synced: synced, lang: lang, lines: lines));
+        }
+      }
+      return result;
+    } catch (e) {
+      debugPrint('NavidromeService.getLyricsBySongId error: $e');
+      return [];
+    }
   }
 
   // ---------------------------------------------------------------------------

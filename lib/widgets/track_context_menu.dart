@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../screens/karaoke_screen.dart';
 import '../services/jam_controller.dart';
 import '../services/navidrome_service.dart';
 import '../services/player_controller.dart';
+import '../services/theme_controller.dart';
 import 'cover_art.dart';
 import '../utils/app_colors.dart';
 
@@ -14,12 +16,14 @@ class TrackContextMenu extends StatelessWidget {
   const TrackContextMenu({super.key, required this.track});
 
   static void show(BuildContext context, Track track) {
+    // NOTA: no usar context.bgApp aquí (usa watch y revienta fuera del build).
+    final theme = context.read<ThemeController>().active;
     showModalBottomSheet<void>(
       context: context,
-      backgroundColor: context.bgApp,
+      backgroundColor: theme.bgApp,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-        side: BorderSide(color: context.bgElevated, width: 1.2),
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        side: BorderSide(color: theme.bgElevated, width: 1.2),
       ),
       builder: (ctx) => TrackContextMenu(track: track),
     );
@@ -28,7 +32,7 @@ class TrackContextMenu extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final nav = context.watch<NavidromeService>();
-    final player = context.read<PlayerController>();
+    final player = context.watch<PlayerController>();
     final jam = context.watch<JamController>();
     final isStarred = nav.isStarred(track.id);
 
@@ -57,6 +61,9 @@ class TrackContextMenu extends StatelessWidget {
                 children: [
                   CoverArt(
                     url: track.albumArtUrl,
+                    artist: track.artist,
+                    album: track.album,
+                    title: track.title,
                     width: 48,
                     height: 48,
                     borderRadius: 8,
@@ -125,13 +132,16 @@ class TrackContextMenu extends StatelessWidget {
                     style: TextStyle(color: context.textMuted, fontSize: 11),
                   ),
                   onTap: () {
+                    final messenger = ScaffoldMessenger.of(context);
+                    final bg =
+                        context.read<ThemeController>().active.bgElevated;
                     Navigator.of(context).pop();
                     jam.addTrackToJam(track);
-                    ScaffoldMessenger.of(context).showSnackBar(
+                    messenger.showSnackBar(
                       SnackBar(
                         content: Text('"${track.title}" añadida a la cola Jam'),
                         duration: const Duration(seconds: 2),
-                        backgroundColor: context.bgElevated,
+                        backgroundColor: bg,
                       ),
                     );
                   },
@@ -144,14 +154,17 @@ class TrackContextMenu extends StatelessWidget {
                     style: TextStyle(color: context.textPrimary, fontSize: 14),
                   ),
                   onTap: () {
+                    final messenger = ScaffoldMessenger.of(context);
+                    final bg =
+                        context.read<ThemeController>().active.bgElevated;
                     Navigator.of(context).pop();
                     jam.addTrackToJam(track, playNext: true);
-                    ScaffoldMessenger.of(context).showSnackBar(
+                    messenger.showSnackBar(
                       SnackBar(
                         content:
                             Text('"${track.title}" sonará a continuación en el Jam'),
                         duration: const Duration(seconds: 2),
-                        backgroundColor: context.bgElevated,
+                        backgroundColor: bg,
                       ),
                     );
                   },
@@ -180,13 +193,16 @@ class TrackContextMenu extends StatelessWidget {
                     style: TextStyle(color: context.textPrimary, fontSize: 14),
                   ),
                   onTap: () {
+                    final messenger = ScaffoldMessenger.of(context);
+                    final bg =
+                        context.read<ThemeController>().active.bgElevated;
                     Navigator.of(context).pop();
                     player.addToQueue(track);
-                    ScaffoldMessenger.of(context).showSnackBar(
+                    messenger.showSnackBar(
                       SnackBar(
                         content: Text('"${track.title}" añadida a la cola'),
                         duration: const Duration(seconds: 2),
-                        backgroundColor: context.bgElevated,
+                        backgroundColor: bg,
                       ),
                     );
                   },
@@ -199,13 +215,16 @@ class TrackContextMenu extends StatelessWidget {
                     style: TextStyle(color: context.textPrimary, fontSize: 14),
                   ),
                   onTap: () {
+                    final messenger = ScaffoldMessenger.of(context);
+                    final bg =
+                        context.read<ThemeController>().active.bgElevated;
                     Navigator.of(context).pop();
                     player.addNextInQueue(track);
-                    ScaffoldMessenger.of(context).showSnackBar(
+                    messenger.showSnackBar(
                       SnackBar(
                         content: Text('"${track.title}" sonará a continuación'),
                         duration: const Duration(seconds: 2),
-                        backgroundColor: context.bgElevated,
+                        backgroundColor: bg,
                       ),
                     );
                   },
@@ -225,6 +244,89 @@ class TrackContextMenu extends StatelessWidget {
                   _showAddToPlaylistSheet(context, nav, track);
                 },
               ),
+
+              Divider(color: context.bgElevated, height: 1),
+
+              // Modo Karaoke
+              ListTile(
+                leading: Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: Colors.transparent,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(
+                    Icons.mic_external_on_rounded,
+                    color: context.accent,
+                    size: 22,
+                  ),
+                ),
+                title: Text(
+                  'Modo Karaoke',
+                  style: TextStyle(
+                    color: context.textPrimary,
+                    fontSize: 14,
+                    fontWeight: FontWeight.normal,
+                  ),
+                ),
+                subtitle: Text(
+                  PlayerController.isVocalReductionSupported
+                      ? 'Letra grande y reducción de voz'
+                      : 'Letra sincronizada a pantalla completa',
+                  style: TextStyle(color: context.textMuted, fontSize: 11),
+                ),
+                trailing: Icon(Icons.chevron_right_rounded,
+                    color: context.textMuted, size: 20),
+                onTap: () {
+                  Navigator.of(context).pop();
+                  KaraokeScreen.open(context);
+                },
+              ),
+
+              // Apagado automático (sleep timer)
+              ListTile(
+                leading: Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: player.hasSleepTimer
+                        ? context.accent.withValues(alpha: 0.15)
+                        : Colors.transparent,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(
+                    Icons.timer_outlined,
+                    color: player.hasSleepTimer
+                        ? context.accent
+                        : context.textSecondary,
+                    size: 22,
+                  ),
+                ),
+                title: Text(
+                  'Apagado automático',
+                  style: TextStyle(
+                    color: player.hasSleepTimer
+                        ? context.accent
+                        : context.textPrimary,
+                    fontSize: 14,
+                    fontWeight: player.hasSleepTimer
+                        ? FontWeight.bold
+                        : FontWeight.normal,
+                  ),
+                ),
+                subtitle: Text(
+                  player.hasSleepTimer ? player.sleepLabel : 'Desactivado',
+                  style: TextStyle(color: context.textMuted, fontSize: 11),
+                ),
+                trailing: player.hasSleepTimer
+                    ? Icon(Icons.check_rounded,
+                        color: context.accent, size: 20)
+                    : Icon(Icons.chevron_right_rounded,
+                        color: context.textMuted, size: 20),
+                onTap: () {
+                  Navigator.of(context).pop();
+                  _showSleepTimerSheet(context);
+                },
+              ),
             ],
           ),
         ),
@@ -232,14 +334,167 @@ class TrackContextMenu extends StatelessWidget {
     );
   }
 
-  void _showAddToPlaylistSheet(
-      BuildContext context, NavidromeService nav, Track track) {
+  void _showSleepTimerSheet(BuildContext parentContext) {
+    // Leer tema con read (fuera del build no se puede usar watch).
+    final theme = parentContext.read<ThemeController>().active;
     showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: context.bgApp,
+      context: parentContext,
+      backgroundColor: theme.bgApp,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-        side: BorderSide(color: context.bgElevated, width: 1.2),
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        side: BorderSide(color: theme.bgElevated, width: 1.2),
+      ),
+      builder: (ctx) {
+        return Consumer<PlayerController>(
+          builder: (context, player, _) {
+            final options = <({String label, Duration? duration})>[
+              (label: 'Desactivado', duration: null),
+              (label: 'En 5 minutos', duration: const Duration(minutes: 5)),
+              (label: 'En 10 minutos', duration: const Duration(minutes: 10)),
+              (label: 'En 15 minutos', duration: const Duration(minutes: 15)),
+              (label: 'En 30 minutos', duration: const Duration(minutes: 30)),
+              (label: 'En 45 minutos', duration: const Duration(minutes: 45)),
+              (label: 'En 1 hora', duration: const Duration(hours: 1)),
+              (
+                label: 'En 1 hora y 30 minutos',
+                duration: const Duration(minutes: 90)
+              ),
+            ];
+
+            bool isSelected(Duration? d) {
+              if (d == null) return !player.hasSleepTimer;
+              final rem = player.sleepRemaining;
+              if (rem == null) return false;
+              // Tolerancia de 2 min para marcar la opción activa.
+              return (rem - d).abs() < const Duration(minutes: 2);
+            }
+
+            return SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 36,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: context.themeBorder,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.timer_outlined,
+                            color: context.accent, size: 20),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Apagado automático',
+                          style: TextStyle(
+                            color: context.textPrimary,
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                    if (player.hasSleepTimer)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 4),
+                        child: Text(
+                          player.sleepLabel,
+                          style: TextStyle(
+                              color: context.accent, fontSize: 12),
+                        ),
+                      ),
+                    const SizedBox(height: 12),
+                    Flexible(
+                      child: ListView.builder(
+                        shrinkWrap: true,
+                        itemCount: options.length,
+                        itemBuilder: (ctx, i) {
+                          final opt = options[i];
+                          final selected = isSelected(opt.duration);
+                          return ListTile(
+                            leading: Icon(
+                              opt.duration == null
+                                  ? Icons.timer_off_outlined
+                                  : Icons.timer_outlined,
+                              color: selected
+                                  ? context.accent
+                                  : context.textSecondary,
+                            ),
+                            title: Text(
+                              opt.label,
+                              style: TextStyle(
+                                color: selected
+                                    ? context.accent
+                                    : context.textPrimary,
+                                fontWeight: selected
+                                    ? FontWeight.bold
+                                    : FontWeight.normal,
+                                fontSize: 14,
+                              ),
+                            ),
+                            trailing: selected
+                                ? Icon(Icons.check_rounded,
+                                    color: context.accent, size: 20)
+                                : null,
+                            onTap: () {
+                              final messenger =
+                                  ScaffoldMessenger.of(context);
+                              final bg = context
+                                  .read<ThemeController>()
+                                  .active
+                                  .bgElevated;
+                              Navigator.of(context).pop();
+                              if (opt.duration == null) {
+                                player.cancelSleepTimer();
+                                messenger.showSnackBar(
+                                  SnackBar(
+                                    content: const Text(
+                                        'Apagado automático desactivado'),
+                                    duration: const Duration(seconds: 2),
+                                    backgroundColor: bg,
+                                  ),
+                                );
+                              } else {
+                                player.setSleepTimer(opt.duration!);
+                                messenger.showSnackBar(
+                                  SnackBar(
+                                    content: Text(
+                                        'La música se pausará ${opt.label.toLowerCase()}'),
+                                    duration: const Duration(seconds: 2),
+                                    backgroundColor: bg,
+                                  ),
+                                );
+                              }
+                            },
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  void _showAddToPlaylistSheet(
+      BuildContext parentContext, NavidromeService nav, Track track) {
+    final theme = parentContext.read<ThemeController>().active;
+    showModalBottomSheet<void>(
+      context: parentContext,
+      backgroundColor: theme.bgApp,
+      shape: RoundedRectangleBorder(
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        side: BorderSide(color: theme.bgElevated, width: 1.2),
       ),
       builder: (ctx) {
         return FutureBuilder<List<Playlist>>(
@@ -294,17 +549,23 @@ class TrackContextMenu extends StatelessWidget {
                                   style: TextStyle(
                                       color: context.textMuted, fontSize: 11)),
                               onTap: () async {
+                                final messenger =
+                                    ScaffoldMessenger.of(context);
+                                final bg = context
+                                    .read<ThemeController>()
+                                    .active
+                                    .bgElevated;
                                 Navigator.of(context).pop();
                                 await nav.updatePlaylist(
                                   playlistId: p.id,
                                   songIdsToAdd: [track.id],
                                 );
                                 if (context.mounted) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
+                                  messenger.showSnackBar(
                                     SnackBar(
                                       content: Text(
                                           'Añadida a "${p.name}"'),
-                                      backgroundColor: context.bgElevated,
+                                      backgroundColor: bg,
                                     ),
                                   );
                                 }
