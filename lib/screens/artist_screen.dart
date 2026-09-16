@@ -5,6 +5,7 @@ import '../services/navidrome_service.dart';
 import '../services/player_controller.dart';
 import '../widgets/persistent_player_bar.dart';
 import 'album_detail_screen.dart';
+import '../utils/app_colors.dart';
 
 /// Pantalla de un artista estilo Spotify:
 /// - Header con portada, nombre, botón play
@@ -38,7 +39,7 @@ class _ArtistScreenState extends State<ArtistScreen> {
   Widget build(BuildContext context) {
     final compact = MediaQuery.sizeOf(context).width < 700;
     return Scaffold(
-      backgroundColor: const Color(0xFF121212),
+      backgroundColor: context.bgApp,
       body: CustomScrollView(
         slivers: [
           _buildSliverAppBar(),
@@ -56,8 +57,8 @@ class _ArtistScreenState extends State<ArtistScreen> {
     return SliverAppBar(
       expandedHeight: 280,
       pinned: true,
-      backgroundColor: const Color(0xFF121212),
-      foregroundColor: Colors.white,
+      backgroundColor: context.bgApp,
+      foregroundColor: context.textPrimary,
       flexibleSpace: FlexibleSpaceBar(
         background: Stack(
           fit: StackFit.expand,
@@ -69,19 +70,19 @@ class _ArtistScreenState extends State<ArtistScreen> {
                     fit: BoxFit.cover,
                     loadingBuilder: (context, child, progress) {
                       if (progress == null) return child;
-                      return Container(color: Colors.deepPurple.shade900);
+                      return Container(color: context.accent2);
                     },
                     errorBuilder: (_, __, ___) =>
-                        Container(color: Colors.deepPurple.shade900),
+                        Container(color: context.accent2),
                   )
-                : Container(color: Colors.deepPurple.shade900),
+                : Container(color: context.accent2),
             // Gradiente oscuro abajo para legibilidad
-            const DecoratedBox(
+            DecoratedBox(
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
-                  colors: [Colors.transparent, Color(0xFF121212)],
+                  colors: [Colors.transparent, context.bgApp],
                   stops: [0.6, 1.0],
                 ),
               ),
@@ -98,8 +99,8 @@ class _ArtistScreenState extends State<ArtistScreen> {
                       widget.artist.name,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: Colors.white,
+                      style: TextStyle(
+                        color: context.textPrimary,
                         fontSize: 36,
                         fontWeight: FontWeight.bold,
                         height: 1.1,
@@ -126,7 +127,7 @@ class _ArtistScreenState extends State<ArtistScreen> {
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
             decoration: BoxDecoration(
-              color: Colors.greenAccent,
+              color: context.accent,
               borderRadius: BorderRadius.circular(30),
             ),
             child: Row(
@@ -136,14 +137,14 @@ class _ArtistScreenState extends State<ArtistScreen> {
                   player.playing && player.currentTrack?.artist == widget.artist.name
                       ? Icons.pause
                       : Icons.play_arrow,
-                  color: Colors.black,
+                  color: context.onAccent,
                   size: 24,
                 ),
                 const SizedBox(width: 8),
-                const Text(
+                Text(
                   'Reproducir',
                   style: TextStyle(
-                    color: Colors.black,
+                    color: context.onAccent,
                     fontSize: 16,
                     fontWeight: FontWeight.bold,
                   ),
@@ -184,17 +185,17 @@ class _ArtistScreenState extends State<ArtistScreen> {
                   _sectionHeader('Canciones populares', tracks.isNotEmpty),
                   const SizedBox(height: 8),
                   if (loading && tracks.isEmpty)
-                    const Center(
+                    Center(
                       child: Padding(
                         padding: EdgeInsets.all(16),
-                        child: CircularProgressIndicator(color: Colors.white),
+                        child: CircularProgressIndicator(color: context.textPrimary),
                       ),
                     )
                   else if (tracks.isEmpty)
-                    const Padding(
+                    Padding(
                       padding: EdgeInsets.symmetric(vertical: 16),
                       child: Text('Sin canciones',
-                          style: TextStyle(color: Colors.white54)),
+                          style: TextStyle(color: context.textMuted)),
                     )
                   else
                     _buildTracksList(tracks),
@@ -206,17 +207,17 @@ class _ArtistScreenState extends State<ArtistScreen> {
                   const SizedBox(height: 8),
                   if (albumSnapshot.connectionState == ConnectionState.waiting &&
                       albums.isEmpty)
-                    const Center(
+                    Center(
                       child: Padding(
                         padding: EdgeInsets.all(16),
-                        child: CircularProgressIndicator(color: Colors.white),
+                        child: CircularProgressIndicator(color: context.textPrimary),
                       ),
                     )
                   else if (albums.isEmpty)
-                    const Padding(
+                    Padding(
                       padding: EdgeInsets.symmetric(vertical: 16),
                       child: Text('Sin álbumes',
-                          style: TextStyle(color: Colors.white54)),
+                          style: TextStyle(color: context.textMuted)),
                     )
                   else
                     _buildAlbumsGrid(albums),
@@ -235,8 +236,8 @@ class _ArtistScreenState extends State<ArtistScreen> {
       children: [
         Text(
           title,
-          style: const TextStyle(
-            color: Colors.white,
+          style: TextStyle(
+            color: context.textPrimary,
             fontSize: 20,
             fontWeight: FontWeight.bold,
           ),
@@ -244,9 +245,9 @@ class _ArtistScreenState extends State<ArtistScreen> {
         if (hasContent)
           TextButton(
             onPressed: () {},
-            child: const Text(
+            child: Text(
               'Ver todo',
-              style: TextStyle(color: Colors.white70, fontSize: 14),
+              style: TextStyle(color: context.textSecondary, fontSize: 14),
             ),
           ),
       ],
@@ -269,8 +270,8 @@ class _ArtistScreenState extends State<ArtistScreen> {
               onPressed: () => setState(() => _showAllTracks = !_showAllTracks),
               child: Text(
                 _showAllTracks ? 'Mostrar menos' : 'Mostrar más',
-                style: const TextStyle(
-                  color: Colors.greenAccent,
+                style: TextStyle(
+                  color: context.accent,
                   fontSize: 14,
                   fontWeight: FontWeight.w600,
                 ),
@@ -306,8 +307,8 @@ class _ArtistScreenState extends State<ArtistScreen> {
                     return Icon(
                       isPlayingThis ? Icons.pause : Icons.play_arrow,
                       color: isPlayingThis
-                          ? Colors.greenAccent
-                          : Colors.white38,
+                          ? context.accent
+                          : context.textMuted,
                       size: 22,
                     );
                   },
@@ -320,7 +321,7 @@ class _ArtistScreenState extends State<ArtistScreen> {
               width: 48,
               height: 48,
               decoration: BoxDecoration(
-                color: Colors.grey.shade800,
+                color: context.bgElevated,
                 borderRadius: BorderRadius.circular(4),
                 image: track.albumArtUrl != null
                     ? DecorationImage(
@@ -330,7 +331,7 @@ class _ArtistScreenState extends State<ArtistScreen> {
                     : null,
               ),
               child: track.albumArtUrl == null
-                  ? const Icon(Icons.music_note, color: Colors.white54, size: 22)
+                  ? Icon(Icons.music_note, color: context.textMuted, size: 22)
                   : null,
             ),
             const SizedBox(width: 12),
@@ -343,8 +344,8 @@ class _ArtistScreenState extends State<ArtistScreen> {
                     track.title,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: Colors.white,
+                    style: TextStyle(
+                      color: context.textPrimary,
                       fontSize: 14,
                       fontWeight: FontWeight.w500,
                     ),
@@ -354,8 +355,8 @@ class _ArtistScreenState extends State<ArtistScreen> {
                     track.artist,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: Colors.white54,
+                    style: TextStyle(
+                      color: context.textMuted,
                       fontSize: 12,
                     ),
                   ),
@@ -369,7 +370,7 @@ class _ArtistScreenState extends State<ArtistScreen> {
                 IconButton(
                   icon: Icon(
                     starred ? Icons.favorite : Icons.favorite_border,
-                    color: starred ? Colors.greenAccent : Colors.white54,
+                    color: starred ? context.accent : context.textMuted,
                     size: 20,
                   ),
                   onPressed: () async {
@@ -378,7 +379,7 @@ class _ArtistScreenState extends State<ArtistScreen> {
                   },
                 ),
                 IconButton(
-                  icon: const Icon(Icons.more_vert, color: Colors.white54),
+                  icon: Icon(Icons.more_vert, color: context.textMuted),
                   onPressed: () {}, // TODO: menú contextual
                 ),
               ],
@@ -416,7 +417,7 @@ class _ArtistScreenState extends State<ArtistScreen> {
                 child: Container(
                   width: double.infinity,
                   decoration: BoxDecoration(
-                    color: Colors.grey.shade800,
+                    color: context.bgElevated,
                     borderRadius: BorderRadius.circular(8),
                     image: album.coverArtUrl != null
                         ? DecorationImage(
@@ -426,9 +427,9 @@ class _ArtistScreenState extends State<ArtistScreen> {
                         : null,
                   ),
                   child: album.coverArtUrl == null
-                      ? const Center(
+                      ? Center(
                           child: Icon(Icons.album,
-                              color: Colors.white54, size: 36),
+                              color: context.textMuted, size: 36),
                         )
                       : null,
                 ),
@@ -438,8 +439,8 @@ class _ArtistScreenState extends State<ArtistScreen> {
                 album.title,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  color: Colors.white,
+                style: TextStyle(
+                  color: context.textPrimary,
                   fontSize: 13,
                   fontWeight: FontWeight.w600,
                 ),
@@ -448,7 +449,7 @@ class _ArtistScreenState extends State<ArtistScreen> {
                 '${album.trackCount} canciones',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(color: Colors.white54, fontSize: 12),
+                style: TextStyle(color: context.textMuted, fontSize: 12),
               ),
             ],
           ),

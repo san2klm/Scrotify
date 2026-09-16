@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../services/navidrome_service.dart';
 import '../services/player_controller.dart';
 import '../widgets/persistent_player_bar.dart';
+import '../utils/app_colors.dart';
 
 /// Pantalla que muestra las canciones marcadas como favoritas (me gusta).
 class LikedSongsScreen extends StatefulWidget {
@@ -28,10 +29,10 @@ class _LikedSongsScreenState extends State<LikedSongsScreen> {
     // Misma lógica que HomeShell: < 700px es móvil (barra compacta).
     final compact = MediaQuery.sizeOf(context).width < 700;
     return Scaffold(
-      backgroundColor: const Color(0xFF121212),
+      backgroundColor: context.bgApp,
       appBar: AppBar(
-        backgroundColor: const Color(0xFF353588),
-        foregroundColor: Colors.white,
+        backgroundColor: context.accent2,
+        foregroundColor: context.onAccent2,
         title: const Text('Liked Songs'),
       ),
       bottomNavigationBar: SafeArea(
@@ -42,14 +43,14 @@ class _LikedSongsScreenState extends State<LikedSongsScreen> {
         future: _future,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(
-                child: CircularProgressIndicator(color: Colors.white));
+            return Center(
+                child: CircularProgressIndicator(color: context.textPrimary));
           }
           final tracks = snapshot.data ?? <Track>[];
           if (tracks.isEmpty) {
-            return const Center(
+            return Center(
               child: Text('No tienes canciones favoritas',
-                  style: TextStyle(color: Colors.white54)),
+                  style: TextStyle(color: context.textMuted)),
             );
           }
           return Column(
@@ -62,32 +63,32 @@ class _LikedSongsScreenState extends State<LikedSongsScreen> {
                       width: 120,
                       height: 120,
                       decoration: BoxDecoration(
-                        color: const Color(0xFF353588),
+                        color: context.accent2,
                         borderRadius: BorderRadius.circular(8),
                       ),
-                      child: const Icon(Icons.favorite,
-                          color: Colors.white, size: 48),
+                      child: Icon(Icons.favorite,
+                          color: context.textPrimary, size: 48),
                     ),
                     const SizedBox(width: 16),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text('Liked Songs',
+                          Text('Liked Songs',
                               style: TextStyle(
-                                  color: Colors.white,
+                                  color: context.textPrimary,
                                   fontSize: 22,
                                   fontWeight: FontWeight.bold)),
                           const SizedBox(height: 8),
                           Text('${tracks.length} canciones',
-                              style: const TextStyle(
-                                  color: Colors.white54, fontSize: 14)),
+                              style: TextStyle(
+                                  color: context.textMuted, fontSize: 14)),
                         ],
                       ),
                     ),
                     IconButton(
-                      icon: const Icon(Icons.play_circle_filled,
-                          color: Colors.greenAccent, size: 48),
+                      icon: Icon(Icons.play_circle_filled,
+                          color: context.accent, size: 48),
                       onPressed: () => context
                           .read<PlayerController>()
                           .playQueue(tracks, startIndex: 0),
@@ -95,7 +96,7 @@ class _LikedSongsScreenState extends State<LikedSongsScreen> {
                   ],
                 ),
               ),
-              const Divider(color: Colors.white12),
+              Divider(color: context.themeBorder),
               Expanded(
                 child: ListView.builder(
                   itemCount: tracks.length,
@@ -107,7 +108,7 @@ class _LikedSongsScreenState extends State<LikedSongsScreen> {
                         width: 40,
                         height: 40,
                         decoration: BoxDecoration(
-                          color: Colors.grey.shade800,
+                          color: context.bgElevated,
                           borderRadius: BorderRadius.circular(4),
                           image: track.albumArtUrl != null
                               ? DecorationImage(
@@ -117,25 +118,25 @@ class _LikedSongsScreenState extends State<LikedSongsScreen> {
                               : null,
                         ),
                         child: track.albumArtUrl == null
-                            ? const Icon(Icons.music_note,
-                                color: Colors.white54, size: 20)
+                            ? Icon(Icons.music_note,
+                                color: context.textMuted, size: 20)
                             : null,
                       ),
                       title: Text(track.title,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                              color: Colors.white, fontSize: 14)),
+                          style: TextStyle(
+                              color: context.textPrimary, fontSize: 14)),
                       subtitle: Text(track.artist,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                              color: Colors.white54, fontSize: 12)),
+                          style: TextStyle(
+                              color: context.textMuted, fontSize: 12)),
                       trailing: IconButton(
                         icon: Icon(
                           starred ? Icons.favorite : Icons.favorite_border,
                           color:
-                              starred ? Colors.greenAccent : Colors.white54,
+                              starred ? context.accent : context.textMuted,
                         ),
                         onPressed: () async {
                           await nav.toggleStar(track);

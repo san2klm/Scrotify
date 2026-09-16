@@ -7,6 +7,7 @@ import 'package:qr_flutter/qr_flutter.dart';
 import '../models/jam_models.dart';
 import '../services/jam_controller.dart';
 import 'cover_art.dart';
+import '../utils/app_colors.dart';
 
 /// Modal / Diálogo interactivo para gestionar o unirse a una sesión Jam.
 class JamDialog extends StatefulWidget {
@@ -23,10 +24,10 @@ class JamDialog extends StatefulWidget {
     return showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
-      backgroundColor: const Color(0xFF0C0C10),
-      shape: const RoundedRectangleBorder(
+      backgroundColor: context.bgApp,
+      shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-        side: BorderSide(color: Color(0xFF1E1E28), width: 1.2),
+        side: BorderSide(color: context.bgElevated, width: 1.2),
       ),
       builder: (ctx) => Padding(
         padding: EdgeInsets.only(
@@ -79,14 +80,14 @@ class _JamDialogState extends State<JamDialog> with SingleTickerProviderStateMix
     final isDesktop = MediaQuery.of(context).size.width >= 700;
 
     return Dialog(
-      backgroundColor: const Color(0xFF0C0C10),
+      backgroundColor: context.bgApp,
       insetPadding: EdgeInsets.symmetric(
         horizontal: isDesktop ? 40 : 16,
         vertical: 24,
       ),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(24),
-        side: const BorderSide(color: Color(0xFF1E1E28), width: 1.2),
+        side: BorderSide(color: context.bgElevated, width: 1.2),
       ),
       child: ConstrainedBox(
         constraints: BoxConstraints(
@@ -118,11 +119,11 @@ class _JamDialogState extends State<JamDialog> with SingleTickerProviderStateMix
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: const Color(0xFF10B981).withValues(alpha: 0.15),
+                color: context.accent.withValues(alpha: 0.15),
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: const Icon(Icons.speaker_group_rounded,
-                  color: Color(0xFF10B981), size: 22),
+              child: Icon(Icons.speaker_group_rounded,
+                  color: context.accent, size: 22),
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -133,8 +134,8 @@ class _JamDialogState extends State<JamDialog> with SingleTickerProviderStateMix
                     children: [
                       Text(
                         isHost ? 'Tu Sesión Jam' : 'Jam de ${session?.hostName ?? "Anfitrión"}',
-                        style: const TextStyle(
-                          color: Colors.white,
+                        style: TextStyle(
+                          color: context.textPrimary,
                           fontSize: 17,
                           fontWeight: FontWeight.bold,
                         ),
@@ -144,14 +145,14 @@ class _JamDialogState extends State<JamDialog> with SingleTickerProviderStateMix
                         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                         decoration: BoxDecoration(
                           color: isHost
-                              ? const Color(0xFFA855F7).withValues(alpha: 0.2)
-                              : const Color(0xFF10B981).withValues(alpha: 0.2),
+                              ? context.accent.withValues(alpha: 0.2)
+                              : context.accent.withValues(alpha: 0.2),
                           borderRadius: BorderRadius.circular(6),
                         ),
                         child: Text(
                           isHost ? 'ANFITRIÓN' : 'INVITADO',
                           style: TextStyle(
-                            color: isHost ? const Color(0xFFA855F7) : const Color(0xFF10B981),
+                            color: isHost ? context.accent : context.accent,
                             fontSize: 9.5,
                             fontWeight: FontWeight.bold,
                           ),
@@ -161,13 +162,13 @@ class _JamDialogState extends State<JamDialog> with SingleTickerProviderStateMix
                   ),
                   Text(
                     '${jam.participants.length} participante${jam.participants.length == 1 ? "" : "s"} conectado${jam.participants.length == 1 ? "" : "s"}',
-                    style: const TextStyle(color: Colors.white54, fontSize: 12),
+                    style: TextStyle(color: context.textMuted, fontSize: 12),
                   ),
                 ],
               ),
             ),
             IconButton(
-              icon: const Icon(Icons.close_rounded, color: Colors.white54),
+              icon: Icon(Icons.close_rounded, color: context.textMuted),
               onPressed: () => Navigator.of(context).pop(),
             ),
           ],
@@ -178,9 +179,9 @@ class _JamDialogState extends State<JamDialog> with SingleTickerProviderStateMix
         Container(
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
-            color: const Color(0xFF14141E),
+            color: context.bgElevated,
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: const Color(0xFF222232)),
+            border: Border.all(color: context.bgElevated),
           ),
           child: Row(
             children: [
@@ -191,14 +192,14 @@ class _JamDialogState extends State<JamDialog> with SingleTickerProviderStateMix
                   child: Container(
                     padding: const EdgeInsets.all(4),
                     decoration: BoxDecoration(
-                      color: Colors.white,
+                      color: context.textPrimary,
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: QrImageView(
                       data: jam.qrUri!,
                       version: QrVersions.auto,
                       size: 46,
-                      backgroundColor: Colors.white,
+                      backgroundColor: context.textPrimary,
                     ),
                   ),
                 ),
@@ -207,10 +208,10 @@ class _JamDialogState extends State<JamDialog> with SingleTickerProviderStateMix
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
+                    Text(
                       'CÓDIGO DE ACCESO',
                       style: TextStyle(
-                        color: Colors.white38,
+                        color: context.textMuted,
                         fontSize: 9.5,
                         fontWeight: FontWeight.bold,
                         letterSpacing: 1.1,
@@ -219,8 +220,8 @@ class _JamDialogState extends State<JamDialog> with SingleTickerProviderStateMix
                     const SizedBox(height: 2),
                     Text(
                       jam.currentCodeFormatted ?? '---',
-                      style: const TextStyle(
-                        color: Colors.white,
+                      style: TextStyle(
+                        color: context.textPrimary,
                         fontSize: 20,
                         fontWeight: FontWeight.bold,
                         letterSpacing: 2,
@@ -232,16 +233,16 @@ class _JamDialogState extends State<JamDialog> with SingleTickerProviderStateMix
               ),
               IconButton(
                 tooltip: 'Copiar código',
-                icon: const Icon(Icons.copy_rounded, color: Color(0xFFA855F7), size: 20),
+                icon: Icon(Icons.copy_rounded, color: context.accent, size: 20),
                 onPressed: () {
                   final code = session?.pinCode ?? jam.currentCodeFormatted;
                   if (code != null) {
                     Clipboard.setData(ClipboardData(text: code));
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
+                      SnackBar(
                         content: Text('Código Jam copiado al portapapeles'),
                         duration: Duration(seconds: 2),
-                        backgroundColor: Color(0xFF1A122E),
+                        backgroundColor: context.bgElevated,
                       ),
                     );
                   }
@@ -258,14 +259,14 @@ class _JamDialogState extends State<JamDialog> with SingleTickerProviderStateMix
             child: Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: context.textPrimary,
                 borderRadius: BorderRadius.circular(16),
               ),
               child: QrImageView(
                 data: jam.qrUri!,
                 version: QrVersions.auto,
                 size: 180,
-                backgroundColor: Colors.white,
+                backgroundColor: context.textPrimary,
               ),
             ),
           ),
@@ -278,9 +279,9 @@ class _JamDialogState extends State<JamDialog> with SingleTickerProviderStateMix
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             decoration: BoxDecoration(
-              color: const Color(0xFF14141E),
+              color: context.bgElevated,
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: const Color(0xFF222232)),
+              border: Border.all(color: context.bgElevated),
             ),
             child: Row(
               children: [
@@ -288,7 +289,7 @@ class _JamDialogState extends State<JamDialog> with SingleTickerProviderStateMix
                   jam.mode == JamMode.partySpeaker
                       ? Icons.speaker_rounded
                       : Icons.headphones_rounded,
-                  color: const Color(0xFFA855F7),
+                  color: context.accent,
                   size: 20,
                 ),
                 const SizedBox(width: 10),
@@ -300,8 +301,8 @@ class _JamDialogState extends State<JamDialog> with SingleTickerProviderStateMix
                         jam.mode == JamMode.partySpeaker
                             ? 'Modo Altavoz de Fiesta'
                             : 'Modo Escucha Sincronizada',
-                        style: const TextStyle(
-                          color: Colors.white,
+                        style: TextStyle(
+                          color: context.textPrimary,
                           fontSize: 12.5,
                           fontWeight: FontWeight.bold,
                         ),
@@ -310,17 +311,17 @@ class _JamDialogState extends State<JamDialog> with SingleTickerProviderStateMix
                         jam.mode == JamMode.partySpeaker
                             ? 'El audio suena sólo en el Host'
                             : 'El audio suena en todos los dispositivos',
-                        style: const TextStyle(color: Colors.white38, fontSize: 10.5),
+                        style: TextStyle(color: context.textMuted, fontSize: 10.5),
                       ),
                     ],
                   ),
                 ),
                 DropdownButton<JamMode>(
                   value: jam.mode,
-                  dropdownColor: const Color(0xFF1A122E),
+                  dropdownColor: context.bgElevated,
                   underline: const SizedBox(),
-                  icon: const Icon(Icons.arrow_drop_down, color: Colors.white54),
-                  style: const TextStyle(color: Colors.white, fontSize: 12),
+                  icon: Icon(Icons.arrow_drop_down, color: context.textMuted),
+                  style: TextStyle(color: context.textPrimary, fontSize: 12),
                   items: const [
                     DropdownMenuItem(
                       value: JamMode.partySpeaker,
@@ -346,12 +347,12 @@ class _JamDialogState extends State<JamDialog> with SingleTickerProviderStateMix
           SwitchListTile(
             contentPadding: EdgeInsets.zero,
             dense: true,
-            title: const Text(
+            title: Text(
               'Permitir a invitados controlar reproducción',
-              style: TextStyle(color: Colors.white70, fontSize: 12),
+              style: TextStyle(color: context.textSecondary, fontSize: 12),
             ),
             value: jam.allowGuestControls,
-            activeTrackColor: const Color(0xFF10B981),
+            activeTrackColor: context.accent,
             onChanged: (val) => jam.updateJamSettings(allowGuestControls: val),
           ),
         ],
@@ -359,10 +360,10 @@ class _JamDialogState extends State<JamDialog> with SingleTickerProviderStateMix
         const SizedBox(height: 8),
 
         // Lista de Participantes
-        const Text(
+        Text(
           'PARTICIPANTES EN LA SESIÓN',
           style: TextStyle(
-            color: Colors.white38,
+            color: context.textMuted,
             fontSize: 10,
             fontWeight: FontWeight.bold,
             letterSpacing: 1.1,
@@ -382,7 +383,7 @@ class _JamDialogState extends State<JamDialog> with SingleTickerProviderStateMix
                 margin: const EdgeInsets.only(bottom: 6),
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF12121A),
+                  color: context.bgCard,
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Row(
@@ -392,8 +393,8 @@ class _JamDialogState extends State<JamDialog> with SingleTickerProviderStateMix
                       backgroundColor: Color(p.avatarColorValue),
                       child: Text(
                         p.name.isNotEmpty ? p.name[0].toUpperCase() : 'U',
-                        style: const TextStyle(
-                          color: Colors.white,
+                        style: TextStyle(
+                          color: context.textPrimary,
                           fontSize: 12,
                           fontWeight: FontWeight.bold,
                         ),
@@ -407,8 +408,8 @@ class _JamDialogState extends State<JamDialog> with SingleTickerProviderStateMix
                             child: Text(
                               p.name,
                               overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                color: Colors.white,
+                              style: TextStyle(
+                                color: context.textPrimary,
                                 fontSize: 13,
                                 fontWeight: FontWeight.w600,
                               ),
@@ -416,15 +417,15 @@ class _JamDialogState extends State<JamDialog> with SingleTickerProviderStateMix
                           ),
                           if (isMe) ...[
                             const SizedBox(width: 6),
-                            const Text(
+                            Text(
                               '(Tú)',
-                              style: TextStyle(color: Color(0xFF10B981), fontSize: 11),
+                              style: TextStyle(color: context.accent, fontSize: 11),
                             ),
                           ],
                           if (p.isHost) ...[
                             const SizedBox(width: 6),
-                            const Icon(Icons.star_rounded,
-                                color: Color(0xFFF59E0B), size: 14),
+                            Icon(Icons.star_rounded,
+                                color: context.warning, size: 14),
                           ],
                         ],
                       ),
@@ -432,8 +433,8 @@ class _JamDialogState extends State<JamDialog> with SingleTickerProviderStateMix
                     if (isHost && !p.isHost)
                       IconButton(
                         tooltip: 'Expulsar participante',
-                        icon: const Icon(Icons.remove_circle_outline,
-                            color: Colors.redAccent, size: 18),
+                        icon: Icon(Icons.remove_circle_outline,
+                            color: context.danger, size: 18),
                         onPressed: () => jam.kickParticipant(p.id),
                       ),
                   ],
@@ -453,9 +454,9 @@ class _JamDialogState extends State<JamDialog> with SingleTickerProviderStateMix
           },
           style: FilledButton.styleFrom(
             backgroundColor: isHost
-                ? const Color(0xFF3B1219)
-                : const Color(0xFF1E1E28),
-            foregroundColor: isHost ? Colors.redAccent : Colors.white70,
+                ? context.danger.withValues(alpha: 0.18)
+                : context.bgElevated,
+            foregroundColor: isHost ? context.danger : context.textSecondary,
             padding: const EdgeInsets.symmetric(vertical: 12),
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           ),
@@ -486,34 +487,34 @@ class _JamDialogState extends State<JamDialog> with SingleTickerProviderStateMix
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: const Color(0xFFA855F7).withValues(alpha: 0.15),
+                color: context.accent.withValues(alpha: 0.15),
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: const Icon(Icons.speaker_group_rounded,
-                  color: Color(0xFFA855F7), size: 22),
+              child: Icon(Icons.speaker_group_rounded,
+                  color: context.accent, size: 22),
             ),
             const SizedBox(width: 12),
-            const Expanded(
+            Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
                     'Scrotify Jam',
                     style: TextStyle(
-                      color: Colors.white,
+                      color: context.textPrimary,
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
                   Text(
                     'Escucha en grupo y comparte la cola en tiempo real',
-                    style: TextStyle(color: Colors.white54, fontSize: 11.5),
+                    style: TextStyle(color: context.textMuted, fontSize: 11.5),
                   ),
                 ],
               ),
             ),
             IconButton(
-              icon: const Icon(Icons.close_rounded, color: Colors.white54),
+              icon: Icon(Icons.close_rounded, color: context.textMuted),
               onPressed: () => Navigator.of(context).pop(),
             ),
           ],
@@ -524,19 +525,19 @@ class _JamDialogState extends State<JamDialog> with SingleTickerProviderStateMix
         Container(
           height: 38,
           decoration: BoxDecoration(
-            color: const Color(0xFF14141E),
+            color: context.bgElevated,
             borderRadius: BorderRadius.circular(12),
           ),
           child: TabBar(
             controller: _tabController,
             indicatorSize: TabBarIndicatorSize.tab,
             indicator: BoxDecoration(
-              color: const Color(0xFF7C3AED),
+              color: context.accent2,
               borderRadius: BorderRadius.circular(10),
             ),
             dividerColor: Colors.transparent,
-            labelColor: Colors.white,
-            unselectedLabelColor: Colors.white54,
+            labelColor: context.textPrimary,
+            unselectedLabelColor: context.textMuted,
             labelStyle: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.bold),
             tabs: const [
               Tab(text: 'Iniciar Jam'),
@@ -570,22 +571,22 @@ class _JamDialogState extends State<JamDialog> with SingleTickerProviderStateMix
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: const Color(0xFF14141E),
+              color: context.bgElevated,
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: const Color(0xFF222232)),
+              border: Border.all(color: context.bgElevated),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Row(
+                Row(
                   children: [
                     Icon(Icons.wifi_tethering_rounded,
-                        color: Color(0xFF10B981), size: 20),
+                        color: context.accent, size: 20),
                     SizedBox(width: 8),
                     Text(
                       'Conexión Local y en Servidor',
                       style: TextStyle(
-                        color: Colors.white,
+                        color: context.textPrimary,
                         fontSize: 13,
                         fontWeight: FontWeight.bold,
                       ),
@@ -593,9 +594,9 @@ class _JamDialogState extends State<JamDialog> with SingleTickerProviderStateMix
                   ],
                 ),
                 const SizedBox(height: 8),
-                const Text(
+                Text(
                   'Inicia una sesión colaborativa. Tus amigos en la misma red Wi-Fi o conectados a tu servidor Navidrome podrán detectarte por radar, ver tu sesión en vivo, escanear tu QR o ingresar tu PIN.',
-                  style: TextStyle(color: Colors.white60, fontSize: 11.5, height: 1.4),
+                  style: TextStyle(color: context.textSecondary, fontSize: 11.5, height: 1.4),
                 ),
                 const SizedBox(height: 16),
 
@@ -605,8 +606,8 @@ class _JamDialogState extends State<JamDialog> with SingleTickerProviderStateMix
                     await jam.startHostSession();
                   },
                   style: FilledButton.styleFrom(
-                    backgroundColor: const Color(0xFF7C3AED),
-                    foregroundColor: Colors.white,
+                    backgroundColor: context.accent2,
+                    foregroundColor: context.onAccent2,
                     padding: const EdgeInsets.symmetric(vertical: 14),
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12)),
@@ -644,23 +645,23 @@ class _JamDialogState extends State<JamDialog> with SingleTickerProviderStateMix
                 height: 42,
                 padding: const EdgeInsets.symmetric(horizontal: 12),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF14141E),
+                  color: context.bgElevated,
                   borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: const Color(0xFF222232)),
+                  border: Border.all(color: context.bgElevated),
                 ),
                 child: TextField(
                   controller: _pinController,
                   textCapitalization: TextCapitalization.characters,
-                  style: const TextStyle(
-                    color: Colors.white,
+                  style: TextStyle(
+                    color: context.textPrimary,
                     fontSize: 14,
                     letterSpacing: 2,
                     fontWeight: FontWeight.bold,
                   ),
-                  decoration: const InputDecoration(
+                  decoration: InputDecoration(
                     hintText: 'PIN (ej: AB3-4EF)',
                     hintStyle: TextStyle(
-                      color: Colors.white30,
+                      color: context.textMuted,
                       fontSize: 12,
                       letterSpacing: 1,
                     ),
@@ -674,8 +675,8 @@ class _JamDialogState extends State<JamDialog> with SingleTickerProviderStateMix
             IconButton(
               tooltip: 'Escanear QR con cámara',
               style: IconButton.styleFrom(
-                backgroundColor: const Color(0xFF1A122E),
-                foregroundColor: const Color(0xFFA855F7),
+                backgroundColor: context.bgElevated,
+                foregroundColor: context.accent,
               ),
               icon: const Icon(Icons.qr_code_scanner_rounded, size: 20),
               onPressed: () {
@@ -690,17 +691,17 @@ class _JamDialogState extends State<JamDialog> with SingleTickerProviderStateMix
                   final ok = await jam.joinByPin(pin);
                   if (!ok && mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
+                      SnackBar(
                         content: Text('No se pudo encontrar la sesión Jam con ese PIN'),
-                        backgroundColor: Colors.redAccent,
+                        backgroundColor: context.danger,
                       ),
                     );
                   }
                 }
               },
               style: FilledButton.styleFrom(
-                backgroundColor: const Color(0xFF10B981),
-                foregroundColor: Colors.black,
+                backgroundColor: context.accent,
+                foregroundColor: context.onAccent,
                 padding: const EdgeInsets.symmetric(horizontal: 14),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
               ),
@@ -714,10 +715,10 @@ class _JamDialogState extends State<JamDialog> with SingleTickerProviderStateMix
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            const Text(
+            Text(
               'SESIONES ACTIVAS (RADAR & SERVIDOR)',
               style: TextStyle(
-                color: Colors.white38,
+                color: context.textMuted,
                 fontSize: 10,
                 fontWeight: FontWeight.bold,
                 letterSpacing: 1.1,
@@ -726,14 +727,14 @@ class _JamDialogState extends State<JamDialog> with SingleTickerProviderStateMix
             IconButton(
               visualDensity: VisualDensity.compact,
               icon: jam.isScanningRadar
-                  ? const SizedBox(
+                  ? SizedBox(
                       width: 14,
                       height: 14,
                       child: CircularProgressIndicator(
-                          strokeWidth: 2, color: Color(0xFF10B981)),
+                          strokeWidth: 2, color: context.accent),
                     )
-                  : const Icon(Icons.refresh_rounded,
-                      color: Color(0xFF10B981), size: 18),
+                  : Icon(Icons.refresh_rounded,
+                      color: context.accent, size: 18),
               onPressed: jam.isScanningRadar ? null : jam.scanRadar,
             ),
           ],
@@ -747,13 +748,13 @@ class _JamDialogState extends State<JamDialog> with SingleTickerProviderStateMix
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Icon(Icons.radar_rounded,
-                          color: Colors.white.withValues(alpha: 0.15), size: 40),
+                          color: context.textPrimary.withValues(alpha: 0.15), size: 40),
                       const SizedBox(height: 8),
                       Text(
                         jam.isScanningRadar
                             ? 'Buscando sesiones en la red y servidor...'
                             : 'No se encontraron sesiones Jam en la red o servidor',
-                        style: const TextStyle(color: Colors.white38, fontSize: 12),
+                        style: TextStyle(color: context.textMuted, fontSize: 12),
                       ),
                     ],
                   ),
@@ -766,9 +767,9 @@ class _JamDialogState extends State<JamDialog> with SingleTickerProviderStateMix
                       margin: const EdgeInsets.only(bottom: 8),
                       padding: const EdgeInsets.all(10),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF14141E),
+                        color: context.bgElevated,
                         borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: const Color(0xFF222232)),
+                        border: Border.all(color: context.bgElevated),
                       ),
                       child: Row(
                         children: [
@@ -788,16 +789,16 @@ class _JamDialogState extends State<JamDialog> with SingleTickerProviderStateMix
                                   d.sessionTitle,
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
-                                    color: Colors.white,
+                                  style: TextStyle(
+                                    color: context.textPrimary,
                                     fontSize: 13,
                                     fontWeight: FontWeight.bold,
                                   ),
                                 ),
                                 Text(
                                   'Host: ${d.hostName} · ${d.participantCount} oyente${d.participantCount == 1 ? "" : "s"}',
-                                  style: const TextStyle(
-                                    color: Colors.white54,
+                                  style: TextStyle(
+                                    color: context.textMuted,
                                     fontSize: 11,
                                   ),
                                 ),
@@ -809,16 +810,16 @@ class _JamDialogState extends State<JamDialog> with SingleTickerProviderStateMix
                               final ok = await jam.joinDiscovered(d);
                               if (!ok && mounted) {
                                 ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
+                                  SnackBar(
                                     content: Text('Error al conectarse a la sesión'),
-                                    backgroundColor: Colors.redAccent,
+                                    backgroundColor: context.danger,
                                   ),
                                 );
                               }
                             },
                             style: FilledButton.styleFrom(
-                              backgroundColor: const Color(0xFF10B981).withValues(alpha: 0.2),
-                              foregroundColor: const Color(0xFF10B981),
+                              backgroundColor: context.accent.withValues(alpha: 0.2),
+                              foregroundColor: context.accent,
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(8),
                               ),
@@ -847,12 +848,12 @@ class _JamDialogState extends State<JamDialog> with SingleTickerProviderStateMix
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            const Text(
+            Text(
               'Escanea el QR del Anfitrión',
-              style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+              style: TextStyle(color: context.textPrimary, fontWeight: FontWeight.bold),
             ),
             IconButton(
-              icon: const Icon(Icons.close, color: Colors.white70),
+              icon: Icon(Icons.close, color: context.textSecondary),
               onPressed: () {
                 _scannerController?.stop();
                 setState(() => _isCameraActive = false);
@@ -876,9 +877,9 @@ class _JamDialogState extends State<JamDialog> with SingleTickerProviderStateMix
                     final ok = await jam.joinByQr(raw);
                     if (!ok && mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
+                        SnackBar(
                           content: Text('Código QR inválido o sesión inaccesible'),
-                          backgroundColor: Colors.redAccent,
+                          backgroundColor: context.danger,
                         ),
                       );
                     }

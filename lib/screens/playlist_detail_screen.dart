@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../services/navidrome_service.dart';
 import '../services/player_controller.dart';
 import '../widgets/persistent_player_bar.dart';
+import '../utils/app_colors.dart';
 
 /// Pantalla que muestra las canciones de una playlist específica.
 /// Se abre desde la barra lateral (Tu Biblioteca) del escritorio.
@@ -41,23 +42,23 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF1F1F1F),
-        title: const Text('¿Eliminar playlist?',
-            style: TextStyle(color: Colors.white)),
+        backgroundColor: context.bgCard,
+        title: Text('¿Eliminar playlist?',
+            style: TextStyle(color: context.textPrimary)),
         content: Text(
           'Se borrará "${widget.playlist.name}" permanentemente.',
-          style: const TextStyle(color: Colors.white70),
+          style: TextStyle(color: context.textSecondary),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Cancelar',
-                style: TextStyle(color: Colors.white70)),
+            child: Text('Cancelar',
+                style: TextStyle(color: context.textSecondary)),
           ),
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('Eliminar',
-                style: TextStyle(color: Colors.redAccent)),
+            child: Text('Eliminar',
+                style: TextStyle(color: context.danger)),
           ),
         ],
       ),
@@ -73,10 +74,10 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
       if (!mounted) return;
       Navigator.of(context).pop();
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
+        SnackBar(
           content: Text('Playlist eliminada',
-              style: TextStyle(color: Colors.white)),
-          backgroundColor: Color(0xFF1F1F1F),
+              style: TextStyle(color: context.textPrimary)),
+          backgroundColor: context.bgCard,
           behavior: SnackBarBehavior.floating,
         ),
       );
@@ -85,8 +86,8 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Error: $e',
-              style: TextStyle(color: Colors.redAccent)),
-          backgroundColor: const Color(0xFF1F1F1F),
+              style: TextStyle(color: context.danger)),
+          backgroundColor: context.bgCard,
           behavior: SnackBarBehavior.floating,
         ),
       );
@@ -99,10 +100,10 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
     // Misma lógica que HomeShell: < 700px es móvil (barra compacta).
     final compact = MediaQuery.sizeOf(context).width < 700;
     return Scaffold(
-      backgroundColor: const Color(0xFF121212),
+      backgroundColor: context.bgApp,
       appBar: AppBar(
-        backgroundColor: const Color(0xFF353588),
-        foregroundColor: Colors.white,
+        backgroundColor: context.accent2,
+        foregroundColor: context.onAccent2,
         title: const Text('Playlist'),
       ),
       bottomNavigationBar: SafeArea(
@@ -113,14 +114,14 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
         future: _future,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(
-                child: CircularProgressIndicator(color: Colors.white));
+            return Center(
+                child: CircularProgressIndicator(color: context.textPrimary));
           }
           final tracks = snapshot.data ?? <Track>[];
           if (tracks.isEmpty) {
-            return const Center(
+            return Center(
               child: Text('Playlist vacía',
-                  style: TextStyle(color: Colors.white54)),
+                  style: TextStyle(color: context.textMuted)),
             );
           }
           final pinned = nav.isPinnedPlaylist(widget.playlist.id);
@@ -134,7 +135,7 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
                       width: 120,
                       height: 120,
                       decoration: BoxDecoration(
-                        color: const Color(0xFF353588),
+                        color: context.accent2,
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: widget.playlist.coverArtUrl != null
@@ -142,8 +143,8 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
                               widget.playlist.coverArtUrl!,
                               fit: BoxFit.cover,
                             )
-                          : const Icon(Icons.queue_music,
-                              color: Colors.white, size: 48),
+                          : Icon(Icons.queue_music,
+                              color: context.textPrimary, size: 48),
                     ),
                     const SizedBox(width: 16),
                     Expanded(
@@ -154,15 +155,15 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
                             widget.playlist.name,
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                                color: Colors.white,
+                            style: TextStyle(
+                                color: context.textPrimary,
                                 fontSize: 22,
                                 fontWeight: FontWeight.bold),
                           ),
                           const SizedBox(height: 8),
                           Text('${tracks.length} canciones',
-                              style: const TextStyle(
-                                  color: Colors.white54, fontSize: 14)),
+                              style: TextStyle(
+                                  color: context.textMuted, fontSize: 14)),
                           const SizedBox(height: 8),
                           InkWell(
                             onTap: () =>
@@ -175,8 +176,8 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
                                       ? Icons.push_pin
                                       : Icons.push_pin_outlined,
                                   color: pinned
-                                      ? Colors.greenAccent
-                                      : Colors.white54,
+                                      ? context.accent
+                                      : context.textMuted,
                                   size: 18,
                                 ),
                                 const SizedBox(width: 6),
@@ -184,8 +185,8 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
                                   pinned ? 'Fijada' : 'Fijar',
                                   style: TextStyle(
                                     color: pinned
-                                        ? Colors.greenAccent
-                                        : Colors.white54,
+                                        ? context.accent
+                                        : context.textMuted,
                                     fontSize: 13,
                                   ),
                                 ),
@@ -199,21 +200,21 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         IconButton(
-                          icon: const Icon(Icons.shuffle,
-                              color: Colors.greenAccent, size: 24),
+                          icon: Icon(Icons.shuffle,
+                              color: context.accent, size: 24),
                           tooltip: 'Reproducir al azar',
                           onPressed: () => _playShuffled(tracks),
                         ),
                         IconButton(
-                          icon: const Icon(Icons.play_circle_filled,
-                              color: Colors.greenAccent, size: 48),
+                          icon: Icon(Icons.play_circle_filled,
+                              color: context.accent, size: 48),
                           onPressed: () => context
                               .read<PlayerController>()
                               .playQueue(tracks, startIndex: 0),
                         ),
                         IconButton(
-                          icon: const Icon(Icons.delete_outline,
-                              color: Colors.redAccent, size: 24),
+                          icon: Icon(Icons.delete_outline,
+                              color: context.danger, size: 24),
                           tooltip: 'Eliminar playlist',
                           onPressed: _confirmDelete,
                         ),
@@ -222,7 +223,7 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
                   ],
                 ),
               ),
-              const Divider(color: Colors.white12),
+              Divider(color: context.themeBorder),
               Expanded(
                 child: ListView.builder(
                   itemCount: tracks.length,
@@ -234,7 +235,7 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
                         width: 40,
                         height: 40,
                         decoration: BoxDecoration(
-                          color: Colors.grey.shade800,
+                          color: context.bgElevated,
                           borderRadius: BorderRadius.circular(4),
                           image: track.albumArtUrl != null
                               ? DecorationImage(
@@ -244,25 +245,25 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
                               : null,
                         ),
                         child: track.albumArtUrl == null
-                            ? const Icon(Icons.music_note,
-                                color: Colors.white54, size: 20)
+                            ? Icon(Icons.music_note,
+                                color: context.textMuted, size: 20)
                             : null,
                       ),
                       title: Text(track.title,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                              color: Colors.white, fontSize: 14)),
+                          style: TextStyle(
+                              color: context.textPrimary, fontSize: 14)),
                       subtitle: Text(track.artist,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                              color: Colors.white54, fontSize: 12)),
+                          style: TextStyle(
+                              color: context.textMuted, fontSize: 12)),
                       trailing: IconButton(
                         icon: Icon(
                           starred ? Icons.favorite : Icons.favorite_border,
                           color:
-                              starred ? Colors.greenAccent : Colors.white54,
+                              starred ? context.accent : context.textMuted,
                         ),
                         onPressed: () async {
                           await nav.toggleStar(track);

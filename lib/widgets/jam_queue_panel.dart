@@ -6,6 +6,7 @@ import '../services/jam_controller.dart';
 import '../services/navidrome_service.dart';
 import '../services/player_controller.dart';
 import 'cover_art.dart';
+import '../utils/app_colors.dart';
 
 /// Panel / Modal de Cola Compartida para sesiones Jam y reproducción general.
 class JamQueuePanel extends StatelessWidget {
@@ -15,10 +16,10 @@ class JamQueuePanel extends StatelessWidget {
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
-      backgroundColor: const Color(0xFF0C0C10),
-      shape: const RoundedRectangleBorder(
+      backgroundColor: context.bgApp,
+      shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-        side: BorderSide(color: Color(0xFF1E1E28), width: 1.2),
+        side: BorderSide(color: context.bgElevated, width: 1.2),
       ),
       builder: (ctx) => const FractionallySizedBox(
         heightFactor: 0.85,
@@ -55,7 +56,7 @@ class JamQueuePanel extends StatelessWidget {
               width: 38,
               height: 4,
               decoration: BoxDecoration(
-                color: Colors.white24,
+                color: context.themeBorder,
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
@@ -69,13 +70,13 @@ class JamQueuePanel extends StatelessWidget {
                 padding: const EdgeInsets.all(6),
                 decoration: BoxDecoration(
                   color: inJam
-                      ? const Color(0xFF10B981).withValues(alpha: 0.15)
-                      : const Color(0xFF7C3AED).withValues(alpha: 0.15),
+                      ? context.accent.withValues(alpha: 0.15)
+                      : context.accent2.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Icon(
                   inJam ? Icons.speaker_group_rounded : Icons.queue_music_rounded,
-                  color: inJam ? const Color(0xFF10B981) : const Color(0xFFA855F7),
+                  color: inJam ? context.accent : context.accent,
                   size: 20,
                 ),
               ),
@@ -86,8 +87,8 @@ class JamQueuePanel extends StatelessWidget {
                   children: [
                     Text(
                       inJam ? 'Cola Colaborativa Jam' : 'Cola de Reproducción',
-                      style: const TextStyle(
-                        color: Colors.white,
+                      style: TextStyle(
+                        color: context.textPrimary,
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
                       ),
@@ -95,7 +96,7 @@ class JamQueuePanel extends StatelessWidget {
                     if (inJam)
                       Text(
                         '${jam.participants.length} participante${jam.participants.length == 1 ? "" : "s"} agregando música',
-                        style: const TextStyle(color: Colors.white54, fontSize: 11),
+                        style: TextStyle(color: context.textMuted, fontSize: 11),
                       ),
                   ],
                 ),
@@ -112,11 +113,11 @@ class JamQueuePanel extends StatelessWidget {
                       player.clearQueue();
                     }
                   },
-                  child: const Text('Limpiar',
-                      style: TextStyle(color: Colors.white38, fontSize: 12)),
+                  child: Text('Limpiar',
+                      style: TextStyle(color: context.textMuted, fontSize: 12)),
                 ),
               IconButton(
-                icon: const Icon(Icons.close_rounded, color: Colors.white54, size: 20),
+                icon: Icon(Icons.close_rounded, color: context.textMuted, size: 20),
                 onPressed: () => Navigator.of(context).pop(),
               ),
             ],
@@ -125,10 +126,10 @@ class JamQueuePanel extends StatelessWidget {
 
           // Canción en reproducción actual
           if (currentTrack != null) ...[
-            const Text(
+            Text(
               'SONANDO AHORA',
               style: TextStyle(
-                color: Colors.white38,
+                color: context.textMuted,
                 fontSize: 10,
                 fontWeight: FontWeight.bold,
                 letterSpacing: 1.1,
@@ -138,12 +139,12 @@ class JamQueuePanel extends StatelessWidget {
             Container(
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
-                color: const Color(0xFF14141E),
+                color: context.bgElevated,
                 borderRadius: BorderRadius.circular(14),
                 border: Border.all(
                   color: inJam
-                      ? const Color(0xFF10B981).withValues(alpha: 0.3)
-                      : const Color(0xFF222232),
+                      ? context.accent.withValues(alpha: 0.3)
+                      : context.bgElevated,
                 ),
               ),
               child: Row(
@@ -163,8 +164,8 @@ class JamQueuePanel extends StatelessWidget {
                           currentTrack.title,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: Colors.white,
+                          style: TextStyle(
+                            color: context.textPrimary,
                             fontSize: 13.5,
                             fontWeight: FontWeight.bold,
                           ),
@@ -173,7 +174,7 @@ class JamQueuePanel extends StatelessWidget {
                           currentTrack.artist,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(color: Colors.white60, fontSize: 11.5),
+                          style: TextStyle(color: context.textSecondary, fontSize: 11.5),
                         ),
                         if (inJam && jam.currentTrackAddedBy != null) ...[
                           const SizedBox(height: 3),
@@ -182,8 +183,8 @@ class JamQueuePanel extends StatelessWidget {
                       ],
                     ),
                   ),
-                  const Icon(Icons.graphic_eq_rounded,
-                      color: Color(0xFF10B981), size: 20),
+                  Icon(Icons.graphic_eq_rounded,
+                      color: context.accent, size: 20),
                 ],
               ),
             ),
@@ -191,10 +192,10 @@ class JamQueuePanel extends StatelessWidget {
           ],
 
           // Lista Siguiente en la Cola
-          const Text(
+          Text(
             'A CONTINUACIÓN',
             style: TextStyle(
-              color: Colors.white38,
+              color: context.textMuted,
               fontSize: 10,
               fontWeight: FontWeight.bold,
               letterSpacing: 1.1,
@@ -209,20 +210,20 @@ class JamQueuePanel extends StatelessWidget {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Icon(Icons.queue_music_rounded,
-                            color: Colors.white.withValues(alpha: 0.15), size: 48),
+                            color: context.textPrimary.withValues(alpha: 0.15), size: 48),
                         const SizedBox(height: 10),
-                        const Text(
+                        Text(
                           'La cola está vacía',
                           style: TextStyle(
-                            color: Colors.white70,
+                            color: context.textSecondary,
                             fontSize: 14,
                             fontWeight: FontWeight.bold,
                           ),
                         ),
                         const SizedBox(height: 4),
-                        const Text(
+                        Text(
                           'Añade canciones desde el buscador o tu biblioteca',
-                          style: TextStyle(color: Colors.white38, fontSize: 12),
+                          style: TextStyle(color: context.textMuted, fontSize: 12),
                         ),
                       ],
                     ),
@@ -245,18 +246,18 @@ class JamQueuePanel extends StatelessWidget {
                             padding: const EdgeInsets.symmetric(
                                 horizontal: 10, vertical: 8),
                             decoration: BoxDecoration(
-                              color: const Color(0xFF12121A),
+                              color: context.bgCard,
                               borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: const Color(0xFF1E1E28)),
+                              border: Border.all(color: context.bgElevated),
                             ),
                             child: Row(
                               children: [
                                 ReorderableDragStartListener(
                                   index: i,
-                                  child: const Padding(
+                                  child: Padding(
                                     padding: EdgeInsets.only(right: 10),
                                     child: Icon(Icons.drag_handle_rounded,
-                                        color: Colors.white38, size: 20),
+                                        color: context.textMuted, size: 20),
                                   ),
                                 ),
                                 CoverArt(
@@ -275,8 +276,8 @@ class JamQueuePanel extends StatelessWidget {
                                         item.track.title,
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
-                                        style: const TextStyle(
-                                          color: Colors.white,
+                                        style: TextStyle(
+                                          color: context.textPrimary,
                                           fontSize: 13,
                                           fontWeight: FontWeight.w600,
                                         ),
@@ -285,8 +286,8 @@ class JamQueuePanel extends StatelessWidget {
                                         item.track.artist,
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
-                                        style: const TextStyle(
-                                            color: Colors.white54,
+                                        style: TextStyle(
+                                            color: context.textMuted,
                                             fontSize: 11),
                                       ),
                                       if (item.addedBy != null) ...[
@@ -298,8 +299,8 @@ class JamQueuePanel extends StatelessWidget {
                                 ),
                                 if (canRemove)
                                   IconButton(
-                                    icon: const Icon(Icons.close_rounded,
-                                        color: Colors.white38, size: 18),
+                                    icon: Icon(Icons.close_rounded,
+                                        color: context.textMuted, size: 18),
                                     onPressed: () =>
                                         jam.removeTrackFromJam(item.id, orderIndex: i),
                                   ),
@@ -324,18 +325,18 @@ class JamQueuePanel extends StatelessWidget {
                             padding: const EdgeInsets.symmetric(
                                 horizontal: 10, vertical: 8),
                             decoration: BoxDecoration(
-                              color: const Color(0xFF12121A),
+                              color: context.bgCard,
                               borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: const Color(0xFF1E1E28)),
+                              border: Border.all(color: context.bgElevated),
                             ),
                             child: Row(
                               children: [
                                 ReorderableDragStartListener(
                                   index: i,
-                                  child: const Padding(
+                                  child: Padding(
                                     padding: EdgeInsets.only(right: 10),
                                     child: Icon(Icons.drag_handle_rounded,
-                                        color: Colors.white38, size: 20),
+                                        color: context.textMuted, size: 20),
                                   ),
                                 ),
                                 CoverArt(
@@ -354,8 +355,8 @@ class JamQueuePanel extends StatelessWidget {
                                         track.title,
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
-                                        style: const TextStyle(
-                                          color: Colors.white,
+                                        style: TextStyle(
+                                          color: context.textPrimary,
                                           fontSize: 13,
                                           fontWeight: FontWeight.w600,
                                         ),
@@ -364,16 +365,16 @@ class JamQueuePanel extends StatelessWidget {
                                         track.artist,
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
-                                        style: const TextStyle(
-                                            color: Colors.white54,
+                                        style: TextStyle(
+                                            color: context.textMuted,
                                             fontSize: 11),
                                       ),
                                     ],
                                   ),
                                 ),
                                 IconButton(
-                                  icon: const Icon(Icons.close_rounded,
-                                      color: Colors.white38, size: 18),
+                                  icon: Icon(Icons.close_rounded,
+                                      color: context.textMuted, size: 18),
                                   onPressed: () {
                                     final realIdx =
                                         player.currentOrderPos + 1 + i;

@@ -6,6 +6,7 @@ import '../services/navidrome_service.dart';
 import '../services/secure_storage.dart';
 import '../widgets/pairing_panel.dart';
 import 'home_shell.dart';
+import '../utils/app_colors.dart';
 
 /// Pantalla de inicio de sesión optimizada exclusivamente para Teléfonos móviles (Android, iOS).
 /// - Layout vertical centrado en la ergonomía táctil (Touch-first).
@@ -84,19 +85,19 @@ class _MobileLoginScreenState extends State<MobileLoginScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            backgroundColor: const Color(0xFF1E1328),
+            backgroundColor: context.bgElevated,
             behavior: SnackBarBehavior.floating,
             shape:
                 RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
             content: Row(
               children: [
-                const Icon(Icons.error_outline,
-                    color: Colors.redAccent, size: 20),
+                Icon(Icons.error_outline,
+                    color: context.danger, size: 20),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
                     'Error: ${e.toString().replaceFirst('Exception: ', '')}',
-                    style: const TextStyle(color: Colors.white, fontSize: 13),
+                    style: TextStyle(color: context.textPrimary, fontSize: 13),
                   ),
                 ),
               ],
@@ -129,7 +130,7 @@ class _MobileLoginScreenState extends State<MobileLoginScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF000000), // Pure AMOLED Black
+      backgroundColor: context.bgApp, // Pure AMOLED Black
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
@@ -147,10 +148,10 @@ class _MobileLoginScreenState extends State<MobileLoginScreen> {
                   Container(
                     padding: const EdgeInsets.all(18),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF0C0C10),
+                      color: context.bgApp,
                       borderRadius: BorderRadius.circular(18),
                       border: Border.all(
-                        color: const Color(0xFF1E1E26),
+                        color: context.bgElevated,
                         width: 1.2,
                       ),
                       boxShadow: [
@@ -186,16 +187,16 @@ class _MobileLoginScreenState extends State<MobileLoginScreen> {
                       Container(
                         width: 6,
                         height: 6,
-                        decoration: const BoxDecoration(
+                        decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          color: Color(0xFF10B981),
+                          color: context.accent,
                         ),
                       ),
                       const SizedBox(width: 6),
                       Text(
                         'Scrotify Mobile · Cifrado E2E X25519',
                         style: TextStyle(
-                          color: Colors.white.withValues(alpha: 0.35),
+                          color: context.textPrimary.withValues(alpha: 0.35),
                           fontSize: 11,
                           fontFamily: 'monospace',
                         ),
@@ -219,29 +220,29 @@ class _MobileLoginScreenState extends State<MobileLoginScreen> {
           height: 52,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            color: const Color(0xFF0E0E12),
+            color: context.bgApp,
             border: Border.all(
-              color: const Color(0xFFA855F7).withValues(alpha: 0.45),
+              color: context.accent.withValues(alpha: 0.45),
               width: 1.5,
             ),
             boxShadow: [
               BoxShadow(
-                color: const Color(0xFFA855F7).withValues(alpha: 0.3),
+                color: context.accent.withValues(alpha: 0.3),
                 blurRadius: 16,
               ),
             ],
           ),
-          child: const Icon(
+          child: Icon(
             Icons.graphic_eq_rounded,
             size: 28,
-            color: Color(0xFFA855F7),
+            color: context.accent,
           ),
         ),
         const SizedBox(height: 10),
-        const Text(
+        Text(
           'SCROTIFY',
           style: TextStyle(
-            color: Colors.white,
+            color: context.textPrimary,
             fontSize: 22,
             fontWeight: FontWeight.w900,
             letterSpacing: 2,
@@ -251,7 +252,7 @@ class _MobileLoginScreenState extends State<MobileLoginScreen> {
         Text(
           'Tu música de Navidrome en tu celular',
           style: TextStyle(
-            color: Colors.white.withValues(alpha: 0.5),
+            color: context.textPrimary.withValues(alpha: 0.5),
             fontSize: 12,
           ),
         ),
@@ -263,9 +264,9 @@ class _MobileLoginScreenState extends State<MobileLoginScreen> {
     return Container(
       padding: const EdgeInsets.all(3),
       decoration: BoxDecoration(
-        color: const Color(0xFF060608),
+        color: context.bgApp,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFF1A1A22)),
+        border: Border.all(color: context.bgCard),
       ),
       child: Row(
         children: [
@@ -285,11 +286,11 @@ class _MobileLoginScreenState extends State<MobileLoginScreen> {
           duration: const Duration(milliseconds: 180),
           padding: const EdgeInsets.symmetric(vertical: 9),
           decoration: BoxDecoration(
-            color: isSelected ? const Color(0xFF1C132E) : Colors.transparent,
+            color: isSelected ? context.bgElevated : Colors.transparent,
             borderRadius: BorderRadius.circular(10),
             border: isSelected
                 ? Border.all(
-                    color: const Color(0xFFA855F7).withValues(alpha: 0.4),
+                    color: context.accent.withValues(alpha: 0.4),
                     width: 1)
                 : null,
           ),
@@ -299,13 +300,13 @@ class _MobileLoginScreenState extends State<MobileLoginScreen> {
               Icon(
                 icon,
                 size: 16,
-                color: isSelected ? const Color(0xFFA855F7) : Colors.white38,
+                color: isSelected ? context.accent : context.textMuted,
               ),
               const SizedBox(width: 6),
               Text(
                 label,
                 style: TextStyle(
-                  color: isSelected ? Colors.white : Colors.white54,
+                  color: isSelected ? context.textPrimary : context.textMuted,
                   fontSize: 12.5,
                   fontWeight:
                       isSelected ? FontWeight.bold : FontWeight.normal,
@@ -358,7 +359,7 @@ class _MobileLoginScreenState extends State<MobileLoginScreen> {
                 _obscurePass
                     ? Icons.visibility_outlined
                     : Icons.visibility_off_outlined,
-                color: Colors.white54,
+                color: context.textMuted,
                 size: 19,
               ),
               onPressed: () => setState(() => _obscurePass = !_obscurePass),
@@ -374,14 +375,14 @@ class _MobileLoginScreenState extends State<MobileLoginScreen> {
             height: 46,
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(12),
-              gradient: const LinearGradient(
-                colors: [Color(0xFF8B5CF6), Color(0xFF6D28D9)],
+              gradient: LinearGradient(
+                colors: [context.accent, context.accent2],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
               boxShadow: [
                 BoxShadow(
-                  color: const Color(0xFF8B5CF6).withValues(alpha: 0.35),
+                  color: context.accent.withValues(alpha: 0.35),
                   blurRadius: 16,
                   offset: const Offset(0, 4),
                 ),
@@ -396,28 +397,28 @@ class _MobileLoginScreenState extends State<MobileLoginScreen> {
                     borderRadius: BorderRadius.circular(12)),
               ),
               child: _loading
-                  ? const SizedBox(
+                  ? SizedBox(
                       width: 18,
                       height: 18,
                       child: CircularProgressIndicator(
                         strokeWidth: 2,
-                        color: Colors.white,
+                        color: context.textPrimary,
                       ),
                     )
-                  : const Row(
+                  : Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Text(
                           'Iniciar sesión',
                           style: TextStyle(
-                            color: Colors.white,
+                            color: context.textPrimary,
                             fontSize: 14,
                             fontWeight: FontWeight.bold,
                           ),
                         ),
                         SizedBox(width: 8),
                         Icon(Icons.arrow_forward_rounded,
-                            size: 17, color: Colors.white),
+                            size: 17, color: context.textPrimary),
                       ],
                     ),
             ),
@@ -445,8 +446,8 @@ class _MobileLoginScreenState extends State<MobileLoginScreen> {
           padding: const EdgeInsets.only(left: 3, bottom: 5),
           child: Text(
             label,
-            style: const TextStyle(
-              color: Colors.white54,
+            style: TextStyle(
+              color: context.textMuted,
               fontSize: 10,
               fontWeight: FontWeight.bold,
               letterSpacing: 1,
@@ -457,43 +458,43 @@ class _MobileLoginScreenState extends State<MobileLoginScreen> {
           controller: controller,
           obscureText: obscureText,
           keyboardType: keyboardType,
-          style: const TextStyle(color: Colors.white, fontSize: 13.5),
+          style: TextStyle(color: context.textPrimary, fontSize: 13.5),
           validator: validator,
           onFieldSubmitted: onSubmitted,
           decoration: InputDecoration(
             hintText: hint,
             hintStyle: TextStyle(
-              color: Colors.white.withValues(alpha: 0.2),
+              color: context.textPrimary.withValues(alpha: 0.2),
               fontSize: 13,
             ),
-            prefixIcon: Icon(icon, color: Colors.white38, size: 18),
+            prefixIcon: Icon(icon, color: context.textMuted, size: 18),
             suffixIcon: suffixIcon,
             filled: true,
-            fillColor: const Color(0xFF070709),
+            fillColor: context.bgApp,
             contentPadding:
                 const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(10),
-              borderSide: const BorderSide(color: Color(0xFF1E1E26)),
+              borderSide: BorderSide(color: context.bgElevated),
             ),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(10),
-              borderSide: const BorderSide(color: Color(0xFF1E1E26)),
+              borderSide: BorderSide(color: context.bgElevated),
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(10),
-              borderSide: const BorderSide(
-                color: Color(0xFFA855F7),
+              borderSide: BorderSide(
+                color: context.accent,
                 width: 1.5,
               ),
             ),
             errorBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(10),
-              borderSide: const BorderSide(color: Colors.redAccent, width: 1.2),
+              borderSide: BorderSide(color: context.danger, width: 1.2),
             ),
             focusedErrorBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(10),
-              borderSide: const BorderSide(color: Colors.redAccent, width: 1.5),
+              borderSide: BorderSide(color: context.danger, width: 1.5),
             ),
           ),
         ),

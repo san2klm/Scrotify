@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../utils/app_colors.dart';
 
 /// Carátula reutilizable con manejo de carga y errores.
 ///
@@ -31,7 +32,7 @@ class CoverArt extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final Widget placeholder = _placeholder();
+    final Widget placeholder = _placeholder(context);
     final bool hasUrl = url != null && url!.isNotEmpty;
 
     final Widget image = hasUrl
@@ -57,11 +58,11 @@ class CoverArt extends StatelessWidget {
     return SizedBox(width: width, height: height, child: clipped);
   }
 
-  Widget _placeholder() {
+  Widget _placeholder(BuildContext context) {
     return ColoredBox(
       color: fallbackColor,
       child: Center(
-        child: Icon(fallbackIcon, color: Colors.white54, size: fallbackIconSize),
+        child: Icon(fallbackIcon, color: context.textMuted, size: fallbackIconSize),
       ),
     );
   }

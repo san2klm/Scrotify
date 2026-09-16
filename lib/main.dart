@@ -1,3 +1,6 @@
+import 'dart:io' show Platform;
+
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:just_audio_media_kit/just_audio_media_kit.dart';
 import 'package:provider/provider.dart';
@@ -7,21 +10,34 @@ import 'services/navidrome_service.dart';
 import 'services/pairing_server.dart';
 import 'services/player_controller.dart';
 import 'services/settings_controller.dart';
+import 'services/theme_controller.dart';
 import 'screens/login_screen.dart';
 
-void main() {
-  JustAudioMediaKit.ensureInitialized();
-  runApp(const MyApp());
+/// Lee el tema guardado ANTES de runApp (equiv. startupThemeAppearance de
+/// Psysonic): el primer frame ya usa el tema correcto, sin flash.
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  // MediaKit con mpv solo hace falta en desktop. En Android/iOS just_audio
+  // usa ExoPlayer/AVPlayer nativo y este init rompería el arranque.
+  if (!kIsWeb && (Platform.isLinux || Platform.isWindows || Platform.isMacOS)) {
+    JustAudioMediaKit.ensureInitialized();
+  }
+  final initialTheme = await ThemeController.readInitial();
+  runApp(MyApp(initialTheme: initialTheme));
 }
 
 class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+  final Map<String, dynamic> initialTheme;
+
+  const MyApp({super.key, this.initialTheme = const {}});
 
   @override
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => SettingsController()),
+        ChangeNotifierProvider(
+            create: (_) => ThemeController(initial: initialTheme)),
         Provider<PairingServer>(
           create: (_) => PairingServer(),
           dispose: (_, server) => server.stop(),
@@ -44,18 +60,16 @@ class MyApp extends StatelessWidget {
           ),
         ),
       ],
-      child: MaterialApp(
-        title: 'Scrotify',
-        debugShowCheckedModeBanner: false,
-        theme: ThemeData(
-          colorScheme: ColorScheme.fromSeed(
-            seedColor: Colors.deepPurple,
-            brightness: Brightness.dark,
-          ),
-          scaffoldBackgroundColor: const Color(0xFF000000),
-          useMaterial3: true,
-        ),
-        home: const LoginScreen(),
+      child: Consumer<ThemeController>(
+        builder: (context, themes, _) {
+          final appTheme = themes.active;
+          return MaterialApp(
+            title: 'Scrotify',
+            debugShowCheckedModeBanner: false,
+            theme: appTheme.toThemeData(),
+            home: const LoginScreen(),
+          );
+        },
       ),
     );
   }

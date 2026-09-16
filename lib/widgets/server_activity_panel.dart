@@ -7,6 +7,7 @@ import '../services/player_controller.dart';
 import 'cover_art.dart';
 import 'jam_dialog.dart';
 import 'track_context_menu.dart';
+import '../utils/app_colors.dart';
 
 /// Panel interactivo de Comunidad para usuarios conectados al mismo servidor Navidrome.
 /// Permite ver qué están escuchando otros usuarios en tiempo real y chatear en el servidor.
@@ -19,7 +20,7 @@ class ServerActivityPanel extends StatefulWidget {
       return showDialog<void>(
         context: context,
         builder: (ctx) => Dialog(
-          backgroundColor: const Color(0xFF0C0C10),
+          backgroundColor: context.bgApp,
           insetPadding:
               const EdgeInsets.symmetric(horizontal: 40, vertical: 24),
           child: ConstrainedBox(
@@ -32,10 +33,10 @@ class ServerActivityPanel extends StatefulWidget {
       return showModalBottomSheet<void>(
         context: context,
         isScrollControlled: true,
-        backgroundColor: const Color(0xFF0C0C10),
-        shape: const RoundedRectangleBorder(
+        backgroundColor: context.bgApp,
+        shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-          side: BorderSide(color: Color(0xFF1E1E28), width: 1.2),
+          side: BorderSide(color: context.bgElevated, width: 1.2),
         ),
         builder: (ctx) => Padding(
           padding: EdgeInsets.only(
@@ -134,9 +135,9 @@ class _ServerActivityPanelState extends State<ServerActivityPanel>
     final curTrack = player.currentTrack;
     if (curTrack == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
+        SnackBar(
           content: Text('No hay ninguna canción en reproducción'),
-          backgroundColor: Color(0xFF1A122E),
+          backgroundColor: context.bgElevated,
         ),
       );
       return;
@@ -165,21 +166,21 @@ class _ServerActivityPanelState extends State<ServerActivityPanel>
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF10B981).withValues(alpha: 0.15),
+                  color: context.accent.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: const Icon(Icons.people_alt_rounded,
-                    color: Color(0xFF10B981), size: 22),
+                child: Icon(Icons.people_alt_rounded,
+                    color: context.accent, size: 22),
               ),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
+                    Text(
                       'Comunidad Navidrome',
                       style: TextStyle(
-                        color: Colors.white,
+                        color: context.textPrimary,
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
                       ),
@@ -187,17 +188,17 @@ class _ServerActivityPanelState extends State<ServerActivityPanel>
                     Text(
                       'Servidor: $serverHost',
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(color: Color(0xFF10B981), fontSize: 11.5),
+                      style: TextStyle(color: context.accent, fontSize: 11.5),
                     ),
                   ],
                 ),
               ),
               IconButton(
-                icon: const Icon(Icons.refresh_rounded, color: Colors.white70, size: 20),
+                icon: Icon(Icons.refresh_rounded, color: context.textSecondary, size: 20),
                 onPressed: () => _loadData(),
               ),
               IconButton(
-                icon: const Icon(Icons.close_rounded, color: Colors.white54, size: 20),
+                icon: Icon(Icons.close_rounded, color: context.textMuted, size: 20),
                 onPressed: () => Navigator.of(context).pop(),
               ),
             ],
@@ -208,19 +209,19 @@ class _ServerActivityPanelState extends State<ServerActivityPanel>
           Container(
             height: 38,
             decoration: BoxDecoration(
-              color: const Color(0xFF14141E),
+              color: context.bgElevated,
               borderRadius: BorderRadius.circular(12),
             ),
             child: TabBar(
               controller: _tabController,
               indicatorSize: TabBarIndicatorSize.tab,
               indicator: BoxDecoration(
-                color: const Color(0xFF7C3AED),
+                color: context.accent2,
                 borderRadius: BorderRadius.circular(10),
               ),
               dividerColor: Colors.transparent,
-              labelColor: Colors.white,
-              unselectedLabelColor: Colors.white54,
+              labelColor: context.textPrimary,
+              unselectedLabelColor: context.textMuted,
               labelStyle:
                   const TextStyle(fontSize: 12.5, fontWeight: FontWeight.bold),
               tabs: [
@@ -252,9 +253,9 @@ class _ServerActivityPanelState extends State<ServerActivityPanel>
           // Contenido de las pestañas
           Expanded(
             child: _loading
-                ? const Center(
+                ? Center(
                     child: CircularProgressIndicator(
-                      color: Color(0xFF10B981),
+                      color: context.accent,
                       strokeWidth: 2,
                     ),
                   )
@@ -281,16 +282,16 @@ class _ServerActivityPanelState extends State<ServerActivityPanel>
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(Icons.headphones_rounded,
-                color: Colors.white.withValues(alpha: 0.15), size: 48),
+                color: context.textPrimary.withValues(alpha: 0.15), size: 48),
             const SizedBox(height: 12),
-            const Text(
+            Text(
               'No hay nadie escuchando en este momento',
-              style: TextStyle(color: Colors.white70, fontWeight: FontWeight.bold),
+              style: TextStyle(color: context.textSecondary, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 4),
-            const Text(
+            Text(
               '¡Inicia una canción o sesión Jam para que otros la vean!',
-              style: TextStyle(color: Colors.white38, fontSize: 12),
+              style: TextStyle(color: context.textMuted, fontSize: 12),
             ),
           ],
         ),
@@ -307,22 +308,22 @@ class _ServerActivityPanelState extends State<ServerActivityPanel>
           margin: const EdgeInsets.only(bottom: 10),
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            color: const Color(0xFF14141E),
+            color: context.bgElevated,
             borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: const Color(0xFF222232)),
+            border: Border.all(color: context.bgElevated),
           ),
           child: Row(
             children: [
               // Avatar de usuario
               CircleAvatar(
                 radius: 18,
-                backgroundColor: const Color(0xFF7C3AED),
+                backgroundColor: context.accent2,
                 child: Text(
                   entry.username.isNotEmpty
                       ? entry.username[0].toUpperCase()
                       : 'U',
-                  style: const TextStyle(
-                    color: Colors.white,
+                  style: TextStyle(
+                    color: context.textPrimary,
                     fontWeight: FontWeight.bold,
                     fontSize: 13,
                   ),
@@ -339,8 +340,8 @@ class _ServerActivityPanelState extends State<ServerActivityPanel>
                       children: [
                         Text(
                           entry.username,
-                          style: const TextStyle(
-                            color: Color(0xFF10B981),
+                          style: TextStyle(
+                            color: context.accent,
                             fontSize: 12.5,
                             fontWeight: FontWeight.bold,
                           ),
@@ -350,7 +351,7 @@ class _ServerActivityPanelState extends State<ServerActivityPanel>
                           entry.minutesAgo == 0
                               ? 'escuchando ahora'
                               : 'hace ${entry.minutesAgo} min',
-                          style: const TextStyle(color: Colors.white38, fontSize: 10.5),
+                          style: TextStyle(color: context.textMuted, fontSize: 10.5),
                         ),
                       ],
                     ),
@@ -359,8 +360,8 @@ class _ServerActivityPanelState extends State<ServerActivityPanel>
                       track.title,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: Colors.white,
+                      style: TextStyle(
+                        color: context.textPrimary,
                         fontSize: 13.5,
                         fontWeight: FontWeight.w600,
                       ),
@@ -369,7 +370,7 @@ class _ServerActivityPanelState extends State<ServerActivityPanel>
                       '${track.artist} · ${track.album}',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(color: Colors.white54, fontSize: 11.5),
+                      style: TextStyle(color: context.textMuted, fontSize: 11.5),
                     ),
                   ],
                 ),
@@ -388,8 +389,8 @@ class _ServerActivityPanelState extends State<ServerActivityPanel>
               // Botón reproducir / menú
               IconButton(
                 tooltip: 'Opciones de canción',
-                icon: const Icon(Icons.more_vert_rounded,
-                    color: Colors.white70, size: 20),
+                icon: Icon(Icons.more_vert_rounded,
+                    color: context.textSecondary, size: 20),
                 onPressed: () => TrackContextMenu.show(context, track),
               ),
             ],
@@ -408,11 +409,11 @@ class _ServerActivityPanelState extends State<ServerActivityPanel>
         // Lista de mensajes
         Expanded(
           child: _chatMessages.isEmpty
-              ? const Center(
+              ? Center(
                   child: Text(
                     'No hay mensajes aún en este servidor.\n¡Sé el primero en saludar!',
                     textAlign: TextAlign.center,
-                    style: TextStyle(color: Colors.white38, fontSize: 12),
+                    style: TextStyle(color: context.textMuted, fontSize: 12),
                   ),
                 )
               : ListView.builder(
@@ -436,13 +437,13 @@ class _ServerActivityPanelState extends State<ServerActivityPanel>
                           horizontal: 12, vertical: 8),
                       decoration: BoxDecoration(
                         color: isMe
-                            ? const Color(0xFF1C1335)
-                            : const Color(0xFF14141E),
+                            ? context.bgElevated
+                            : context.bgElevated,
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(
                           color: isMe
-                              ? const Color(0xFFA855F7).withValues(alpha: 0.3)
-                              : const Color(0xFF222232),
+                              ? context.accent.withValues(alpha: 0.3)
+                              : context.bgElevated,
                         ),
                       ),
                       child: Column(
@@ -455,24 +456,24 @@ class _ServerActivityPanelState extends State<ServerActivityPanel>
                                 isMe ? 'Tú' : msg.username,
                                 style: TextStyle(
                                   color: isMe
-                                      ? const Color(0xFFA855F7)
-                                      : const Color(0xFF10B981),
+                                      ? context.accent
+                                      : context.accent,
                                   fontSize: 11.5,
                                   fontWeight: FontWeight.bold,
                                 ),
                               ),
                               Text(
                                 '${msg.time.hour.toString().padLeft(2, '0')}:${msg.time.minute.toString().padLeft(2, '0')}',
-                                style: const TextStyle(
-                                    color: Colors.white30, fontSize: 10),
+                                style: TextStyle(
+                                    color: context.textMuted, fontSize: 10),
                               ),
                             ],
                           ),
                           const SizedBox(height: 3),
                           Text(
                             msg.message,
-                            style: const TextStyle(
-                                color: Colors.white, fontSize: 13),
+                            style: TextStyle(
+                                color: context.textPrimary, fontSize: 13),
                           ),
                         ],
                       ),
@@ -489,8 +490,8 @@ class _ServerActivityPanelState extends State<ServerActivityPanel>
             IconButton(
               tooltip: 'Compartir lo que estoy escuchando',
               style: IconButton.styleFrom(
-                backgroundColor: const Color(0xFF14141E),
-                foregroundColor: const Color(0xFF10B981),
+                backgroundColor: context.bgElevated,
+                foregroundColor: context.accent,
               ),
               icon: const Icon(Icons.music_note_rounded, size: 20),
               onPressed: _shareCurrentTrack,
@@ -502,18 +503,18 @@ class _ServerActivityPanelState extends State<ServerActivityPanel>
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 14),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF14141E),
+                  color: context.bgElevated,
                   borderRadius: BorderRadius.circular(24),
-                  border: Border.all(color: const Color(0xFF222232)),
+                  border: Border.all(color: context.bgElevated),
                 ),
                 child: TextField(
                   controller: _chatController,
-                  style: const TextStyle(color: Colors.white, fontSize: 13),
+                  style: TextStyle(color: context.textPrimary, fontSize: 13),
                   textInputAction: TextInputAction.send,
                   onSubmitted: (_) => _sendMessage(),
-                  decoration: const InputDecoration(
+                  decoration: InputDecoration(
                     hintText: 'Escribe un mensaje en el servidor...',
-                    hintStyle: TextStyle(color: Colors.white30, fontSize: 12),
+                    hintStyle: TextStyle(color: context.textMuted, fontSize: 12),
                     border: InputBorder.none,
                     isDense: true,
                   ),
@@ -526,15 +527,15 @@ class _ServerActivityPanelState extends State<ServerActivityPanel>
             IconButton(
               tooltip: 'Enviar mensaje',
               style: IconButton.styleFrom(
-                backgroundColor: const Color(0xFF7C3AED),
-                foregroundColor: Colors.white,
+                backgroundColor: context.accent2,
+                foregroundColor: context.onAccent2,
               ),
               icon: _sending
-                  ? const SizedBox(
+                  ? SizedBox(
                       width: 16,
                       height: 16,
                       child: CircularProgressIndicator(
-                          strokeWidth: 2, color: Colors.white),
+                          strokeWidth: 2, color: context.textPrimary),
                     )
                   : const Icon(Icons.send_rounded, size: 18),
               onPressed: _sendMessage,
@@ -550,10 +551,10 @@ class _ServerActivityPanelState extends State<ServerActivityPanel>
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: const Color(0xFF0F1A16),
+        color: context.accent.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
-          color: const Color(0xFF10B981).withValues(alpha: 0.4),
+          color: context.accent.withValues(alpha: 0.4),
         ),
       ),
       child: Row(
@@ -561,11 +562,11 @@ class _ServerActivityPanelState extends State<ServerActivityPanel>
           Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: const Color(0xFF10B981).withValues(alpha: 0.2),
+              color: context.accent.withValues(alpha: 0.2),
               borderRadius: BorderRadius.circular(10),
             ),
-            child: const Icon(Icons.speaker_group_rounded,
-                color: Color(0xFF10B981), size: 22),
+            child: Icon(Icons.speaker_group_rounded,
+                color: context.accent, size: 22),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -576,8 +577,8 @@ class _ServerActivityPanelState extends State<ServerActivityPanel>
                   children: [
                     Text(
                       '¡Jam Activo de ${msg.username}!',
-                      style: const TextStyle(
-                        color: Colors.white,
+                      style: TextStyle(
+                        color: context.textPrimary,
                         fontSize: 13,
                         fontWeight: FontWeight.bold,
                       ),
@@ -587,13 +588,13 @@ class _ServerActivityPanelState extends State<ServerActivityPanel>
                       padding:
                           const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF10B981).withValues(alpha: 0.2),
+                        color: context.accent.withValues(alpha: 0.2),
                         borderRadius: BorderRadius.circular(4),
                       ),
-                      child: const Text(
+                      child: Text(
                         'EN VIVO',
                         style: TextStyle(
-                            color: Color(0xFF10B981),
+                            color: context.accent,
                             fontSize: 9,
                             fontWeight: FontWeight.bold),
                       ),
@@ -601,9 +602,9 @@ class _ServerActivityPanelState extends State<ServerActivityPanel>
                   ],
                 ),
                 const SizedBox(height: 2),
-                const Text(
+                Text(
                   'Sesión abierta en este servidor Navidrome',
-                  style: TextStyle(color: Colors.white54, fontSize: 11),
+                  style: TextStyle(color: context.textMuted, fontSize: 11),
                 ),
               ],
             ),
@@ -614,8 +615,8 @@ class _ServerActivityPanelState extends State<ServerActivityPanel>
               JamDialog.show(context);
             },
             style: FilledButton.styleFrom(
-              backgroundColor: const Color(0xFF10B981).withValues(alpha: 0.2),
-              foregroundColor: const Color(0xFF10B981),
+              backgroundColor: context.accent.withValues(alpha: 0.2),
+              foregroundColor: context.accent,
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(8)),
             ),

@@ -6,6 +6,7 @@ import '../services/pairing_server.dart';
 import '../services/secure_storage.dart';
 import '../widgets/pairing_panel.dart';
 import 'home_shell.dart';
+import '../utils/app_colors.dart';
 
 /// Pantalla de inicio de sesión optimizada exclusivamente para Escritorio (Linux, Windows, macOS).
 /// - Layout de dos columnas horizontales balanceadas en negro AMOLED puro.
@@ -91,19 +92,19 @@ class _DesktopLoginScreenState extends State<DesktopLoginScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            backgroundColor: const Color(0xFF1E1328),
+            backgroundColor: context.bgElevated,
             behavior: SnackBarBehavior.floating,
             shape:
                 RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
             content: Row(
               children: [
-                const Icon(Icons.error_outline,
-                    color: Colors.redAccent, size: 20),
+                Icon(Icons.error_outline,
+                    color: context.danger, size: 20),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
                     'Error: ${e.toString().replaceFirst('Exception: ', '')}',
-                    style: const TextStyle(color: Colors.white, fontSize: 13),
+                    style: TextStyle(color: context.textPrimary, fontSize: 13),
                   ),
                 ),
               ],
@@ -149,7 +150,7 @@ class _DesktopLoginScreenState extends State<DesktopLoginScreen> {
     final server = context.read<PairingServer>();
 
     return Scaffold(
-      backgroundColor: const Color(0xFF000000), // Pure AMOLED Black
+      backgroundColor: context.bgApp, // Pure AMOLED Black
       body: Stack(
         children: [
           // Sutil resplandor superior
@@ -165,7 +166,7 @@ class _DesktopLoginScreenState extends State<DesktopLoginScreen> {
                   shape: BoxShape.circle,
                   gradient: RadialGradient(
                     colors: [
-                      const Color(0xFF7C3AED).withValues(alpha: 0.18),
+                      context.accent2.withValues(alpha: 0.18),
                       Colors.transparent,
                     ],
                   ),
@@ -190,10 +191,10 @@ class _DesktopLoginScreenState extends State<DesktopLoginScreen> {
                       // Tarjeta principal AMOLED de dos paneles
                       Container(
                         decoration: BoxDecoration(
-                          color: const Color(0xFF0C0C10),
+                          color: context.bgApp,
                           borderRadius: BorderRadius.circular(20),
                           border: Border.all(
-                            color: const Color(0xFF1E1E26),
+                            color: context.bgElevated,
                             width: 1.2,
                           ),
                           boxShadow: [
@@ -226,30 +227,30 @@ class _DesktopLoginScreenState extends State<DesktopLoginScreen> {
                                             Container(
                                               padding: const EdgeInsets.all(8),
                                               decoration: BoxDecoration(
-                                                color: const Color(0xFF7C3AED)
+                                                color: context.accent2
                                                     .withValues(alpha: 0.15),
                                                 borderRadius:
                                                     BorderRadius.circular(10),
                                                 border: Border.all(
-                                                  color: const Color(0xFF7C3AED)
+                                                  color: context.accent2
                                                       .withValues(alpha: 0.3),
                                                 ),
                                               ),
-                                              child: const Icon(
+                                              child: Icon(
                                                 Icons.login_rounded,
-                                                color: Color(0xFFA855F7),
+                                                color: context.accent,
                                                 size: 18,
                                               ),
                                             ),
                                             const SizedBox(width: 12),
-                                            const Column(
+                                            Column(
                                               crossAxisAlignment:
                                                   CrossAxisAlignment.start,
                                               children: [
                                                 Text(
                                                   'Conexión al Servidor',
                                                   style: TextStyle(
-                                                    color: Colors.white,
+                                                    color: context.textPrimary,
                                                     fontSize: 18,
                                                     fontWeight: FontWeight.bold,
                                                   ),
@@ -257,7 +258,7 @@ class _DesktopLoginScreenState extends State<DesktopLoginScreen> {
                                                 Text(
                                                   'Ingresa tus credenciales de Navidrome',
                                                   style: TextStyle(
-                                                    color: Colors.white54,
+                                                    color: context.textMuted,
                                                     fontSize: 12,
                                                   ),
                                                 ),
@@ -280,7 +281,7 @@ class _DesktopLoginScreenState extends State<DesktopLoginScreen> {
                               // Divisor vertical elegante
                               Container(
                                 width: 1,
-                                color: const Color(0xFF1E1E26),
+                                color: context.bgElevated,
                               ),
 
                               // Panel Derecho: Emparejamiento
@@ -288,8 +289,8 @@ class _DesktopLoginScreenState extends State<DesktopLoginScreen> {
                                 flex: 5,
                                 child: Container(
                                   padding: const EdgeInsets.all(32),
-                                  decoration: const BoxDecoration(
-                                    color: Color(0xFF09090C),
+                                  decoration: BoxDecoration(
+                                    color: context.bgApp,
                                     borderRadius: BorderRadius.horizontal(
                                       right: Radius.circular(20),
                                     ),
@@ -321,16 +322,16 @@ class _DesktopLoginScreenState extends State<DesktopLoginScreen> {
                           Container(
                             width: 6,
                             height: 6,
-                            decoration: const BoxDecoration(
+                            decoration: BoxDecoration(
                               shape: BoxShape.circle,
-                              color: Color(0xFF10B981),
+                              color: context.accent,
                             ),
                           ),
                           const SizedBox(width: 8),
                           Text(
                             'Scrotify Desktop · Cifrado E2E X25519 + XChaCha20',
                             style: TextStyle(
-                              color: Colors.white.withValues(alpha: 0.35),
+                              color: context.textPrimary.withValues(alpha: 0.35),
                               fontSize: 12,
                               fontFamily: 'monospace',
                             ),
@@ -357,32 +358,32 @@ class _DesktopLoginScreenState extends State<DesktopLoginScreen> {
           height: 48,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            color: const Color(0xFF0E0E12),
+            color: context.bgApp,
             border: Border.all(
-              color: const Color(0xFFA855F7).withValues(alpha: 0.4),
+              color: context.accent.withValues(alpha: 0.4),
               width: 1.5,
             ),
             boxShadow: [
               BoxShadow(
-                color: const Color(0xFFA855F7).withValues(alpha: 0.3),
+                color: context.accent.withValues(alpha: 0.3),
                 blurRadius: 18,
               ),
             ],
           ),
-          child: const Icon(
+          child: Icon(
             Icons.graphic_eq_rounded,
             size: 26,
-            color: Color(0xFFA855F7),
+            color: context.accent,
           ),
         ),
         const SizedBox(width: 14),
-        const Column(
+        Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
               'SCROTIFY',
               style: TextStyle(
-                color: Colors.white,
+                color: context.textPrimary,
                 fontSize: 22,
                 fontWeight: FontWeight.w900,
                 letterSpacing: 2.5,
@@ -391,7 +392,7 @@ class _DesktopLoginScreenState extends State<DesktopLoginScreen> {
             Text(
               'Cliente de Música para Navidrome (Subsonic API)',
               style: TextStyle(
-                color: Colors.white54,
+                color: context.textMuted,
                 fontSize: 12,
               ),
             ),
@@ -447,7 +448,7 @@ class _DesktopLoginScreenState extends State<DesktopLoginScreen> {
               _obscurePass
                   ? Icons.visibility_outlined
                   : Icons.visibility_off_outlined,
-              color: Colors.white54,
+              color: context.textMuted,
               size: 18,
             ),
             onPressed: () => setState(() => _obscurePass = !_obscurePass),
@@ -465,14 +466,14 @@ class _DesktopLoginScreenState extends State<DesktopLoginScreen> {
       height: 46,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(10),
-        gradient: const LinearGradient(
-          colors: [Color(0xFF8B5CF6), Color(0xFF6D28D9)],
+        gradient: LinearGradient(
+          colors: [context.accent, context.accent2],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF8B5CF6).withValues(alpha: 0.35),
+            color: context.accent.withValues(alpha: 0.35),
             blurRadius: 16,
             offset: const Offset(0, 4),
           ),
@@ -487,28 +488,28 @@ class _DesktopLoginScreenState extends State<DesktopLoginScreen> {
               RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         ),
         child: _loading
-            ? const SizedBox(
+            ? SizedBox(
                 width: 18,
                 height: 18,
                 child: CircularProgressIndicator(
                   strokeWidth: 2,
-                  color: Colors.white,
+                  color: context.textPrimary,
                 ),
               )
-            : const Row(
+            : Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Text(
                     'Entrar a Navidrome',
                     style: TextStyle(
-                      color: Colors.white,
+                      color: context.textPrimary,
                       fontSize: 14,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
                   SizedBox(width: 8),
                   Icon(Icons.arrow_forward_rounded,
-                      size: 17, color: Colors.white),
+                      size: 17, color: context.textPrimary),
                 ],
               ),
       ),
@@ -552,8 +553,8 @@ class _DesktopField extends StatelessWidget {
           padding: const EdgeInsets.only(left: 2, bottom: 6),
           child: Text(
             label,
-            style: const TextStyle(
-              color: Colors.white54,
+            style: TextStyle(
+              color: context.textMuted,
               fontSize: 10.5,
               fontWeight: FontWeight.bold,
               letterSpacing: 1,
@@ -566,43 +567,43 @@ class _DesktopField extends StatelessWidget {
           obscureText: obscureText,
           keyboardType: keyboardType,
           textInputAction: textInputAction,
-          style: const TextStyle(color: Colors.white, fontSize: 13.5),
+          style: TextStyle(color: context.textPrimary, fontSize: 13.5),
           validator: validator,
           onFieldSubmitted: onSubmitted,
           decoration: InputDecoration(
             hintText: hint,
             hintStyle: TextStyle(
-              color: Colors.white.withValues(alpha: 0.2),
+              color: context.textPrimary.withValues(alpha: 0.2),
               fontSize: 13,
             ),
-            prefixIcon: Icon(icon, color: Colors.white38, size: 18),
+            prefixIcon: Icon(icon, color: context.textMuted, size: 18),
             suffixIcon: suffixIcon,
             filled: true,
-            fillColor: const Color(0xFF060608),
+            fillColor: context.bgApp,
             contentPadding:
                 const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(10),
-              borderSide: const BorderSide(color: Color(0xFF1E1E26)),
+              borderSide: BorderSide(color: context.bgElevated),
             ),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(10),
-              borderSide: const BorderSide(color: Color(0xFF1E1E26)),
+              borderSide: BorderSide(color: context.bgElevated),
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(10),
-              borderSide: const BorderSide(
-                color: Color(0xFFA855F7),
+              borderSide: BorderSide(
+                color: context.accent,
                 width: 1.5,
               ),
             ),
             errorBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(10),
-              borderSide: const BorderSide(color: Colors.redAccent, width: 1.2),
+              borderSide: BorderSide(color: context.danger, width: 1.2),
             ),
             focusedErrorBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(10),
-              borderSide: const BorderSide(color: Colors.redAccent, width: 1.5),
+              borderSide: BorderSide(color: context.danger, width: 1.5),
             ),
           ),
         ),

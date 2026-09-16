@@ -8,6 +8,7 @@ import '../services/secure_storage.dart';
 import 'desktop_login_screen.dart';
 import 'home_shell.dart';
 import 'mobile_login_screen.dart';
+import '../utils/app_colors.dart';
 
 /// Selector principal de Login que desacopla completamente las experiencias:
 /// - En Escritorio (Linux, Windows, macOS): Muestra `DesktopLoginScreen`.
@@ -107,7 +108,7 @@ class _AmoledSplashScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF000000),
+      backgroundColor: context.bgApp,
       body: Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -117,48 +118,48 @@ class _AmoledSplashScreen extends StatelessWidget {
               height: 60,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: const Color(0xFF0E0E12),
+                color: context.bgApp,
                 border: Border.all(
-                  color: const Color(0xFFA855F7).withValues(alpha: 0.5),
+                  color: context.logoStart.withValues(alpha: 0.5),
                   width: 1.5,
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: const Color(0xFFA855F7).withValues(alpha: 0.35),
+                    color: context.accentGlow,
                     blurRadius: 20,
                   ),
                 ],
               ),
-              child: const Icon(
+              child: Icon(
                 Icons.graphic_eq_rounded,
                 size: 32,
-                color: Color(0xFFA855F7),
+                color: context.logoStart,
               ),
             ),
             const SizedBox(height: 16),
-            const Text(
+            Text(
               'SCROTIFY',
               style: TextStyle(
-                color: Colors.white,
+                color: context.textPrimary,
                 fontSize: 22,
                 fontWeight: FontWeight.w900,
                 letterSpacing: 3,
               ),
             ),
             const SizedBox(height: 32),
-            const SizedBox(
+            SizedBox(
               width: 20,
               height: 20,
               child: CircularProgressIndicator(
                 strokeWidth: 2,
-                color: Color(0xFFA855F7),
+                color: context.accent,
               ),
             ),
             const SizedBox(height: 14),
             Text(
               'Restaurando sesión guardada...',
               style: TextStyle(
-                color: Colors.white.withValues(alpha: 0.45),
+                color: context.textPrimary.withValues(alpha: 0.45),
                 fontSize: 12.5,
               ),
             ),

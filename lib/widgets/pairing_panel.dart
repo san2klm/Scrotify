@@ -7,6 +7,7 @@ import 'package:qr_flutter/qr_flutter.dart';
 import '../models/pairing_models.dart';
 import '../services/pairing_client.dart';
 import '../services/pairing_server.dart';
+import '../utils/app_colors.dart';
 
 // =============================================================================
 // LADO PC: PairingSharePanel (AMOLED)
@@ -108,16 +109,16 @@ class _PairingSharePanelState extends State<PairingSharePanel> {
     Clipboard.setData(ClipboardData(text: text));
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        backgroundColor: const Color(0xFF1B1428),
+        backgroundColor: context.bgElevated,
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         content: Row(
           children: [
-            const Icon(Icons.check_circle_outline, color: Color(0xFF10B981), size: 18),
+            Icon(Icons.check_circle_outline, color: context.accent, size: 18),
             const SizedBox(width: 8),
             Text(
               '$label copiado al portapapeles',
-              style: const TextStyle(color: Colors.white, fontSize: 12.5),
+              style: TextStyle(color: context.textPrimary, fontSize: 12.5),
             ),
           ],
         ),
@@ -138,17 +139,17 @@ class _PairingSharePanelState extends State<PairingSharePanel> {
     final status = widget.server.status;
 
     if (_starting) {
-      return const Center(
+      return Center(
         child: Padding(
           padding: EdgeInsets.all(32),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              CircularProgressIndicator(strokeWidth: 2, color: Color(0xFFA855F7)),
+              CircularProgressIndicator(strokeWidth: 2, color: context.accent),
               SizedBox(height: 14),
               Text(
                 'Iniciando sesión segura...',
-                style: TextStyle(color: Colors.white60, fontSize: 12.5),
+                style: TextStyle(color: context.textSecondary, fontSize: 12.5),
               ),
             ],
           ),
@@ -168,34 +169,34 @@ class _PairingSharePanelState extends State<PairingSharePanel> {
                 height: 58,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: const Color(0xFF10B981).withValues(alpha: 0.12),
-                  border: Border.all(color: const Color(0xFF10B981), width: 1.8),
+                  color: context.accent.withValues(alpha: 0.12),
+                  border: Border.all(color: context.accent, width: 1.8),
                 ),
-                child: const Icon(Icons.check_rounded,
-                    color: Color(0xFF10B981), size: 32),
+                child: Icon(Icons.check_rounded,
+                    color: context.accent, size: 32),
               ),
               const SizedBox(height: 14),
-              const Text(
+              Text(
                 '¡Teléfono emparejado!',
                 textAlign: TextAlign.center,
                 style: TextStyle(
-                  color: Colors.white,
+                  color: context.textPrimary,
                   fontWeight: FontWeight.bold,
                   fontSize: 15,
                 ),
               ),
               const SizedBox(height: 4),
-              const Text(
+              Text(
                 'Las credenciales se transmitieron cifradas con éxito.',
                 textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.white54, fontSize: 12),
+                style: TextStyle(color: context.textMuted, fontSize: 12),
               ),
               const SizedBox(height: 18),
               OutlinedButton.icon(
                 onPressed: _startPairing,
                 style: OutlinedButton.styleFrom(
-                  foregroundColor: Colors.white70,
-                  side: const BorderSide(color: Color(0xFF2A2A35)),
+                  foregroundColor: context.textSecondary,
+                  side: BorderSide(color: context.bgElevated),
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                   shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(10)),
@@ -229,8 +230,8 @@ class _PairingSharePanelState extends State<PairingSharePanel> {
                 Container(
                   width: 7,
                   height: 7,
-                  decoration: const BoxDecoration(
-                    color: Color(0xFF10B981),
+                  decoration: BoxDecoration(
+                    color: context.accent,
                     shape: BoxShape.circle,
                   ),
                 ),
@@ -239,8 +240,8 @@ class _PairingSharePanelState extends State<PairingSharePanel> {
                   child: Text(
                     'Listo para vincular (${widget.server.deviceName})',
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: Color(0xFF10B981),
+                    style: TextStyle(
+                      color: context.accent,
                       fontWeight: FontWeight.bold,
                       fontSize: 12.5,
                     ),
@@ -250,19 +251,19 @@ class _PairingSharePanelState extends State<PairingSharePanel> {
                   padding:
                       const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF1A1A22),
+                    color: context.bgCard,
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(Icons.timer_outlined,
-                          size: 13, color: Colors.white54),
+                      Icon(Icons.timer_outlined,
+                          size: 13, color: context.textMuted),
                       const SizedBox(width: 4),
                       Text(
                         timeStr,
-                        style: const TextStyle(
-                          color: Colors.white,
+                        style: TextStyle(
+                          color: context.textPrimary,
                           fontSize: 11.5,
                           fontWeight: FontWeight.bold,
                           fontFamily: 'monospace',
@@ -279,11 +280,11 @@ class _PairingSharePanelState extends State<PairingSharePanel> {
             Container(
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: context.textPrimary,
                 borderRadius: BorderRadius.circular(14),
                 boxShadow: [
                   BoxShadow(
-                    color: const Color(0xFFA855F7).withValues(alpha: 0.25),
+                    color: context.accent.withValues(alpha: 0.25),
                     blurRadius: 20,
                     spreadRadius: 1,
                   ),
@@ -293,15 +294,15 @@ class _PairingSharePanelState extends State<PairingSharePanel> {
                 data: qrData,
                 version: QrVersions.auto,
                 size: widget.compact ? 150 : 175,
-                backgroundColor: Colors.white,
+                backgroundColor: context.textPrimary,
                 padding: EdgeInsets.zero,
               ),
             ),
             const SizedBox(height: 14),
 
-            const Text(
+            Text(
               'O escribe este código en tu teléfono:',
-              style: TextStyle(color: Colors.white60, fontSize: 11.5),
+              style: TextStyle(color: context.textSecondary, fontSize: 11.5),
             ),
             const SizedBox(height: 8),
 
@@ -312,11 +313,11 @@ class _PairingSharePanelState extends State<PairingSharePanel> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   _AmoledCodeGroupChip(code: code.substring(0, 3)),
-                  const Padding(
+                  Padding(
                     padding: EdgeInsets.symmetric(horizontal: 6),
                     child: Text('-',
                         style: TextStyle(
-                            color: Colors.white30,
+                            color: context.textMuted,
                             fontSize: 20,
                             fontWeight: FontWeight.bold)),
                   ),
@@ -324,8 +325,8 @@ class _PairingSharePanelState extends State<PairingSharePanel> {
                   const SizedBox(width: 8),
                   IconButton(
                     tooltip: 'Copiar código',
-                    icon: const Icon(Icons.copy_rounded,
-                        size: 16, color: Colors.white54),
+                    icon: Icon(Icons.copy_rounded,
+                        size: 16, color: context.textMuted),
                     onPressed: () => _copyToClipboard(code, 'Código $code'),
                   ),
                 ],
@@ -346,14 +347,14 @@ class _PairingSharePanelState extends State<PairingSharePanel> {
                       padding: const EdgeInsets.symmetric(
                           horizontal: 8, vertical: 3),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF070709),
+                        color: context.bgApp,
                         borderRadius: BorderRadius.circular(6),
-                        border: Border.all(color: const Color(0xFF1E1E28)),
+                        border: Border.all(color: context.bgElevated),
                       ),
                       child: Text(
                         'IP: $ip:${widget.server.port}',
-                        style: const TextStyle(
-                          color: Colors.white54,
+                        style: TextStyle(
+                          color: context.textMuted,
                           fontSize: 10.5,
                           fontFamily: 'monospace',
                         ),
@@ -371,7 +372,7 @@ class _PairingSharePanelState extends State<PairingSharePanel> {
                 TextButton.icon(
                   onPressed: _startPairing,
                   style: TextButton.styleFrom(
-                    foregroundColor: Colors.white60,
+                    foregroundColor: context.textSecondary,
                   ),
                   icon: const Icon(Icons.refresh, size: 14),
                   label: const Text('Regenerar', style: TextStyle(fontSize: 11.5)),
@@ -380,7 +381,7 @@ class _PairingSharePanelState extends State<PairingSharePanel> {
                 TextButton.icon(
                   onPressed: _stopPairing,
                   style: TextButton.styleFrom(
-                    foregroundColor: Colors.redAccent.withValues(alpha: 0.8),
+                    foregroundColor: context.danger.withValues(alpha: 0.8),
                   ),
                   icon: const Icon(Icons.close, size: 14),
                   label: const Text('Cancelar', style: TextStyle(fontSize: 11.5)),
@@ -402,41 +403,41 @@ class _PairingSharePanelState extends State<PairingSharePanel> {
           height: 52,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            color: const Color(0xFF140E24),
+            color: context.bgElevated,
             border: Border.all(
-                color: const Color(0xFFA855F7).withValues(alpha: 0.3)),
+                color: context.accent.withValues(alpha: 0.3)),
           ),
-          child: const Icon(Icons.qr_code_2_rounded,
-              color: Color(0xFFA855F7), size: 28),
+          child: Icon(Icons.qr_code_2_rounded,
+              color: context.accent, size: 28),
         ),
         const SizedBox(height: 12),
-        const Text(
+        Text(
           'Emparejar con el teléfono',
           style: TextStyle(
-            color: Colors.white,
+            color: context.textPrimary,
             fontWeight: FontWeight.bold,
             fontSize: 15,
           ),
         ),
         const SizedBox(height: 4),
-        const Text(
+        Text(
           'Genera un código QR y un pin seguro para que tu teléfono pueda conectarse automáticamente sin escribir la contraseña.',
           textAlign: TextAlign.center,
-          style: TextStyle(color: Colors.white54, fontSize: 12, height: 1.3),
+          style: TextStyle(color: context.textMuted, fontSize: 12, height: 1.3),
         ),
         if (_errorMessage != null) ...[
           const SizedBox(height: 10),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
             decoration: BoxDecoration(
-              color: Colors.redAccent.withValues(alpha: 0.1),
+              color: context.danger.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(8),
               border: Border.all(
-                  color: Colors.redAccent.withValues(alpha: 0.25)),
+                  color: context.danger.withValues(alpha: 0.25)),
             ),
             child: Text(
               _errorMessage!,
-              style: const TextStyle(color: Colors.redAccent, fontSize: 11.5),
+              style: TextStyle(color: context.danger, fontSize: 11.5),
               textAlign: TextAlign.center,
             ),
           ),
@@ -445,8 +446,8 @@ class _PairingSharePanelState extends State<PairingSharePanel> {
         FilledButton.icon(
           onPressed: _startPairing,
           style: FilledButton.styleFrom(
-            backgroundColor: const Color(0xFF7C3AED),
-            foregroundColor: Colors.white,
+            backgroundColor: context.accent2,
+            foregroundColor: context.onAccent2,
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 11),
             shape:
                 RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -471,23 +472,23 @@ class _AmoledCodeGroupChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
-        color: const Color(0xFF000000),
+        color: context.bgApp,
         borderRadius: BorderRadius.circular(8),
         border: Border.all(
-          color: const Color(0xFFA855F7),
+          color: context.accent,
           width: 1.2,
         ),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFFA855F7).withValues(alpha: 0.2),
+            color: context.accent.withValues(alpha: 0.2),
             blurRadius: 8,
           ),
         ],
       ),
       child: Text(
         code,
-        style: const TextStyle(
-          color: Colors.white,
+        style: TextStyle(
+          color: context.textPrimary,
           fontSize: 20,
           fontWeight: FontWeight.bold,
           letterSpacing: 3,
@@ -624,19 +625,19 @@ class _PairingJoinPanelState extends State<PairingJoinPanel> {
     return showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF0E0E12),
+        backgroundColor: context.bgApp,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
-          side: const BorderSide(color: Color(0xFF1E1E28)),
+          side: BorderSide(color: context.bgElevated),
         ),
         title: Row(
           children: [
-            const Icon(Icons.laptop_mac_rounded, color: Color(0xFFA855F7), size: 20),
+            Icon(Icons.laptop_mac_rounded, color: context.accent, size: 20),
             const SizedBox(width: 10),
             Expanded(
               child: Text(
                 'Código de $deviceName',
-                style: const TextStyle(color: Colors.white, fontSize: 15),
+                style: TextStyle(color: context.textPrimary, fontSize: 15),
               ),
             ),
           ],
@@ -645,9 +646,9 @@ class _PairingJoinPanelState extends State<PairingJoinPanel> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
+            Text(
               'Ingresa el código que aparece en la pantalla de esa computadora:',
-              style: TextStyle(color: Colors.white60, fontSize: 12.5),
+              style: TextStyle(color: context.textSecondary, fontSize: 12.5),
             ),
             const SizedBox(height: 14),
             TextField(
@@ -655,8 +656,8 @@ class _PairingJoinPanelState extends State<PairingJoinPanel> {
               autofocus: true,
               textCapitalization: TextCapitalization.characters,
               textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: Colors.white,
+              style: TextStyle(
+                color: context.textPrimary,
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
                 letterSpacing: 4,
@@ -669,16 +670,16 @@ class _PairingJoinPanelState extends State<PairingJoinPanel> {
               decoration: InputDecoration(
                 hintText: 'XXX-XXX',
                 hintStyle: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.2), letterSpacing: 4),
+                    color: context.textPrimary.withValues(alpha: 0.2), letterSpacing: 4),
                 filled: true,
-                fillColor: const Color(0xFF060608),
+                fillColor: context.bgApp,
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(10),
-                  borderSide: const BorderSide(color: Color(0xFF22222E)),
+                  borderSide: BorderSide(color: context.bgElevated),
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(10),
-                  borderSide: const BorderSide(color: Color(0xFFA855F7), width: 1.5),
+                  borderSide: BorderSide(color: context.accent, width: 1.5),
                 ),
               ),
             ),
@@ -688,13 +689,13 @@ class _PairingJoinPanelState extends State<PairingJoinPanel> {
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(),
             child:
-                const Text('Cancelar', style: TextStyle(color: Colors.white54)),
+                Text('Cancelar', style: TextStyle(color: context.textMuted)),
           ),
           ElevatedButton(
             onPressed: () => Navigator.of(ctx).pop(controller.text),
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF7C3AED),
-              foregroundColor: Colors.white,
+              backgroundColor: context.accent2,
+              foregroundColor: context.onAccent2,
             ),
             child: const Text('Conectar'),
           ),
@@ -858,9 +859,9 @@ class _PairingJoinPanelState extends State<PairingJoinPanel> {
         Container(
           padding: const EdgeInsets.all(3),
           decoration: BoxDecoration(
-            color: const Color(0xFF060608),
+            color: context.bgApp,
             borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: const Color(0xFF1E1E28)),
+            border: Border.all(color: context.bgElevated),
           ),
           child: Row(
             children: [
@@ -882,14 +883,14 @@ class _PairingJoinPanelState extends State<PairingJoinPanel> {
         OutlinedButton.icon(
           onPressed: _loading ? null : _openQrScanner,
           style: OutlinedButton.styleFrom(
-            foregroundColor: Colors.white,
-            side: const BorderSide(color: Color(0xFF2A2A38)),
+            foregroundColor: context.textPrimary,
+            side: BorderSide(color: context.bgElevated),
             padding: const EdgeInsets.symmetric(vertical: 12),
             shape:
                 RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           ),
-          icon: const Icon(Icons.qr_code_scanner_rounded,
-              size: 19, color: Color(0xFFA855F7)),
+          icon: Icon(Icons.qr_code_scanner_rounded,
+              size: 19, color: context.accent),
           label: const Text(
             'Escanear código QR con la cámara',
             style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12.5),
@@ -901,7 +902,7 @@ class _PairingJoinPanelState extends State<PairingJoinPanel> {
           child: TextButton.icon(
             onPressed: () => setState(() => _showManualIp = !_showManualIp),
             style: TextButton.styleFrom(
-              foregroundColor: Colors.white38,
+              foregroundColor: context.textMuted,
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
             ),
             icon: Icon(
@@ -929,18 +930,18 @@ class _PairingJoinPanelState extends State<PairingJoinPanel> {
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const SizedBox(
+              SizedBox(
                 width: 14,
                 height: 14,
                 child: CircularProgressIndicator(
-                    strokeWidth: 1.8, color: Color(0xFFA855F7)),
+                    strokeWidth: 1.8, color: context.accent),
               ),
               const SizedBox(width: 8),
               Flexible(
                 child: Text(
                   _statusText!,
-                  style: const TextStyle(
-                      color: Color(0xFFA855F7), fontSize: 12),
+                  style: TextStyle(
+                      color: context.accent, fontSize: 12),
                 ),
               ),
             ],
@@ -952,22 +953,22 @@ class _PairingJoinPanelState extends State<PairingJoinPanel> {
           Container(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: Colors.redAccent.withValues(alpha: 0.1),
+              color: context.danger.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(10),
               border:
-                  Border.all(color: Colors.redAccent.withValues(alpha: 0.25)),
+                  Border.all(color: context.danger.withValues(alpha: 0.25)),
             ),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Icon(Icons.error_outline,
-                    color: Colors.redAccent, size: 16),
+                Icon(Icons.error_outline,
+                    color: context.danger, size: 16),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
                     _errorMessage!,
                     style:
-                        const TextStyle(color: Colors.redAccent, fontSize: 11.5),
+                        TextStyle(color: context.danger, fontSize: 11.5),
                   ),
                 ),
               ],
@@ -986,11 +987,11 @@ class _PairingJoinPanelState extends State<PairingJoinPanel> {
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 7),
           decoration: BoxDecoration(
-            color: isSelected ? const Color(0xFF1C132E) : Colors.transparent,
+            color: isSelected ? context.bgElevated : Colors.transparent,
             borderRadius: BorderRadius.circular(8),
             border: isSelected
                 ? Border.all(
-                    color: const Color(0xFFA855F7).withValues(alpha: 0.4),
+                    color: context.accent.withValues(alpha: 0.4),
                     width: 1)
                 : null,
           ),
@@ -1000,13 +1001,13 @@ class _PairingJoinPanelState extends State<PairingJoinPanel> {
               Icon(icon,
                   size: 15,
                   color: isSelected
-                      ? const Color(0xFFA855F7)
-                      : Colors.white38),
+                      ? context.accent
+                      : context.textMuted),
               const SizedBox(width: 6),
               Text(
                 label,
                 style: TextStyle(
-                  color: isSelected ? Colors.white : Colors.white54,
+                  color: isSelected ? context.textPrimary : context.textMuted,
                   fontSize: 12,
                   fontWeight:
                       isSelected ? FontWeight.bold : FontWeight.normal,
@@ -1028,10 +1029,10 @@ class _PairingJoinPanelState extends State<PairingJoinPanel> {
       children: [
         Row(
           children: [
-            const Text(
+            Text(
               'Dispositivos en tu red Wi-Fi',
               style: TextStyle(
-                color: Colors.white,
+                color: context.textPrimary,
                 fontSize: 13.5,
                 fontWeight: FontWeight.bold,
               ),
@@ -1040,21 +1041,21 @@ class _PairingJoinPanelState extends State<PairingJoinPanel> {
             IconButton(
               tooltip: 'Volver a escanear',
               icon: _scanningLan
-                  ? const SizedBox(
+                  ? SizedBox(
                       width: 14,
                       height: 14,
                       child: CircularProgressIndicator(
-                          strokeWidth: 1.8, color: Color(0xFFA855F7)),
+                          strokeWidth: 1.8, color: context.accent),
                     )
-                  : const Icon(Icons.refresh, size: 17, color: Colors.white54),
+                  : Icon(Icons.refresh, size: 17, color: context.textMuted),
               onPressed: _scanningLan ? null : _scanLanDevices,
             ),
           ],
         ),
         const SizedBox(height: 2),
-        const Text(
+        Text(
           'Computadoras con Scrotify listas para emparejar:',
-          style: TextStyle(color: Colors.white38, fontSize: 11.5),
+          style: TextStyle(color: context.textMuted, fontSize: 11.5),
         ),
         const SizedBox(height: 10),
 
@@ -1062,9 +1063,9 @@ class _PairingJoinPanelState extends State<PairingJoinPanel> {
           Container(
             padding: const EdgeInsets.all(18),
             decoration: BoxDecoration(
-              color: const Color(0xFF070709),
+              color: context.bgApp,
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: const Color(0xFF1E1E28)),
+              border: Border.all(color: context.bgElevated),
             ),
             child: Center(
               child: Column(
@@ -1074,20 +1075,20 @@ class _PairingJoinPanelState extends State<PairingJoinPanel> {
                         ? Icons.radar_rounded
                         : Icons.devices_other_rounded,
                     size: 28,
-                    color: Colors.white24,
+                    color: context.themeBorder,
                   ),
                   const SizedBox(height: 8),
                   Text(
                     _scanningLan
                         ? 'Buscando computadoras en la red...'
                         : 'No se encontraron computadoras emitiendo',
-                    style: const TextStyle(color: Colors.white54, fontSize: 12),
+                    style: TextStyle(color: context.textMuted, fontSize: 12),
                   ),
                   const SizedBox(height: 4),
-                  const Text(
+                  Text(
                     'Toca "Generar código" en tu PC o usa la pestaña "Código PIN".',
                     textAlign: TextAlign.center,
-                    style: TextStyle(color: Colors.white30, fontSize: 10.5),
+                    style: TextStyle(color: context.textMuted, fontSize: 10.5),
                   ),
                 ],
               ),
@@ -1099,10 +1100,10 @@ class _PairingJoinPanelState extends State<PairingJoinPanel> {
               margin: const EdgeInsets.only(bottom: 8),
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: const Color(0xFF070709),
+                color: context.bgApp,
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(
-                  color: const Color(0xFFA855F7).withValues(alpha: 0.35),
+                  color: context.accent.withValues(alpha: 0.35),
                 ),
               ),
               child: Row(
@@ -1112,12 +1113,12 @@ class _PairingJoinPanelState extends State<PairingJoinPanel> {
                     height: 36,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      color: const Color(0xFF1B122C),
+                      color: context.bgElevated,
                       border: Border.all(
-                          color: const Color(0xFFA855F7).withValues(alpha: 0.4)),
+                          color: context.accent.withValues(alpha: 0.4)),
                     ),
-                    child: const Icon(Icons.laptop_rounded,
-                        color: Color(0xFFA855F7), size: 19),
+                    child: Icon(Icons.laptop_rounded,
+                        color: context.accent, size: 19),
                   ),
                   const SizedBox(width: 10),
                   Expanded(
@@ -1126,16 +1127,16 @@ class _PairingJoinPanelState extends State<PairingJoinPanel> {
                       children: [
                         Text(
                           pc.deviceName,
-                          style: const TextStyle(
-                            color: Colors.white,
+                          style: TextStyle(
+                            color: context.textPrimary,
                             fontWeight: FontWeight.bold,
                             fontSize: 13.5,
                           ),
                         ),
                         Text(
                           '${pc.host}:${pc.port}',
-                          style: const TextStyle(
-                            color: Colors.white38,
+                          style: TextStyle(
+                            color: context.textMuted,
                             fontSize: 10.5,
                             fontFamily: 'monospace',
                           ),
@@ -1147,7 +1148,7 @@ class _PairingJoinPanelState extends State<PairingJoinPanel> {
                   FilledButton(
                     onPressed: _loading ? null : () => _connectToDiscoveredDevice(pc),
                     style: FilledButton.styleFrom(
-                      backgroundColor: const Color(0xFF7C3AED),
+                      backgroundColor: context.accent2,
                       padding: const EdgeInsets.symmetric(
                           horizontal: 12, vertical: 6),
                       shape: RoundedRectangleBorder(
@@ -1170,18 +1171,18 @@ class _PairingJoinPanelState extends State<PairingJoinPanel> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        const Text(
+        Text(
           'Código de inicio de sesión',
           style: TextStyle(
-            color: Colors.white,
+            color: context.textPrimary,
             fontSize: 13.5,
             fontWeight: FontWeight.bold,
           ),
         ),
         const SizedBox(height: 2),
-        const Text(
+        Text(
           'Ingresa el código que aparece en tu computadora:',
-          style: TextStyle(color: Colors.white38, fontSize: 11.5),
+          style: TextStyle(color: context.textMuted, fontSize: 11.5),
         ),
         const SizedBox(height: 12),
 
@@ -1190,8 +1191,8 @@ class _PairingJoinPanelState extends State<PairingJoinPanel> {
           enabled: !_loading,
           textCapitalization: TextCapitalization.characters,
           textAlign: TextAlign.center,
-          style: const TextStyle(
-            color: Colors.white,
+          style: TextStyle(
+            color: context.textPrimary,
             fontSize: 20,
             fontWeight: FontWeight.bold,
             letterSpacing: 6,
@@ -1204,24 +1205,24 @@ class _PairingJoinPanelState extends State<PairingJoinPanel> {
           decoration: InputDecoration(
             hintText: 'XXX-XXX',
             hintStyle: TextStyle(
-              color: Colors.white.withValues(alpha: 0.15),
+              color: context.textPrimary.withValues(alpha: 0.15),
               letterSpacing: 6,
             ),
             filled: true,
-            fillColor: const Color(0xFF070709),
+            fillColor: context.bgApp,
             contentPadding: const EdgeInsets.symmetric(vertical: 12),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: Color(0xFF1E1E28)),
+              borderSide: BorderSide(color: context.bgElevated),
             ),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: Color(0xFF1E1E28)),
+              borderSide: BorderSide(color: context.bgElevated),
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(
-                  color: Color(0xFFA855F7), width: 1.5),
+              borderSide: BorderSide(
+                  color: context.accent, width: 1.5),
             ),
           ),
           onSubmitted: (_) => _connectWithCode(),
@@ -1231,8 +1232,8 @@ class _PairingJoinPanelState extends State<PairingJoinPanel> {
         ElevatedButton(
           onPressed: _loading ? null : _connectWithCode,
           style: ElevatedButton.styleFrom(
-            backgroundColor: const Color(0xFF7C3AED),
-            foregroundColor: Colors.white,
+            backgroundColor: context.accent2,
+            foregroundColor: context.onAccent2,
             padding: const EdgeInsets.symmetric(vertical: 12),
             shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12)),
@@ -1256,17 +1257,17 @@ class _PairingJoinPanelState extends State<PairingJoinPanel> {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: const Color(0xFF070709),
+        color: context.bgApp,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFF1E1E28)),
+        border: Border.all(color: context.bgElevated),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const Text(
+          Text(
             'Conexión directa por dirección IP',
             style: TextStyle(
-              color: Colors.white,
+              color: context.textPrimary,
               fontSize: 12,
               fontWeight: FontWeight.bold,
             ),
@@ -1278,21 +1279,21 @@ class _PairingJoinPanelState extends State<PairingJoinPanel> {
                 flex: 7,
                 child: TextField(
                   controller: _manualHostController,
-                  style: const TextStyle(color: Colors.white, fontSize: 12),
+                  style: TextStyle(color: context.textPrimary, fontSize: 12),
                   decoration: InputDecoration(
                     labelText: 'IP del PC',
                     labelStyle:
-                        const TextStyle(color: Colors.white54, fontSize: 11),
+                        TextStyle(color: context.textMuted, fontSize: 11),
                     hintText: '192.168.1.50',
                     hintStyle: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.2), fontSize: 11),
+                        color: context.textPrimary.withValues(alpha: 0.2), fontSize: 11),
                     filled: true,
-                    fillColor: const Color(0xFF000000),
+                    fillColor: context.bgApp,
                     contentPadding: const EdgeInsets.symmetric(
                         horizontal: 10, vertical: 8),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(8),
-                      borderSide: const BorderSide(color: Color(0xFF1E1E28)),
+                      borderSide: BorderSide(color: context.bgElevated),
                     ),
                   ),
                 ),
@@ -1303,21 +1304,21 @@ class _PairingJoinPanelState extends State<PairingJoinPanel> {
                 child: TextField(
                   controller: _manualPortController,
                   keyboardType: TextInputType.number,
-                  style: const TextStyle(color: Colors.white, fontSize: 12),
+                  style: TextStyle(color: context.textPrimary, fontSize: 12),
                   decoration: InputDecoration(
                     labelText: 'Puerto',
                     labelStyle:
-                        const TextStyle(color: Colors.white54, fontSize: 11),
+                        TextStyle(color: context.textMuted, fontSize: 11),
                     hintText: '54321',
                     hintStyle: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.2), fontSize: 11),
+                        color: context.textPrimary.withValues(alpha: 0.2), fontSize: 11),
                     filled: true,
-                    fillColor: const Color(0xFF000000),
+                    fillColor: context.bgApp,
                     contentPadding: const EdgeInsets.symmetric(
                         horizontal: 10, vertical: 8),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(8),
-                      borderSide: const BorderSide(color: Color(0xFF1E1E28)),
+                      borderSide: BorderSide(color: context.bgElevated),
                     ),
                   ),
                 ),
@@ -1328,8 +1329,8 @@ class _PairingJoinPanelState extends State<PairingJoinPanel> {
           TextField(
             controller: _manualCodeController,
             textCapitalization: TextCapitalization.characters,
-            style: const TextStyle(
-                color: Colors.white, fontSize: 12, letterSpacing: 2),
+            style: TextStyle(
+                color: context.textPrimary, fontSize: 12, letterSpacing: 2),
             inputFormatters: [
               LengthLimitingTextInputFormatter(7),
               _PairCodeInputFormatter(),
@@ -1337,17 +1338,17 @@ class _PairingJoinPanelState extends State<PairingJoinPanel> {
             decoration: InputDecoration(
               labelText: 'Código de 6 letras',
               labelStyle:
-                  const TextStyle(color: Colors.white54, fontSize: 11),
+                  TextStyle(color: context.textMuted, fontSize: 11),
               hintText: 'ABC-DEF',
               hintStyle: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.2), fontSize: 11),
+                  color: context.textPrimary.withValues(alpha: 0.2), fontSize: 11),
               filled: true,
-              fillColor: const Color(0xFF000000),
+              fillColor: context.bgApp,
               contentPadding:
                   const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(8),
-                borderSide: const BorderSide(color: Color(0xFF1E1E28)),
+                borderSide: BorderSide(color: context.bgElevated),
               ),
             ),
           ),
@@ -1355,7 +1356,7 @@ class _PairingJoinPanelState extends State<PairingJoinPanel> {
           FilledButton.icon(
             onPressed: _loading ? null : _connectManualIp,
             style: FilledButton.styleFrom(
-              backgroundColor: const Color(0xFF6D28D9),
+              backgroundColor: context.accent2,
               padding: const EdgeInsets.symmetric(vertical: 9),
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(8)),
@@ -1434,10 +1435,10 @@ class _QrScannerSheetState extends State<QrScannerSheet> {
   Widget build(BuildContext context) {
     return Container(
       height: MediaQuery.of(context).size.height * 0.78,
-      decoration: const BoxDecoration(
-        color: Color(0xFF000000),
+      decoration: BoxDecoration(
+        color: context.bgApp,
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-        border: Border(top: BorderSide(color: Color(0xFF22222E), width: 1.2)),
+        border: Border(top: BorderSide(color: context.bgElevated, width: 1.2)),
       ),
       child: Column(
         children: [
@@ -1446,7 +1447,7 @@ class _QrScannerSheetState extends State<QrScannerSheet> {
             width: 36,
             height: 4,
             decoration: BoxDecoration(
-              color: Colors.white24,
+              color: context.themeBorder,
               borderRadius: BorderRadius.circular(2),
             ),
           ),
@@ -1454,31 +1455,31 @@ class _QrScannerSheetState extends State<QrScannerSheet> {
             padding: const EdgeInsets.fromLTRB(20, 14, 12, 10),
             child: Row(
               children: [
-                const Text(
+                Text(
                   'Escanear código QR',
                   style: TextStyle(
-                    color: Colors.white,
+                    color: context.textPrimary,
                     fontSize: 16,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
                 const Spacer(),
                 IconButton(
-                  icon: const Icon(Icons.flash_on, color: Colors.white70, size: 20),
+                  icon: Icon(Icons.flash_on, color: context.textSecondary, size: 20),
                   onPressed: () => _controller.toggleTorch(),
                 ),
                 IconButton(
-                  icon: const Icon(Icons.close, color: Colors.white70, size: 20),
+                  icon: Icon(Icons.close, color: context.textSecondary, size: 20),
                   onPressed: () => Navigator.of(context).pop(),
                 ),
               ],
             ),
           ),
-          const Padding(
+          Padding(
             padding: EdgeInsets.symmetric(horizontal: 20),
             child: Text(
               'Apunta con la cámara al código QR que aparece en la pantalla de tu PC.',
-              style: TextStyle(color: Colors.white54, fontSize: 12.5),
+              style: TextStyle(color: context.textMuted, fontSize: 12.5),
             ),
           ),
           const SizedBox(height: 14),
@@ -1501,7 +1502,7 @@ class _QrScannerSheetState extends State<QrScannerSheet> {
                         decoration: BoxDecoration(
                           borderRadius: BorderRadius.circular(16),
                           border: Border.all(
-                            color: const Color(0xFFA855F7),
+                            color: context.accent,
                             width: 2.2,
                           ),
                         ),

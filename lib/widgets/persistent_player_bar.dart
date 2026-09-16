@@ -9,6 +9,7 @@ import '../screens/player_screen.dart';
 import 'cover_art.dart';
 import 'jam_dialog.dart';
 import 'jam_queue_panel.dart';
+import '../utils/app_colors.dart';
 
 /// Panel de control persistente (barra inferior del reproductor).
 /// Refleja el estado real del [PlayerController] y permite controlar la
@@ -48,15 +49,15 @@ class PersistentPlayerBar extends StatelessWidget {
       Track? track, bool playing) {
     return Container(
       height: 90,
-      color: const Color(0xFF181818),
+      color: context.bgPlayer,
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16),
         child: Row(
           children: [
             // ── Left: artwork + track info + favorite ──
-            _artwork(track),
+            _artwork(context, track),
             const SizedBox(width: 12),
-            _trackInfo(track),
+            _trackInfo(context, track),
             const SizedBox(width: 12),
             _favoriteButton(context, track),
             const SizedBox(width: 8),
@@ -76,22 +77,22 @@ class PersistentPlayerBar extends StatelessWidget {
                           Icons.shuffle,
                           size: 20,
                           color: player.shuffleEnabled
-                              ? Colors.greenAccent
-                              : Colors.white70,
+                              ? context.accent
+                              : context.textSecondary,
                         ),
                         onPressed: player.toggleShuffle,
                       ),
                       IconButton(
                         visualDensity: VisualDensity.compact,
-                        icon: const Icon(Icons.skip_previous,
-                            color: Colors.white, size: 26),
+                        icon: Icon(Icons.skip_previous,
+                            color: context.textPrimary, size: 26),
                         onPressed: player.skipPrevious,
                       ),
-                      _playButton(player, playing),
+                      _playButton(context, player, playing),
                       IconButton(
                         visualDensity: VisualDensity.compact,
-                        icon: const Icon(Icons.skip_next,
-                            color: Colors.white, size: 26),
+                        icon: Icon(Icons.skip_next,
+                            color: context.textPrimary, size: 26),
                         onPressed: player.skipNext,
                       ),
                       IconButton(
@@ -102,8 +103,8 @@ class PersistentPlayerBar extends StatelessWidget {
                               : Icons.repeat,
                           size: 20,
                           color: player.repeatMode != LoopMode.off
-                              ? Colors.greenAccent
-                              : Colors.white70,
+                              ? context.accent
+                              : context.textSecondary,
                         ),
                         onPressed: player.toggleRepeat,
                       ),
@@ -140,7 +141,7 @@ class PersistentPlayerBar extends StatelessWidget {
       Track? track, bool playing) {
     return Container(
       height: 84,
-      color: const Color(0xFF181818),
+      color: context.bgPlayer,
       child: Column(
         children: [
           // Thin progress bar at the very top (Spotify mobile style)
@@ -151,9 +152,9 @@ class PersistentPlayerBar extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 12),
               child: Row(
                 children: [
-                  _artwork(track),
+                  _artwork(context, track),
                   const SizedBox(width: 10),
-                  Expanded(child: _trackInfo(track)),
+                  Expanded(child: _trackInfo(context, track)),
                   _favoriteButton(context, track, compact: true),
                   const SizedBox(width: 4),
                   ..._mobileControls(context, player, playing),
@@ -169,13 +170,13 @@ class PersistentPlayerBar extends StatelessWidget {
   List<Widget> _mobileControls(
       BuildContext context, PlayerController player, bool playing) {
     return [
-      _compactControlIcon(
+      _compactControlIcon(context, 
         Icons.skip_previous,
         player.skipPrevious,
         size: 24,
       ),
-      _playButton(player, playing, compact: true),
-      _compactControlIcon(
+      _playButton(context, player, playing, compact: true),
+      _compactControlIcon(context, 
         Icons.skip_next,
         player.skipNext,
         size: 24,
@@ -184,8 +185,8 @@ class PersistentPlayerBar extends StatelessWidget {
         visualDensity: VisualDensity.compact,
         padding: EdgeInsets.zero,
         constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-        icon: const Icon(Icons.queue_music_rounded,
-            color: Colors.white70, size: 20),
+        icon: Icon(Icons.queue_music_rounded,
+            color: context.textSecondary, size: 20),
         onPressed: () => JamQueuePanel.show(context),
       ),
       _openFullButton(context, up: true),
@@ -201,10 +202,10 @@ class PersistentPlayerBar extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
           decoration: BoxDecoration(
-            color: const Color(0xFF10B981).withValues(alpha: 0.15),
+            color: context.accent.withValues(alpha: 0.15),
             borderRadius: BorderRadius.circular(20),
             border: Border.all(
-              color: const Color(0xFF10B981).withValues(alpha: 0.4),
+              color: context.accent.withValues(alpha: 0.4),
             ),
           ),
           child: Row(
@@ -213,19 +214,19 @@ class PersistentPlayerBar extends StatelessWidget {
               Container(
                 width: 7,
                 height: 7,
-                decoration: const BoxDecoration(
+                decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: Color(0xFF10B981),
+                  color: context.accent,
                 ),
               ),
               const SizedBox(width: 6),
-              const Icon(Icons.speaker_group_rounded,
-                  color: Color(0xFF10B981), size: 15),
+              Icon(Icons.speaker_group_rounded,
+                  color: context.accent, size: 15),
               const SizedBox(width: 5),
               Text(
                 'Jam · ${jam.participants.length}',
-                style: const TextStyle(
-                  color: Color(0xFF10B981),
+                style: TextStyle(
+                  color: context.accent,
                   fontSize: 11.5,
                   fontWeight: FontWeight.bold,
                 ),
@@ -239,8 +240,8 @@ class PersistentPlayerBar extends StatelessWidget {
     return IconButton(
       tooltip: 'Iniciar o unirse a Jam',
       visualDensity: VisualDensity.compact,
-      icon: const Icon(Icons.speaker_group_outlined,
-          color: Colors.white70, size: 20),
+      icon: Icon(Icons.speaker_group_outlined,
+          color: context.textSecondary, size: 20),
       onPressed: () => JamDialog.show(context),
     );
   }
@@ -249,8 +250,8 @@ class PersistentPlayerBar extends StatelessWidget {
     return IconButton(
       tooltip: 'Cola de reproducción',
       visualDensity: VisualDensity.compact,
-      icon: const Icon(Icons.queue_music_rounded,
-          color: Colors.white70, size: 21),
+      icon: Icon(Icons.queue_music_rounded,
+          color: context.textSecondary, size: 21),
       onPressed: () => JamQueuePanel.show(context),
     );
   }
@@ -259,7 +260,7 @@ class PersistentPlayerBar extends StatelessWidget {
   // Shared widgets
   // ---------------------------------------------------------------------------
 
-  Widget _artwork(Track? track) {
+  Widget _artwork(BuildContext context, Track? track) {
     return CoverArt(
       url: track?.albumArtUrl,
       width: compact ? 44 : 56,
@@ -267,11 +268,11 @@ class PersistentPlayerBar extends StatelessWidget {
       borderRadius: compact ? 8 : 6,
       fallbackIcon: Icons.music_note,
       fallbackIconSize: 22,
-      fallbackColor: Colors.deepPurple,
+      fallbackColor: context.accent,
     );
   }
 
-  Widget _trackInfo(Track? track) {
+  Widget _trackInfo(BuildContext context, Track? track) {
     return Column(
       mainAxisAlignment: MainAxisAlignment.center,
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -280,8 +281,8 @@ class PersistentPlayerBar extends StatelessWidget {
           track?.title ?? 'Nada en reproducción',
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
-          style: const TextStyle(
-            color: Colors.white,
+          style: TextStyle(
+            color: context.playerTitle,
             fontSize: 13,
             fontWeight: FontWeight.w600,
           ),
@@ -290,7 +291,7 @@ class PersistentPlayerBar extends StatelessWidget {
           track?.artist ?? 'Selecciona algo para escuchar',
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
-          style: const TextStyle(color: Colors.white54, fontSize: 12),
+          style: TextStyle(color: context.playerArtist, fontSize: 12),
         ),
       ],
     );
@@ -310,25 +311,28 @@ class PersistentPlayerBar extends StatelessWidget {
           compact ? const BoxConstraints(minWidth: 36, minHeight: 36) : null,
       icon: Icon(
         starred ? Icons.favorite : Icons.favorite_border,
-        color: starred ? Colors.greenAccent : Colors.white70,
+        color: starred ? context.accent : context.textSecondary,
         size: compact ? 22 : 20,
       ),
       onPressed: () => nav.toggleStar(track),
     );
   }
 
-  Widget _compactControlIcon(IconData icon, VoidCallback onPressed,
-      {Color color = Colors.white, double size = 24}) {
+  Widget _compactControlIcon(BuildContext context, IconData icon,
+      VoidCallback onPressed,
+      {Color? color,
+      double size = 24}) {
     return IconButton(
       visualDensity: VisualDensity.compact,
       padding: EdgeInsets.zero,
       constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-      icon: Icon(icon, color: color, size: size),
+      icon: Icon(icon, color: color ?? context.textPrimary, size: size),
       onPressed: onPressed,
     );
   }
 
-  Widget _playButton(PlayerController player, bool playing,
+  Widget _playButton(
+      BuildContext context, PlayerController player, bool playing,
       {bool compact = false}) {
     return IconButton(
       visualDensity: compact ? VisualDensity.compact : null,
@@ -338,7 +342,7 @@ class PersistentPlayerBar extends StatelessWidget {
       iconSize: compact ? 38 : 36,
       icon: Icon(
         playing ? Icons.pause_circle_filled : Icons.play_circle_filled,
-        color: Colors.white,
+        color: context.textPrimary,
       ),
       onPressed: player.togglePlay,
     );
@@ -352,7 +356,7 @@ class PersistentPlayerBar extends StatelessWidget {
           up ? const BoxConstraints(minWidth: 36, minHeight: 36) : null,
       icon: Icon(
         up ? Icons.keyboard_arrow_up : Icons.fullscreen,
-        color: Colors.white70,
+        color: context.textSecondary,
         size: up ? 28 : 18,
       ),
       onPressed: () {
@@ -424,7 +428,7 @@ class _DesktopProgressBarState extends State<_DesktopProgressBar> {
                       width: 40,
                       child: Text(
                         _format(Duration(milliseconds: currentMs.round())),
-                        style: const TextStyle(color: Colors.white70, fontSize: 11),
+                        style: TextStyle(color: context.textSecondary, fontSize: 11),
                         textAlign: TextAlign.right,
                       ),
                     ),
@@ -435,13 +439,13 @@ class _DesktopProgressBarState extends State<_DesktopProgressBar> {
                         child: SliderTheme(
                           data: SliderThemeData(
                             trackHeight: _hovering ? 4 : 3,
-                            activeTrackColor: _hovering ? Colors.greenAccent : Colors.white,
-                            inactiveTrackColor: Colors.white24,
-                            thumbColor: Colors.white,
+                            activeTrackColor: context.waveformPlayed,
+                            inactiveTrackColor: context.waveformUnplayed,
+                            thumbColor: context.sliderThumb,
                             thumbShape: RoundSliderThumbShape(
                               enabledThumbRadius: _hovering ? 6 : 0,
                             ),
-                            overlayColor: Colors.white10,
+                            overlayColor: context.accentDim,
                             overlayShape:
                                 const RoundSliderOverlayShape(overlayRadius: 14),
                           ),
@@ -464,7 +468,7 @@ class _DesktopProgressBarState extends State<_DesktopProgressBar> {
                       width: 40,
                       child: Text(
                         _format(duration),
-                        style: const TextStyle(color: Colors.white70, fontSize: 11),
+                        style: TextStyle(color: context.textSecondary, fontSize: 11),
                       ),
                     ),
                   ],
@@ -513,11 +517,11 @@ class _MobileProgressBarState extends State<_MobileProgressBar> {
         return SizedBox(
           height: 6,
           child: SliderTheme(
-            data: const SliderThemeData(
+            data: SliderThemeData(
               trackHeight: 3,
-              activeTrackColor: Colors.white,
-              inactiveTrackColor: Colors.white24,
-              thumbColor: Colors.white,
+              activeTrackColor: context.waveformPlayed,
+              inactiveTrackColor: context.waveformUnplayed,
+              thumbColor: context.waveformPlayed,
               thumbShape: RoundSliderThumbShape(enabledThumbRadius: 0),
               overlayColor: Colors.transparent,
               overlayShape: RoundSliderOverlayShape(overlayRadius: 0),
@@ -573,19 +577,19 @@ class _VolumeBarState extends State<_VolumeBar> {
                   : volume < 0.5
                       ? Icons.volume_down
                       : Icons.volume_up,
-              color: Colors.white70,
+              color: context.textSecondary,
               size: 20,
             ),
             SizedBox(
               width: 110,
               child: SliderTheme(
-                data: const SliderThemeData(
+                data: SliderThemeData(
                   trackHeight: 3,
-                  activeTrackColor: Colors.white,
-                  inactiveTrackColor: Colors.white24,
-                  thumbColor: Colors.white,
+                  activeTrackColor: context.volumeAccent,
+                  inactiveTrackColor: context.themeBorder,
+                  thumbColor: context.sliderThumb,
                   thumbShape: RoundSliderThumbShape(enabledThumbRadius: 5),
-                  overlayColor: Colors.white10,
+                  overlayColor: context.accentDim,
                   overlayShape: RoundSliderOverlayShape(overlayRadius: 12),
                 ),
                 child: Slider(
@@ -610,7 +614,7 @@ class _VolumeBarState extends State<_VolumeBar> {
               child: Text(
                 '${(volume * 100).round()}%',
                 textAlign: TextAlign.center,
-                style: const TextStyle(color: Colors.white70, fontSize: 11),
+                style: TextStyle(color: context.textSecondary, fontSize: 11),
               ),
             ),
           ],

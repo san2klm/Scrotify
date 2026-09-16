@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../services/navidrome_service.dart';
 import '../services/player_controller.dart';
 import '../widgets/persistent_player_bar.dart';
+import '../utils/app_colors.dart';
 
 /// Pantalla que muestra las canciones de un álbum.
 /// Se abre al tocar un álbum en el inicio o en un artista.
@@ -31,10 +32,10 @@ class _AlbumDetailScreenState extends State<AlbumDetailScreen> {
     // Misma lógica que HomeShell: < 700px es móvil (barra compacta).
     final compact = MediaQuery.sizeOf(context).width < 700;
     return Scaffold(
-      backgroundColor: const Color(0xFF121212),
+      backgroundColor: context.bgApp,
       appBar: AppBar(
-        backgroundColor: const Color(0xFF353588),
-        foregroundColor: Colors.white,
+        backgroundColor: context.accent2,
+        foregroundColor: context.onAccent2,
         title: const Text('Álbum'),
       ),
       bottomNavigationBar: SafeArea(
@@ -45,14 +46,14 @@ class _AlbumDetailScreenState extends State<AlbumDetailScreen> {
         future: _future,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(
-                child: CircularProgressIndicator(color: Colors.white));
+            return Center(
+                child: CircularProgressIndicator(color: context.textPrimary));
           }
           final tracks = snapshot.data ?? <Track>[];
           if (tracks.isEmpty) {
-            return const Center(
+            return Center(
               child: Text('Álbum sin canciones',
-                  style: TextStyle(color: Colors.white54)),
+                  style: TextStyle(color: context.textMuted)),
             );
           }
           return Column(
@@ -65,7 +66,7 @@ class _AlbumDetailScreenState extends State<AlbumDetailScreen> {
                       width: 120,
                       height: 120,
                       decoration: BoxDecoration(
-                        color: Colors.grey.shade800,
+                        color: context.bgElevated,
                         borderRadius: BorderRadius.circular(8),
                         image: widget.album.coverArtUrl != null
                             ? DecorationImage(
@@ -75,8 +76,8 @@ class _AlbumDetailScreenState extends State<AlbumDetailScreen> {
                             : null,
                       ),
                       child: widget.album.coverArtUrl == null
-                          ? const Icon(Icons.album,
-                              color: Colors.white54, size: 44)
+                          ? Icon(Icons.album,
+                              color: context.textMuted, size: 44)
                           : null,
                     ),
                     const SizedBox(width: 16),
@@ -88,8 +89,8 @@ class _AlbumDetailScreenState extends State<AlbumDetailScreen> {
                             widget.album.title,
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                                color: Colors.white,
+                            style: TextStyle(
+                                color: context.textPrimary,
                                 fontSize: 22,
                                 fontWeight: FontWeight.bold),
                           ),
@@ -97,19 +98,19 @@ class _AlbumDetailScreenState extends State<AlbumDetailScreen> {
                           Text(widget.album.artist,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                  color: Colors.white54, fontSize: 14)),
+                              style: TextStyle(
+                                  color: context.textMuted, fontSize: 14)),
                           const SizedBox(height: 4),
                           Text('${tracks.length} canciones',
-                              style: const TextStyle(
-                                  color: Colors.white54, fontSize: 13)),
+                              style: TextStyle(
+                                  color: context.textMuted, fontSize: 13)),
                         ],
                       ),
                     ),
                   ],
                 ),
               ),
-              const Divider(color: Colors.white12),
+              Divider(color: context.themeBorder),
               Expanded(
                 child: ListView.builder(
                   itemCount: tracks.length,
@@ -119,24 +120,24 @@ class _AlbumDetailScreenState extends State<AlbumDetailScreen> {
                     return ListTile(
                       leading: Text(
                         '${index + 1}',
-                        style: const TextStyle(
-                            color: Colors.white38, fontSize: 14),
+                        style: TextStyle(
+                            color: context.textMuted, fontSize: 14),
                       ),
                       title: Text(track.title,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                              color: Colors.white, fontSize: 14)),
+                          style: TextStyle(
+                              color: context.textPrimary, fontSize: 14)),
                       subtitle: Text(track.artist,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                              color: Colors.white54, fontSize: 12)),
+                          style: TextStyle(
+                              color: context.textMuted, fontSize: 12)),
                       trailing: IconButton(
                         icon: Icon(
                           starred ? Icons.favorite : Icons.favorite_border,
                           color:
-                              starred ? Colors.greenAccent : Colors.white54,
+                              starred ? context.accent : context.textMuted,
                           size: 20,
                         ),
                         onPressed: () async {

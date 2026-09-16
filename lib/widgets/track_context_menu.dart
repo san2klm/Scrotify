@@ -5,6 +5,7 @@ import '../services/jam_controller.dart';
 import '../services/navidrome_service.dart';
 import '../services/player_controller.dart';
 import 'cover_art.dart';
+import '../utils/app_colors.dart';
 
 /// Menú contextual unificado para pistas/canciones en toda la aplicación.
 class TrackContextMenu extends StatelessWidget {
@@ -15,10 +16,10 @@ class TrackContextMenu extends StatelessWidget {
   static void show(BuildContext context, Track track) {
     showModalBottomSheet<void>(
       context: context,
-      backgroundColor: const Color(0xFF0C0C10),
-      shape: const RoundedRectangleBorder(
+      backgroundColor: context.bgApp,
+      shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-        side: BorderSide(color: Color(0xFF1E1E28), width: 1.2),
+        side: BorderSide(color: context.bgElevated, width: 1.2),
       ),
       builder: (ctx) => TrackContextMenu(track: track),
     );
@@ -44,7 +45,7 @@ class TrackContextMenu extends StatelessWidget {
                   width: 36,
                   height: 4,
                   decoration: BoxDecoration(
-                    color: Colors.white24,
+                    color: context.themeBorder,
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
@@ -69,8 +70,8 @@ class TrackContextMenu extends StatelessWidget {
                           track.title,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: Colors.white,
+                          style: TextStyle(
+                            color: context.textPrimary,
                             fontSize: 15,
                             fontWeight: FontWeight.bold,
                           ),
@@ -80,8 +81,8 @@ class TrackContextMenu extends StatelessWidget {
                           '${track.artist} · ${track.album}',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                              color: Colors.white54, fontSize: 12),
+                          style: TextStyle(
+                              color: context.textMuted, fontSize: 12),
                         ),
                       ],
                     ),
@@ -89,14 +90,14 @@ class TrackContextMenu extends StatelessWidget {
                   IconButton(
                     icon: Icon(
                       isStarred ? Icons.favorite : Icons.favorite_border,
-                      color: isStarred ? const Color(0xFF10B981) : Colors.white60,
+                      color: isStarred ? context.accent : context.textSecondary,
                     ),
                     onPressed: () => nav.toggleStar(track),
                   ),
                 ],
               ),
               const SizedBox(height: 16),
-              const Divider(color: Color(0xFF1E1E28), height: 1),
+              Divider(color: context.bgElevated, height: 1),
               const SizedBox(height: 8),
 
               // Acciones Jam (si hay Jam activo)
@@ -105,23 +106,23 @@ class TrackContextMenu extends StatelessWidget {
                   leading: Container(
                     padding: const EdgeInsets.all(6),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF10B981).withValues(alpha: 0.15),
+                      color: context.accent.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(8),
                     ),
-                    child: const Icon(Icons.speaker_group_rounded,
-                        color: Color(0xFF10B981), size: 20),
+                    child: Icon(Icons.speaker_group_rounded,
+                        color: context.accent, size: 20),
                   ),
-                  title: const Text(
+                  title: Text(
                     'Añadir a la cola Jam',
                     style: TextStyle(
-                      color: Color(0xFF10B981),
+                      color: context.accent,
                       fontWeight: FontWeight.bold,
                       fontSize: 14,
                     ),
                   ),
                   subtitle: Text(
                     'Compartir con los ${jam.participants.length} oyentes de la sesión',
-                    style: const TextStyle(color: Colors.white38, fontSize: 11),
+                    style: TextStyle(color: context.textMuted, fontSize: 11),
                   ),
                   onTap: () {
                     Navigator.of(context).pop();
@@ -130,17 +131,17 @@ class TrackContextMenu extends StatelessWidget {
                       SnackBar(
                         content: Text('"${track.title}" añadida a la cola Jam'),
                         duration: const Duration(seconds: 2),
-                        backgroundColor: const Color(0xFF1A122E),
+                        backgroundColor: context.bgElevated,
                       ),
                     );
                   },
                 ),
                 ListTile(
-                  leading: const Icon(Icons.playlist_play_rounded,
-                      color: Colors.white70),
-                  title: const Text(
+                  leading: Icon(Icons.playlist_play_rounded,
+                      color: context.textSecondary),
+                  title: Text(
                     'Reproducir siguiente en Jam',
-                    style: TextStyle(color: Colors.white, fontSize: 14),
+                    style: TextStyle(color: context.textPrimary, fontSize: 14),
                   ),
                   onTap: () {
                     Navigator.of(context).pop();
@@ -150,19 +151,19 @@ class TrackContextMenu extends StatelessWidget {
                         content:
                             Text('"${track.title}" sonará a continuación en el Jam'),
                         duration: const Duration(seconds: 2),
-                        backgroundColor: const Color(0xFF1A122E),
+                        backgroundColor: context.bgElevated,
                       ),
                     );
                   },
                 ),
               ] else ...[
                 ListTile(
-                  leading: const Icon(Icons.play_arrow_rounded,
-                      color: Color(0xFFA855F7), size: 24),
-                  title: const Text(
+                  leading: Icon(Icons.play_arrow_rounded,
+                      color: context.accent, size: 24),
+                  title: Text(
                     'Reproducir ahora',
                     style: TextStyle(
-                        color: Colors.white,
+                        color: context.textPrimary,
                         fontWeight: FontWeight.bold,
                         fontSize: 14),
                   ),
@@ -172,11 +173,11 @@ class TrackContextMenu extends StatelessWidget {
                   },
                 ),
                 ListTile(
-                  leading: const Icon(Icons.queue_music_rounded,
-                      color: Colors.white70),
-                  title: const Text(
+                  leading: Icon(Icons.queue_music_rounded,
+                      color: context.textSecondary),
+                  title: Text(
                     'Añadir a la cola',
-                    style: TextStyle(color: Colors.white, fontSize: 14),
+                    style: TextStyle(color: context.textPrimary, fontSize: 14),
                   ),
                   onTap: () {
                     Navigator.of(context).pop();
@@ -185,17 +186,17 @@ class TrackContextMenu extends StatelessWidget {
                       SnackBar(
                         content: Text('"${track.title}" añadida a la cola'),
                         duration: const Duration(seconds: 2),
-                        backgroundColor: const Color(0xFF1A122E),
+                        backgroundColor: context.bgElevated,
                       ),
                     );
                   },
                 ),
                 ListTile(
-                  leading: const Icon(Icons.playlist_play_rounded,
-                      color: Colors.white70),
-                  title: const Text(
+                  leading: Icon(Icons.playlist_play_rounded,
+                      color: context.textSecondary),
+                  title: Text(
                     'Reproducir siguiente',
-                    style: TextStyle(color: Colors.white, fontSize: 14),
+                    style: TextStyle(color: context.textPrimary, fontSize: 14),
                   ),
                   onTap: () {
                     Navigator.of(context).pop();
@@ -204,7 +205,7 @@ class TrackContextMenu extends StatelessWidget {
                       SnackBar(
                         content: Text('"${track.title}" sonará a continuación'),
                         duration: const Duration(seconds: 2),
-                        backgroundColor: const Color(0xFF1A122E),
+                        backgroundColor: context.bgElevated,
                       ),
                     );
                   },
@@ -213,11 +214,11 @@ class TrackContextMenu extends StatelessWidget {
 
               // Añadir a Playlist
               ListTile(
-                leading: const Icon(Icons.playlist_add_rounded,
-                    color: Colors.white70),
-                title: const Text(
+                leading: Icon(Icons.playlist_add_rounded,
+                    color: context.textSecondary),
+                title: Text(
                   'Añadir a una playlist',
-                  style: TextStyle(color: Colors.white, fontSize: 14),
+                  style: TextStyle(color: context.textPrimary, fontSize: 14),
                 ),
                 onTap: () {
                   Navigator.of(context).pop();
@@ -235,10 +236,10 @@ class TrackContextMenu extends StatelessWidget {
       BuildContext context, NavidromeService nav, Track track) {
     showModalBottomSheet<void>(
       context: context,
-      backgroundColor: const Color(0xFF0C0C10),
-      shape: const RoundedRectangleBorder(
+      backgroundColor: context.bgApp,
+      shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-        side: BorderSide(color: Color(0xFF1E1E28), width: 1.2),
+        side: BorderSide(color: context.bgElevated, width: 1.2),
       ),
       builder: (ctx) {
         return FutureBuilder<List<Playlist>>(
@@ -255,26 +256,26 @@ class TrackContextMenu extends StatelessWidget {
                       width: 36,
                       height: 4,
                       decoration: BoxDecoration(
-                        color: Colors.white24,
+                        color: context.themeBorder,
                         borderRadius: BorderRadius.circular(2),
                       ),
                     ),
                     const SizedBox(height: 12),
-                    const Text(
+                    Text(
                       'Añadir a Playlist',
                       style: TextStyle(
-                        color: Colors.white,
+                        color: context.textPrimary,
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
                     const SizedBox(height: 12),
                     if (playlists.isEmpty)
-                      const Padding(
+                      Padding(
                         padding: EdgeInsets.all(20),
                         child: Text(
                           'No tienes playlists creadas',
-                          style: TextStyle(color: Colors.white54),
+                          style: TextStyle(color: context.textMuted),
                         ),
                       )
                     else
@@ -285,13 +286,13 @@ class TrackContextMenu extends StatelessWidget {
                           itemBuilder: (ctx, i) {
                             final p = playlists[i];
                             return ListTile(
-                              leading: const Icon(Icons.playlist_play,
-                                  color: Color(0xFFA855F7)),
+                              leading: Icon(Icons.playlist_play,
+                                  color: context.accent),
                               title: Text(p.name,
-                                  style: const TextStyle(color: Colors.white)),
+                                  style: TextStyle(color: context.textPrimary)),
                               subtitle: Text('${p.songCount} canciones',
-                                  style: const TextStyle(
-                                      color: Colors.white54, fontSize: 11)),
+                                  style: TextStyle(
+                                      color: context.textMuted, fontSize: 11)),
                               onTap: () async {
                                 Navigator.of(context).pop();
                                 await nav.updatePlaylist(
@@ -303,7 +304,7 @@ class TrackContextMenu extends StatelessWidget {
                                     SnackBar(
                                       content: Text(
                                           'Añadida a "${p.name}"'),
-                                      backgroundColor: const Color(0xFF1A122E),
+                                      backgroundColor: context.bgElevated,
                                     ),
                                   );
                                 }

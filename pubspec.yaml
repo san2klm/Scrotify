@@ -26,6 +26,7 @@ dependencies:
   connectivity_plus: ^7.3.1
   file_selector: ^1.1.0
   flutter_secure_storage: ^11.1.1
+  archive: ^4.3.0
   qr_flutter: ^4.1.0
   mobile_scanner: ^5.0.0
   cryptography: ^2.9.0

@@ -10,7 +10,9 @@ import '../services/playlist_importer.dart';
 import '../services/secure_storage.dart';
 import '../services/settings_controller.dart';
 import '../widgets/pairing_panel.dart';
+import '../widgets/theme_grid.dart';
 import 'login_screen.dart';
+import '../utils/app_colors.dart';
 
 /// Pantalla de ajustes. Centraliza las preferencias del usuario: calidad de
 /// audio según la red, portadas, volumen y cuenta.
@@ -29,10 +31,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final nav = context.watch<NavidromeService>();
 
     return Scaffold(
-      backgroundColor: const Color(0xFF121212),
+      backgroundColor: context.bgApp,
       appBar: AppBar(
-        backgroundColor: const Color(0xFF0A0A0A),
-        foregroundColor: Colors.white,
+        backgroundColor: context.bgApp,
+        foregroundColor: context.textPrimary,
         elevation: 0,
         title: const Text('Ajustes'),
       ),
@@ -94,17 +96,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 children: [
                   ListTile(
                     contentPadding: EdgeInsets.zero,
-                    title: const Text('Volumen inicial',
-                        style: TextStyle(color: Colors.white, fontSize: 14)),
+                    title: Text('Volumen inicial',
+                        style: TextStyle(color: context.textPrimary, fontSize: 14)),
                     subtitle: Slider(
                       value: settings.initialVolume,
-                      activeColor: Colors.greenAccent,
-                      inactiveColor: Colors.white24,
+                      activeColor: context.accent,
+                      inactiveColor: context.themeBorder,
                       onChanged: settings.setInitialVolume,
                     ),
                     trailing: Text(
                       '${(settings.initialVolume * 100).round()}%',
-                      style: const TextStyle(color: Colors.white70, fontSize: 13),
+                      style: TextStyle(color: context.textSecondary, fontSize: 13),
                     ),
                   ),
                   _switchTile(
@@ -128,22 +130,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     const SizedBox(height: 4),
                     ListTile(
                       contentPadding: EdgeInsets.zero,
-                      title: const Text('Duración del fundido',
-                          style: TextStyle(color: Colors.white, fontSize: 14)),
+                      title: Text('Duración del fundido',
+                          style: TextStyle(color: context.textPrimary, fontSize: 14)),
                       subtitle: Slider(
                         value: settings.crossfade.inSeconds
                             .clamp(1, 10)
                             .toDouble(),
                         min: 1,
                         max: 10,
-                        activeColor: Colors.greenAccent,
-                        inactiveColor: Colors.white24,
+                        activeColor: context.accent,
+                        inactiveColor: context.themeBorder,
                         onChanged: (v) =>
                             settings.setCrossfade(Duration(seconds: v.round())),
                       ),
                       trailing: Text(
                         '${settings.crossfade.inSeconds} s',
-                        style: const TextStyle(color: Colors.white70, fontSize: 13),
+                        style: TextStyle(color: context.textSecondary, fontSize: 13),
                       ),
                     ),
                   ],
@@ -171,6 +173,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
                 ],
               ),
+              const SizedBox(height: 12),
+              // Temas (.zip estilo Psysonic, carpeta configurable).
+              const ThemesSection(),
 
               // ---------------------------------------------------------------
               // Playlists (importar)
@@ -180,14 +185,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 children: [
                   ListTile(
                     contentPadding: EdgeInsets.zero,
-                    leading: const Icon(Icons.upload_file, color: Colors.white70),
-                    title: const Text('Importar playlist',
-                        style: TextStyle(color: Colors.white, fontSize: 14)),
-                    subtitle: const Text(
+                    leading: Icon(Icons.upload_file, color: context.textSecondary),
+                    title: Text('Importar playlist',
+                        style: TextStyle(color: context.textPrimary, fontSize: 14)),
+                    subtitle: Text(
                       'Desde CSV, M3U/M3U8, PLS o TXT',
-                      style: TextStyle(color: Colors.white54, fontSize: 12),
+                      style: TextStyle(color: context.textMuted, fontSize: 12),
                     ),
-                    trailing: const Icon(Icons.chevron_right, color: Colors.white38),
+                    trailing: Icon(Icons.chevron_right, color: context.textMuted),
                     onTap: _importing ? null : _pickAndImport,
                   ),
                 ],
@@ -207,17 +212,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 children: [
                   ListTile(
                     contentPadding: EdgeInsets.zero,
-                    leading: const Icon(Icons.dns_outlined, color: Colors.white70),
+                    leading: Icon(Icons.dns_outlined, color: context.textSecondary),
                     title: Text(
                       nav.serverUrl ?? 'Sin conexión',
-                      style: const TextStyle(color: Colors.white, fontSize: 14),
+                      style: TextStyle(color: context.textPrimary, fontSize: 14),
                     ),
                     subtitle: Text(
                       nav.connected
                           ? 'Conectado como ${nav.username ?? "usuario"}'
                           : 'Desconectado',
                       style: TextStyle(
-                        color: nav.connected ? Colors.greenAccent : Colors.white54,
+                        color: nav.connected ? context.accent : context.textMuted,
                         fontSize: 12,
                       ),
                     ),
@@ -227,8 +232,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     width: double.infinity,
                     child: OutlinedButton.icon(
                       style: OutlinedButton.styleFrom(
-                        foregroundColor: Colors.redAccent,
-                        side: const BorderSide(color: Colors.redAccent),
+                        foregroundColor: context.danger,
+                        side: BorderSide(color: context.danger),
                         padding: const EdgeInsets.symmetric(vertical: 12),
                       ),
                       icon: const Icon(Icons.logout, size: 18),
@@ -305,27 +310,27 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF1F1F1F),
-        title: const Text('Importar playlist',
-            style: TextStyle(color: Colors.white)),
+        backgroundColor: context.bgCard,
+        title: Text('Importar playlist',
+            style: TextStyle(color: context.textPrimary)),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(
               '${parsed.tracks.length} canciones detectadas',
-              style: const TextStyle(color: Colors.white70, fontSize: 14),
+              style: TextStyle(color: context.textSecondary, fontSize: 14),
             ),
             const SizedBox(height: 12),
             TextField(
               controller: controller,
-              style: const TextStyle(color: Colors.white),
-              decoration: const InputDecoration(
+              style: TextStyle(color: context.textPrimary),
+              decoration: InputDecoration(
                 labelText: 'Nombre de la playlist',
-                labelStyle: TextStyle(color: Colors.white70),
+                labelStyle: TextStyle(color: context.textSecondary),
                 enabledBorder: UnderlineInputBorder(
-                    borderSide: BorderSide(color: Colors.white38)),
+                    borderSide: BorderSide(color: context.textMuted)),
                 focusedBorder: UnderlineInputBorder(
-                    borderSide: BorderSide(color: Colors.greenAccent)),
+                    borderSide: BorderSide(color: context.accent)),
               ),
             ),
           ],
@@ -333,11 +338,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Cancelar', style: TextStyle(color: Colors.white70)),
+            child: Text('Cancelar', style: TextStyle(color: context.textSecondary)),
           ),
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('Importar', style: TextStyle(color: Colors.greenAccent)),
+            child: Text('Importar', style: TextStyle(color: context.accent)),
           ),
         ],
       ),
@@ -379,14 +384,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
     showDialog<void>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF1F1F1F),
-        title: const Text('Error al importar',
-            style: TextStyle(color: Colors.white)),
-        content: Text(msg, style: const TextStyle(color: Colors.white70)),
+        backgroundColor: context.bgCard,
+        title: Text('Error al importar',
+            style: TextStyle(color: context.textPrimary)),
+        content: Text(msg, style: TextStyle(color: context.textSecondary)),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('OK', style: TextStyle(color: Colors.redAccent)),
+            child: Text('OK', style: TextStyle(color: context.danger)),
           ),
         ],
       ),
@@ -400,22 +405,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
     showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF1F1F1F),
-        title: const Text('¿Cerrar sesión?',
-            style: TextStyle(color: Colors.white)),
-        content: const Text(
+        backgroundColor: context.bgCard,
+        title: Text('¿Cerrar sesión?',
+            style: TextStyle(color: context.textPrimary)),
+        content: Text(
           'Se eliminarán las credenciales guardadas en este dispositivo y volverás a la pantalla de inicio de sesión.',
-          style: TextStyle(color: Colors.white70),
+          style: TextStyle(color: context.textSecondary),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Cancelar', style: TextStyle(color: Colors.white70)),
+            child: Text('Cancelar', style: TextStyle(color: context.textSecondary)),
           ),
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('Cerrar sesión',
-                style: TextStyle(color: Colors.redAccent)),
+            child: Text('Cerrar sesión',
+                style: TextStyle(color: context.danger)),
           ),
         ],
       ),
@@ -440,8 +445,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
       padding: const EdgeInsets.fromLTRB(4, 20, 4, 8),
       child: Text(
         title,
-        style: const TextStyle(
-          color: Colors.white,
+        style: TextStyle(
+          color: context.textPrimary,
           fontSize: 16,
           fontWeight: FontWeight.bold,
         ),
@@ -453,7 +458,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFF1F1F1F),
+        color: context.bgCard,
         borderRadius: BorderRadius.circular(12),
       ),
       child: Column(
@@ -472,11 +477,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return SwitchListTile(
       contentPadding: EdgeInsets.zero,
       title: Text(title,
-          style: const TextStyle(color: Colors.white, fontSize: 14)),
+          style: TextStyle(color: context.textPrimary, fontSize: 14)),
       subtitle: Text(subtitle,
-          style: const TextStyle(color: Colors.white54, fontSize: 12)),
-      activeTrackColor: Colors.greenAccent,
-      activeThumbColor: Colors.white,
+          style: TextStyle(color: context.textMuted, fontSize: 12)),
+      activeTrackColor: context.accent,
+      activeThumbColor: context.textPrimary,
       value: value,
       onChanged: onChanged,
     );
@@ -486,7 +491,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
-        color: const Color(0xFF242424),
+        color: context.bgElevated,
         borderRadius: BorderRadius.circular(8),
       ),
       child: Row(
@@ -496,13 +501,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
             height: 8,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: mobile ? Colors.orangeAccent : Colors.greenAccent,
+              color: mobile ? context.warning : context.accent,
             ),
           ),
           const SizedBox(width: 8),
           Text(
             'Red actual: $label',
-            style: const TextStyle(color: Colors.white70, fontSize: 12),
+            style: TextStyle(color: context.textSecondary, fontSize: 12),
           ),
         ],
       ),
@@ -518,11 +523,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(title,
-            style: const TextStyle(color: Colors.white70, fontSize: 12)),
+            style: TextStyle(color: context.textSecondary, fontSize: 12)),
         const SizedBox(height: 6),
         Container(
           decoration: BoxDecoration(
-            color: const Color(0xFF181818),
+            color: context.bgElevated,
             borderRadius: BorderRadius.circular(8),
           ),
           child: Column(
@@ -540,8 +545,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               ? Icons.radio_button_checked
                               : Icons.radio_button_off,
                           color: q == current
-                              ? Colors.greenAccent
-                              : Colors.white24,
+                              ? context.accent
+                              : context.themeBorder,
                           size: 20,
                         ),
                         const SizedBox(width: 12),
@@ -550,11 +555,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(q.label,
-                                  style: const TextStyle(
-                                      color: Colors.white, fontSize: 14)),
+                                  style: TextStyle(
+                                      color: context.textPrimary, fontSize: 14)),
                               Text(q.subtitle,
-                                  style: const TextStyle(
-                                      color: Colors.white54, fontSize: 12)),
+                                  style: TextStyle(
+                                      color: context.textMuted, fontSize: 12)),
                             ],
                           ),
                         ),
@@ -564,7 +569,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             child: Text(
                               'FLAC',
                               style: TextStyle(
-                                color: Colors.greenAccent.withValues(alpha: 0.8),
+                                color: context.accent.withValues(alpha: 0.8),
                                 fontSize: 11,
                                 fontWeight: FontWeight.w600,
                               ),
@@ -591,11 +596,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(title,
-            style: const TextStyle(color: Colors.white70, fontSize: 12)),
+            style: TextStyle(color: context.textSecondary, fontSize: 12)),
         const SizedBox(height: 6),
         Container(
           decoration: BoxDecoration(
-            color: const Color(0xFF181818),
+            color: context.bgElevated,
             borderRadius: BorderRadius.circular(8),
           ),
           child: Column(
@@ -613,8 +618,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               ? Icons.radio_button_checked
                               : Icons.radio_button_off,
                           color: opt.value == value
-                              ? Colors.greenAccent
-                              : Colors.white24,
+                              ? context.accent
+                              : context.themeBorder,
                           size: 20,
                         ),
                         const SizedBox(width: 12),
@@ -623,11 +628,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(opt.label,
-                                  style: const TextStyle(
-                                      color: Colors.white, fontSize: 14)),
+                                  style: TextStyle(
+                                      color: context.textPrimary, fontSize: 14)),
                               Text(opt.subtitle,
-                                  style: const TextStyle(
-                                      color: Colors.white54, fontSize: 12)),
+                                  style: TextStyle(
+                                      color: context.textMuted, fontSize: 12)),
                             ],
                           ),
                         ),
@@ -651,16 +656,16 @@ class _ImportingDialog extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      backgroundColor: const Color(0xFF1F1F1F),
-      title: const Text('Importando…', style: TextStyle(color: Colors.white)),
+      backgroundColor: context.bgCard,
+      title: Text('Importando…', style: TextStyle(color: context.textPrimary)),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const CircularProgressIndicator(color: Colors.greenAccent),
+          CircularProgressIndicator(color: context.accent),
           const SizedBox(height: 16),
-          const Text(
+          Text(
             'Buscando canciones en tu biblioteca…',
-            style: TextStyle(color: Colors.white70),
+            style: TextStyle(color: context.textSecondary),
           ),
         ],
       ),
@@ -713,9 +718,9 @@ class _ImportResultDialogState extends State<_ImportResultDialog> {
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('CSV guardado', style: TextStyle(color: Colors.white)),
-          backgroundColor: Color(0xFF1F1F1F),
+        SnackBar(
+          content: Text('CSV guardado', style: TextStyle(color: context.textPrimary)),
+          backgroundColor: context.bgCard,
           behavior: SnackBarBehavior.floating,
         ),
       );
@@ -725,9 +730,9 @@ class _ImportResultDialogState extends State<_ImportResultDialog> {
         SnackBar(
           content: Text(
             'No se pudo guardar el CSV: $e',
-            style: const TextStyle(color: Colors.white),
+            style: TextStyle(color: context.textPrimary),
           ),
-          backgroundColor: const Color(0xFF1F1F1F),
+          backgroundColor: context.bgCard,
           behavior: SnackBarBehavior.floating,
         ),
       );
@@ -742,10 +747,10 @@ class _ImportResultDialogState extends State<_ImportResultDialog> {
     final total = result.matched + result.unmatched.length;
 
     return AlertDialog(
-      backgroundColor: const Color(0xFF1F1F1F),
+      backgroundColor: context.bgCard,
       title: Text(
         'Playlist "${result.name}" creada',
-        style: const TextStyle(color: Colors.white),
+        style: TextStyle(color: context.textPrimary),
       ),
       content: SizedBox(
         width: double.maxFinite,
@@ -755,18 +760,18 @@ class _ImportResultDialogState extends State<_ImportResultDialog> {
           children: [
             Text(
               '$total canciones en total:',
-              style: const TextStyle(color: Colors.white70, fontSize: 13),
+              style: TextStyle(color: context.textSecondary, fontSize: 13),
             ),
             const SizedBox(height: 6),
             Row(
               children: [
-                const Icon(Icons.check_circle,
-                    color: Colors.greenAccent, size: 18),
+                Icon(Icons.check_circle,
+                    color: context.accent, size: 18),
                 const SizedBox(width: 8),
                 Text(
                   '${result.matched} importadas',
-                  style: const TextStyle(
-                      color: Colors.greenAccent, fontSize: 14),
+                  style: TextStyle(
+                      color: context.accent, fontSize: 14),
                 ),
               ],
             ),
@@ -778,8 +783,8 @@ class _ImportResultDialogState extends State<_ImportResultDialog> {
                       ? Icons.error_outline
                       : Icons.check_circle,
                   color: result.hasUnmatched
-                      ? Colors.orangeAccent
-                      : Colors.greenAccent,
+                      ? context.warning
+                      : context.accent,
                   size: 18,
                 ),
                 const SizedBox(width: 8),
@@ -789,8 +794,8 @@ class _ImportResultDialogState extends State<_ImportResultDialog> {
                       : 'Todas las canciones fueron importadas',
                   style: TextStyle(
                     color: result.hasUnmatched
-                        ? Colors.orangeAccent
-                        : Colors.greenAccent,
+                        ? context.warning
+                        : context.accent,
                     fontSize: 14,
                   ),
                 ),
@@ -800,7 +805,7 @@ class _ImportResultDialogState extends State<_ImportResultDialog> {
               const SizedBox(height: 14),
               Text(
                 'Canciones que faltan (${result.unmatched.length}):',
-                style: const TextStyle(color: Colors.white60, fontSize: 13),
+                style: TextStyle(color: context.textSecondary, fontSize: 13),
               ),
               const SizedBox(height: 6),
               ConstrainedBox(
@@ -813,7 +818,7 @@ class _ImportResultDialogState extends State<_ImportResultDialog> {
                     final t = result.unmatched[i];
                     return Text(
                       t.display,
-                      style: const TextStyle(color: Colors.white70, fontSize: 12),
+                      style: TextStyle(color: context.textSecondary, fontSize: 12),
                     );
                   },
                 ),
@@ -822,12 +827,12 @@ class _ImportResultDialogState extends State<_ImportResultDialog> {
               OutlinedButton.icon(
                 onPressed: _savingCsv ? null : _exportCsv,
                 icon: _savingCsv
-                    ? const SizedBox(
+                    ? SizedBox(
                         width: 16,
                         height: 16,
                         child: CircularProgressIndicator(
                           strokeWidth: 2,
-                          color: Colors.orangeAccent,
+                          color: context.warning,
                         ),
                       )
                     : const Icon(Icons.file_download_outlined, size: 18),
@@ -836,8 +841,8 @@ class _ImportResultDialogState extends State<_ImportResultDialog> {
                   style: const TextStyle(fontSize: 13),
                 ),
                 style: OutlinedButton.styleFrom(
-                  foregroundColor: Colors.orangeAccent,
-                  side: const BorderSide(color: Colors.orangeAccent),
+                  foregroundColor: context.warning,
+                  side: BorderSide(color: context.warning),
                 ),
               ),
             ],
@@ -847,7 +852,7 @@ class _ImportResultDialogState extends State<_ImportResultDialog> {
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(),
-          child: const Text('OK', style: TextStyle(color: Colors.greenAccent)),
+          child: Text('OK', style: TextStyle(color: context.accent)),
         ),
       ],
     );
@@ -866,19 +871,19 @@ class _PlaylistsManager extends StatelessWidget {
           future: nav.getPlaylists(),
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
-              return const Padding(
+              return Padding(
                 padding: EdgeInsets.all(16),
                 child: Center(
-                  child: CircularProgressIndicator(color: Colors.greenAccent),
+                  child: CircularProgressIndicator(color: context.accent),
                 ),
               );
             }
             if (snapshot.hasError || !snapshot.hasData || snapshot.data!.isEmpty) {
-              return const Padding(
+              return Padding(
                 padding: EdgeInsets.all(16),
                 child: Text(
                   'No tienes playlists creadas.',
-                  style: TextStyle(color: Colors.white54),
+                  style: TextStyle(color: context.textMuted),
                 ),
               );
             }
@@ -906,9 +911,9 @@ class _PlaylistTile extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 8),
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         border: Border(
-          bottom: BorderSide(color: Colors.white12, width: 0.5),
+          bottom: BorderSide(color: context.themeBorder, width: 0.5),
         ),
       ),
       child: Row(
@@ -917,7 +922,7 @@ class _PlaylistTile extends StatelessWidget {
             width: 40,
             height: 40,
             decoration: BoxDecoration(
-              color: Colors.grey.shade800,
+              color: context.bgElevated,
               borderRadius: BorderRadius.circular(4),
               image: playlist.coverArtUrl != null
                   ? DecorationImage(
@@ -927,7 +932,7 @@ class _PlaylistTile extends StatelessWidget {
                   : null,
             ),
             child: playlist.coverArtUrl == null
-                ? const Icon(Icons.queue_music, color: Colors.white54, size: 20)
+                ? Icon(Icons.queue_music, color: context.textMuted, size: 20)
                 : null,
           ),
           const SizedBox(width: 12),
@@ -939,17 +944,17 @@ class _PlaylistTile extends StatelessWidget {
                   playlist.name,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(color: Colors.white, fontSize: 14),
+                  style: TextStyle(color: context.textPrimary, fontSize: 14),
                 ),
                 Text(
                   '${playlist.songCount} canciones',
-                  style: const TextStyle(color: Colors.white54, fontSize: 12),
+                  style: TextStyle(color: context.textMuted, fontSize: 12),
                 ),
               ],
             ),
           ),
           IconButton(
-            icon: const Icon(Icons.delete_outline, color: Colors.redAccent, size: 20),
+            icon: Icon(Icons.delete_outline, color: context.danger, size: 20),
             onPressed: () => _confirmDelete(context, playlist),
             tooltip: 'Eliminar playlist',
           ),
@@ -963,21 +968,21 @@ class _PlaylistTile extends StatelessWidget {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF1F1F1F),
-        title: const Text('¿Eliminar playlist?',
-            style: TextStyle(color: Colors.white)),
+        backgroundColor: context.bgCard,
+        title: Text('¿Eliminar playlist?',
+            style: TextStyle(color: context.textPrimary)),
         content: Text(
           'Se borrará "${playlist.name}" permanentemente.',
-          style: const TextStyle(color: Colors.white70),
+          style: TextStyle(color: context.textSecondary),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Cancelar', style: TextStyle(color: Colors.white70)),
+            child: Text('Cancelar', style: TextStyle(color: context.textSecondary)),
           ),
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('Eliminar', style: TextStyle(color: Colors.redAccent)),
+            child: Text('Eliminar', style: TextStyle(color: context.danger)),
           ),
         ],
       ),
@@ -989,8 +994,8 @@ class _PlaylistTile extends StatelessWidget {
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Playlist eliminada', style: const TextStyle(color: Colors.white)),
-          backgroundColor: const Color(0xFF1F1F1F),
+          content: Text('Playlist eliminada', style: TextStyle(color: context.textPrimary)),
+          backgroundColor: context.bgCard,
           behavior: SnackBarBehavior.floating,
         ),
       );
@@ -998,8 +1003,8 @@ class _PlaylistTile extends StatelessWidget {
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Error: $e', style: const TextStyle(color: Colors.redAccent)),
-          backgroundColor: const Color(0xFF1F1F1F),
+          content: Text('Error: $e', style: TextStyle(color: context.danger)),
+          backgroundColor: context.bgCard,
           behavior: SnackBarBehavior.floating,
         ),
       );
@@ -1016,7 +1021,7 @@ class _InfoText extends StatelessWidget {
   Widget build(BuildContext context) {
     return Text(
       text,
-      style: const TextStyle(color: Colors.white38, fontSize: 12, height: 1.4),
+      style: TextStyle(color: context.textMuted, fontSize: 12, height: 1.4),
     );
   }
 }

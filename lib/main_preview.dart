@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import 'services/navidrome_service.dart';
 import 'services/player_controller.dart';
 import 'services/settings_controller.dart';
+import 'services/theme_controller.dart';
 import 'screens/home_shell.dart';
 
 /// ENTRYPOINT TEMPORAL DE PREVIEW (no es parte de la app).
@@ -33,6 +34,7 @@ class _PreviewApp extends StatelessWidget {
       providers: [
         ChangeNotifierProvider.value(value: settings),
         ChangeNotifierProvider.value(value: service),
+        ChangeNotifierProvider(create: (_) => ThemeController()),
         ChangeNotifierProvider<PlayerController>(
           create: (ctx) => PlayerController(
             ctx.read<NavidromeService>(),

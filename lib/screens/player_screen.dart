@@ -10,6 +10,7 @@ import '../services/navidrome_service.dart';
 import '../widgets/jam_dialog.dart';
 import '../widgets/jam_queue_panel.dart';
 import '../widgets/track_context_menu.dart';
+import '../utils/app_colors.dart';
 
 /// Pantalla completa del reproductor. Es una vista del estado global de
 /// reproducción ([PlayerController]); al cerrar esta pantalla la música sigue
@@ -40,11 +41,11 @@ class _PlayerScreenState extends State<PlayerScreen> {
       builder: (context, player, _) {
         final track = player.currentTrack;
         if (track == null) {
-          return const Scaffold(
-            backgroundColor: Colors.black,
+          return Scaffold(
+            backgroundColor: context.bgApp,
             body: Center(
               child: Text('Nada en reproducción',
-                  style: TextStyle(color: Colors.white70)),
+                  style: TextStyle(color: context.textSecondary)),
             ),
           );
         }
@@ -54,7 +55,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
         final shuffleEnabled = player.shuffleEnabled;
 
         return Scaffold(
-          backgroundColor: const Color(0xFF121212),
+          backgroundColor: context.bgDeep,
           body: Stack(
             children: [
               _buildAmbientBackground(track),
@@ -67,8 +68,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           IconButton(
-                            icon: const Icon(Icons.keyboard_arrow_down,
-                                color: Colors.white, size: 32),
+                            icon: Icon(Icons.keyboard_arrow_down,
+                                color: context.textPrimary, size: 32),
                             onPressed: () => Navigator.of(context).pop(),
                           ),
                           Consumer<JamController>(
@@ -82,11 +83,11 @@ class _PlayerScreenState extends State<PlayerScreen> {
                                     padding: const EdgeInsets.symmetric(
                                         horizontal: 10, vertical: 4),
                                     decoration: BoxDecoration(
-                                      color: const Color(0xFF10B981)
+                                      color: context.accent
                                           .withValues(alpha: 0.15),
                                       borderRadius: BorderRadius.circular(20),
                                       border: Border.all(
-                                        color: const Color(0xFF10B981)
+                                        color: context.accent
                                             .withValues(alpha: 0.4),
                                       ),
                                     ),
@@ -96,16 +97,16 @@ class _PlayerScreenState extends State<PlayerScreen> {
                                         Container(
                                           width: 6,
                                           height: 6,
-                                          decoration: const BoxDecoration(
+                                          decoration: BoxDecoration(
                                             shape: BoxShape.circle,
-                                            color: Color(0xFF10B981),
+                                            color: context.accent,
                                           ),
                                         ),
                                         const SizedBox(width: 6),
                                         Text(
                                           'Jam · ${jam.participants.length}',
-                                          style: const TextStyle(
-                                            color: Color(0xFF10B981),
+                                          style: TextStyle(
+                                            color: context.accent,
                                             fontSize: 11.5,
                                             fontWeight: FontWeight.bold,
                                           ),
@@ -116,8 +117,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
                                 );
                               }
                               return IconButton(
-                                icon: const Icon(Icons.speaker_group_outlined,
-                                    color: Colors.white70, size: 22),
+                                icon: Icon(Icons.speaker_group_outlined,
+                                    color: context.textSecondary, size: 22),
                                 tooltip: 'Jam',
                                 onPressed: () =>
                                     JamDialog.showAsBottomSheet(context),
@@ -125,8 +126,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
                             },
                           ),
                           IconButton(
-                            icon: const Icon(Icons.more_horiz,
-                                color: Colors.white),
+                            icon: Icon(Icons.more_horiz,
+                                color: context.textPrimary),
                             onPressed: () => _showContextMenu(player, track),
                           ),
                         ],
@@ -141,9 +142,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
                                   ? Image.network(track.albumArtUrl!,
                                       fit: BoxFit.cover)
                                   : Container(
-                                      color: Colors.grey.shade800,
-                                      child: const Icon(Icons.music_note,
-                                          size: 60, color: Colors.grey),
+                                      color: context.bgElevated,
+                                      child: Icon(Icons.music_note,
+                                          size: 60, color: context.textMuted),
                                     ),
                             ),
                           ),
@@ -155,8 +156,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         textAlign: TextAlign.center,
-                        style: const TextStyle(
-                          color: Colors.white,
+                        style: TextStyle(
+                          color: context.textPrimary,
                           fontSize: 20,
                           fontWeight: FontWeight.bold,
                         ),
@@ -167,8 +168,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         textAlign: TextAlign.center,
-                        style: const TextStyle(
-                          color: Colors.white70,
+                        style: TextStyle(
+                          color: context.textSecondary,
                           fontSize: 16,
                         ),
                       ),
@@ -241,8 +242,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
                                         ? Icons.favorite
                                         : Icons.favorite_border,
                                     color: isStarred
-                                        ? const Color(0xFF10B981)
-                                        : Colors.white60,
+                                        ? context.accent
+                                        : context.textSecondary,
                                     size: 22,
                                   ),
                                   onPressed: () => nav.toggleStar(track),
@@ -250,8 +251,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
                               },
                             ),
                             IconButton(
-                              icon: const Icon(Icons.queue_music_rounded,
-                                  color: Colors.white70, size: 24),
+                              icon: Icon(Icons.queue_music_rounded,
+                                  color: context.textSecondary, size: 24),
                               tooltip: 'Cola de reproducción',
                               onPressed: () => JamQueuePanel.show(context),
                             ),
@@ -279,7 +280,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
               child: Image.network(
                 track.albumArtUrl!,
                 fit: BoxFit.cover,
-                color: Colors.white.withAlpha(70),
+                color: context.textPrimary.withAlpha(70),
                 colorBlendMode: BlendMode.modulate,
               ),
             ),
@@ -304,13 +305,13 @@ class _PlayerScreenState extends State<PlayerScreen> {
         return Column(
           children: [
             SliderTheme(
-              data: const SliderThemeData(
+              data: SliderThemeData(
                 trackHeight: 3,
-                activeTrackColor: Colors.white,
-                inactiveTrackColor: Colors.white24,
-                thumbColor: Colors.white,
+                activeTrackColor: context.waveformPlayed,
+                inactiveTrackColor: context.waveformUnplayed,
+                thumbColor: context.sliderThumb,
                 thumbShape: RoundSliderThumbShape(enabledThumbRadius: 6),
-                overlayColor: Colors.white10,
+                overlayColor: context.accentDim,
                 overlayShape: RoundSliderOverlayShape(overlayRadius: 16),
               ),
               child: Slider(
@@ -332,12 +333,12 @@ class _PlayerScreenState extends State<PlayerScreen> {
                   Text(
                     _format(Duration(milliseconds: currentMs.round())),
                     style:
-                        const TextStyle(color: Colors.white70, fontSize: 12),
+                        TextStyle(color: context.textSecondary, fontSize: 12),
                   ),
                   Text(
                     _format(duration),
                     style:
-                        const TextStyle(color: Colors.white70, fontSize: 12),
+                        TextStyle(color: context.textSecondary, fontSize: 12),
                   ),
                 ],
               ),
@@ -361,31 +362,31 @@ class _PlayerScreenState extends State<PlayerScreen> {
           icon: Icon(
             Icons.shuffle,
             size: 22,
-            color: shuffleEnabled ? Colors.greenAccent : Colors.white,
+            color: shuffleEnabled ? context.accent : context.textPrimary,
           ),
           onPressed: player.toggleShuffle,
         ),
         IconButton(
-          icon: const Icon(Icons.skip_previous, color: Colors.white, size: 34),
+          icon: Icon(Icons.skip_previous, color: context.textPrimary, size: 34),
           onPressed: player.skipPrevious,
         ),
         IconButton(
           iconSize: 60,
           icon: Icon(
             playing ? Icons.pause_circle_filled : Icons.play_circle_filled,
-            color: Colors.white,
+            color: context.textPrimary,
           ),
           onPressed: player.togglePlay,
         ),
         IconButton(
-          icon: const Icon(Icons.skip_next, color: Colors.white, size: 34),
+          icon: Icon(Icons.skip_next, color: context.textPrimary, size: 34),
           onPressed: player.skipNext,
         ),
         IconButton(
           icon: Icon(
             repeatMode == LoopMode.one ? Icons.repeat_one : Icons.repeat,
             size: 22,
-            color: repeatMode != LoopMode.off ? Colors.greenAccent : Colors.white,
+            color: repeatMode != LoopMode.off ? context.accent : context.textPrimary,
           ),
           onPressed: player.toggleRepeat,
         ),
@@ -393,3 +394,4 @@ class _PlayerScreenState extends State<PlayerScreen> {
     );
   }
 }
+

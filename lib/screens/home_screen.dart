@@ -15,6 +15,7 @@ import 'playlist_detail_screen.dart';
 import 'album_detail_screen.dart';
 import 'artist_screen.dart';
 import 'settings_screen.dart';
+import '../utils/app_colors.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -76,10 +77,10 @@ class _HomeScreenState extends State<HomeScreen> {
     showDialog<void>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF0C0C10),
+        backgroundColor: context.bgApp,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(20),
-          side: const BorderSide(color: Color(0xFF1E1E28), width: 1.2),
+          side: BorderSide(color: context.bgElevated, width: 1.2),
         ),
         titlePadding: const EdgeInsets.fromLTRB(20, 16, 12, 0),
         contentPadding: const EdgeInsets.all(20),
@@ -88,24 +89,24 @@ class _HomeScreenState extends State<HomeScreen> {
             Container(
               padding: const EdgeInsets.all(6),
               decoration: BoxDecoration(
-                color: const Color(0xFF7C3AED).withValues(alpha: 0.15),
+                color: context.accent2.withValues(alpha: 0.15),
                 borderRadius: BorderRadius.circular(8),
               ),
-              child: const Icon(Icons.qr_code_2_rounded,
-                  color: Color(0xFFA855F7), size: 20),
+              child: Icon(Icons.qr_code_2_rounded,
+                  color: context.accent, size: 20),
             ),
             const SizedBox(width: 10),
-            const Text(
+            Text(
               'Vincular con tu Teléfono',
               style: TextStyle(
-                color: Colors.white,
+                color: context.textPrimary,
                 fontSize: 16,
                 fontWeight: FontWeight.bold,
               ),
             ),
             const Spacer(),
             IconButton(
-              icon: const Icon(Icons.close, color: Colors.white54, size: 20),
+              icon: Icon(Icons.close, color: context.textMuted, size: 20),
               onPressed: () => Navigator.of(ctx).pop(),
             ),
           ],
@@ -159,7 +160,7 @@ class _HomeScreenState extends State<HomeScreen> {
     _playlistVersion = pVersion;
 
     return Scaffold(
-      backgroundColor: const Color(0xFF000000), // Pure AMOLED Black
+      backgroundColor: context.bgApp, // Pure AMOLED Black
       body: Column(
         children: [
           // -----------------------------------------------------------------
@@ -194,10 +195,10 @@ class _HomeScreenState extends State<HomeScreen> {
     return Container(
       height: 60,
       padding: const EdgeInsets.symmetric(horizontal: 16),
-      decoration: const BoxDecoration(
-        color: Color(0xFF07070A),
+      decoration: BoxDecoration(
+        color: context.bgApp,
         border: Border(
-          bottom: BorderSide(color: Color(0xFF181820), width: 1.2),
+          bottom: BorderSide(color: context.bgElevated, width: 1.2),
         ),
       ),
       child: Row(
@@ -221,23 +222,23 @@ class _HomeScreenState extends State<HomeScreen> {
                     height: 32,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      color: const Color(0xFF140E24),
+                      color: context.bgElevated,
                       border: Border.all(
-                        color: const Color(0xFFA855F7).withValues(alpha: 0.5),
+                        color: context.accent.withValues(alpha: 0.5),
                         width: 1.2,
                       ),
                     ),
-                    child: const Icon(
+                    child: Icon(
                       Icons.graphic_eq_rounded,
-                      color: Color(0xFFA855F7),
+                      color: context.accent,
                       size: 18,
                     ),
                   ),
                   const SizedBox(width: 10),
-                  const Text(
+                  Text(
                     'SCROTIFY',
                     style: TextStyle(
-                      color: Colors.white,
+                      color: context.textPrimary,
                       fontSize: 15,
                       fontWeight: FontWeight.w900,
                       letterSpacing: 2,
@@ -285,25 +286,25 @@ class _HomeScreenState extends State<HomeScreen> {
                 constraints: const BoxConstraints(maxWidth: 480),
                 padding: const EdgeInsets.symmetric(horizontal: 12),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF0F0F14),
+                  color: context.inputBg,
                   borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: const Color(0xFF1E1E28)),
+                  border: Border.all(color: context.inputBorder),
                 ),
                 child: Row(
                   children: [
-                    const Icon(Icons.search_rounded,
-                        color: Colors.white38, size: 18),
+                    Icon(Icons.search_rounded,
+                        color: context.textMuted, size: 18),
                     const SizedBox(width: 8),
                     Expanded(
                       child: TextField(
                         controller: _searchController,
-                        style: const TextStyle(color: Colors.white, fontSize: 13),
+                        style: TextStyle(color: context.textPrimary, fontSize: 13),
                         textInputAction: TextInputAction.search,
                         onChanged: _runSearch,
-                        decoration: const InputDecoration(
+                        decoration: InputDecoration(
                           hintText: '¿Qué quieres escuchar hoy?',
                           hintStyle:
-                              TextStyle(color: Colors.white30, fontSize: 13),
+                              TextStyle(color: context.textMuted, fontSize: 13),
                           border: InputBorder.none,
                           isDense: true,
                         ),
@@ -311,20 +312,20 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                     if (_searchController.text.isNotEmpty)
                       IconButton(
-                        icon: const Icon(Icons.close_rounded,
-                            size: 16, color: Colors.white38),
+                        icon: Icon(Icons.close_rounded,
+                            size: 16, color: context.textMuted),
                         onPressed: () {
                           _searchController.clear();
                           _runSearch('');
                         },
                       )
                     else if (_searching)
-                      const SizedBox(
+                      SizedBox(
                         width: 14,
                         height: 14,
                         child: CircularProgressIndicator(
                           strokeWidth: 1.8,
-                          color: Color(0xFFA855F7),
+                          color: context.accent,
                         ),
                       ),
                   ],
@@ -343,14 +344,14 @@ class _HomeScreenState extends State<HomeScreen> {
                   onPressed: () => JamDialog.show(context),
                   style: FilledButton.styleFrom(
                     backgroundColor:
-                        const Color(0xFF10B981).withValues(alpha: 0.18),
-                    foregroundColor: const Color(0xFF10B981),
+                        context.accent.withValues(alpha: 0.18),
+                    foregroundColor: context.accent,
                     padding:
                         const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(10),
-                      side: const BorderSide(
-                          color: Color(0xFF10B981), width: 0.8),
+                      side: BorderSide(
+                          color: context.accent, width: 0.8),
                     ),
                   ),
                   icon: const Icon(Icons.speaker_group_rounded, size: 17),
@@ -365,8 +366,8 @@ class _HomeScreenState extends State<HomeScreen> {
                 onPressed: () => JamDialog.show(context),
                 style: FilledButton.styleFrom(
                   backgroundColor:
-                      const Color(0xFF10B981).withValues(alpha: 0.12),
-                  foregroundColor: const Color(0xFF10B981),
+                      context.accent.withValues(alpha: 0.12),
+                  foregroundColor: context.accent,
                   padding:
                       const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   shape: RoundedRectangleBorder(
@@ -387,8 +388,8 @@ class _HomeScreenState extends State<HomeScreen> {
           IconButton(
             tooltip: 'Comunidad & Chat Navidrome',
             style: IconButton.styleFrom(
-              backgroundColor: const Color(0xFF14141E),
-              foregroundColor: const Color(0xFF10B981),
+              backgroundColor: context.bgElevated,
+              foregroundColor: context.accent,
             ),
             icon: const Icon(Icons.people_alt_rounded, size: 19),
             onPressed: () => ServerActivityPanel.show(context),
@@ -400,8 +401,8 @@ class _HomeScreenState extends State<HomeScreen> {
           FilledButton.tonalIcon(
             onPressed: _openPairingDialog,
             style: FilledButton.styleFrom(
-              backgroundColor: const Color(0xFF1A122E),
-              foregroundColor: const Color(0xFFA855F7),
+              backgroundColor: context.bgElevated,
+              foregroundColor: context.accent,
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(10)),
@@ -417,8 +418,8 @@ class _HomeScreenState extends State<HomeScreen> {
 
           // Botón Ajustes
           IconButton(
-            icon: const Icon(Icons.settings_outlined,
-                color: Colors.white70, size: 20),
+            icon: Icon(Icons.settings_outlined,
+                color: context.textSecondary, size: 20),
             tooltip: 'Ajustes',
             onPressed: () => Navigator.push(
               context,
@@ -434,10 +435,10 @@ class _HomeScreenState extends State<HomeScreen> {
             height: 32,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: const Color(0xFF7C3AED),
+              color: context.accent2,
               boxShadow: [
                 BoxShadow(
-                  color: const Color(0xFF7C3AED).withValues(alpha: 0.3),
+                  color: context.accent2.withValues(alpha: 0.3),
                   blurRadius: 8,
                 ),
               ],
@@ -445,8 +446,8 @@ class _HomeScreenState extends State<HomeScreen> {
             child: Center(
               child: Text(
                 initial,
-                style: const TextStyle(
-                  color: Colors.white,
+                style: TextStyle(
+                  color: context.textPrimary,
                   fontWeight: FontWeight.bold,
                   fontSize: 13,
                 ),
@@ -471,11 +472,11 @@ class _HomeScreenState extends State<HomeScreen> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
         decoration: BoxDecoration(
-          color: isSelected ? const Color(0xFF181824) : Colors.transparent,
+          color: isSelected ? context.bgElevated : Colors.transparent,
           borderRadius: BorderRadius.circular(10),
           border: isSelected
               ? Border.all(
-                  color: const Color(0xFFA855F7).withValues(alpha: 0.35),
+                  color: context.accent.withValues(alpha: 0.35),
                   width: 1)
               : null,
         ),
@@ -484,13 +485,13 @@ class _HomeScreenState extends State<HomeScreen> {
             Icon(
               icon,
               size: 17,
-              color: isSelected ? const Color(0xFFA855F7) : Colors.white60,
+              color: isSelected ? context.accent : context.textSecondary,
             ),
             const SizedBox(width: 6),
             Text(
               label,
               style: TextStyle(
-                color: isSelected ? Colors.white : Colors.white60,
+                color: isSelected ? context.textPrimary : context.textSecondary,
                 fontSize: 13,
                 fontWeight:
                     isSelected ? FontWeight.bold : FontWeight.normal,
@@ -508,12 +509,12 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _buildLibraryPanel() {
     return Container(
       width: 270,
-      color: const Color(0xFF060608),
+      color: context.bgSidebar,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _libraryHeader(),
-          const Divider(height: 1, color: Color(0xFF1A1A22)),
+          Divider(height: 1, color: context.bgCard),
           _librarySearchBar(),
           Expanded(child: _libraryList()),
         ],
@@ -526,20 +527,20 @@ class _HomeScreenState extends State<HomeScreen> {
       padding: const EdgeInsets.fromLTRB(16, 14, 12, 10),
       child: Row(
         children: [
-          const Icon(Icons.library_music_rounded,
-              color: Color(0xFFA855F7), size: 18),
+          Icon(Icons.library_music_rounded,
+              color: context.accent, size: 18),
           const SizedBox(width: 8),
-          const Text(
+          Text(
             'Tu Biblioteca',
             style: TextStyle(
-              color: Colors.white,
+              color: context.textPrimary,
               fontSize: 14,
               fontWeight: FontWeight.bold,
             ),
           ),
           const Spacer(),
           IconButton(
-            icon: const Icon(Icons.menu_open, color: Colors.white54, size: 18),
+            icon: Icon(Icons.menu_open, color: context.textMuted, size: 18),
             tooltip: 'Colapsar biblioteca',
             onPressed: () => setState(() => _libraryCollapsed = true),
           ),
@@ -555,20 +556,20 @@ class _HomeScreenState extends State<HomeScreen> {
         height: 34,
         padding: const EdgeInsets.symmetric(horizontal: 10),
         decoration: BoxDecoration(
-          color: const Color(0xFF0F0F14),
+          color: context.bgApp,
           borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: const Color(0xFF1E1E26)),
+          border: Border.all(color: context.inputBorder),
         ),
-        child: const Row(
+        child: Row(
           children: [
-            Icon(Icons.search, color: Colors.white38, size: 16),
+            Icon(Icons.search, color: context.textMuted, size: 16),
             SizedBox(width: 6),
             Expanded(
               child: TextField(
-                style: TextStyle(color: Colors.white, fontSize: 12),
+                style: TextStyle(color: context.textPrimary, fontSize: 12),
                 decoration: InputDecoration(
                   hintText: 'Buscar en playlists...',
-                  hintStyle: TextStyle(color: Colors.white24, fontSize: 12),
+                  hintStyle: TextStyle(color: context.themeBorder, fontSize: 12),
                   border: InputBorder.none,
                   isDense: true,
                 ),
@@ -593,7 +594,7 @@ class _HomeScreenState extends State<HomeScreen> {
               icon: Icons.favorite_rounded,
               title: 'Tus me gusta',
               subtitle: 'Canciones favoritas',
-              background: const Color(0xFF4C1D95),
+              background: context.accent2,
               onTap: () => Navigator.push(
                 context,
                 MaterialPageRoute(
@@ -631,7 +632,7 @@ class _HomeScreenState extends State<HomeScreen> {
               borderRadius: 6,
               fallbackIcon: Icons.queue_music,
               fallbackIconSize: 18,
-              fallbackColor: const Color(0xFF1A1A24),
+              fallbackColor: context.bgElevated,
             ),
             const SizedBox(width: 10),
             Expanded(
@@ -641,8 +642,8 @@ class _HomeScreenState extends State<HomeScreen> {
                   Row(
                     children: [
                       if (pinned) ...[
-                        const Icon(Icons.push_pin,
-                            color: Color(0xFF10B981), size: 12),
+                        Icon(Icons.push_pin,
+                            color: context.accent, size: 12),
                         const SizedBox(width: 3),
                       ],
                       Expanded(
@@ -650,8 +651,8 @@ class _HomeScreenState extends State<HomeScreen> {
                           playlist.name,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: Colors.white,
+                          style: TextStyle(
+                            color: context.textPrimary,
                             fontSize: 13,
                             fontWeight: FontWeight.w500,
                           ),
@@ -663,7 +664,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     'Playlist · ${playlist.songCount} canciones',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(color: Colors.white38, fontSize: 11),
+                    style: TextStyle(color: context.textMuted, fontSize: 11),
                   ),
                 ],
               ),
@@ -679,7 +680,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final pinned = nav.isPinnedPlaylist(playlist.id);
     showModalBottomSheet<void>(
       context: context,
-      backgroundColor: const Color(0xFF0C0C10),
+      backgroundColor: context.bgApp,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
@@ -688,18 +689,18 @@ class _HomeScreenState extends State<HomeScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             ListTile(
-              leading: const Icon(Icons.play_arrow, color: Colors.white),
-              title: const Text('Reproducir',
-                  style: TextStyle(color: Colors.white)),
+              leading: Icon(Icons.play_arrow, color: context.textPrimary),
+              title: Text('Reproducir',
+                  style: TextStyle(color: context.textPrimary)),
               onTap: () {
                 Navigator.of(context).pop();
                 _playPlaylist(playlist.id);
               },
             ),
             ListTile(
-              leading: const Icon(Icons.shuffle, color: Color(0xFF10B981)),
-              title: const Text('Reproducir al azar',
-                  style: TextStyle(color: Colors.white)),
+              leading: Icon(Icons.shuffle, color: context.accent),
+              title: Text('Reproducir al azar',
+                  style: TextStyle(color: context.textPrimary)),
               onTap: () {
                 Navigator.of(context).pop();
                 _playPlaylistShuffled(playlist.id);
@@ -708,11 +709,11 @@ class _HomeScreenState extends State<HomeScreen> {
             ListTile(
               leading: Icon(
                 pinned ? Icons.push_pin_outlined : Icons.push_pin,
-                color: Colors.white,
+                color: context.textPrimary,
               ),
               title: Text(
                 pinned ? 'Quitar de arriba' : 'Fijar arriba',
-                style: const TextStyle(color: Colors.white),
+                style: TextStyle(color: context.textPrimary),
               ),
               onTap: () {
                 Navigator.of(context).pop();
@@ -720,9 +721,9 @@ class _HomeScreenState extends State<HomeScreen> {
               },
             ),
             ListTile(
-              leading: const Icon(Icons.delete_outline, color: Colors.redAccent),
-              title: const Text('Eliminar playlist',
-                  style: TextStyle(color: Colors.redAccent)),
+              leading: Icon(Icons.delete_outline, color: context.danger),
+              title: Text('Eliminar playlist',
+                  style: TextStyle(color: context.danger)),
               onTap: () {
                 Navigator.of(context).pop();
                 _confirmDeletePlaylist(playlist);
@@ -756,23 +757,23 @@ class _HomeScreenState extends State<HomeScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF141418),
-        title: const Text('¿Eliminar playlist?',
-            style: TextStyle(color: Colors.white)),
+        backgroundColor: context.bgCard,
+        title: Text('¿Eliminar playlist?',
+            style: TextStyle(color: context.textPrimary)),
         content: Text(
           'Se borrará "${playlist.name}" permanentemente.',
-          style: const TextStyle(color: Colors.white70),
+          style: TextStyle(color: context.textSecondary),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
             child:
-                const Text('Cancelar', style: TextStyle(color: Colors.white70)),
+                Text('Cancelar', style: TextStyle(color: context.textSecondary)),
           ),
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(true),
             child:
-                const Text('Eliminar', style: TextStyle(color: Colors.redAccent)),
+                Text('Eliminar', style: TextStyle(color: context.danger)),
           ),
         ],
       ),
@@ -784,10 +785,10 @@ class _HomeScreenState extends State<HomeScreen> {
       nav.bumpPlaylists();
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
+        SnackBar(
           content: Text('Playlist eliminada',
-              style: TextStyle(color: Colors.white)),
-          backgroundColor: Color(0xFF1C1328),
+              style: TextStyle(color: context.textPrimary)),
+          backgroundColor: context.bgElevated,
           behavior: SnackBarBehavior.floating,
         ),
       );
@@ -796,8 +797,8 @@ class _HomeScreenState extends State<HomeScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Error: $e',
-              style: const TextStyle(color: Colors.redAccent)),
-          backgroundColor: const Color(0xFF1C1328),
+              style: TextStyle(color: context.danger)),
+          backgroundColor: context.bgElevated,
           behavior: SnackBarBehavior.floating,
         ),
       );
@@ -837,8 +838,8 @@ class _HomeScreenState extends State<HomeScreen> {
                     title,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: Colors.white,
+                    style: TextStyle(
+                      color: context.textPrimary,
                       fontSize: 13,
                       fontWeight: FontWeight.w500,
                     ),
@@ -847,7 +848,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     subtitle,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(color: Colors.white38, fontSize: 11),
+                    style: TextStyle(color: context.textMuted, fontSize: 11),
                   ),
                 ],
               ),
@@ -863,24 +864,24 @@ class _HomeScreenState extends State<HomeScreen> {
   // ===========================================================================
   Widget _buildMainPanel() {
     return Container(
-      color: const Color(0xFF000000), // AMOLED
+      color: context.bgApp, // AMOLED
       child: _searchResults != null
           ? _buildSearchResultsPanel()
           : FutureBuilder<List<Track>>(
               future: _futureTracks,
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(
+                  return Center(
                     child: CircularProgressIndicator(
-                      color: Color(0xFFA855F7),
+                      color: context.accent,
                       strokeWidth: 2,
                     ),
                   );
                 }
                 if (snapshot.hasError || !snapshot.hasData) {
-                  return const Center(
+                  return Center(
                     child: Text('Error al cargar contenido',
-                        style: TextStyle(color: Colors.white54)),
+                        style: TextStyle(color: context.textMuted)),
                   );
                 }
                 final tracks = snapshot.data!;
@@ -893,17 +894,17 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _buildSearchResultsPanel() {
     final results = _searchResults!;
     if (_searching && results.isEmpty) {
-      return const Center(
+      return Center(
         child: CircularProgressIndicator(
-          color: Color(0xFFA855F7),
+          color: context.accent,
           strokeWidth: 2,
         ),
       );
     }
     if (results.isEmpty) {
-      return const Center(
+      return Center(
         child: Text('Sin resultados para tu búsqueda',
-            style: TextStyle(color: Colors.white54)),
+            style: TextStyle(color: context.textMuted)),
       );
     }
 
@@ -926,23 +927,23 @@ class _HomeScreenState extends State<HomeScreen> {
                 borderRadius: 4,
                 fallbackIcon: Icons.music_note,
                 fallbackIconSize: 20,
-                fallbackColor: const Color(0xFF141418),
+                fallbackColor: context.bgCard,
               ),
               title: Text(track.title,
-                  style: const TextStyle(color: Colors.white, fontSize: 13.5)),
+                  style: TextStyle(color: context.textPrimary, fontSize: 13.5)),
               subtitle: Text('${track.artist} · ${track.album}',
-                  style: const TextStyle(color: Colors.white54, fontSize: 11.5)),
+                  style: TextStyle(color: context.textMuted, fontSize: 11.5)),
               trailing: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   IconButton(
-                    icon: const Icon(Icons.more_horiz, color: Colors.white54),
+                    icon: Icon(Icons.more_horiz, color: context.textMuted),
                     onPressed: () => TrackContextMenu.show(context, track),
                   ),
                   Text(
                     _formatDuration(track.duration),
                     style:
-                        const TextStyle(color: Colors.white38, fontSize: 11.5),
+                        TextStyle(color: context.textMuted, fontSize: 11.5),
                   ),
                 ],
               ),
@@ -966,16 +967,16 @@ class _HomeScreenState extends State<HomeScreen> {
                 borderRadius: 4,
                 fallbackIcon: Icons.album,
                 fallbackIconSize: 20,
-                fallbackColor: const Color(0xFF141418),
+                fallbackColor: context.bgCard,
               ),
               title: Text(album.title,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(color: Colors.white, fontSize: 13.5)),
+                  style: TextStyle(color: context.textPrimary, fontSize: 13.5)),
               subtitle: Text(album.artist,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(color: Colors.white54, fontSize: 11.5)),
+                  style: TextStyle(color: context.textMuted, fontSize: 11.5)),
               onTap: () => Navigator.push(
                 context,
                 MaterialPageRoute(
@@ -996,14 +997,14 @@ class _HomeScreenState extends State<HomeScreen> {
                 circle: true,
                 fallbackIcon: Icons.person,
                 fallbackIconSize: 20,
-                fallbackColor: const Color(0xFF141418),
+                fallbackColor: context.bgCard,
               ),
               title: Text(artist.name,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(color: Colors.white, fontSize: 13.5)),
-              subtitle: const Text('Artista',
-                  style: TextStyle(color: Colors.white54, fontSize: 11.5)),
+                  style: TextStyle(color: context.textPrimary, fontSize: 13.5)),
+              subtitle: Text('Artista',
+                  style: TextStyle(color: context.textMuted, fontSize: 11.5)),
               onTap: () => Navigator.push(
                 context,
                 MaterialPageRoute(
@@ -1068,7 +1069,7 @@ class _HomeScreenState extends State<HomeScreen> {
             if (index == 0) {
               return _quickAccessCard(
                 label: 'Tus Me Gusta',
-                color: const Color(0xFF4C1D95),
+                color: context.accent2,
                 icon: Icons.favorite_rounded,
                 onTap: () => Navigator.push(
                   context,
@@ -1080,7 +1081,7 @@ class _HomeScreenState extends State<HomeScreen> {
             final track = items[index - 1];
             return _quickAccessCard(
               label: track.album,
-              color: const Color(0xFF14141A),
+              color: context.bgCard,
               albumArtUrl: track.albumArtUrl,
               icon: Icons.album,
               onTap: () => _openPlayer(tracks, tracks.indexOf(track)),
@@ -1103,9 +1104,9 @@ class _HomeScreenState extends State<HomeScreen> {
       borderRadius: BorderRadius.circular(10),
       child: Container(
         decoration: BoxDecoration(
-          color: const Color(0xFF0C0C10),
+          color: context.bgApp,
           borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: const Color(0xFF1E1E26), width: 1),
+          border: Border.all(color: context.bgElevated, width: 1),
         ),
         child: Row(
           children: [
@@ -1124,7 +1125,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     : null,
               ),
               child: albumArtUrl == null
-                  ? Icon(icon, color: Colors.white, size: 22)
+                  ? Icon(icon, color: context.textPrimary, size: 22)
                   : null,
             ),
             const SizedBox(width: 12),
@@ -1133,8 +1134,8 @@ class _HomeScreenState extends State<HomeScreen> {
                 label,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  color: Colors.white,
+                style: TextStyle(
+                  color: context.textPrimary,
                   fontSize: 13,
                   fontWeight: FontWeight.w600,
                 ),
@@ -1149,8 +1150,8 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _sectionHeader(String title) {
     return Text(
       title,
-      style: const TextStyle(
-        color: Colors.white,
+      style: TextStyle(
+        color: context.textPrimary,
         fontSize: 18,
         fontWeight: FontWeight.bold,
       ),
@@ -1188,9 +1189,9 @@ class _HomeScreenState extends State<HomeScreen> {
       child: Container(
         padding: const EdgeInsets.all(8),
         decoration: BoxDecoration(
-          color: const Color(0xFF07070A),
+          color: context.bgApp,
           borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: const Color(0xFF14141C)),
+          border: Border.all(color: context.bgCard),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -1200,17 +1201,17 @@ class _HomeScreenState extends State<HomeScreen> {
                 borderRadius: BorderRadius.circular(8),
                 child: Container(
                   width: double.infinity,
-                  color: const Color(0xFF14141A),
+                  color: context.bgCard,
                   child: track.albumArtUrl != null
                       ? Image.network(
                           track.albumArtUrl!,
                           fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => const Center(
-                            child: Icon(Icons.music_note, color: Colors.white38),
+                          errorBuilder: (_, __, ___) => Center(
+                            child: Icon(Icons.music_note, color: context.textMuted),
                           ),
                         )
-                      : const Center(
-                          child: Icon(Icons.music_note, color: Colors.white38),
+                      : Center(
+                          child: Icon(Icons.music_note, color: context.textMuted),
                         ),
                 ),
               ),
@@ -1220,8 +1221,8 @@ class _HomeScreenState extends State<HomeScreen> {
               track.title,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                color: Colors.white,
+              style: TextStyle(
+                color: context.textPrimary,
                 fontSize: 12.5,
                 fontWeight: FontWeight.bold,
               ),
@@ -1230,7 +1231,7 @@ class _HomeScreenState extends State<HomeScreen> {
               track.artist,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(color: Colors.white54, fontSize: 11),
+              style: TextStyle(color: context.textMuted, fontSize: 11),
             ),
           ],
         ),
@@ -1246,17 +1247,17 @@ class _HomeScreenState extends State<HomeScreen> {
         final albums = snapshot.data ?? [];
         if (snapshot.connectionState == ConnectionState.waiting &&
             albums.isEmpty) {
-          return const SizedBox(
+          return SizedBox(
             height: 170,
             child: Center(
               child: CircularProgressIndicator(
-                  strokeWidth: 2, color: Color(0xFFA855F7)),
+                  strokeWidth: 2, color: context.accent),
             ),
           );
         }
         if (albums.isEmpty) {
-          return const Text('Sin álbumes disponibles',
-              style: TextStyle(color: Colors.white54));
+          return Text('Sin álbumes disponibles',
+              style: TextStyle(color: context.textMuted));
         }
         return SizedBox(
           height: 180,
@@ -1278,9 +1279,9 @@ class _HomeScreenState extends State<HomeScreen> {
                     width: 130,
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF07070A),
+                      color: context.bgApp,
                       borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: const Color(0xFF14141C)),
+                      border: Border.all(color: context.bgCard),
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1290,20 +1291,20 @@ class _HomeScreenState extends State<HomeScreen> {
                             borderRadius: BorderRadius.circular(6),
                             child: Container(
                               width: double.infinity,
-                              color: const Color(0xFF14141A),
+                              color: context.bgCard,
                               child: album.coverArtUrl != null
                                   ? Image.network(
                                       album.coverArtUrl!,
                                       fit: BoxFit.cover,
                                       errorBuilder: (_, __, ___) =>
-                                          const Center(
+                                          Center(
                                         child: Icon(Icons.album,
-                                            color: Colors.white38, size: 28),
+                                            color: context.textMuted, size: 28),
                                       ),
                                     )
-                                  : const Center(
+                                  : Center(
                                       child: Icon(Icons.album,
-                                          color: Colors.white38, size: 28),
+                                          color: context.textMuted, size: 28),
                                     ),
                             ),
                           ),
@@ -1313,8 +1314,8 @@ class _HomeScreenState extends State<HomeScreen> {
                           album.title,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: Colors.white,
+                          style: TextStyle(
+                            color: context.textPrimary,
                             fontSize: 12,
                             fontWeight: FontWeight.w600,
                           ),
@@ -1323,8 +1324,8 @@ class _HomeScreenState extends State<HomeScreen> {
                           album.artist,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                              color: Colors.white54, fontSize: 11),
+                          style: TextStyle(
+                              color: context.textMuted, fontSize: 11),
                         ),
                       ],
                     ),
@@ -1350,17 +1351,17 @@ class _HomeScreenState extends State<HomeScreen> {
         final artists = snapshot.data ?? <Artist>[];
         if (snapshot.connectionState == ConnectionState.waiting &&
             artists.isEmpty) {
-          return const SizedBox(
+          return SizedBox(
             height: 160,
             child: Center(
               child: CircularProgressIndicator(
-                  strokeWidth: 2, color: Color(0xFFA855F7)),
+                  strokeWidth: 2, color: context.accent),
             ),
           );
         }
         if (artists.isEmpty) {
-          return const Text('Sin artistas',
-              style: TextStyle(color: Colors.white54));
+          return Text('Sin artistas',
+              style: TextStyle(color: context.textMuted));
         }
         return SizedBox(
           height: 160,
@@ -1387,9 +1388,9 @@ class _HomeScreenState extends State<HomeScreen> {
                             width: 110,
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
-                              color: const Color(0xFF140E24),
+                              color: context.bgElevated,
                               border: Border.all(
-                                color: const Color(0xFFA855F7)
+                                color: context.accent
                                     .withValues(alpha: 0.35),
                                 width: 1.2,
                               ),
@@ -1401,9 +1402,9 @@ class _HomeScreenState extends State<HomeScreen> {
                                   : null,
                             ),
                             child: artist.coverArtUrl == null
-                                ? const Center(
+                                ? Center(
                                     child: Icon(Icons.person,
-                                        color: Colors.white38, size: 36),
+                                        color: context.textMuted, size: 36),
                                   )
                                 : null,
                           ),
@@ -1414,8 +1415,8 @@ class _HomeScreenState extends State<HomeScreen> {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           textAlign: TextAlign.center,
-                          style: const TextStyle(
-                            color: Colors.white,
+                          style: TextStyle(
+                            color: context.textPrimary,
                             fontSize: 12,
                             fontWeight: FontWeight.w600,
                           ),
@@ -1436,11 +1437,11 @@ class _HomeScreenState extends State<HomeScreen> {
     final player = context.watch<PlayerController>();
     final items = player.recentlyPlayed.take(6).toList();
     if (items.isEmpty) {
-      return const Padding(
+      return Padding(
         padding: EdgeInsets.symmetric(vertical: 8),
         child: Text(
           'Todavía no has reproducido ninguna canción',
-          style: TextStyle(color: Colors.white38, fontSize: 12.5),
+          style: TextStyle(color: context.textMuted, fontSize: 12.5),
         ),
       );
     }
@@ -1456,11 +1457,11 @@ class _HomeScreenState extends State<HomeScreen> {
                   child: Container(
                     width: 40,
                     height: 40,
-                    color: const Color(0xFF14141A),
+                    color: context.bgCard,
                     child: track.albumArtUrl != null
                         ? Image.network(track.albumArtUrl!, fit: BoxFit.cover)
-                        : const Icon(Icons.music_note,
-                            color: Colors.white38, size: 20),
+                        : Icon(Icons.music_note,
+                            color: context.textMuted, size: 20),
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -1472,8 +1473,8 @@ class _HomeScreenState extends State<HomeScreen> {
                         track.title,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: Colors.white,
+                        style: TextStyle(
+                          color: context.textPrimary,
                           fontSize: 13,
                           fontWeight: FontWeight.w600,
                         ),
@@ -1482,15 +1483,15 @@ class _HomeScreenState extends State<HomeScreen> {
                         track.artist,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                            color: Colors.white54, fontSize: 11.5),
+                        style: TextStyle(
+                            color: context.textMuted, fontSize: 11.5),
                       ),
                     ],
                   ),
                 ),
                 IconButton(
-                  icon: const Icon(Icons.play_circle_fill_rounded,
-                      color: Color(0xFFA855F7), size: 28),
+                  icon: Icon(Icons.play_circle_fill_rounded,
+                      color: context.accent, size: 28),
                   onPressed: () {
                     context.read<PlayerController>().playQueue([track], startIndex: 0);
                   },
@@ -1520,8 +1521,8 @@ class _SectionLabel extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 8),
       child: Text(
         label,
-        style: const TextStyle(
-          color: Color(0xFFA855F7),
+        style: TextStyle(
+          color: context.accent,
           fontSize: 15,
           fontWeight: FontWeight.bold,
         ),
