@@ -2,12 +2,12 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
-import 'package:qr_flutter/qr_flutter.dart';
 
 import '../models/pairing_models.dart';
 import '../services/pairing_client.dart';
 import '../services/pairing_server.dart';
 import '../utils/app_colors.dart';
+import 'pairing_qr_code.dart';
 
 // =============================================================================
 // LADO PC: PairingSharePanel (AMOLED)
@@ -65,7 +65,10 @@ class _PairingSharePanelState extends State<PairingSharePanel> {
   void _startTicker() {
     _ticker?.cancel();
     _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (!mounted) return;
+      if (!mounted) {
+        _ticker?.cancel();
+        return;
+      }
       if (!widget.server.isActive) {
         _ticker?.cancel();
       }
@@ -91,6 +94,7 @@ class _PairingSharePanelState extends State<PairingSharePanel> {
         username: creds.username,
         password: creds.password,
       );
+      if (!mounted) return;
       _startTicker();
     } catch (e) {
       _errorMessage = e.toString().replaceFirst('Exception: ', '');
@@ -281,7 +285,7 @@ class _PairingSharePanelState extends State<PairingSharePanel> {
             Container(
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
-                color: context.textPrimary,
+                color: Colors.white,
                 borderRadius: BorderRadius.circular(14),
                 boxShadow: [
                   BoxShadow(
@@ -291,12 +295,9 @@ class _PairingSharePanelState extends State<PairingSharePanel> {
                   ),
                 ],
               ),
-              child: QrImageView(
+              child: PairingQrCode(
                 data: qrData,
-                version: QrVersions.auto,
                 size: widget.compact ? 150 : 175,
-                backgroundColor: context.textPrimary,
-                padding: EdgeInsets.zero,
               ),
             ),
             const SizedBox(height: 14),
@@ -516,10 +517,12 @@ class _AmoledCodeGroupChip extends StatelessWidget {
 /// - Desplegable: 🌐 Conexión Manual por IP
 class PairingJoinPanel extends StatefulWidget {
   final Future<void> Function(PairCredentials creds) onCredentialsReceived;
+  final bool autoOpenScanner;
 
   const PairingJoinPanel({
     super.key,
     required this.onCredentialsReceived,
+    this.autoOpenScanner = false,
   });
 
   @override
@@ -550,6 +553,13 @@ class _PairingJoinPanelState extends State<PairingJoinPanel> {
   void initState() {
     super.initState();
     _scanLanDevices();
+    if (widget.autoOpenScanner) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && !_loading) {
+          unawaited(_openQrScanner());
+        }
+      });
+    }
   }
 
   @override
@@ -1400,30 +1410,137 @@ class QrScannerSheet extends StatefulWidget {
   State<QrScannerSheet> createState() => _QrScannerSheetState();
 }
 
-class _QrScannerSheetState extends State<QrScannerSheet> {
+class _QrScannerSheetState extends State<QrScannerSheet>
+    with WidgetsBindingObserver {
   final MobileScannerController _controller = MobileScannerController(
+    autoStart: false,
     detectionSpeed: DetectionSpeed.normal,
     facing: CameraFacing.back,
     torchEnabled: false,
   );
   bool _handled = false;
+  String? _startError;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) unawaited(_startScanner());
+    });
+  }
 
   @override
   void dispose() {
-    _controller.dispose();
+    WidgetsBinding.instance.removeObserver(this);
+    unawaited(_controller.dispose());
     super.dispose();
   }
 
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    switch (state) {
+      case AppLifecycleState.resumed:
+        unawaited(_startScanner());
+        return;
+      case AppLifecycleState.inactive:
+      case AppLifecycleState.hidden:
+      case AppLifecycleState.paused:
+      case AppLifecycleState.detached:
+        unawaited(_controller.stop());
+        return;
+    }
+  }
+
+  Future<void> _startScanner() async {
+    if (!mounted) return;
+    try {
+      await _controller.start();
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _startError = 'No se pudo iniciar la cámara en este dispositivo.';
+        });
+      }
+    }
+  }
+
+  Future<void> _toggleTorch() async {
+    try {
+      await _controller.toggleTorch();
+    } on MobileScannerException {
+      // La cámara todavía no está lista o el dispositivo no tiene linterna.
+    }
+  }
+
   void _onDetect(BarcodeCapture capture) {
-    if (_handled) return;
+    if (_handled || !mounted) return;
     for (final barcode in capture.barcodes) {
       final value = barcode.rawValue;
       if (value != null && value.startsWith('scrotify://pair')) {
         _handled = true;
+        unawaited(_controller.stop());
         Navigator.of(context).pop(value);
         break;
       }
     }
+  }
+
+  String _cameraErrorMessage(MobileScannerException error) {
+    if (error.errorCode == MobileScannerErrorCode.permissionDenied) {
+      return 'Permite el acceso a la cámara para escanear el código QR.';
+    }
+    if (error.errorCode == MobileScannerErrorCode.unsupported) {
+      return 'Este dispositivo no tiene una cámara compatible.';
+    }
+    return 'No se pudo iniciar la cámara. Cierra e intenta abrir el escáner otra vez.';
+  }
+
+  Widget _buildCameraProblem(BuildContext context, String message) {
+    return ColoredBox(
+      color: context.bgDeep,
+      child: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.camera_alt_outlined, color: context.warning, size: 34),
+              const SizedBox(height: 12),
+              Text(
+                message,
+                textAlign: TextAlign.center,
+                style: TextStyle(color: context.textPrimary, fontSize: 13),
+              ),
+              const SizedBox(height: 12),
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('Cerrar escáner'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCameraPlaceholder(BuildContext context) {
+    return ColoredBox(
+      color: context.bgDeep,
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            CircularProgressIndicator(color: context.accent, strokeWidth: 2),
+            const SizedBox(height: 12),
+            Text(
+              'Solicitando acceso a la cámara...',
+              style: TextStyle(color: context.textMuted, fontSize: 12.5),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   @override
@@ -1459,10 +1576,22 @@ class _QrScannerSheetState extends State<QrScannerSheet> {
                   ),
                 ),
                 const Spacer(),
-                IconButton(
-                  icon: Icon(Icons.flash_on,
-                      color: context.textSecondary, size: 20),
-                  onPressed: () => _controller.toggleTorch(),
+                ValueListenableBuilder<MobileScannerState>(
+                  valueListenable: _controller,
+                  builder: (context, state, _) => IconButton(
+                    tooltip: 'Linterna',
+                    icon: Icon(
+                      state.torchState == TorchState.on
+                          ? Icons.flash_on
+                          : Icons.flash_off,
+                      color: context.textSecondary,
+                      size: 20,
+                    ),
+                    onPressed: state.isRunning &&
+                            state.torchState != TorchState.unavailable
+                        ? _toggleTorch
+                        : null,
+                  ),
                 ),
                 IconButton(
                   icon:
@@ -1485,28 +1614,30 @@ class _QrScannerSheetState extends State<QrScannerSheet> {
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(16),
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    MobileScanner(
-                      controller: _controller,
-                      onDetect: _onDetect,
-                    ),
-                    Center(
-                      child: Container(
-                        width: 220,
-                        height: 220,
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(
-                            color: context.accent,
-                            width: 2.2,
+                child: _startError == null
+                    ? MobileScanner(
+                        controller: _controller,
+                        onDetect: _onDetect,
+                        placeholderBuilder: (context, _) =>
+                            _buildCameraPlaceholder(context),
+                        errorBuilder: (context, error, _) =>
+                            _buildCameraProblem(
+                                context, _cameraErrorMessage(error)),
+                        overlayBuilder: (context, _) => Center(
+                          child: Container(
+                            width: 220,
+                            height: 220,
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(
+                                color: context.accent,
+                                width: 2.2,
+                              ),
+                            ),
                           ),
                         ),
-                      ),
-                    ),
-                  ],
-                ),
+                      )
+                    : _buildCameraProblem(context, _startError!),
               ),
             ),
           ),

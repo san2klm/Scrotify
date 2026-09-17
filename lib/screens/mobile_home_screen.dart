@@ -159,7 +159,7 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
     }
   }
 
-  void _openPairingModal() {
+  void _openPairingModal({bool autoOpenScanner = false}) {
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -210,6 +210,7 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
               ),
               const SizedBox(height: 12),
               PairingJoinPanel(
+                autoOpenScanner: autoOpenScanner,
                 onCredentialsReceived: (creds) async {
                   Navigator.of(ctx).pop();
                   final nav = context.read<NavidromeService>();
@@ -423,7 +424,7 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
                 tooltip: 'Vincular con PC',
                 icon: Icon(Icons.qr_code_2_rounded,
                     color: context.accent, size: 22),
-                onPressed: _openPairingModal,
+                onPressed: () => _openPairingModal(autoOpenScanner: true),
               ),
 
               // Botón Ajustes
