@@ -1,9 +1,11 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
 
 import 'package:cryptography/cryptography.dart';
 import 'package:flutter/foundation.dart';
+import 'package:web_socket_channel/web_socket_channel.dart';
 
 import '../models/pairing_models.dart';
 import '../utils/crypto_helper.dart';
@@ -18,9 +20,17 @@ import '../utils/crypto_helper.dart';
 class PairingServer {
   static const int _defaultTtlSeconds = 300; // 5 min
 
+  /// Sólo se desactiva en tests de la antigua vía LAN. En la app, todo QR usa
+  /// el relay temporal gratuito de ntfy.sh.
+  PairingServer({this.useRelay = true});
+
+  final bool useRelay;
+
   HttpServer? _server;
   RawDatagramSocket? _discoverySocket;
   Timer? _expiryTimer;
+  WebSocketChannel? _relayChannel;
+  StreamSubscription<dynamic>? _relaySubscription;
 
   String? _hostIp;
   List<String> _allLocalIps = [];
@@ -32,7 +42,9 @@ class PairingServer {
   String? _username;
   String? _password;
   String _deviceName = '';
-  SimpleKeyPair? _ephemeralKeyPair; // clave efímera del PC para este emparejamiento
+  String? _relayTopic;
+  SimpleKeyPair?
+      _ephemeralKeyPair; // clave efímera del PC para este emparejamiento
   final _statusController = StreamController<PairingStatus>.broadcast();
 
   /// Stream del estado para la UI.
@@ -44,9 +56,18 @@ class PairingServer {
   String get deviceName => _deviceName;
   String? get currentCode => _currentCode?.value;
   String? get currentCodeFormatted => _currentCode?.formatted;
-  String? get qrDataUri => _currentCode != null && _hostIp != null
-      ? QrData(host: _hostIp!, port: _port, code: _currentCode!.value).toUri()
-      : null;
+  String? get qrDataUri {
+    if (_currentCode == null) return null;
+    if (_relayTopic != null) {
+      return QrData(code: _currentCode!.value, relayTopic: _relayTopic).toUri();
+    }
+    if (_hostIp != null) {
+      return QrData(host: _hostIp, port: _port, code: _currentCode!.value)
+          .toUri();
+    }
+    return null;
+  }
+
   int get remainingSeconds => _expiresAt != null
       ? (_expiresAt!.difference(DateTime.now()).inSeconds)
           .clamp(0, _defaultTtlSeconds)
@@ -71,6 +92,7 @@ class PairingServer {
     // Generar código y clave efímera
     _currentCode = PairCode.generate();
     _ephemeralKeyPair = await generateKeyPair();
+    _relayTopic = useRelay ? _newRelayTopic() : null;
     _expiresAt = DateTime.now().add(Duration(seconds: ttlSeconds));
     _status = PairingStatus.waiting;
     _statusController.add(_status);
@@ -85,6 +107,17 @@ class PairingServer {
 
     // Rutas HTTP
     _server!.listen(_handleRequest);
+
+    // El QR no expone la IP local: el PC escucha su topic temporal gratuito
+    // de ntfy y sólo procesa payloads cifrados para este emparejamiento.
+    if (useRelay) {
+      try {
+        await _startRelaySubscription();
+      } catch (_) {
+        await stop();
+        rethrow;
+      }
+    }
 
     // Timer de expiración
     _expiryTimer = Timer(Duration(seconds: ttlSeconds), _expire);
@@ -111,6 +144,13 @@ class PairingServer {
 
     _stopDiscoveryBeacon();
 
+    await _relaySubscription?.cancel();
+    _relaySubscription = null;
+    try {
+      await _relayChannel?.sink.close();
+    } catch (_) {}
+    _relayChannel = null;
+
     if (_server != null) {
       try {
         await _server!.close(force: true);
@@ -131,6 +171,103 @@ class PairingServer {
     _hostIp = null;
     _allLocalIps = [];
     _port = 0;
+    _relayTopic = null;
+  }
+
+  String _newRelayTopic() {
+    const alphabet = 'abcdefghijklmnopqrstuvwxyz0123456789';
+    final random = Random.secure();
+    return 'scrotify-${List.generate(32, (_) => alphabet[random.nextInt(alphabet.length)]).join()}';
+  }
+
+  Future<void> _startRelaySubscription() async {
+    final topic = _relayTopic!;
+    final channel =
+        WebSocketChannel.connect(Uri.parse('wss://ntfy.sh/$topic/ws'));
+    _relayChannel = channel;
+    _relaySubscription = channel.stream.listen(
+      _onRelayMessage,
+      onError: (Object error) {
+        debugPrint('PairingServer relay error: $error');
+      },
+    );
+    await channel.ready.timeout(const Duration(seconds: 12));
+  }
+
+  void _onRelayMessage(dynamic raw) {
+    if (_status != PairingStatus.waiting || raw is! String) return;
+    try {
+      final envelope = jsonDecode(raw) as Map<String, dynamic>;
+      if (envelope['event'] != 'message') return;
+      final message =
+          jsonDecode(envelope['message'] as String) as Map<String, dynamic>;
+      if (message['op'] != 'claim') return;
+      unawaited(_handleRelayClaim(message));
+    } catch (_) {
+      // Los topics públicos pueden recibir basura; se ignora de forma segura.
+    }
+  }
+
+  Future<void> _handleRelayClaim(Map<String, dynamic> message) async {
+    if (_status != PairingStatus.waiting || _currentCode == null) return;
+    final code = message['code'] as String?;
+    final publicKey = message['publicKey'] as String?;
+    final requestId = message['requestId'] as String?;
+    if (code?.toUpperCase() != _currentCode!.value ||
+        publicKey == null ||
+        publicKey.length < 40 ||
+        requestId == null ||
+        requestId.length < 16) {
+      return;
+    }
+
+    try {
+      final credentials = PairCredentials(
+        url: _serverUrl!,
+        username: _username!,
+        password: _password!,
+      );
+      final encrypted = await sealEncrypt(
+        ephemeralKeyPair: _ephemeralKeyPair!,
+        recipientPublicKey: SimplePublicKey(
+          base64Url.decode(publicKey),
+          type: KeyPairType.x25519,
+        ),
+        plaintext:
+            Uint8List.fromList(utf8.encode(jsonEncode(credentials.toJson()))),
+      );
+      await _publishRelay({
+        'op': 'credentials',
+        'requestId': requestId,
+        'payload': encrypted,
+      });
+      _status = PairingStatus.paired;
+      _statusController.add(_status);
+      _expiryTimer?.cancel();
+      _stopDiscoveryBeacon();
+      Future.delayed(const Duration(milliseconds: 500), () => stop());
+    } catch (error) {
+      debugPrint('PairingServer relay claim failed: $error');
+    }
+  }
+
+  Future<void> _publishRelay(Map<String, dynamic> message) async {
+    final topic = _relayTopic;
+    if (topic == null) throw StateError('No hay relay activo.');
+    final client = HttpClient();
+    try {
+      final request = await client.postUrl(Uri.parse('https://ntfy.sh/'));
+      request.headers.contentType = ContentType.json;
+      request
+          .write(jsonEncode({'topic': topic, 'message': jsonEncode(message)}));
+      final response = await request.close();
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        throw HttpException('ntfy respondió HTTP ${response.statusCode}');
+      }
+      await response.drain();
+    } finally {
+      client.close(force: true);
+    }
   }
 
   Future<void> _handleRequest(HttpRequest req) async {
@@ -287,7 +424,8 @@ class PairingServer {
           _handleDiscoveryDatagram(dg);
         }
       });
-      debugPrint('PairingServer: discovery beacon bound on port $kPairingDiscoveryPort');
+      debugPrint(
+          'PairingServer: discovery beacon bound on port $kPairingDiscoveryPort');
     } catch (e) {
       debugPrint('PairingServer: discovery beacon failed to bind: $e');
     }

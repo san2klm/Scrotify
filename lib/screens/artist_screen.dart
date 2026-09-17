@@ -5,6 +5,7 @@ import '../services/navidrome_service.dart';
 import '../services/player_controller.dart';
 import '../widgets/cover_art.dart';
 import '../widgets/persistent_player_bar.dart';
+import '../widgets/global_top_bar.dart';
 import 'album_detail_screen.dart';
 import '../utils/app_colors.dart';
 
@@ -41,10 +42,17 @@ class _ArtistScreenState extends State<ArtistScreen> {
     final compact = MediaQuery.sizeOf(context).width < 700;
     return Scaffold(
       backgroundColor: context.bgApp,
-      body: CustomScrollView(
-        slivers: [
-          _buildSliverAppBar(),
-          SliverToBoxAdapter(child: _buildContent()),
+      body: Column(
+        children: [
+          const GlobalTopBar(title: 'Artista'),
+          Expanded(
+            child: CustomScrollView(
+              slivers: [
+                _buildSliverAppBar(),
+                SliverToBoxAdapter(child: _buildContent()),
+              ],
+            ),
+          ),
         ],
       ),
       bottomNavigationBar: SafeArea(
@@ -135,7 +143,8 @@ class _ArtistScreenState extends State<ArtistScreen> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Icon(
-                  player.playing && player.currentTrack?.artist == widget.artist.name
+                  player.playing &&
+                          player.currentTrack?.artist == widget.artist.name
                       ? Icons.pause
                       : Icons.play_arrow,
                   color: context.onAccent,
@@ -189,7 +198,8 @@ class _ArtistScreenState extends State<ArtistScreen> {
                     Center(
                       child: Padding(
                         padding: EdgeInsets.all(16),
-                        child: CircularProgressIndicator(color: context.textPrimary),
+                        child: CircularProgressIndicator(
+                            color: context.textPrimary),
                       ),
                     )
                   else if (tracks.isEmpty)
@@ -206,12 +216,14 @@ class _ArtistScreenState extends State<ArtistScreen> {
                   // ── Álbumes ─────────────────────────────────────────
                   _sectionHeader('Álbumes', albums.isNotEmpty),
                   const SizedBox(height: 8),
-                  if (albumSnapshot.connectionState == ConnectionState.waiting &&
+                  if (albumSnapshot.connectionState ==
+                          ConnectionState.waiting &&
                       albums.isEmpty)
                     Center(
                       child: Padding(
                         padding: EdgeInsets.all(16),
-                        child: CircularProgressIndicator(color: context.textPrimary),
+                        child: CircularProgressIndicator(
+                            color: context.textPrimary),
                       ),
                     )
                   else if (albums.isEmpty)
@@ -256,9 +268,8 @@ class _ArtistScreenState extends State<ArtistScreen> {
   }
 
   Widget _buildTracksList(List<Track> tracks) {
-    final displayTracks = _showAllTracks
-        ? tracks
-        : tracks.take(_initialTrackCount).toList();
+    final displayTracks =
+        _showAllTracks ? tracks : tracks.take(_initialTrackCount).toList();
 
     return Column(
       children: [
@@ -303,13 +314,11 @@ class _ArtistScreenState extends State<ArtistScreen> {
               child: Center(
                 child: Consumer<PlayerController>(
                   builder: (context, player, _) {
-                    final isPlayingThis = player.playing &&
-                        player.currentTrack?.id == track.id;
+                    final isPlayingThis =
+                        player.playing && player.currentTrack?.id == track.id;
                     return Icon(
                       isPlayingThis ? Icons.pause : Icons.play_arrow,
-                      color: isPlayingThis
-                          ? context.accent
-                          : context.textMuted,
+                      color: isPlayingThis ? context.accent : context.textMuted,
                       size: 22,
                     );
                   },
@@ -402,8 +411,7 @@ class _ArtistScreenState extends State<ArtistScreen> {
         return InkWell(
           onTap: () => Navigator.push(
             context,
-            MaterialPageRoute(
-                builder: (_) => AlbumDetailScreen(album: album)),
+            MaterialPageRoute(builder: (_) => AlbumDetailScreen(album: album)),
           ),
           borderRadius: BorderRadius.circular(8),
           child: Column(

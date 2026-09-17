@@ -152,10 +152,22 @@ class PersistentPlayerBar extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 12),
               child: Row(
                 children: [
-                  _artwork(context, track),
-                  const SizedBox(width: 10),
-                  Expanded(child: _trackInfo(context, track)),
-                  _favoriteButton(context, track, compact: true),
+                  // La zona completa (portada + nombre + corazón) abre el
+                  // reproductor en pantalla completa al tocarla.
+                  Expanded(
+                    child: InkWell(
+                      onTap: () => _openPlayerScreen(context),
+                      borderRadius: BorderRadius.circular(8),
+                      child: Row(
+                        children: [
+                          _artwork(context, track),
+                          const SizedBox(width: 10),
+                          Expanded(child: _trackInfo(context, track)),
+                          _favoriteButton(context, track, compact: true),
+                        ],
+                      ),
+                    ),
+                  ),
                   const SizedBox(width: 4),
                   ..._mobileControls(context, player, playing),
                 ],
@@ -170,13 +182,15 @@ class PersistentPlayerBar extends StatelessWidget {
   List<Widget> _mobileControls(
       BuildContext context, PlayerController player, bool playing) {
     return [
-      _compactControlIcon(context, 
+      _compactControlIcon(
+        context,
         Icons.skip_previous,
         player.skipPrevious,
         size: 24,
       ),
       _playButton(context, player, playing, compact: true),
-      _compactControlIcon(context, 
+      _compactControlIcon(
+        context,
         Icons.skip_next,
         player.skipNext,
         size: 24,
@@ -189,7 +203,6 @@ class PersistentPlayerBar extends StatelessWidget {
             color: context.textSecondary, size: 20),
         onPressed: () => JamQueuePanel.show(context),
       ),
-      _openFullButton(context, up: true),
     ];
   }
 
@@ -300,8 +313,8 @@ class PersistentPlayerBar extends StatelessWidget {
     );
   }
 
-  Widget _favoriteButton(
-      BuildContext context, Track? track, {bool compact = false}) {
+  Widget _favoriteButton(BuildContext context, Track? track,
+      {bool compact = false}) {
     if (track == null) {
       return const SizedBox.shrink();
     }
@@ -321,10 +334,9 @@ class PersistentPlayerBar extends StatelessWidget {
     );
   }
 
-  Widget _compactControlIcon(BuildContext context, IconData icon,
-      VoidCallback onPressed,
-      {Color? color,
-      double size = 24}) {
+  Widget _compactControlIcon(
+      BuildContext context, IconData icon, VoidCallback onPressed,
+      {Color? color, double size = 24}) {
     return IconButton(
       visualDensity: VisualDensity.compact,
       padding: EdgeInsets.zero,
@@ -351,25 +363,24 @@ class PersistentPlayerBar extends StatelessWidget {
     );
   }
 
-  Widget _openFullButton(BuildContext context, {bool up = false}) {
+  Widget _openFullButton(BuildContext context) {
     return IconButton(
-      visualDensity: up ? VisualDensity.compact : null,
-      padding: up ? EdgeInsets.zero : null,
-      constraints:
-          up ? const BoxConstraints(minWidth: 36, minHeight: 36) : null,
+      visualDensity: VisualDensity.compact,
       icon: Icon(
-        up ? Icons.keyboard_arrow_up : Icons.fullscreen,
+        Icons.fullscreen,
         color: context.textSecondary,
-        size: up ? 28 : 18,
+        size: 18,
       ),
-      onPressed: () {
-        final player = context.read<PlayerController>();
-        if (player.currentTrack == null) return;
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => const PlayerScreen()),
-        );
-      },
+      onPressed: () => _openPlayerScreen(context),
+    );
+  }
+
+  void _openPlayerScreen(BuildContext context) {
+    final player = context.read<PlayerController>();
+    if (player.currentTrack == null) return;
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const PlayerScreen()),
     );
   }
 }
@@ -431,7 +442,8 @@ class _DesktopProgressBarState extends State<_DesktopProgressBar> {
                       width: 40,
                       child: Text(
                         _format(Duration(milliseconds: currentMs.round())),
-                        style: TextStyle(color: context.textSecondary, fontSize: 11),
+                        style: TextStyle(
+                            color: context.textSecondary, fontSize: 11),
                         textAlign: TextAlign.right,
                       ),
                     ),
@@ -449,8 +461,8 @@ class _DesktopProgressBarState extends State<_DesktopProgressBar> {
                               enabledThumbRadius: _hovering ? 6 : 0,
                             ),
                             overlayColor: context.accentDim,
-                            overlayShape:
-                                const RoundSliderOverlayShape(overlayRadius: 14),
+                            overlayShape: const RoundSliderOverlayShape(
+                                overlayRadius: 14),
                           ),
                           child: Slider(
                             min: 0,
@@ -471,7 +483,8 @@ class _DesktopProgressBarState extends State<_DesktopProgressBar> {
                       width: 40,
                       child: Text(
                         _format(duration),
-                        style: TextStyle(color: context.textSecondary, fontSize: 11),
+                        style: TextStyle(
+                            color: context.textSecondary, fontSize: 11),
                       ),
                     ),
                   ],

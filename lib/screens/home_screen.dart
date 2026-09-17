@@ -1,20 +1,18 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../services/jam_controller.dart';
 import '../services/navidrome_service.dart';
-import '../services/pairing_server.dart';
 import '../services/player_controller.dart';
 import '../widgets/persistent_player_bar.dart';
 import '../widgets/cover_art.dart';
-import '../widgets/pairing_panel.dart';
-import '../widgets/jam_dialog.dart';
-import '../widgets/server_activity_panel.dart';
+import '../widgets/create_playlist_dialog.dart';
+import '../widgets/global_top_bar.dart';
 import '../widgets/track_context_menu.dart';
 import 'liked_songs_screen.dart';
 import 'playlist_detail_screen.dart';
 import 'album_detail_screen.dart';
 import 'artist_screen.dart';
-import 'settings_screen.dart';
 import '../utils/app_colors.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -35,12 +33,44 @@ class _HomeScreenState extends State<HomeScreen> {
   final TextEditingController _searchController = TextEditingController();
   SearchResults? _searchResults;
   bool _searching = false;
+  Timer? _serverPlayCountTimer;
+  bool _refreshingPlayCounts = false;
+  final ScrollController _artistsScrollController = ScrollController();
+  int _explorePageSize = 25;
+  int _explorePage = 0;
 
   @override
   void initState() {
     super.initState();
-    _futureTracks = context.read<NavidromeService>().getTracks();
+    _futureTracks = _loadTracks();
     _futurePlaylists = context.read<NavidromeService>().getPlaylists();
+    _serverPlayCountTimer = Timer.periodic(
+      const Duration(seconds: 30),
+      (_) => _refreshServerPlayCounts(),
+    );
+  }
+
+  Future<List<Track>> _loadTracks() async {
+    final tracks = await context.read<NavidromeService>().getTracks();
+    if (mounted) {
+      context.read<PlayerController>().syncServerPlayCounts(tracks);
+    }
+    return tracks;
+  }
+
+  Future<void> _refreshServerPlayCounts() async {
+    if (_refreshingPlayCounts || !mounted) return;
+    _refreshingPlayCounts = true;
+    try {
+      final tracks = await context.read<NavidromeService>().getTracks();
+      if (mounted) {
+        context.read<PlayerController>().syncServerPlayCounts(tracks);
+      }
+    } catch (_) {
+      // La siguiente actualización periódica reintentará si no hay conexión.
+    } finally {
+      _refreshingPlayCounts = false;
+    }
   }
 
   Future<void> _runSearch(String query) async {
@@ -71,61 +101,11 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  void _openPairingDialog() {
-    final nav = context.read<NavidromeService>();
-    final server = context.read<PairingServer>();
-    showDialog<void>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: context.bgApp,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
-          side: BorderSide(color: context.bgElevated, width: 1.2),
-        ),
-        titlePadding: const EdgeInsets.fromLTRB(20, 16, 12, 0),
-        contentPadding: const EdgeInsets.all(20),
-        title: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(6),
-              decoration: BoxDecoration(
-                color: context.accent2.withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Icon(Icons.qr_code_2_rounded,
-                  color: context.accent, size: 20),
-            ),
-            const SizedBox(width: 10),
-            Text(
-              'Vincular con tu Teléfono',
-              style: TextStyle(
-                color: context.textPrimary,
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const Spacer(),
-            IconButton(
-              icon: Icon(Icons.close, color: context.textMuted, size: 20),
-              onPressed: () => Navigator.of(ctx).pop(),
-            ),
-          ],
-        ),
-        content: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 420),
-          child: PairingSharePanel(
-            compact: true,
-            server: server,
-            onGetCredentials: () async => nav.currentCredentials,
-          ),
-        ),
-      ),
-    );
-  }
-
   @override
   void dispose() {
+    _serverPlayCountTimer?.cancel();
     _searchController.dispose();
+    _artistsScrollController.dispose();
     super.dispose();
   }
 
@@ -139,7 +119,7 @@ class _HomeScreenState extends State<HomeScreen> {
         if (!mounted) return;
         setState(() {
           final svc = context.read<NavidromeService>();
-          _futureTracks = svc.getTracks();
+          _futureTracks = _loadTracks();
           _futurePlaylists = svc.getPlaylists();
         });
       });
@@ -174,7 +154,9 @@ class _HomeScreenState extends State<HomeScreen> {
           Expanded(
             child: Row(
               children: [
-                if (!_libraryCollapsed) _buildLibraryPanel(),
+                _libraryCollapsed
+                    ? _buildCollapsedLibraryPanel()
+                    : _buildLibraryPanel(),
                 Expanded(child: _buildMainPanel()),
               ],
             ),
@@ -189,323 +171,138 @@ class _HomeScreenState extends State<HomeScreen> {
   // BARRA SUPERIOR PERSISTENTE (GLOBAL HEADER)
   // ===========================================================================
   Widget _buildPersistentGlobalTopBar(NavidromeService nav) {
-    final username = nav.username ?? 'U';
-    final initial = username.isNotEmpty ? username[0].toUpperCase() : 'U';
-
-    return Container(
-      height: 60,
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      decoration: BoxDecoration(
-        color: context.bgApp,
-        border: Border(
-          bottom: BorderSide(color: context.bgElevated, width: 1.2),
-        ),
-      ),
-      child: Row(
-        children: [
-          // Logo de Scrotify
-          InkWell(
-            onTap: () {
-              setState(() {
-                _searchResults = null;
-                _searchController.clear();
-                _activeNavIndex = 0;
-              });
-            },
-            borderRadius: BorderRadius.circular(8),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-              child: Row(
-                children: [
-                  Container(
-                    width: 32,
-                    height: 32,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: context.bgElevated,
-                      border: Border.all(
-                        color: context.accent.withValues(alpha: 0.5),
-                        width: 1.2,
-                      ),
-                    ),
-                    child: Icon(
-                      Icons.graphic_eq_rounded,
-                      color: context.accent,
-                      size: 18,
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Text(
-                    'SCROTIFY',
-                    style: TextStyle(
-                      color: context.textPrimary,
-                      fontSize: 15,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: 2,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-
-          const SizedBox(width: 16),
-
-          // Botones de navegación persistentes
-          _navItem(
-            index: 0,
-            icon: Icons.home_rounded,
-            label: 'Inicio',
-            onTap: () {
-              setState(() {
-                _searchResults = null;
-                _searchController.clear();
-                _activeNavIndex = 0;
-              });
-            },
-          ),
-          const SizedBox(width: 6),
-          _navItem(
-            index: 1,
-            icon: Icons.explore_outlined,
-            label: 'Explorar',
-            onTap: () {
-              setState(() {
-                _activeNavIndex = 1;
-              });
-            },
-          ),
-
-          const SizedBox(width: 16),
-
-          // Barra de Búsqueda Omnibox Central
-          Expanded(
-            child: Center(
-              child: Container(
-                height: 38,
-                constraints: const BoxConstraints(maxWidth: 480),
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                decoration: BoxDecoration(
-                  color: context.inputBg,
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: context.inputBorder),
-                ),
-                child: Row(
-                  children: [
-                    Icon(Icons.search_rounded,
-                        color: context.textMuted, size: 18),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: TextField(
-                        controller: _searchController,
-                        style: TextStyle(color: context.textPrimary, fontSize: 13),
-                        textInputAction: TextInputAction.search,
-                        onChanged: _runSearch,
-                        decoration: InputDecoration(
-                          hintText: '¿Qué quieres escuchar hoy?',
-                          hintStyle:
-                              TextStyle(color: context.textMuted, fontSize: 13),
-                          border: InputBorder.none,
-                          isDense: true,
-                        ),
-                      ),
-                    ),
-                    if (_searchController.text.isNotEmpty)
-                      IconButton(
-                        icon: Icon(Icons.close_rounded,
-                            size: 16, color: context.textMuted),
-                        onPressed: () {
-                          _searchController.clear();
-                          _runSearch('');
-                        },
-                      )
-                    else if (_searching)
-                      SizedBox(
-                        width: 14,
-                        height: 14,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 1.8,
-                          color: context.accent,
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-
-          const SizedBox(width: 16),
-
-          // Botón Rápido: Jam (Sesión compartida / colaborativa)
-          Consumer<JamController>(
-            builder: (context, jam, _) {
-              if (jam.inJam) {
-                return FilledButton.tonalIcon(
-                  onPressed: () => JamDialog.show(context),
-                  style: FilledButton.styleFrom(
-                    backgroundColor:
-                        context.accent.withValues(alpha: 0.18),
-                    foregroundColor: context.accent,
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
-                      side: BorderSide(
-                          color: context.accent, width: 0.8),
-                    ),
-                  ),
-                  icon: const Icon(Icons.speaker_group_rounded, size: 17),
-                  label: Text(
-                    'Jam (${jam.participants.length})',
-                    style: const TextStyle(
-                        fontSize: 12, fontWeight: FontWeight.bold),
-                  ),
-                );
-              }
-              return FilledButton.tonalIcon(
-                onPressed: () => JamDialog.show(context),
-                style: FilledButton.styleFrom(
-                  backgroundColor:
-                      context.accent.withValues(alpha: 0.12),
-                  foregroundColor: context.accent,
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10)),
-                ),
-                icon: const Icon(Icons.speaker_group_outlined, size: 17),
-                label: const Text(
-                  'Jam',
-                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
-                ),
-              );
-            },
-          ),
-
-          const SizedBox(width: 8),
-
-          // Botón Rápido: Comunidad / Ahora sonando en el servidor
-          IconButton(
-            tooltip: 'Comunidad & Chat Navidrome',
-            style: IconButton.styleFrom(
-              backgroundColor: context.bgElevated,
-              foregroundColor: context.accent,
-            ),
-            icon: const Icon(Icons.people_alt_rounded, size: 19),
-            onPressed: () => ServerActivityPanel.show(context),
-          ),
-
-          const SizedBox(width: 8),
-
-          // Botón Rápido: Vincular Teléfono (QR/LAN)
-          FilledButton.tonalIcon(
-            onPressed: _openPairingDialog,
-            style: FilledButton.styleFrom(
-              backgroundColor: context.bgElevated,
-              foregroundColor: context.accent,
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10)),
-            ),
-            icon: const Icon(Icons.qr_code_2_rounded, size: 17),
-            label: const Text(
-              'Vincular celular',
-              style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
-            ),
-          ),
-
-          const SizedBox(width: 10),
-
-          // Botón Ajustes
-          IconButton(
-            icon: Icon(Icons.settings_outlined,
-                color: context.textSecondary, size: 20),
-            tooltip: 'Ajustes',
-            onPressed: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const SettingsScreen()),
-            ),
-          ),
-
-          const SizedBox(width: 6),
-
-          // Avatar de Usuario
-          Container(
-            width: 32,
-            height: 32,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: context.accent2,
-              boxShadow: [
-                BoxShadow(
-                  color: context.accent2.withValues(alpha: 0.3),
-                  blurRadius: 8,
-                ),
-              ],
-            ),
-            child: Center(
-              child: Text(
-                initial,
-                style: TextStyle(
-                  color: context.textPrimary,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 13,
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _navItem({
-    required int index,
-    required IconData icon,
-    required String label,
-    required VoidCallback onTap,
-  }) {
-    final isSelected = _activeNavIndex == index && _searchResults == null;
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(10),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-        decoration: BoxDecoration(
-          color: isSelected ? context.bgElevated : Colors.transparent,
-          borderRadius: BorderRadius.circular(10),
-          border: isSelected
-              ? Border.all(
-                  color: context.accent.withValues(alpha: 0.35),
-                  width: 1)
-              : null,
-        ),
-        child: Row(
-          children: [
-            Icon(
-              icon,
-              size: 17,
-              color: isSelected ? context.accent : context.textSecondary,
-            ),
-            const SizedBox(width: 6),
-            Text(
-              label,
-              style: TextStyle(
-                color: isSelected ? context.textPrimary : context.textSecondary,
-                fontSize: 13,
-                fontWeight:
-                    isSelected ? FontWeight.bold : FontWeight.normal,
-              ),
-            ),
-          ],
-        ),
-      ),
+    return GlobalTopBar(
+      searchController: _searchController,
+      searching: _searching,
+      activeNavIndex: _activeNavIndex,
+      showBackButton: false,
+      onSearch: _runSearch,
+      onSearchCleared: () {
+        if (!mounted) return;
+        setState(() {
+          _searchResults = null;
+          _searching = false;
+        });
+      },
+      onLogoTap: () {
+        setState(() {
+          _searchResults = null;
+          _searchController.clear();
+          _searching = false;
+          _activeNavIndex = 0;
+        });
+      },
+      onNavIndexChanged: (index) {
+        setState(() {
+          _searchResults = null;
+          _searchController.clear();
+          _searching = false;
+          _activeNavIndex = index;
+        });
+      },
     );
   }
 
   // ===========================================================================
   // Panel Izquierdo: Tu Biblioteca
   // ===========================================================================
+  Widget _buildCollapsedLibraryPanel() {
+    return Container(
+      width: 68,
+      color: context.bgSidebar,
+      child: Column(
+        children: [
+          SizedBox(
+            height: 54,
+            child: IconButton(
+              icon: Icon(Icons.library_music_rounded,
+                  color: context.accent, size: 21),
+              tooltip: 'Expandir biblioteca',
+              onPressed: () => setState(() => _libraryCollapsed = false),
+            ),
+          ),
+          Divider(height: 1, color: context.bgCard),
+          Expanded(child: _collapsedLibraryList()),
+        ],
+      ),
+    );
+  }
+
+  Widget _collapsedLibraryList() {
+    final nav = context.watch<NavidromeService>();
+    return FutureBuilder<List<Playlist>>(
+      future: _futurePlaylists,
+      builder: (context, snapshot) {
+        final playlists = snapshot.data ?? [];
+        return ListView(
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          children: [
+            Tooltip(
+              message: 'Tus me gusta',
+              child: IconButton(
+                icon: Icon(Icons.favorite_rounded, color: context.accent2),
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const LikedSongsScreen()),
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            for (final playlist in playlists)
+              _collapsedPlaylistTile(
+                playlist,
+                nav.isPinnedPlaylist(playlist.id),
+              ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _collapsedPlaylistTile(Playlist playlist, bool pinned) {
+    return Tooltip(
+      message: playlist.name,
+      child: Semantics(
+        button: true,
+        label: playlist.name,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(8),
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => PlaylistDetailScreen(playlist: playlist),
+            ),
+          ),
+          onLongPress: () => _showPlaylistActions(playlist),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
+            child: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                CoverArt(
+                  url: playlist.coverArtUrl,
+                  width: 40,
+                  height: 40,
+                  borderRadius: 6,
+                  fallbackIcon: Icons.queue_music,
+                  fallbackIconSize: 18,
+                  fallbackColor: context.bgElevated,
+                ),
+                if (pinned)
+                  Positioned(
+                    top: -4,
+                    right: -4,
+                    child:
+                        Icon(Icons.push_pin, color: context.accent, size: 12),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildLibraryPanel() {
     return Container(
       width: 270,
@@ -527,8 +324,7 @@ class _HomeScreenState extends State<HomeScreen> {
       padding: const EdgeInsets.fromLTRB(16, 14, 12, 10),
       child: Row(
         children: [
-          Icon(Icons.library_music_rounded,
-              color: context.accent, size: 18),
+          Icon(Icons.library_music_rounded, color: context.accent, size: 18),
           const SizedBox(width: 8),
           Text(
             'Tu Biblioteca',
@@ -539,6 +335,11 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
           const Spacer(),
+          IconButton(
+            icon: Icon(Icons.add_rounded, color: context.accent, size: 21),
+            tooltip: 'Crear playlist',
+            onPressed: _createPlaylist,
+          ),
           IconButton(
             icon: Icon(Icons.menu_open, color: context.textMuted, size: 18),
             tooltip: 'Colapsar biblioteca',
@@ -569,9 +370,16 @@ class _HomeScreenState extends State<HomeScreen> {
                 style: TextStyle(color: context.textPrimary, fontSize: 12),
                 decoration: InputDecoration(
                   hintText: 'Buscar en playlists...',
-                  hintStyle: TextStyle(color: context.themeBorder, fontSize: 12),
-                  border: InputBorder.none,
+                  hintStyle: TextStyle(color: context.textMuted, fontSize: 12),
                   isDense: true,
+                  filled: false,
+                  fillColor: Colors.transparent,
+                  border: InputBorder.none,
+                  enabledBorder: InputBorder.none,
+                  focusedBorder: InputBorder.none,
+                  disabledBorder: InputBorder.none,
+                  errorBorder: InputBorder.none,
+                  contentPadding: EdgeInsets.zero,
                 ),
               ),
             ),
@@ -597,8 +405,7 @@ class _HomeScreenState extends State<HomeScreen> {
               background: context.accent2,
               onTap: () => Navigator.push(
                 context,
-                MaterialPageRoute(
-                    builder: (_) => const LikedSongsScreen()),
+                MaterialPageRoute(builder: (_) => const LikedSongsScreen()),
               ),
             ),
             const SizedBox(height: 4),
@@ -642,8 +449,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   Row(
                     children: [
                       if (pinned) ...[
-                        Icon(Icons.push_pin,
-                            color: context.accent, size: 12),
+                        Icon(Icons.push_pin, color: context.accent, size: 12),
                         const SizedBox(width: 3),
                       ],
                       Expanded(
@@ -694,7 +500,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   style: TextStyle(color: context.textPrimary)),
               onTap: () {
                 Navigator.of(context).pop();
-                _playPlaylist(playlist.id);
+                _playPlaylist(playlist);
               },
             ),
             ListTile(
@@ -703,7 +509,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   style: TextStyle(color: context.textPrimary)),
               onTap: () {
                 Navigator.of(context).pop();
-                _playPlaylistShuffled(playlist.id);
+                _playPlaylistShuffled(playlist);
               },
             ),
             ListTile(
@@ -735,22 +541,33 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Future<void> _playPlaylist(String playlistId) async {
+  Future<void> _playPlaylist(Playlist playlist) async {
     final tracks =
-        await context.read<NavidromeService>().getPlaylistTracks(playlistId);
+        await context.read<NavidromeService>().getPlaylistTracks(playlist.id);
     if (mounted && tracks.isNotEmpty) {
-      context.read<PlayerController>().playQueue(tracks, startIndex: 0);
+      context.read<PlayerController>().playQueue(
+            tracks,
+            startIndex: 0,
+            sourcePlaylist: playlist,
+          );
     }
   }
 
-  Future<void> _playPlaylistShuffled(String playlistId) async {
+  Future<void> _playPlaylistShuffled(Playlist playlist) async {
     final tracks =
-        await context.read<NavidromeService>().getPlaylistTracks(playlistId);
+        await context.read<NavidromeService>().getPlaylistTracks(playlist.id);
     if (mounted && tracks.isNotEmpty) {
       final player = context.read<PlayerController>();
-      player.playQueue(tracks, startIndex: 0);
-      await player.toggleShuffle();
+      await player.playShuffledQueue(tracks, sourcePlaylist: playlist);
     }
+  }
+
+  Future<void> _createPlaylist() async {
+    final playlist = await showCreatePlaylistDialog(context);
+    if (playlist == null || !mounted) return;
+    setState(() {
+      _futurePlaylists = context.read<NavidromeService>().getPlaylists();
+    });
   }
 
   Future<void> _confirmDeletePlaylist(Playlist playlist) async {
@@ -767,13 +584,12 @@ class _HomeScreenState extends State<HomeScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
-            child:
-                Text('Cancelar', style: TextStyle(color: context.textSecondary)),
+            child: Text('Cancelar',
+                style: TextStyle(color: context.textSecondary)),
           ),
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(true),
-            child:
-                Text('Eliminar', style: TextStyle(color: context.danger)),
+            child: Text('Eliminar', style: TextStyle(color: context.danger)),
           ),
         ],
       ),
@@ -796,8 +612,7 @@ class _HomeScreenState extends State<HomeScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Error: $e',
-              style: TextStyle(color: context.danger)),
+          content: Text('Error: $e', style: TextStyle(color: context.danger)),
           backgroundColor: context.bgElevated,
           behavior: SnackBarBehavior.floating,
         ),
@@ -885,7 +700,9 @@ class _HomeScreenState extends State<HomeScreen> {
                   );
                 }
                 final tracks = snapshot.data!;
-                return _mainContent(tracks);
+                return _activeNavIndex == 1
+                    ? _buildExploreContent(tracks)
+                    : _mainContent(tracks);
               },
             ),
     );
@@ -945,8 +762,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                   Text(
                     _formatDuration(track.duration),
-                    style:
-                        TextStyle(color: context.textMuted, fontSize: 11.5),
+                    style: TextStyle(color: context.textMuted, fontSize: 11.5),
                   ),
                 ],
               ),
@@ -1010,8 +826,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   style: TextStyle(color: context.textMuted, fontSize: 11.5)),
               onTap: () => Navigator.push(
                 context,
-                MaterialPageRoute(
-                    builder: (_) => ArtistScreen(artist: artist)),
+                MaterialPageRoute(builder: (_) => ArtistScreen(artist: artist)),
               ),
             ),
         ],
@@ -1025,7 +840,7 @@ class _HomeScreenState extends State<HomeScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _quickAccessGrid(tracks),
+          _quickAccessGrid(),
           const SizedBox(height: 28),
           _sectionHeader('Recomendados para ti'),
           const SizedBox(height: 14),
@@ -1048,13 +863,222 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  Widget _buildExploreContent(List<Track> tracks) {
+    if (tracks.isEmpty) {
+      return Center(
+        child: Text(
+          'No hay canciones en tu biblioteca',
+          style: TextStyle(color: context.textMuted),
+        ),
+      );
+    }
+
+    final totalPages = (tracks.length / _explorePageSize).ceil();
+    final currentPage = _explorePage.clamp(0, totalPages - 1).toInt();
+    final firstTrack = currentPage * _explorePageSize;
+    final pageTracks = tracks.skip(firstTrack).take(_explorePageSize).toList();
+
+    return ListView.builder(
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+      itemCount: pageTracks.length + 2,
+      itemBuilder: (context, index) {
+        if (index == 0) {
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Explorar',
+                  style: TextStyle(
+                    color: context.textPrimary,
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+
+        if (index == pageTracks.length + 1) {
+          return _explorePagination(totalPages, currentPage);
+        }
+
+        final trackIndex = firstTrack + index - 1;
+        final track = pageTracks[index - 1];
+        return ListTile(
+          dense: true,
+          leading: CoverArt(
+            url: track.albumArtUrl,
+            artist: track.artist,
+            album: track.album,
+            title: track.title,
+            width: 40,
+            height: 40,
+            borderRadius: 4,
+            fallbackIcon: Icons.music_note,
+            fallbackIconSize: 20,
+            fallbackColor: context.bgCard,
+          ),
+          title: Text(
+            track.title,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(color: context.textPrimary, fontSize: 13.5),
+          ),
+          subtitle: Text(
+            '${track.artist} · ${track.album}',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(color: context.textMuted, fontSize: 11.5),
+          ),
+          trailing: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              IconButton(
+                icon: Icon(Icons.more_horiz, color: context.textMuted),
+                onPressed: () => TrackContextMenu.show(context, track),
+              ),
+              Text(
+                _formatDuration(track.duration),
+                style: TextStyle(color: context.textMuted, fontSize: 11.5),
+              ),
+            ],
+          ),
+          onTap: () => _openPlayer(tracks, trackIndex),
+        );
+      },
+    );
+  }
+
+  Widget _explorePagination(int totalPages, int currentPage) {
+    final pages = <int>{0, totalPages - 1, currentPage};
+    if (totalPages <= 5) {
+      pages.addAll(List.generate(totalPages, (index) => index));
+    } else {
+      for (var page = currentPage - 1; page <= currentPage + 1; page++) {
+        if (page >= 0 && page < totalPages) pages.add(page);
+      }
+      if (currentPage <= 2) pages.addAll([1, 2, 3]);
+      if (currentPage >= totalPages - 3) {
+        pages.addAll([totalPages - 4, totalPages - 3, totalPages - 2]);
+      }
+    }
+    final sortedPages = pages.toList()..sort();
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 20, bottom: 28),
+      child: Align(
+        alignment: Alignment.centerRight,
+        child: Wrap(
+          spacing: 12,
+          runSpacing: 8,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          alignment: WrapAlignment.end,
+          children: [
+            Container(
+              height: 34,
+              padding: const EdgeInsets.only(left: 10, right: 6),
+              decoration: BoxDecoration(
+                border: Border.all(color: context.inputBorder),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: DropdownButtonHideUnderline(
+                child: DropdownButton<int>(
+                  value: _explorePageSize,
+                  isDense: true,
+                  dropdownColor: context.bgCard,
+                  icon: Icon(Icons.keyboard_arrow_down_rounded,
+                      color: context.textMuted),
+                  style: TextStyle(
+                    color: context.textPrimary,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                  items: [10, 25, 50, 100]
+                      .map(
+                        (pageSize) => DropdownMenuItem(
+                          value: pageSize,
+                          child: Text('$pageSize'),
+                        ),
+                      )
+                      .toList(),
+                  onChanged: (pageSize) {
+                    if (pageSize == null) return;
+                    setState(() {
+                      _explorePageSize = pageSize;
+                      _explorePage = 0;
+                    });
+                  },
+                ),
+              ),
+            ),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                IconButton(
+                  tooltip: 'Página anterior',
+                  onPressed: currentPage > 0
+                      ? () => setState(() => _explorePage = currentPage - 1)
+                      : null,
+                  icon: const Icon(Icons.chevron_left_rounded),
+                ),
+                for (var index = 0; index < sortedPages.length; index++) ...[
+                  if (index > 0 &&
+                      sortedPages[index] != sortedPages[index - 1] + 1)
+                    Text('…', style: TextStyle(color: context.textMuted)),
+                  ChoiceChip(
+                    label: Text('${sortedPages[index] + 1}'),
+                    selected: sortedPages[index] == currentPage,
+                    selectedColor: context.accent.withValues(alpha: 0.2),
+                    labelStyle: TextStyle(
+                      color: sortedPages[index] == currentPage
+                          ? context.accent
+                          : context.textSecondary,
+                      fontWeight: FontWeight.w600,
+                    ),
+                    onSelected: (_) =>
+                        setState(() => _explorePage = sortedPages[index]),
+                  ),
+                ],
+                IconButton(
+                  tooltip: 'Página siguiente',
+                  onPressed: currentPage < totalPages - 1
+                      ? () => setState(() => _explorePage = currentPage + 1)
+                      : null,
+                  icon: const Icon(Icons.chevron_right_rounded),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   void _openPlayer(List<Track> tracks, int index) {
     context.read<PlayerController>().playQueue(tracks, startIndex: index);
   }
 
   // Tarjetas de Acceso Rápido AMOLED
-  Widget _quickAccessGrid(List<Track> tracks) {
-    final items = tracks.take(6).toList();
+  Widget _quickAccessGrid() {
+    // Orden fijo: favoritos, la playlist más reproducida y cuatro canciones.
+    final mostPlayed = context.watch<PlayerController>().mostPlayed;
+    MostPlayedItem? topPlaylist;
+    final topTracks = <MostPlayedItem>[];
+    for (final item in mostPlayed) {
+      if (item.type == MostPlayedItemType.playlist && topPlaylist == null) {
+        topPlaylist = item;
+      } else if (item.type == MostPlayedItemType.track &&
+          topTracks.length < 4) {
+        topTracks.add(item);
+      }
+    }
+    final items = <MostPlayedItem>[
+      if (topPlaylist != null) topPlaylist,
+      ...topTracks,
+    ];
     return LayoutBuilder(
       builder: (context, constraints) {
         final cols = (constraints.maxWidth / 220).floor().clamp(2, 3);
@@ -1063,9 +1087,12 @@ class _HomeScreenState extends State<HomeScreen> {
           physics: const NeverScrollableScrollPhysics(),
           gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: cols,
-            childAspectRatio: 2.8,
+            // Estas seis tarjetas se muestran en dos o tres filas. Al
+            // duplicar la proporción y reducir el espaciado, el bloque ocupa
+            // aproximadamente la mitad de alto sin sacrificar la portada.
+            childAspectRatio: 5.6,
             crossAxisSpacing: 12,
-            mainAxisSpacing: 12,
+            mainAxisSpacing: 6,
           ),
           itemCount: items.length + 1,
           itemBuilder: (context, index) {
@@ -1076,21 +1103,34 @@ class _HomeScreenState extends State<HomeScreen> {
                 icon: Icons.favorite_rounded,
                 onTap: () => Navigator.push(
                   context,
-                  MaterialPageRoute(
-                      builder: (_) => const LikedSongsScreen()),
+                  MaterialPageRoute(builder: (_) => const LikedSongsScreen()),
                 ),
               );
             }
-            final track = items[index - 1];
+            final item = items[index - 1];
+            if (item.type == MostPlayedItemType.playlist) {
+              final playlist = item.playlist!;
+              return _quickAccessCard(
+                label: playlist.name,
+                color: context.accent2,
+                albumArtUrl: playlist.coverArtUrl,
+                icon: Icons.queue_music,
+                onTap: () => _playPlaylist(playlist),
+              );
+            }
+
+            final track = item.track!;
             return _quickAccessCard(
-              label: track.album,
+              label: track.title,
               color: context.bgCard,
               albumArtUrl: track.albumArtUrl,
               artist: track.artist,
               album: track.album,
               title: track.title,
-              icon: Icons.album,
-              onTap: () => _openPlayer(tracks, tracks.indexOf(track)),
+              icon: Icons.music_note,
+              onTap: () => context
+                  .read<PlayerController>()
+                  .playQueue([track], startIndex: 0),
             );
           },
         );
@@ -1166,24 +1206,20 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _recommendedGrid(List<Track> tracks) {
     final items = tracks.take(10).toList();
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final cols = (constraints.maxWidth / 160).floor().clamp(3, 6);
-        return GridView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: cols,
-            childAspectRatio: 0.74,
-            crossAxisSpacing: 14,
-            mainAxisSpacing: 16,
-          ),
-          itemCount: items.length,
-          itemBuilder: (context, index) {
-            final track = items[index];
-            return _recommendedCard(track, tracks);
-          },
-        );
+    return GridView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      // Coincide con las tarjetas de «Álbumes destacados»: 130 × 180 px.
+      gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+        maxCrossAxisExtent: 130,
+        childAspectRatio: 13 / 18,
+        crossAxisSpacing: 14,
+        mainAxisSpacing: 16,
+      ),
+      itemCount: items.length,
+      itemBuilder: (context, index) {
+        final track = items[index];
+        return _recommendedCard(track, tracks);
       },
     );
   }
@@ -1296,8 +1332,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                   ? Image.network(
                                       album.coverArtUrl!,
                                       fit: BoxFit.cover,
-                                      errorBuilder: (_, __, ___) =>
-                                          Center(
+                                      errorBuilder: (_, __, ___) => Center(
                                         child: Icon(Icons.album,
                                             color: context.textMuted, size: 28),
                                       ),
@@ -1324,8 +1359,8 @@ class _HomeScreenState extends State<HomeScreen> {
                           album.artist,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                              color: context.textMuted, fontSize: 11),
+                          style:
+                              TextStyle(color: context.textMuted, fontSize: 11),
                         ),
                       ],
                     ),
@@ -1363,70 +1398,79 @@ class _HomeScreenState extends State<HomeScreen> {
           return Text('Sin artistas',
               style: TextStyle(color: context.textMuted));
         }
+        final showScrollbar = artists.length > 10;
         return SizedBox(
-          height: 160,
-          child: ListView.builder(
-            scrollDirection: Axis.horizontal,
-            itemCount: artists.length,
-            itemBuilder: (context, index) {
-              final artist = artists[index];
-              return Padding(
-                padding: const EdgeInsets.only(right: 14),
-                child: InkWell(
-                  onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                        builder: (_) => ArtistScreen(artist: artist)),
-                  ),
-                  borderRadius: BorderRadius.circular(10),
-                  child: SizedBox(
-                    width: 110,
-                    child: Column(
-                      children: [
-                        Expanded(
-                          child: Container(
-                            width: 110,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: context.bgElevated,
-                              border: Border.all(
-                                color: context.accent
-                                    .withValues(alpha: 0.35),
-                                width: 1.2,
+          height: showScrollbar ? 180 : 160,
+          child: Scrollbar(
+            controller: _artistsScrollController,
+            thumbVisibility: showScrollbar,
+            interactive: showScrollbar,
+            scrollbarOrientation: ScrollbarOrientation.bottom,
+            child: ListView.builder(
+              controller: _artistsScrollController,
+              scrollDirection: Axis.horizontal,
+              padding: EdgeInsets.only(bottom: showScrollbar ? 20 : 0),
+              itemCount: artists.length,
+              itemBuilder: (context, index) {
+                final artist = artists[index];
+                return Padding(
+                  padding: const EdgeInsets.only(right: 14),
+                  child: InkWell(
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                          builder: (_) => ArtistScreen(artist: artist)),
+                    ),
+                    borderRadius: BorderRadius.circular(10),
+                    child: SizedBox(
+                      width: 110,
+                      child: Column(
+                        children: [
+                          Expanded(
+                            child: Container(
+                              width: 110,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: context.bgElevated,
+                                border: Border.all(
+                                  color: context.accent.withValues(alpha: 0.35),
+                                  width: 1.2,
+                                ),
+                                image: artist.coverArtUrl != null
+                                    ? DecorationImage(
+                                        image:
+                                            NetworkImage(artist.coverArtUrl!),
+                                        fit: BoxFit.cover,
+                                      )
+                                    : null,
                               ),
-                              image: artist.coverArtUrl != null
-                                  ? DecorationImage(
-                                      image: NetworkImage(artist.coverArtUrl!),
-                                      fit: BoxFit.cover,
+                              child: artist.coverArtUrl == null
+                                  ? Center(
+                                      child: Icon(Icons.person,
+                                          color: context.textMuted, size: 36),
                                     )
                                   : null,
                             ),
-                            child: artist.coverArtUrl == null
-                                ? Center(
-                                    child: Icon(Icons.person,
-                                        color: context.textMuted, size: 36),
-                                  )
-                                : null,
                           ),
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          artist.name,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            color: context.textPrimary,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
+                          const SizedBox(height: 6),
+                          Text(
+                            artist.name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: context.textPrimary,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
-                ),
-              );
-            },
+                );
+              },
+            ),
           ),
         );
       },
@@ -1483,8 +1527,8 @@ class _HomeScreenState extends State<HomeScreen> {
                         track.artist,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                            color: context.textMuted, fontSize: 11.5),
+                        style:
+                            TextStyle(color: context.textMuted, fontSize: 11.5),
                       ),
                     ],
                   ),
@@ -1493,7 +1537,9 @@ class _HomeScreenState extends State<HomeScreen> {
                   icon: Icon(Icons.play_circle_fill_rounded,
                       color: context.accent, size: 28),
                   onPressed: () {
-                    context.read<PlayerController>().playQueue([track], startIndex: 0);
+                    context
+                        .read<PlayerController>()
+                        .playQueue([track], startIndex: 0);
                   },
                 ),
               ],

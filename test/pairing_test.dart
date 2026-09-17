@@ -23,7 +23,8 @@ void main() {
     });
 
     test('QrData serialization & deserialization', () {
-      final original = QrData(host: '192.168.1.50', port: 54321, code: 'X7K9MP');
+      final original =
+          QrData(host: '192.168.1.50', port: 54321, code: 'X7K9MP');
       final uri = original.toUri();
       expect(uri, 'scrotify://pair?host=192.168.1.50&port=54321&code=X7K9MP');
 
@@ -34,7 +35,19 @@ void main() {
       expect(parsed.code, 'X7K9MP');
     });
 
-    test('Sealed-box encryption and decryption (X25519 + XChaCha20-Poly1305)', () async {
+    test('QrData relay serialization & deserialization', () {
+      final original = QrData(
+        code: 'X7K9MP',
+        relayTopic: 'scrotify-0123456789abcdefghijklmnopqrstuv',
+      );
+      final parsed = QrData.fromUri(original.toUri());
+      expect(parsed, isNotNull);
+      expect(parsed!.usesRelay, isTrue);
+      expect(parsed.relayTopic, original.relayTopic);
+    });
+
+    test('Sealed-box encryption and decryption (X25519 + XChaCha20-Poly1305)',
+        () async {
       // 1. PC genera clave efímera
       final pcKeyPair = await generateKeyPair();
 
@@ -43,7 +56,8 @@ void main() {
       final mobilePublicKey = await mobileKeyPair.extractPublicKey();
 
       // 3. PC cifra credenciales para el móvil
-      const secretMessage = '{"url":"https://navidrome.test","user":"testuser","pass":"secret123"}';
+      const secretMessage =
+          '{"url":"https://navidrome.test","user":"testuser","pass":"secret123"}';
       final encryptedMap = await sealEncrypt(
         ephemeralKeyPair: pcKeyPair,
         recipientPublicKey: mobilePublicKey,
@@ -64,7 +78,7 @@ void main() {
     });
 
     test('PairingServer ↔ PairingClient end-to-end HTTP claim', () async {
-      final server = PairingServer();
+      final server = PairingServer(useRelay: false);
 
       try {
         // Iniciar servidor
@@ -98,7 +112,7 @@ void main() {
     });
 
     test('UDP discovery beacon finds PC by code on local loopback', () async {
-      final server = PairingServer();
+      final server = PairingServer(useRelay: false);
 
       try {
         await server.start(
@@ -124,7 +138,7 @@ void main() {
     });
 
     test('UDP radar discoverPcs lists active PC on local network', () async {
-      final server = PairingServer();
+      final server = PairingServer(useRelay: false);
 
       try {
         await server.start(
@@ -148,7 +162,7 @@ void main() {
     });
 
     test('PairingClient claim with invalid code fails', () async {
-      final server = PairingServer();
+      final server = PairingServer(useRelay: false);
 
       try {
         await server.start(

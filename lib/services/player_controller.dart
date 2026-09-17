@@ -11,6 +11,55 @@ import 'package:path_provider/path_provider.dart';
 import 'navidrome_service.dart';
 import 'settings_controller.dart';
 
+enum MostPlayedItemType { track, playlist }
+
+/// Un contenido reproducido desde Scrotify. Las playlists y las canciones se
+/// registran por separado para que escuchar una playlist no infle el contador
+/// de cada una de sus canciones.
+class MostPlayedItem {
+  final MostPlayedItemType type;
+  final String id;
+  final int playCount;
+  final DateTime lastPlayedAt;
+  final Track? track;
+  final Playlist? playlist;
+
+  const MostPlayedItem._({
+    required this.type,
+    required this.id,
+    required this.playCount,
+    required this.lastPlayedAt,
+    this.track,
+    this.playlist,
+  });
+
+  factory MostPlayedItem.track(
+    Track track, {
+    int playCount = 1,
+    DateTime? lastPlayedAt,
+  }) =>
+      MostPlayedItem._(
+        type: MostPlayedItemType.track,
+        id: track.id,
+        playCount: playCount,
+        lastPlayedAt: lastPlayedAt ?? DateTime.now(),
+        track: track,
+      );
+
+  factory MostPlayedItem.playlist(
+    Playlist playlist, {
+    int playCount = 1,
+    DateTime? lastPlayedAt,
+  }) =>
+      MostPlayedItem._(
+        type: MostPlayedItemType.playlist,
+        id: playlist.id,
+        playCount: playCount,
+        lastPlayedAt: lastPlayedAt ?? DateTime.now(),
+        playlist: playlist,
+      );
+}
+
 /// Estado global de reproducción. Persiste entre pantallas y alimenta el
 /// panel de control persistente (barra inferior).
 ///
@@ -83,6 +132,14 @@ class PlayerController extends ChangeNotifier {
   // un máximo de 50 entradas para no crecer indefinidamente.
   List<Track> _recentlyPlayed = [];
 
+  // Reproducciones acumuladas de canciones sueltas y playlists. Se guardan
+  // como entradas independientes para que una reproducción de playlist no
+  // cuente también como reproducción individual de cada canción.
+  final Map<String, MostPlayedItem> _mostPlayedByKey = {};
+  Playlist? _sourcePlaylist;
+  String? _mostPlayedSession;
+  int _mostPlayedLoadGeneration = 0;
+
   bool _shuffleEnabled = false;
   LoopMode _repeatMode = LoopMode.off;
 
@@ -96,6 +153,11 @@ class PlayerController extends ChangeNotifier {
   bool _preloaded = false;
   bool _fading = false;
   int _fadeTargetPos = -1;
+  // La siguiente pista se prepara aunque el crossfade esté desactivado. Así el
+  // botón «siguiente» puede cambiar de reproductor sin volver a abrir el
+  // stream desde cero.
+  int _preparedNextPos = -1;
+  int _preparedNextGen = 0;
   static const Duration _preRoll = Duration(seconds: 3);
 
   // --- Apagado automático (sleep timer) ---
@@ -162,6 +224,15 @@ class PlayerController extends ChangeNotifier {
 
   List<Track> get queue => List.unmodifiable(_queue);
   List<Track> get recentlyPlayed => List.unmodifiable(_recentlyPlayed);
+  List<MostPlayedItem> get mostPlayed {
+    final items = _mostPlayedByKey.values.toList();
+    items.sort((a, b) {
+      final byCount = b.playCount.compareTo(a.playCount);
+      return byCount != 0 ? byCount : b.lastPlayedAt.compareTo(a.lastPlayedAt);
+    });
+    return List.unmodifiable(items);
+  }
+
   int get currentOrderPos => _pos;
   List<int> get order => List.unmodifiable(_order);
   List<Track> get orderedQueue => [
@@ -169,14 +240,15 @@ class PlayerController extends ChangeNotifier {
           if (idx >= 0 && idx < _queue.length) _queue[idx]
       ];
 
-  int get _currentIndex => _pos >= 0 && _pos < _order.length ? _order[_pos] : -1;
+  int get _currentIndex =>
+      _pos >= 0 && _pos < _order.length ? _order[_pos] : -1;
 
-  Track? get currentTrack =>
-      _currentIndex >= 0 ? _queue[_currentIndex] : null;
+  Track? get currentTrack => _currentIndex >= 0 ? _queue[_currentIndex] : null;
   bool get hasTrack => currentTrack != null;
 
-  Stream<PlayerState> get playerStateStream =>
-      _karaokeMode ? _karaokePlayerStateController.stream : _lead.playerStateStream;
+  Stream<PlayerState> get playerStateStream => _karaokeMode
+      ? _karaokePlayerStateController.stream
+      : _lead.playerStateStream;
   Stream<Duration> get positionStream =>
       _karaokeMode ? _karaokePositionController.stream : _lead.positionStream;
   Stream<Duration?> get durationStream =>
@@ -185,21 +257,21 @@ class PlayerController extends ChangeNotifier {
 
   bool get shuffleEnabled => _shuffleEnabled;
   LoopMode get repeatMode => _repeatMode;
-  bool get playing => _karaokeMode
-      ? (_karaokePlayer?.state.playing ?? false)
-      : _lead.playing;
+  bool get playing =>
+      _karaokeMode ? (_karaokePlayer?.state.playing ?? false) : _lead.playing;
   Duration get position => _karaokeMode
       ? (_karaokePlayer?.state.position ?? Duration.zero)
       : _lead.position;
-  Duration? get duration => _karaokeMode
-      ? _karaokePlayer?.state.duration
-      : _lead.duration;
+  Duration? get duration =>
+      _karaokeMode ? _karaokePlayer?.state.duration : _lead.duration;
   double get volume => _volume;
   bool get gapless => _settings.gapless;
 
   PlayerController(this._service, this._settings) {
     _listenPlayers();
     _loadHistory();
+    _service.addListener(_onServiceChanged);
+    _onServiceChanged();
     _lastAppliedQuality = _settings.effectiveQuality;
     _volume = _settings.initialVolume;
     _lastAppliedVolume = _settings.initialVolume;
@@ -239,9 +311,8 @@ class PlayerController extends ChangeNotifier {
       if (await file.exists()) {
         final content = await file.readAsString();
         final list = jsonDecode(content) as List;
-        _recentlyPlayed = list
-            .map((j) => _trackFromJson(j as Map<String, dynamic>))
-            .toList();
+        _recentlyPlayed =
+            list.map((j) => _trackFromJson(j as Map<String, dynamic>)).toList();
         notifyListeners();
       }
     } catch (_) {
@@ -253,9 +324,178 @@ class PlayerController extends ChangeNotifier {
     try {
       final dir = await getApplicationDocumentsDirectory();
       final file = File('${dir.path}/recently_played.json');
-      await file
-          .writeAsString(jsonEncode(_recentlyPlayed.map(_trackToJson).toList()));
+      await file.writeAsString(
+          jsonEncode(_recentlyPlayed.map(_trackToJson).toList()));
     } catch (_) {}
+  }
+
+  // ---------------------------------------------------------------------------
+  // Contadores de reproducciones
+  // ---------------------------------------------------------------------------
+  String _mostPlayedKey(MostPlayedItemType type, String id) =>
+      '${type.name}:$id';
+
+  void _recordTrackPlay(Track track) {
+    if (_sourcePlaylist != null) return;
+    _incrementMostPlayed(MostPlayedItem.track(track));
+    unawaited(_service.scrobble(track.id));
+  }
+
+  /// Integra los contadores de Navidrome al abrir la biblioteca en este
+  /// dispositivo. El máximo evita que una respuesta desactualizada reduzca una
+  /// reproducción que acabamos de registrar localmente.
+  void syncServerPlayCounts(Iterable<Track> tracks) {
+    var changed = false;
+    for (final track in tracks) {
+      if (track.playCount <= 0) continue;
+      final key = _mostPlayedKey(MostPlayedItemType.track, track.id);
+      final previous = _mostPlayedByKey[key];
+      if (previous != null && previous.playCount >= track.playCount) continue;
+      _mostPlayedByKey[key] = MostPlayedItem.track(
+        track,
+        playCount: track.playCount,
+        lastPlayedAt: previous?.lastPlayedAt,
+      );
+      changed = true;
+    }
+    if (!changed) return;
+    _saveMostPlayed();
+    notifyListeners();
+  }
+
+  void _recordPlaylistPlay(Playlist playlist) {
+    _incrementMostPlayed(MostPlayedItem.playlist(playlist));
+  }
+
+  void _incrementMostPlayed(MostPlayedItem item) {
+    final key = _mostPlayedKey(item.type, item.id);
+    final previous = _mostPlayedByKey[key];
+    _mostPlayedByKey[key] = item.type == MostPlayedItemType.track
+        ? MostPlayedItem.track(
+            item.track!,
+            playCount: (previous?.playCount ?? 0) + 1,
+          )
+        : MostPlayedItem.playlist(
+            item.playlist!,
+            playCount: (previous?.playCount ?? 0) + 1,
+          );
+    _saveMostPlayed();
+  }
+
+  Future<void> _loadMostPlayed() async {
+    final session = _mostPlayedSession;
+    if (session == null) return;
+    final loadGeneration = ++_mostPlayedLoadGeneration;
+    try {
+      final dir = await getApplicationDocumentsDirectory();
+      final file = File('${dir.path}/${_mostPlayedFileName(session)}');
+      if (!await file.exists()) return;
+      final values = jsonDecode(await file.readAsString()) as List;
+      final loaded = <String, MostPlayedItem>{};
+      for (final value in values) {
+        final data = value as Map<String, dynamic>;
+        final item = _mostPlayedFromJson(data);
+        if (item != null) {
+          loaded[_mostPlayedKey(item.type, item.id)] = item;
+        }
+      }
+      if (loadGeneration != _mostPlayedLoadGeneration ||
+          session != _mostPlayedSession) {
+        return;
+      }
+      _mostPlayedByKey
+        ..clear()
+        ..addAll(loaded);
+      notifyListeners();
+    } catch (_) {
+      // Las estadísticas son locales y no deben impedir la reproducción.
+    }
+  }
+
+  Future<void> _saveMostPlayed() async {
+    final session = _mostPlayedSession;
+    if (session == null) return;
+    final values = _mostPlayedByKey.values.map(_mostPlayedToJson).toList();
+    try {
+      final dir = await getApplicationDocumentsDirectory();
+      final file = File('${dir.path}/${_mostPlayedFileName(session)}');
+      await file.writeAsString(jsonEncode(values));
+    } catch (_) {}
+  }
+
+  String? get _currentMostPlayedSession {
+    final url = _service.serverUrl;
+    final username = _service.username;
+    if (!_service.connected || url == null || username == null) return null;
+    return '$url|$username';
+  }
+
+  String _mostPlayedFileName(String session) {
+    final encoded = base64Url.encode(utf8.encode(session)).replaceAll('=', '');
+    return 'most_played_$encoded.json';
+  }
+
+  void _onServiceChanged() {
+    final session = _currentMostPlayedSession;
+    if (session == _mostPlayedSession) return;
+
+    _mostPlayedSession = session;
+    _mostPlayedLoadGeneration++;
+    _mostPlayedByKey.clear();
+    _sourcePlaylist = null;
+    if (session != null) {
+      _loadMostPlayed();
+    }
+    notifyListeners();
+  }
+
+  static Map<String, dynamic> _mostPlayedToJson(MostPlayedItem item) => {
+        'type': item.type.name,
+        'id': item.id,
+        'playCount': item.playCount,
+        'lastPlayedAt': item.lastPlayedAt.toIso8601String(),
+        if (item.track != null) 'track': _trackToJson(item.track!),
+        if (item.playlist != null)
+          'playlist': {
+            'id': item.playlist!.id,
+            'name': item.playlist!.name,
+            'coverArtUrl': item.playlist!.coverArtUrl,
+            'songCount': item.playlist!.songCount,
+            'duration': item.playlist!.duration,
+          },
+      };
+
+  static MostPlayedItem? _mostPlayedFromJson(Map<String, dynamic> json) {
+    final type = json['type'];
+    final id = json['id'] as String? ?? '';
+    if (id.isEmpty) return null;
+    final count = (json['playCount'] as num?)?.toInt() ?? 0;
+    final lastPlayedAt =
+        DateTime.tryParse(json['lastPlayedAt'] as String? ?? '');
+    if (count <= 0 || lastPlayedAt == null) return null;
+
+    if (type == MostPlayedItemType.track.name && json['track'] is Map) {
+      return MostPlayedItem.track(
+        _trackFromJson(Map<String, dynamic>.from(json['track'] as Map)),
+        playCount: count,
+        lastPlayedAt: lastPlayedAt,
+      );
+    }
+    if (type == MostPlayedItemType.playlist.name && json['playlist'] is Map) {
+      final playlist = Map<String, dynamic>.from(json['playlist'] as Map);
+      return MostPlayedItem.playlist(
+        Playlist(
+          id: playlist['id'] as String? ?? id,
+          name: playlist['name'] as String? ?? 'Playlist',
+          coverArtUrl: playlist['coverArtUrl'] as String?,
+          songCount: (playlist['songCount'] as num?)?.toInt() ?? 0,
+          duration: (playlist['duration'] as num?)?.toInt() ?? 0,
+        ),
+        playCount: count,
+        lastPlayedAt: lastPlayedAt,
+      );
+    }
+    return null;
   }
 
   static Map<String, dynamic> _trackToJson(Track t) => {
@@ -265,6 +505,7 @@ class PlayerController extends ChangeNotifier {
         'album': t.album,
         'duration': t.duration,
         'albumArtUrl': t.albumArtUrl,
+        'playCount': t.playCount,
       };
 
   static Track _trackFromJson(Map<String, dynamic> j) => Track(
@@ -274,6 +515,7 @@ class PlayerController extends ChangeNotifier {
         album: (j['album'] as String?) ?? 'Unknown',
         duration: (j['duration'] as String?) ?? '',
         albumArtUrl: j['albumArtUrl'] as String?,
+        playCount: (j['playCount'] as num?)?.toInt() ?? 0,
       );
 
   // ---------------------------------------------------------------------------
@@ -284,7 +526,8 @@ class PlayerController extends ChangeNotifier {
       _service.getStreamUrl(t.id, quality: _settings.effectiveQuality)));
 
   Future<void> _loadTrackOn(AudioPlayer p, int realIndex) async {
-    await p.stop();
+    // setAudioSource reemplaza la fuente actual y detiene la anterior. Evitar
+    // el stop explícito elimina una espera antes de empezar el buffer nuevo.
     await p.setAudioSource(_sourceFor(_queue[realIndex]));
   }
 
@@ -312,9 +555,14 @@ class PlayerController extends ChangeNotifier {
     return rest;
   }
 
-  Future<void> playQueue(List<Track> tracks, {int startIndex = 0}) async {
+  Future<void> playQueue(
+    List<Track> tracks, {
+    int startIndex = 0,
+    Playlist? sourcePlaylist,
+  }) async {
     if (tracks.isEmpty) return;
     _cancelFade();
+    _sourcePlaylist = sourcePlaylist;
     _queue = List.of(tracks);
     final n = tracks.length;
     _order = List.generate(n, (i) => i);
@@ -327,8 +575,30 @@ class PlayerController extends ChangeNotifier {
     await _lead.setVolume(_volume);
     await _lead.play();
     _recordRecent(currentTrack!);
+    if (sourcePlaylist != null) {
+      _recordPlaylistPlay(sourcePlaylist);
+    } else {
+      _recordTrackPlay(currentTrack!);
+    }
+    _prepareNextForSkip();
     _ensureWatchdog();
     notifyListeners();
+  }
+
+  /// Inicia una cola con un tema inicial elegido al azar y deja activo el
+  /// orden aleatorio. Así el botón "shuffle" no cae siempre en la primera
+  /// canción de una playlist.
+  Future<void> playShuffledQueue(
+    List<Track> tracks, {
+    Playlist? sourcePlaylist,
+  }) async {
+    if (tracks.isEmpty) return;
+    _shuffleEnabled = true;
+    await playQueue(
+      tracks,
+      startIndex: _rand.nextInt(tracks.length),
+      sourcePlaylist: sourcePlaylist,
+    );
   }
 
   /// Añade una pista al final de la cola de reproducción.
@@ -343,6 +613,8 @@ class PlayerController extends ChangeNotifier {
       await _lead.setVolume(_volume);
       await _lead.play();
       _recordRecent(currentTrack!);
+      _recordTrackPlay(currentTrack!);
+      _prepareNextForSkip();
       _ensureWatchdog();
     }
     notifyListeners();
@@ -363,6 +635,8 @@ class PlayerController extends ChangeNotifier {
       await _lead.setVolume(_volume);
       await _lead.play();
       _recordRecent(currentTrack!);
+      _recordTrackPlay(currentTrack!);
+      _prepareNextForSkip();
       _ensureWatchdog();
     }
     notifyListeners();
@@ -376,9 +650,10 @@ class PlayerController extends ChangeNotifier {
     if (orderIndex < _pos) {
       _pos--;
     }
-    if (_fading && _fadeTargetPos == orderIndex) {
-      _cancelFade();
-    }
+    // También invalida la pista preparada: al modificar la cola podría haber
+    // dejado de ser la siguiente.
+    _cancelFade();
+    _prepareNextForSkip();
     notifyListeners();
   }
 
@@ -399,9 +674,8 @@ class PlayerController extends ChangeNotifier {
       _pos++;
     }
 
-    if (_fading) {
-      _cancelFade();
-    }
+    _cancelFade();
+    _prepareNextForSkip();
     notifyListeners();
   }
 
@@ -411,6 +685,7 @@ class PlayerController extends ChangeNotifier {
     _queue.clear();
     _order.clear();
     _pos = -1;
+    _sourcePlaylist = null;
     _lead.stop();
     notifyListeners();
   }
@@ -425,6 +700,8 @@ class PlayerController extends ChangeNotifier {
       _pos = _currentIndex;
       _order = List.generate(n, (i) => i);
     }
+    _cancelFade();
+    _prepareNextForSkip();
     notifyListeners();
   }
 
@@ -484,14 +761,18 @@ class PlayerController extends ChangeNotifier {
     if (_karaokeMode && _karaokePlayer != null) {
       final t = currentTrack;
       if (t != null) {
-        final url = _service.getStreamUrl(t.id, quality: _settings.effectiveQuality);
+        final url =
+            _service.getStreamUrl(t.id, quality: _settings.effectiveQuality);
         unawaited(_karaokePlayer!.open(mk.Media(url), play: true));
         _recordRecent(t);
+        _recordTrackPlay(t);
       }
     } else {
       unawaited(_loadCurrentAndPlay(_lead));
       _recordRecent(currentTrack!);
+      _recordTrackPlay(currentTrack!);
     }
+    _prepareNextForSkip();
     notifyListeners();
   }
 
@@ -513,6 +794,8 @@ class PlayerController extends ChangeNotifier {
     // completarse antes del handoff: reanudarla desde el principio.
     if (!newLead.playing) unawaited(newLead.play());
     _recordRecent(currentTrack!);
+    _recordTrackPlay(currentTrack!);
+    _prepareNextForSkip();
     notifyListeners();
   }
 
@@ -525,6 +808,56 @@ class PlayerController extends ChangeNotifier {
   void _ensureWatchdog() {
     _watchdog ??= Timer.periodic(
         const Duration(milliseconds: 200), (_) => _watchdogTick());
+  }
+
+  void _prepareNextForSkip() {
+    if (_karaokeMode || _fading || _preloaded || _pos < 0) return;
+    final next = _nextOrderPos(_pos);
+    if (next == null || _preparedNextPos == next) return;
+
+    final token = ++_preparedNextGen;
+    _preparedNextPos = -1;
+    final track = _queue[_order[next]];
+    unawaited(_prepareNextOnFade(track, next, token));
+  }
+
+  Future<void> _prepareNextOnFade(Track track, int nextPos, int token) async {
+    try {
+      await _fade.stop();
+      if (token != _preparedNextGen) return;
+      await _fade.setVolume(_volume);
+      await _fade.setAudioSource(_sourceFor(track));
+      if (token == _preparedNextGen) {
+        _preparedNextPos = nextPos;
+      }
+    } catch (_) {
+      if (token == _preparedNextGen) _preparedNextPos = -1;
+    }
+  }
+
+  Future<bool> _playPreparedNext(int nextPos) async {
+    if (_preparedNextPos != nextPos || _karaokeMode) return false;
+
+    final oldLead = _lead;
+    final newLead = _fade;
+    _preparedNextPos = -1;
+    _preparedNextGen++;
+    _fadeGen++;
+    _fading = false;
+    _preloaded = false;
+    _fadeTargetPos = -1;
+    _useA = !_useA;
+    _pos = nextPos;
+
+    try {
+      await oldLead.stop();
+      await newLead.setVolume(_volume);
+      await newLead.play();
+      _prepareNextForSkip();
+      return true;
+    } catch (_) {
+      return false;
+    }
   }
 
   /// Duración conocida de la canción actual (dato del stream o, si aún no se
@@ -569,6 +902,10 @@ class PlayerController extends ChangeNotifier {
 
   Future<void> _preloadNext(int nextPos) async {
     final token = _fadeGen;
+    // Esta preparación pasa a ser un crossfade audible, por lo que sustituye
+    // la fuente silenciosa que se había reservado para el botón siguiente.
+    _preparedNextGen++;
+    _preparedNextPos = -1;
     _preloaded = true;
     _fadeTargetPos = nextPos;
     final track = _queue[_order[nextPos]];
@@ -608,8 +945,7 @@ class PlayerController extends ChangeNotifier {
         await other.play();
       }
       if (token != _fadeGen) return;
-      final steps =
-          (fadeDur.inMilliseconds / 50).round().clamp(1, 2000);
+      final steps = (fadeDur.inMilliseconds / 50).round().clamp(1, 2000);
       for (var i = 1; i <= steps; i++) {
         await Future<void>.delayed(const Duration(milliseconds: 50));
         if (token != _fadeGen || !_fading) return;
@@ -626,6 +962,8 @@ class PlayerController extends ChangeNotifier {
   /// Cancela cualquier fundido/pre-carga en curso y restaura el volumen.
   void _cancelFade() {
     _fadeGen++;
+    _preparedNextGen++;
+    _preparedNextPos = -1;
     _fading = false;
     _preloaded = false;
     _fadeTargetPos = -1;
@@ -748,8 +1086,7 @@ class PlayerController extends ChangeNotifier {
           // 2. bandreject (1200Hz, Q=1.5): corte activo en frecuencias vocales
           // 3. equalizers: atenuación de formantes y presencia vocal
           // 4. extrastereo: refuerza los instrumentos en los laterales
-          const filter =
-              'lavfi=[stereotools=mode=lr>l-r:slev=1.4,'
+          const filter = 'lavfi=[stereotools=mode=lr>l-r:slev=1.4,'
               'bandreject=f=1200:w=1.5:t=q,'
               'equalizer=f=3000:t=q:w=1.5:g=-18,'
               'equalizer=f=300:t=q:w=1.2:g=-10,'
@@ -788,21 +1125,32 @@ class PlayerController extends ChangeNotifier {
   }
 
   Future<void> skipNext() async {
-    _cancelFade();
     final next = _nextOrderPos(_pos);
     if (next == null) return;
+    if (await _playPreparedNext(next)) {
+      _recordRecent(currentTrack!);
+      _recordTrackPlay(currentTrack!);
+      notifyListeners();
+      return;
+    }
+
+    _cancelFade();
     _pos = next;
     if (_karaokeMode && _karaokePlayer != null) {
       final t = currentTrack;
       if (t != null) {
-        final url = _service.getStreamUrl(t.id, quality: _settings.effectiveQuality);
+        final url =
+            _service.getStreamUrl(t.id, quality: _settings.effectiveQuality);
         await _karaokePlayer!.open(mk.Media(url), play: true);
         _recordRecent(t);
+        _recordTrackPlay(t);
       }
     } else {
       await _loadCurrentAndPlay(_lead);
       _recordRecent(currentTrack!);
+      _recordTrackPlay(currentTrack!);
     }
+    _prepareNextForSkip();
     notifyListeners();
   }
 
@@ -817,14 +1165,18 @@ class PlayerController extends ChangeNotifier {
       if (_karaokeMode && _karaokePlayer != null) {
         final t = currentTrack;
         if (t != null) {
-          final url = _service.getStreamUrl(t.id, quality: _settings.effectiveQuality);
+          final url =
+              _service.getStreamUrl(t.id, quality: _settings.effectiveQuality);
           await _karaokePlayer!.open(mk.Media(url), play: true);
           _recordRecent(t);
+          _recordTrackPlay(t);
         }
       } else {
         await _loadCurrentAndPlay(_lead);
         _recordRecent(currentTrack!);
+        _recordTrackPlay(currentTrack!);
       }
+      _prepareNextForSkip();
       notifyListeners();
     }
   }
@@ -905,6 +1257,7 @@ class PlayerController extends ChangeNotifier {
     _karaokeDurationController.close();
     _karaokePlayerStateController.close();
     _settings.removeListener(_onSettingsChanged);
+    _service.removeListener(_onServiceChanged);
     _a.dispose();
     _b.dispose();
     super.dispose();

@@ -5,6 +5,7 @@ import '../services/navidrome_service.dart';
 import '../services/player_controller.dart';
 import '../widgets/cover_art.dart';
 import '../widgets/persistent_player_bar.dart';
+import '../widgets/global_top_bar.dart';
 import '../utils/app_colors.dart';
 
 /// Pantalla que muestra las canciones de una playlist específica.
@@ -20,11 +21,13 @@ class PlaylistDetailScreen extends StatefulWidget {
 
 class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
   late Future<List<Track>> _future;
+  List<Track>? _displayTracks;
 
   @override
   void initState() {
     super.initState();
-    _future = context.read<NavidromeService>().getPlaylistTracks(widget.playlist.id);
+    _future =
+        context.read<NavidromeService>().getPlaylistTracks(widget.playlist.id);
   }
 
   /// Reproduce la playlist con el modo aleatorio activo (igual que la opción
@@ -32,8 +35,8 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
   Future<void> _playShuffled(List<Track> tracks) async {
     if (tracks.isEmpty) return;
     final player = context.read<PlayerController>();
-    player.playQueue(tracks, startIndex: 0);
-    await player.toggleShuffle();
+    await player.playShuffledQueue(tracks, sourcePlaylist: widget.playlist);
+    if (mounted) setState(() => _displayTracks = player.orderedQueue);
   }
 
   /// Confirma y borra la playlist en Navidrome. Al terminar vuelve a la
@@ -58,8 +61,7 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
           ),
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(true),
-            child: Text('Eliminar',
-                style: TextStyle(color: context.danger)),
+            child: Text('Eliminar', style: TextStyle(color: context.danger)),
           ),
         ],
       ),
@@ -86,8 +88,7 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Error: $e',
-              style: TextStyle(color: context.danger)),
+          content: Text('Error: $e', style: TextStyle(color: context.danger)),
           backgroundColor: context.bgCard,
           behavior: SnackBarBehavior.floating,
         ),
@@ -102,179 +103,193 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
     final compact = MediaQuery.sizeOf(context).width < 700;
     return Scaffold(
       backgroundColor: context.bgApp,
-      appBar: AppBar(
-        backgroundColor: context.accent2,
-        foregroundColor: context.onAccent2,
-        title: const Text('Playlist'),
-      ),
       bottomNavigationBar: SafeArea(
         top: false,
         child: PersistentPlayerBar(compact: compact),
       ),
-      body: FutureBuilder<List<Track>>(
-        future: _future,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return Center(
-                child: CircularProgressIndicator(color: context.textPrimary));
-          }
-          final tracks = snapshot.data ?? <Track>[];
-          if (tracks.isEmpty) {
-            return Center(
-              child: Text('Playlist vacía',
-                  style: TextStyle(color: context.textMuted)),
-            );
-          }
-          final pinned = nav.isPinnedPlaylist(widget.playlist.id);
-          return Column(
-            children: [
-              Padding(
-                padding: const EdgeInsets.all(16),
-                child: Row(
+      body: Column(
+        children: [
+          const GlobalTopBar(title: 'Playlist'),
+          Expanded(
+            child: FutureBuilder<List<Track>>(
+              future: _future,
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return Center(
+                      child: CircularProgressIndicator(
+                          color: context.textPrimary));
+                }
+                final tracks = snapshot.data ?? <Track>[];
+                if (tracks.isEmpty) {
+                  return Center(
+                    child: Text('Playlist vacía',
+                        style: TextStyle(color: context.textMuted)),
+                  );
+                }
+                final pinned = nav.isPinnedPlaylist(widget.playlist.id);
+                final visibleTracks = _displayTracks ?? tracks;
+                return Column(
                   children: [
-                    Container(
-                      width: 120,
-                      height: 120,
-                      decoration: BoxDecoration(
-                        color: context.accent2,
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: widget.playlist.coverArtUrl != null
-                          ? Image.network(
-                              widget.playlist.coverArtUrl!,
-                              fit: BoxFit.cover,
-                            )
-                          : Icon(Icons.queue_music,
-                              color: context.textPrimary, size: 48),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                    Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Row(
                         children: [
-                          Text(
-                            widget.playlist.name,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                                color: context.textPrimary,
-                                fontSize: 22,
-                                fontWeight: FontWeight.bold),
+                          Container(
+                            width: 120,
+                            height: 120,
+                            decoration: BoxDecoration(
+                              color: context.accent2,
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: widget.playlist.coverArtUrl != null
+                                ? Image.network(
+                                    widget.playlist.coverArtUrl!,
+                                    fit: BoxFit.cover,
+                                  )
+                                : Icon(Icons.queue_music,
+                                    color: context.textPrimary, size: 48),
                           ),
-                          const SizedBox(height: 8),
-                          Text('${tracks.length} canciones',
-                              style: TextStyle(
-                                  color: context.textMuted, fontSize: 14)),
-                          const SizedBox(height: 8),
-                          InkWell(
-                            onTap: () =>
-                                nav.togglePinPlaylist(widget.playlist.id),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Icon(
-                                  pinned
-                                      ? Icons.push_pin
-                                      : Icons.push_pin_outlined,
-                                  color: pinned
-                                      ? context.accent
-                                      : context.textMuted,
-                                  size: 18,
-                                ),
-                                const SizedBox(width: 6),
                                 Text(
-                                  pinned ? 'Fijada' : 'Fijar',
+                                  widget.playlist.name,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
                                   style: TextStyle(
-                                    color: pinned
-                                        ? context.accent
-                                        : context.textMuted,
-                                    fontSize: 13,
+                                      color: context.textPrimary,
+                                      fontSize: 22,
+                                      fontWeight: FontWeight.bold),
+                                ),
+                                const SizedBox(height: 8),
+                                Text('${tracks.length} canciones',
+                                    style: TextStyle(
+                                        color: context.textMuted,
+                                        fontSize: 14)),
+                                const SizedBox(height: 8),
+                                InkWell(
+                                  onTap: () =>
+                                      nav.togglePinPlaylist(widget.playlist.id),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(
+                                        pinned
+                                            ? Icons.push_pin
+                                            : Icons.push_pin_outlined,
+                                        color: pinned
+                                            ? context.accent
+                                            : context.textMuted,
+                                        size: 18,
+                                      ),
+                                      const SizedBox(width: 6),
+                                      Text(
+                                        pinned ? 'Fijada' : 'Fijar',
+                                        style: TextStyle(
+                                          color: pinned
+                                              ? context.accent
+                                              : context.textMuted,
+                                          fontSize: 13,
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ),
                               ],
                             ),
                           ),
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              IconButton(
+                                icon: Icon(Icons.shuffle,
+                                    color: context.accent, size: 24),
+                                tooltip: 'Reproducir al azar',
+                                onPressed: () => _playShuffled(tracks),
+                              ),
+                              IconButton(
+                                icon: Icon(Icons.play_circle_filled,
+                                    color: context.accent, size: 48),
+                                onPressed: () =>
+                                    context.read<PlayerController>().playQueue(
+                                          tracks,
+                                          startIndex: 0,
+                                          sourcePlaylist: widget.playlist,
+                                        ),
+                              ),
+                              IconButton(
+                                icon: Icon(Icons.delete_outline,
+                                    color: context.danger, size: 24),
+                                tooltip: 'Eliminar playlist',
+                                onPressed: _confirmDelete,
+                              ),
+                            ],
+                          ),
                         ],
                       ),
                     ),
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        IconButton(
-                          icon: Icon(Icons.shuffle,
-                              color: context.accent, size: 24),
-                          tooltip: 'Reproducir al azar',
-                          onPressed: () => _playShuffled(tracks),
-                        ),
-                        IconButton(
-                          icon: Icon(Icons.play_circle_filled,
-                              color: context.accent, size: 48),
-                          onPressed: () => context
-                              .read<PlayerController>()
-                              .playQueue(tracks, startIndex: 0),
-                        ),
-                        IconButton(
-                          icon: Icon(Icons.delete_outline,
-                              color: context.danger, size: 24),
-                          tooltip: 'Eliminar playlist',
-                          onPressed: _confirmDelete,
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-              Divider(color: context.themeBorder),
-              Expanded(
-                child: ListView.builder(
-                  itemCount: tracks.length,
-                  itemBuilder: (context, index) {
-                    final track = tracks[index];
-                    final starred = nav.isStarred(track.id);
-                    return ListTile(
-                      leading: CoverArt(
-                        url: track.albumArtUrl,
-                        artist: track.artist,
-                        album: track.album,
-                        title: track.title,
-                        width: 40,
-                        height: 40,
-                        borderRadius: 4,
-                        fallbackIcon: Icons.music_note,
-                        fallbackIconSize: 20,
-                        fallbackColor: context.bgElevated,
-                      ),
-                      title: Text(track.title,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                              color: context.textPrimary, fontSize: 14)),
-                      subtitle: Text(track.artist,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                              color: context.textMuted, fontSize: 12)),
-                      trailing: IconButton(
-                        icon: Icon(
-                          starred ? Icons.favorite : Icons.favorite_border,
-                          color:
-                              starred ? context.accent : context.textMuted,
-                        ),
-                        onPressed: () async {
-                          await nav.toggleStar(track);
-                          setState(() {});
+                    Divider(color: context.themeBorder),
+                    Expanded(
+                      child: ListView.builder(
+                        itemCount: visibleTracks.length,
+                        itemBuilder: (context, index) {
+                          final track = visibleTracks[index];
+                          final starred = nav.isStarred(track.id);
+                          return ListTile(
+                            leading: CoverArt(
+                              url: track.albumArtUrl,
+                              artist: track.artist,
+                              album: track.album,
+                              title: track.title,
+                              width: 40,
+                              height: 40,
+                              borderRadius: 4,
+                              fallbackIcon: Icons.music_note,
+                              fallbackIconSize: 20,
+                              fallbackColor: context.bgElevated,
+                            ),
+                            title: Text(track.title,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                    color: context.textPrimary, fontSize: 14)),
+                            subtitle: Text(track.artist,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                    color: context.textMuted, fontSize: 12)),
+                            trailing: IconButton(
+                              icon: Icon(
+                                starred
+                                    ? Icons.favorite
+                                    : Icons.favorite_border,
+                                color: starred
+                                    ? context.accent
+                                    : context.textMuted,
+                              ),
+                              onPressed: () async {
+                                await nav.toggleStar(track);
+                                setState(() {});
+                              },
+                            ),
+                            onTap: () =>
+                                context.read<PlayerController>().playQueue(
+                                      visibleTracks,
+                                      startIndex: index,
+                                      sourcePlaylist: widget.playlist,
+                                    ),
+                          );
                         },
                       ),
-                      onTap: () => context
-                          .read<PlayerController>()
-                          .playQueue(tracks, startIndex: index),
-                    );
-                  },
-                ),
-              ),
-            ],
-          );
-        },
+                    ),
+                  ],
+                );
+              },
+            ),
+          ),
+        ],
       ),
     );
   }

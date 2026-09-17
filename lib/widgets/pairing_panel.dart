@@ -172,8 +172,8 @@ class _PairingSharePanelState extends State<PairingSharePanel> {
                   color: context.accent.withValues(alpha: 0.12),
                   border: Border.all(color: context.accent, width: 1.8),
                 ),
-                child: Icon(Icons.check_rounded,
-                    color: context.accent, size: 32),
+                child:
+                    Icon(Icons.check_rounded, color: context.accent, size: 32),
               ),
               const SizedBox(height: 14),
               Text(
@@ -197,12 +197,14 @@ class _PairingSharePanelState extends State<PairingSharePanel> {
                 style: OutlinedButton.styleFrom(
                   foregroundColor: context.textSecondary,
                   side: BorderSide(color: context.bgElevated),
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                   shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(10)),
                 ),
                 icon: const Icon(Icons.refresh, size: 15),
-                label: const Text('Generar otro código', style: TextStyle(fontSize: 12.5)),
+                label: const Text('Generar otro código',
+                    style: TextStyle(fontSize: 12.5)),
               ),
             ],
           ),
@@ -216,8 +218,7 @@ class _PairingSharePanelState extends State<PairingSharePanel> {
       final seconds = widget.server.remainingSeconds;
       final minutes = seconds ~/ 60;
       final remSec = seconds % 60;
-      final timeStr =
-          '$minutes:${remSec.toString().padLeft(2, '0')}';
+      final timeStr = '$minutes:${remSec.toString().padLeft(2, '0')}';
 
       return SingleChildScrollView(
         child: Column(
@@ -301,8 +302,14 @@ class _PairingSharePanelState extends State<PairingSharePanel> {
             const SizedBox(height: 14),
 
             Text(
-              'O escribe este código en tu teléfono:',
+              'QR temporal por relay gratuito de ntfy.sh',
               style: TextStyle(color: context.textSecondary, fontSize: 11.5),
+            ),
+            const SizedBox(height: 3),
+            Text(
+              'Las credenciales viajan cifradas de punta a punta.',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: context.textMuted, fontSize: 10.5),
             ),
             const SizedBox(height: 8),
 
@@ -341,8 +348,8 @@ class _PairingSharePanelState extends State<PairingSharePanel> {
                 runSpacing: 4,
                 children: widget.server.allLocalIps.map((ip) {
                   return GestureDetector(
-                    onTap: () => _copyToClipboard(
-                        '$ip:${widget.server.port}', 'IP $ip:${widget.server.port}'),
+                    onTap: () => _copyToClipboard('$ip:${widget.server.port}',
+                        'IP $ip:${widget.server.port}'),
                     child: Container(
                       padding: const EdgeInsets.symmetric(
                           horizontal: 8, vertical: 3),
@@ -375,7 +382,8 @@ class _PairingSharePanelState extends State<PairingSharePanel> {
                     foregroundColor: context.textSecondary,
                   ),
                   icon: const Icon(Icons.refresh, size: 14),
-                  label: const Text('Regenerar', style: TextStyle(fontSize: 11.5)),
+                  label:
+                      const Text('Regenerar', style: TextStyle(fontSize: 11.5)),
                 ),
                 const SizedBox(width: 8),
                 TextButton.icon(
@@ -384,7 +392,8 @@ class _PairingSharePanelState extends State<PairingSharePanel> {
                     foregroundColor: context.danger.withValues(alpha: 0.8),
                   ),
                   icon: const Icon(Icons.close, size: 14),
-                  label: const Text('Cancelar', style: TextStyle(fontSize: 11.5)),
+                  label:
+                      const Text('Cancelar', style: TextStyle(fontSize: 11.5)),
                 ),
               ],
             ),
@@ -404,11 +413,9 @@ class _PairingSharePanelState extends State<PairingSharePanel> {
           decoration: BoxDecoration(
             shape: BoxShape.circle,
             color: context.bgElevated,
-            border: Border.all(
-                color: context.accent.withValues(alpha: 0.3)),
+            border: Border.all(color: context.accent.withValues(alpha: 0.3)),
           ),
-          child: Icon(Icons.qr_code_2_rounded,
-              color: context.accent, size: 28),
+          child: Icon(Icons.qr_code_2_rounded, color: context.accent, size: 28),
         ),
         const SizedBox(height: 12),
         Text(
@@ -432,8 +439,7 @@ class _PairingSharePanelState extends State<PairingSharePanel> {
             decoration: BoxDecoration(
               color: context.danger.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(8),
-              border: Border.all(
-                  color: context.danger.withValues(alpha: 0.25)),
+              border: Border.all(color: context.danger.withValues(alpha: 0.25)),
             ),
             child: Text(
               _errorMessage!,
@@ -670,7 +676,8 @@ class _PairingJoinPanelState extends State<PairingJoinPanel> {
               decoration: InputDecoration(
                 hintText: 'XXX-XXX',
                 hintStyle: TextStyle(
-                    color: context.textPrimary.withValues(alpha: 0.2), letterSpacing: 4),
+                    color: context.textPrimary.withValues(alpha: 0.2),
+                    letterSpacing: 4),
                 filled: true,
                 fillColor: context.bgApp,
                 border: OutlineInputBorder(
@@ -688,8 +695,7 @@ class _PairingJoinPanelState extends State<PairingJoinPanel> {
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(),
-            child:
-                Text('Cancelar', style: TextStyle(color: context.textMuted)),
+            child: Text('Cancelar', style: TextStyle(color: context.textMuted)),
           ),
           ElevatedButton(
             onPressed: () => Navigator.of(ctx).pop(controller.text),
@@ -724,8 +730,7 @@ class _PairingJoinPanelState extends State<PairingJoinPanel> {
     try {
       final pc = await PairingClient.findPcByCode(code);
       if (pc == null) {
-        throw Exception(
-            'No se encontró el PC con ese código en tu red Wi-Fi.\n'
+        throw Exception('No se encontró el PC con ese código en tu red Wi-Fi.\n'
             'Asegúrate de estar en la misma red o prueba con el escáner QR.');
       }
 
@@ -872,10 +877,7 @@ class _PairingJoinPanelState extends State<PairingJoinPanel> {
         ),
         const SizedBox(height: 16),
 
-        if (_activeTab == 0)
-          _buildRadarSection()
-        else
-          _buildCodeSection(),
+        if (_activeTab == 0) _buildRadarSection() else _buildCodeSection(),
 
         const SizedBox(height: 14),
 
@@ -940,8 +942,7 @@ class _PairingJoinPanelState extends State<PairingJoinPanel> {
               Flexible(
                 child: Text(
                   _statusText!,
-                  style: TextStyle(
-                      color: context.accent, fontSize: 12),
+                  style: TextStyle(color: context.accent, fontSize: 12),
                 ),
               ),
             ],
@@ -955,20 +956,17 @@ class _PairingJoinPanelState extends State<PairingJoinPanel> {
             decoration: BoxDecoration(
               color: context.danger.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(10),
-              border:
-                  Border.all(color: context.danger.withValues(alpha: 0.25)),
+              border: Border.all(color: context.danger.withValues(alpha: 0.25)),
             ),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(Icons.error_outline,
-                    color: context.danger, size: 16),
+                Icon(Icons.error_outline, color: context.danger, size: 16),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
                     _errorMessage!,
-                    style:
-                        TextStyle(color: context.danger, fontSize: 11.5),
+                    style: TextStyle(color: context.danger, fontSize: 11.5),
                   ),
                 ),
               ],
@@ -991,8 +989,7 @@ class _PairingJoinPanelState extends State<PairingJoinPanel> {
             borderRadius: BorderRadius.circular(8),
             border: isSelected
                 ? Border.all(
-                    color: context.accent.withValues(alpha: 0.4),
-                    width: 1)
+                    color: context.accent.withValues(alpha: 0.4), width: 1)
                 : null,
           ),
           child: Row(
@@ -1000,17 +997,14 @@ class _PairingJoinPanelState extends State<PairingJoinPanel> {
             children: [
               Icon(icon,
                   size: 15,
-                  color: isSelected
-                      ? context.accent
-                      : context.textMuted),
+                  color: isSelected ? context.accent : context.textMuted),
               const SizedBox(width: 6),
               Text(
                 label,
                 style: TextStyle(
                   color: isSelected ? context.textPrimary : context.textMuted,
                   fontSize: 12,
-                  fontWeight:
-                      isSelected ? FontWeight.bold : FontWeight.normal,
+                  fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
                 ),
               ),
             ],
@@ -1058,7 +1052,6 @@ class _PairingJoinPanelState extends State<PairingJoinPanel> {
           style: TextStyle(color: context.textMuted, fontSize: 11.5),
         ),
         const SizedBox(height: 10),
-
         if (_nearbyDevices.isEmpty)
           Container(
             padding: const EdgeInsets.all(18),
@@ -1146,7 +1139,8 @@ class _PairingJoinPanelState extends State<PairingJoinPanel> {
                   ),
                   const SizedBox(width: 8),
                   FilledButton(
-                    onPressed: _loading ? null : () => _connectToDiscoveredDevice(pc),
+                    onPressed:
+                        _loading ? null : () => _connectToDiscoveredDevice(pc),
                     style: FilledButton.styleFrom(
                       backgroundColor: context.accent2,
                       padding: const EdgeInsets.symmetric(
@@ -1154,7 +1148,8 @@ class _PairingJoinPanelState extends State<PairingJoinPanel> {
                       shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(8)),
                     ),
-                    child: const Text('Vincular', style: TextStyle(fontSize: 11.5)),
+                    child: const Text('Vincular',
+                        style: TextStyle(fontSize: 11.5)),
                   ),
                 ],
               ),
@@ -1185,7 +1180,6 @@ class _PairingJoinPanelState extends State<PairingJoinPanel> {
           style: TextStyle(color: context.textMuted, fontSize: 11.5),
         ),
         const SizedBox(height: 12),
-
         TextField(
           controller: _codeController,
           enabled: !_loading,
@@ -1221,22 +1215,20 @@ class _PairingJoinPanelState extends State<PairingJoinPanel> {
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(
-                  color: context.accent, width: 1.5),
+              borderSide: BorderSide(color: context.accent, width: 1.5),
             ),
           ),
           onSubmitted: (_) => _connectWithCode(),
         ),
         const SizedBox(height: 12),
-
         ElevatedButton(
           onPressed: _loading ? null : _connectWithCode,
           style: ElevatedButton.styleFrom(
             backgroundColor: context.accent2,
             foregroundColor: context.onAccent2,
             padding: const EdgeInsets.symmetric(vertical: 12),
-            shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12)),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           ),
           child: const Text(
             'Vincular con este código',
@@ -1286,11 +1278,12 @@ class _PairingJoinPanelState extends State<PairingJoinPanel> {
                         TextStyle(color: context.textMuted, fontSize: 11),
                     hintText: '192.168.1.50',
                     hintStyle: TextStyle(
-                        color: context.textPrimary.withValues(alpha: 0.2), fontSize: 11),
+                        color: context.textPrimary.withValues(alpha: 0.2),
+                        fontSize: 11),
                     filled: true,
                     fillColor: context.bgApp,
-                    contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 10, vertical: 8),
+                    contentPadding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(8),
                       borderSide: BorderSide(color: context.bgElevated),
@@ -1311,11 +1304,12 @@ class _PairingJoinPanelState extends State<PairingJoinPanel> {
                         TextStyle(color: context.textMuted, fontSize: 11),
                     hintText: '54321',
                     hintStyle: TextStyle(
-                        color: context.textPrimary.withValues(alpha: 0.2), fontSize: 11),
+                        color: context.textPrimary.withValues(alpha: 0.2),
+                        fontSize: 11),
                     filled: true,
                     fillColor: context.bgApp,
-                    contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 10, vertical: 8),
+                    contentPadding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(8),
                       borderSide: BorderSide(color: context.bgElevated),
@@ -1337,11 +1331,11 @@ class _PairingJoinPanelState extends State<PairingJoinPanel> {
             ],
             decoration: InputDecoration(
               labelText: 'Código de 6 letras',
-              labelStyle:
-                  TextStyle(color: context.textMuted, fontSize: 11),
+              labelStyle: TextStyle(color: context.textMuted, fontSize: 11),
               hintText: 'ABC-DEF',
               hintStyle: TextStyle(
-                  color: context.textPrimary.withValues(alpha: 0.2), fontSize: 11),
+                  color: context.textPrimary.withValues(alpha: 0.2),
+                  fontSize: 11),
               filled: true,
               fillColor: context.bgApp,
               contentPadding:
@@ -1362,7 +1356,8 @@ class _PairingJoinPanelState extends State<PairingJoinPanel> {
                   borderRadius: BorderRadius.circular(8)),
             ),
             icon: const Icon(Icons.link_rounded, size: 15),
-            label: const Text('Conectar por IP', style: TextStyle(fontSize: 12)),
+            label:
+                const Text('Conectar por IP', style: TextStyle(fontSize: 12)),
           ),
         ],
       ),
@@ -1465,11 +1460,13 @@ class _QrScannerSheetState extends State<QrScannerSheet> {
                 ),
                 const Spacer(),
                 IconButton(
-                  icon: Icon(Icons.flash_on, color: context.textSecondary, size: 20),
+                  icon: Icon(Icons.flash_on,
+                      color: context.textSecondary, size: 20),
                   onPressed: () => _controller.toggleTorch(),
                 ),
                 IconButton(
-                  icon: Icon(Icons.close, color: context.textSecondary, size: 20),
+                  icon:
+                      Icon(Icons.close, color: context.textSecondary, size: 20),
                   onPressed: () => Navigator.of(context).pop(),
                 ),
               ],

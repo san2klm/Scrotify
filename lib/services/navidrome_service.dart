@@ -16,6 +16,7 @@ class Track {
   final String album;
   final String duration;
   final String? albumArtUrl;
+  final int playCount;
 
   Track({
     required this.id,
@@ -24,6 +25,7 @@ class Track {
     required this.album,
     required this.duration,
     this.albumArtUrl,
+    this.playCount = 0,
   });
 
   factory Track.fromJson(Map<String, dynamic> json, {String? albumArtUrl}) {
@@ -41,6 +43,7 @@ class Track {
       album: (json['album'] as String?) ?? 'Unknown',
       duration: duration,
       albumArtUrl: coverArt,
+      playCount: (json['playCount'] as num?)?.toInt() ?? 0,
     );
   }
 }
@@ -65,7 +68,8 @@ class Album {
   factory Album.fromJson(Map<String, dynamic> json, {String? coverArtUrl}) {
     return Album(
       id: (json['id'] as String?) ?? '',
-      title: (json['name'] as String?) ?? (json['title'] as String?) ?? 'Unknown',
+      title:
+          (json['name'] as String?) ?? (json['title'] as String?) ?? 'Unknown',
       artist: (json['artist'] as String?) ?? 'Unknown',
       coverArtUrl: coverArtUrl ?? json['coverArt'] as String?,
       trackCount: (json['songCount'] as num?)?.toInt() ??
@@ -288,9 +292,11 @@ class NavidromeService with ChangeNotifier {
   }
 
   Future<void> connectByUrl(String url, String user, String pass) async {
-    var processedUrl = url.endsWith('/') ? url.substring(0, url.length - 1) : url;
+    var processedUrl =
+        url.endsWith('/') ? url.substring(0, url.length - 1) : url;
 
-    if (!processedUrl.startsWith('http://') && !processedUrl.startsWith('https://')) {
+    if (!processedUrl.startsWith('http://') &&
+        !processedUrl.startsWith('https://')) {
       processedUrl = 'https://$processedUrl';
     }
 
@@ -328,13 +334,14 @@ class NavidromeService with ChangeNotifier {
 
       try {
         final data = jsonDecode(response.body);
-        
+
         if (data['subsonic-response']['status'] == 'ok') {
           _connected = true;
           await _loadPins();
           notifyListeners();
         } else {
-          throw Exception('Authentication failed: ${data['subsonic-response']['error']['message']}');
+          throw Exception(
+              'Authentication failed: ${data['subsonic-response']['error']['message']}');
         }
       } catch (e) {
         if (e.toString().contains('Unexpected character')) {
@@ -354,7 +361,8 @@ class NavidromeService with ChangeNotifier {
     final salt = _randomSalt();
     final token = _md5('$_pass$salt');
 
-    final uri = Uri.parse('$_url/rest/getMusicFolders.view').replace(queryParameters: {
+    final uri =
+        Uri.parse('$_url/rest/getMusicFolders.view').replace(queryParameters: {
       'u': _user!,
       's': salt,
       't': token,
@@ -374,7 +382,8 @@ class NavidromeService with ChangeNotifier {
     final salt = _randomSalt();
     final token = _md5('$_pass$salt');
 
-    final uri = Uri.parse('$_url/rest/getArtists.view').replace(queryParameters: {
+    final uri =
+        Uri.parse('$_url/rest/getArtists.view').replace(queryParameters: {
       'u': _user!,
       's': salt,
       't': token,
@@ -393,11 +402,19 @@ class NavidromeService with ChangeNotifier {
       return [];
     }
 
+    // getArtists devuelve el id de coverArt, no una URL. Normalizarlo aquí
+    // para que los consumidores de este método puedan cargar la imagen igual
+    // que los álbumes y resultados de búsqueda.
     final List<dynamic> allArtists = [];
-    for (var idx in indexes) {
-      final artistsList = idx['artist'] as List?;
-      if (artistsList != null) {
-        allArtists.addAll(artistsList);
+    for (final index in _asList(indexes)) {
+      if (index is! Map) continue;
+
+      for (final rawArtist in _asList(index['artist'])) {
+        if (rawArtist is! Map) continue;
+
+        final artist = Map<String, dynamic>.from(rawArtist);
+        artist['coverArt'] = _coverArtUrl(artist['coverArt'], salt, token);
+        allArtists.add(artist);
       }
     }
 
@@ -410,7 +427,8 @@ class NavidromeService with ChangeNotifier {
     final salt = _randomSalt();
     final token = _md5('$_pass$salt');
 
-    final uri = Uri.parse('$_url/rest/getIndexes.view').replace(queryParameters: {
+    final uri =
+        Uri.parse('$_url/rest/getIndexes.view').replace(queryParameters: {
       'u': _user!,
       's': salt,
       't': token,
@@ -465,11 +483,13 @@ class NavidromeService with ChangeNotifier {
       'albumCount': '24',
       'artistCount': '24',
     };
-    final uri = Uri.parse('$_url/rest/search3.view').replace(queryParameters: params);
+    final uri =
+        Uri.parse('$_url/rest/search3.view').replace(queryParameters: params);
 
     final response = await _client.get(uri);
     final data = jsonDecode(response.body);
-    final result = data['subsonic-response']?['searchResult3'] as Map<String, dynamic>?;
+    final result =
+        data['subsonic-response']?['searchResult3'] as Map<String, dynamic>?;
     if (result == null) {
       return SearchResults(songs: [], albums: [], artists: []);
     }
@@ -507,7 +527,8 @@ class NavidromeService with ChangeNotifier {
     if (!_connected) throw Exception('Not connected');
     final (salt, token) = _auth();
 
-    final uri = Uri.parse('$_url/rest/getPlaylists.view').replace(queryParameters: {
+    final uri =
+        Uri.parse('$_url/rest/getPlaylists.view').replace(queryParameters: {
       'u': _user!,
       's': salt,
       't': token,
@@ -527,21 +548,51 @@ class NavidromeService with ChangeNotifier {
         .toList();
   }
 
-  Future<Playlist?> createPlaylist(String name) async {
+  /// Crea una playlist y, si el servidor Navidrome lo permite, le adjunta una
+  /// portada PNG, JPG o WebP. La portada usa multipart para no convertir la
+  /// imagen a texto ni guardarla localmente.
+  Future<Playlist?> createPlaylist(
+    String name, {
+    List<int>? coverBytes,
+    String? coverFileName,
+  }) async {
     if (!_connected) throw Exception('Not connected');
+    final cleanName = name.trim();
+    if (cleanName.isEmpty) {
+      throw ArgumentError.value(name, 'name', 'El nombre es obligatorio.');
+    }
     final (salt, token) = _auth();
 
-    final uri = Uri.parse('$_url/rest/createPlaylist.view').replace(queryParameters: {
+    final uri =
+        Uri.parse('$_url/rest/createPlaylist.view').replace(queryParameters: {
       'u': _user!,
       's': salt,
       't': token,
       'v': '1.16.1',
       'c': 'Psysonic',
       'f': 'json',
-      'name': name,
+      'name': cleanName,
     });
 
-    final response = await _client.get(uri);
+    late http.Response response;
+    if (coverBytes == null) {
+      response = await _client.get(uri);
+    } else {
+      if (coverBytes.length > 10 * 1024 * 1024) {
+        throw ArgumentError('La portada supera el máximo de 10 MB.');
+      }
+      final request = http.MultipartRequest('POST', uri)
+        ..files.add(http.MultipartFile.fromBytes(
+          'coverArt',
+          coverBytes,
+          filename: coverFileName ?? 'playlist-cover.png',
+        ));
+      response = await http.Response.fromStream(await request.send());
+    }
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception(
+          'No se pudo crear la playlist (HTTP ${response.statusCode}).');
+    }
     final data = jsonDecode(response.body);
     final p = data['subsonic-response']?['playlist'];
     if (p == null) return null;
@@ -581,7 +632,8 @@ class NavidromeService with ChangeNotifier {
   Future<void> deletePlaylist(String playlistId) async {
     if (!_connected) throw Exception('Not connected');
     final (salt, token) = _auth();
-    final uri = Uri.parse('$_url/rest/deletePlaylist.view').replace(queryParameters: {
+    final uri =
+        Uri.parse('$_url/rest/deletePlaylist.view').replace(queryParameters: {
       'u': _user!,
       's': salt,
       't': token,
@@ -596,7 +648,8 @@ class NavidromeService with ChangeNotifier {
   Future<Playlist?> getPlaylist(String playlistId) async {
     if (!_connected) throw Exception('Not connected');
     final (salt, token) = _auth();
-    final uri = Uri.parse('$_url/rest/getPlaylist.view').replace(queryParameters: {
+    final uri =
+        Uri.parse('$_url/rest/getPlaylist.view').replace(queryParameters: {
       'u': _user!,
       's': salt,
       't': token,
@@ -616,7 +669,8 @@ class NavidromeService with ChangeNotifier {
   Future<List<Track>> getPlaylistTracks(String playlistId) async {
     if (!_connected) throw Exception('Not connected');
     final (salt, token) = _auth();
-    final uri = Uri.parse('$_url/rest/getPlaylist.view').replace(queryParameters: {
+    final uri =
+        Uri.parse('$_url/rest/getPlaylist.view').replace(queryParameters: {
       'u': _user!,
       's': salt,
       't': token,
@@ -668,14 +722,16 @@ class NavidromeService with ChangeNotifier {
     if (albumId != null) params['albumId'] = albumId;
     if (artistId != null) params['artistId'] = artistId;
 
-    final uri = Uri.parse('$_url/rest/$endpoint').replace(queryParameters: params);
+    final uri =
+        Uri.parse('$_url/rest/$endpoint').replace(queryParameters: params);
     await _client.get(uri);
   }
 
   Future<List<Track>> getStarred() async {
     if (!_connected) throw Exception('Not connected');
     final (salt, token) = _auth();
-    final uri = Uri.parse('$_url/rest/getStarred2.view').replace(queryParameters: {
+    final uri =
+        Uri.parse('$_url/rest/getStarred2.view').replace(queryParameters: {
       'u': _user!,
       's': salt,
       't': token,
@@ -708,8 +764,7 @@ class NavidromeService with ChangeNotifier {
 
   bool isPinnedPlaylist(String id) => _pinnedPlaylistIds.contains(id);
 
-  List<String> get pinnedPlaylistIds =>
-      _pinnedPlaylistIds.toList()..sort();
+  List<String> get pinnedPlaylistIds => _pinnedPlaylistIds.toList()..sort();
 
   void togglePinPlaylist(String id) {
     if (_pinnedPlaylistIds.contains(id)) {
@@ -826,7 +881,8 @@ class NavidromeService with ChangeNotifier {
           albumArtUrl: _coverArtUrl(map['coverArt'], salt, token)));
     }
 
-    tracks.sort((a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()));
+    tracks
+        .sort((a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()));
     return tracks;
   }
 
@@ -864,7 +920,8 @@ class NavidromeService with ChangeNotifier {
     final salt = _randomSalt();
     final token = _md5('$_pass$salt');
 
-    final uri = Uri.parse('$_url/rest/getAlbumList2.view').replace(queryParameters: {
+    final uri =
+        Uri.parse('$_url/rest/getAlbumList2.view').replace(queryParameters: {
       'u': _user!,
       's': salt,
       't': token,
@@ -921,7 +978,8 @@ class NavidromeService with ChangeNotifier {
   Future<List<Album>> getArtistAlbums(String artistId) async {
     if (!_connected) throw Exception('Not connected');
     final (salt, token) = _auth();
-    final uri = Uri.parse('$_url/rest/getArtist.view').replace(queryParameters: {
+    final uri =
+        Uri.parse('$_url/rest/getArtist.view').replace(queryParameters: {
       'u': _user!,
       's': salt,
       't': token,
@@ -932,7 +990,8 @@ class NavidromeService with ChangeNotifier {
     });
     final response = await _client.get(uri);
     final data = jsonDecode(response.body);
-    final artist = data['subsonic-response']?['artist'] as Map<String, dynamic>?;
+    final artist =
+        data['subsonic-response']?['artist'] as Map<String, dynamic>?;
     if (artist == null) return [];
     final list = artist['album'] as List?;
     if (list == null) return [];
@@ -947,7 +1006,8 @@ class NavidromeService with ChangeNotifier {
     if (!_connected) throw Exception('Not connected');
     // Primero obtenemos el nombre del artista para buscar sus canciones.
     final (salt, token) = _auth();
-    final uri = Uri.parse('$_url/rest/getArtist.view').replace(queryParameters: {
+    final uri =
+        Uri.parse('$_url/rest/getArtist.view').replace(queryParameters: {
       'u': _user!,
       's': salt,
       't': token,
@@ -958,12 +1018,14 @@ class NavidromeService with ChangeNotifier {
     });
     final response = await _client.get(uri);
     final data = jsonDecode(response.body);
-    final artist = data['subsonic-response']?['artist'] as Map<String, dynamic>?;
+    final artist =
+        data['subsonic-response']?['artist'] as Map<String, dynamic>?;
     if (artist == null) return [];
     final artistName = artist['name'] as String? ?? '';
 
     // Buscamos canciones del artista (search3 con query = nombre del artista).
-    final searchUri = Uri.parse('$_url/rest/search3.view').replace(queryParameters: {
+    final searchUri =
+        Uri.parse('$_url/rest/search3.view').replace(queryParameters: {
       'u': _user!,
       's': salt,
       't': token,
@@ -977,7 +1039,8 @@ class NavidromeService with ChangeNotifier {
     });
     final searchResponse = await _client.get(searchUri);
     final searchData = jsonDecode(searchResponse.body);
-    final result = searchData['subsonic-response']?['searchResult3'] as Map<String, dynamic>?;
+    final result = searchData['subsonic-response']?['searchResult3']
+        as Map<String, dynamic>?;
     if (result == null) return [];
     final songs = _asList(result['song']);
     return songs
@@ -1002,6 +1065,31 @@ class NavidromeService with ChangeNotifier {
     return url;
   }
 
+  /// Registra una reproducción para el usuario conectado. Navidrome solo
+  /// actualiza su contador al recibir este evento, nunca solo por `stream`.
+  Future<void> scrobble(String trackId) async {
+    if (!_connected) return;
+    try {
+      final (salt, token) = _auth();
+      final uri = Uri.parse('$_url/rest/scrobble.view').replace(
+        queryParameters: {
+          'u': _user!,
+          's': salt,
+          't': token,
+          'v': '1.16.1',
+          'c': 'Scrotify',
+          'f': 'json',
+          'id': trackId,
+          'time': DateTime.now().millisecondsSinceEpoch.toString(),
+          'submission': 'true',
+        },
+      );
+      await _client.get(uri);
+    } catch (_) {
+      // Un fallo de red al informar una escucha no debe cortar el audio.
+    }
+  }
+
   // ---------------------------------------------------------------------------
   // Letras locales (prioridad 1): getLyricsBySongId de Navidrome/OpenSubsonic.
   // Usa letras embebidas o .lrc externos ya escaneados por el servidor.
@@ -1012,8 +1100,8 @@ class NavidromeService with ChangeNotifier {
   Future<List<StructuredLyricBlock>> getLyricsBySongId(String songId) async {
     if (!_connected) return [];
     final (salt, token) = _auth();
-    final uri =
-        Uri.parse('$_url/rest/getLyricsBySongId.view').replace(queryParameters: {
+    final uri = Uri.parse('$_url/rest/getLyricsBySongId.view')
+        .replace(queryParameters: {
       'u': _user!,
       's': salt,
       't': token,
@@ -1050,8 +1138,8 @@ class NavidromeService with ChangeNotifier {
           lines.add(LyricLineData(startMs: start, text: value));
         }
         if (lines.isNotEmpty) {
-          result.add(StructuredLyricBlock(
-              synced: synced, lang: lang, lines: lines));
+          result.add(
+              StructuredLyricBlock(synced: synced, lang: lang, lines: lines));
         }
       }
       return result;
@@ -1069,7 +1157,8 @@ class NavidromeService with ChangeNotifier {
   Future<List<NowPlayingEntry>> getNowPlaying() async {
     if (!_connected) return [];
     final (salt, token) = _auth();
-    final uri = Uri.parse('$_url/rest/getNowPlaying.view').replace(queryParameters: {
+    final uri =
+        Uri.parse('$_url/rest/getNowPlaying.view').replace(queryParameters: {
       'u': _user!,
       's': salt,
       't': token,
@@ -1112,8 +1201,8 @@ class NavidromeService with ChangeNotifier {
       if (since != null) 'since': since.toString(),
     };
 
-    final uri =
-        Uri.parse('$_url/rest/getChatMessages.view').replace(queryParameters: params);
+    final uri = Uri.parse('$_url/rest/getChatMessages.view')
+        .replace(queryParameters: params);
 
     try {
       final response = await _client.get(uri);

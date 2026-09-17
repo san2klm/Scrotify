@@ -77,7 +77,9 @@ class JamQueuePanel extends StatelessWidget {
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Icon(
-                  inJam ? Icons.speaker_group_rounded : Icons.queue_music_rounded,
+                  inJam
+                      ? Icons.speaker_group_rounded
+                      : Icons.queue_music_rounded,
                   color: inJam ? context.accent : context.accent,
                   size: 20,
                 ),
@@ -98,7 +100,8 @@ class JamQueuePanel extends StatelessWidget {
                     if (inJam)
                       Text(
                         '${jam.participants.length} participante${jam.participants.length == 1 ? "" : "s"} agregando música',
-                        style: TextStyle(color: context.textMuted, fontSize: 11),
+                        style:
+                            TextStyle(color: context.textMuted, fontSize: 11),
                       ),
                   ],
                 ),
@@ -119,7 +122,8 @@ class JamQueuePanel extends StatelessWidget {
                       style: TextStyle(color: context.textMuted, fontSize: 12)),
                 ),
               IconButton(
-                icon: Icon(Icons.close_rounded, color: context.textMuted, size: 20),
+                icon: Icon(Icons.close_rounded,
+                    color: context.textMuted, size: 20),
                 onPressed: () => Navigator.of(context).pop(),
               ),
             ],
@@ -179,7 +183,8 @@ class JamQueuePanel extends StatelessWidget {
                           currentTrack.artist,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: TextStyle(color: context.textSecondary, fontSize: 11.5),
+                          style: TextStyle(
+                              color: context.textSecondary, fontSize: 11.5),
                         ),
                         if (inJam && jam.currentTrackAddedBy != null) ...[
                           const SizedBox(height: 3),
@@ -215,7 +220,8 @@ class JamQueuePanel extends StatelessWidget {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Icon(Icons.queue_music_rounded,
-                            color: context.textPrimary.withValues(alpha: 0.15), size: 48),
+                            color: context.textPrimary.withValues(alpha: 0.15),
+                            size: 48),
                         const SizedBox(height: 10),
                         Text(
                           'La cola está vacía',
@@ -228,7 +234,8 @@ class JamQueuePanel extends StatelessWidget {
                         const SizedBox(height: 4),
                         Text(
                           'Añade canciones desde el buscador o tu biblioteca',
-                          style: TextStyle(color: context.textMuted, fontSize: 12),
+                          style:
+                              TextStyle(color: context.textMuted, fontSize: 12),
                         ),
                       ],
                     ),
@@ -309,8 +316,9 @@ class JamQueuePanel extends StatelessWidget {
                                   IconButton(
                                     icon: Icon(Icons.close_rounded,
                                         color: context.textMuted, size: 18),
-                                    onPressed: () =>
-                                        jam.removeTrackFromJam(item.id, orderIndex: i),
+                                    onPressed: () => jam.removeTrackFromJam(
+                                        item.id,
+                                        orderIndex: i),
                                   ),
                               ],
                             ),
@@ -381,6 +389,17 @@ class JamQueuePanel extends StatelessWidget {
                                             fontSize: 11),
                                       ),
                                     ],
+                                  ),
+                                ),
+                                // Segundo agarre junto a eliminar: facilita
+                                // reordenar con el pulgar derecho. Se conserva
+                                // el agarre izquierdo para quien lo prefiera.
+                                ReorderableDragStartListener(
+                                  index: i,
+                                  child: Padding(
+                                    padding: const EdgeInsets.only(left: 6),
+                                    child: Icon(Icons.drag_handle_rounded,
+                                        color: context.textMuted, size: 20),
                                   ),
                                 ),
                                 IconButton(

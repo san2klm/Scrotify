@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
 
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
@@ -58,10 +59,12 @@ class PairingClient {
       void sendBroadcasts() async {
         try {
           try {
-            socket?.send(bytes, InternetAddress.loopbackIPv4, kPairingDiscoveryPort);
+            socket?.send(
+                bytes, InternetAddress.loopbackIPv4, kPairingDiscoveryPort);
           } catch (_) {}
           try {
-            socket?.send(bytes, InternetAddress('255.255.255.255'), kPairingDiscoveryPort);
+            socket?.send(bytes, InternetAddress('255.255.255.255'),
+                kPairingDiscoveryPort);
           } catch (_) {}
 
           final interfaces = await NetworkInterface.list(
@@ -74,7 +77,8 @@ class PairingClient {
               if (parts.length == 4) {
                 final subnetBcast = '${parts[0]}.${parts[1]}.${parts[2]}.255';
                 try {
-                  socket?.send(bytes, InternetAddress(subnetBcast), kPairingDiscoveryPort);
+                  socket?.send(bytes, InternetAddress(subnetBcast),
+                      kPairingDiscoveryPort);
                 } catch (_) {}
               }
             }
@@ -152,11 +156,13 @@ class PairingClient {
       void sendBroadcasts() async {
         try {
           try {
-            socket?.send(bytes, InternetAddress.loopbackIPv4, kPairingDiscoveryPort);
+            socket?.send(
+                bytes, InternetAddress.loopbackIPv4, kPairingDiscoveryPort);
           } catch (_) {}
 
           try {
-            socket?.send(bytes, InternetAddress('255.255.255.255'), kPairingDiscoveryPort);
+            socket?.send(bytes, InternetAddress('255.255.255.255'),
+                kPairingDiscoveryPort);
           } catch (_) {}
 
           final interfaces = await NetworkInterface.list(
@@ -169,7 +175,8 @@ class PairingClient {
               if (parts.length == 4) {
                 final subnetBcast = '${parts[0]}.${parts[1]}.${parts[2]}.255';
                 try {
-                  socket?.send(bytes, InternetAddress(subnetBcast), kPairingDiscoveryPort);
+                  socket?.send(bytes, InternetAddress(subnetBcast),
+                      kPairingDiscoveryPort);
                 } catch (_) {}
               }
             }
@@ -269,10 +276,97 @@ class PairingClient {
     if (qrData == null) {
       throw Exception('El código QR escaneado no es un QR de Scrotify válido');
     }
+    if (qrData.usesRelay) return _claimViaNtfy(qrData);
     return claim(
-      host: qrData.host,
-      port: qrData.port,
+      host: qrData.host!,
+      port: qrData.port!,
       code: qrData.code,
     );
+  }
+
+  /// Reclama credenciales desde el relay temporal gratuito de ntfy.sh.
+  /// El relay sólo transporta la clave pública del teléfono y la sealed-box
+  /// cifrada por el PC; nunca recibe URL/usuario/contraseña en claro.
+  static Future<PairCredentials> _claimViaNtfy(QrData qrData) async {
+    final topic = qrData.relayTopic!;
+    final keyPair = await generateKeyPair();
+    final publicKey = publicKeyToBase64(await extractPublicKeyBytes(keyPair));
+    final requestId = _randomRequestId();
+    final client = http.Client();
+    try {
+      final publish = await client
+          .post(
+            Uri.parse('https://ntfy.sh/'),
+            headers: const {'Content-Type': 'application/json'},
+            body: jsonEncode({
+              'topic': topic,
+              'message': jsonEncode({
+                'op': 'claim',
+                'code': qrData.code,
+                'publicKey': publicKey,
+                'requestId': requestId,
+              }),
+            }),
+          )
+          .timeout(const Duration(seconds: 12));
+      if (publish.statusCode < 200 || publish.statusCode >= 300) {
+        throw Exception(
+            'No se pudo contactar el relay temporal (HTTP ${publish.statusCode}).');
+      }
+
+      final deadline = DateTime.now().add(const Duration(seconds: 35));
+      String? lastMessageId;
+      while (DateTime.now().isBefore(deadline)) {
+        final query = <String, String>{
+          'poll': '1',
+          'since': lastMessageId ?? 'all',
+        };
+        final response = await client
+            .get(Uri.https('ntfy.sh', '/$topic/json', query))
+            .timeout(const Duration(seconds: 12));
+        if (response.statusCode != 200) {
+          throw Exception(
+              'El relay temporal no respondió (HTTP ${response.statusCode}).');
+        }
+        for (final line in const LineSplitter().convert(response.body)) {
+          if (line.trim().isEmpty) continue;
+          final envelope = jsonDecode(line) as Map<String, dynamic>;
+          final id = envelope['id'] as String?;
+          if (id != null) lastMessageId = id;
+          if (envelope['event'] != 'message') continue;
+          final rawMessage = envelope['message'];
+          if (rawMessage is! String) continue;
+          final message = jsonDecode(rawMessage) as Map<String, dynamic>;
+          if (message['op'] != 'credentials' ||
+              message['requestId'] != requestId ||
+              message['payload'] is! Map) {
+            continue;
+          }
+          final payload = Map<String, dynamic>.from(message['payload'] as Map);
+          final decrypted = await sealDecrypt(
+            recipientKeyPair: keyPair,
+            ephemeralPublicKeyB64: payload['ephemeralPublicKey'] as String,
+            nonceB64: payload['nonce'] as String,
+            ciphertextB64: payload['ciphertext'] as String,
+            macB64: payload['mac'] as String,
+          );
+          return PairCredentials.fromJson(
+            jsonDecode(utf8.decode(decrypted)) as Map<String, dynamic>,
+          );
+        }
+        await Future<void>.delayed(const Duration(milliseconds: 450));
+      }
+      throw Exception(
+          'El QR expiró o la PC no respondió por el relay temporal.');
+    } finally {
+      client.close();
+    }
+  }
+
+  static String _randomRequestId() {
+    const alphabet = 'abcdefghijklmnopqrstuvwxyz0123456789';
+    final random = Random.secure();
+    return List.generate(24, (_) => alphabet[random.nextInt(alphabet.length)])
+        .join();
   }
 }

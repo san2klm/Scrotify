@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../services/jam_controller.dart';
@@ -6,6 +8,7 @@ import '../services/player_controller.dart';
 import '../services/secure_storage.dart';
 import '../widgets/persistent_player_bar.dart';
 import '../widgets/cover_art.dart';
+import '../widgets/create_playlist_dialog.dart';
 import '../widgets/pairing_panel.dart';
 import '../widgets/jam_dialog.dart';
 import '../widgets/server_activity_panel.dart';
@@ -39,16 +42,65 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
   final TextEditingController _searchController = TextEditingController();
   SearchResults? _searchResults;
   bool _searching = false;
+  Timer? _serverPlayCountTimer;
+  bool _refreshingPlayCounts = false;
+  final ScrollController _artistsScrollController = ScrollController();
 
   @override
   void initState() {
     super.initState();
-    _futureTracks = context.read<NavidromeService>().getTracks();
+    _futureTracks = _loadTracks();
     _futurePlaylists = context.read<NavidromeService>().getPlaylists();
+    _serverPlayCountTimer = Timer.periodic(
+      const Duration(seconds: 30),
+      (_) => _refreshServerPlayCounts(),
+    );
+  }
+
+  Future<List<Track>> _loadTracks() async {
+    final tracks = await context.read<NavidromeService>().getTracks();
+    if (mounted) {
+      context.read<PlayerController>().syncServerPlayCounts(tracks);
+    }
+    return tracks;
+  }
+
+  Future<void> _refreshServerPlayCounts() async {
+    if (_refreshingPlayCounts || !mounted) return;
+    _refreshingPlayCounts = true;
+    try {
+      final tracks = await context.read<NavidromeService>().getTracks();
+      if (mounted) {
+        context.read<PlayerController>().syncServerPlayCounts(tracks);
+      }
+    } catch (_) {
+      // La siguiente actualización periódica reintentará si no hay conexión.
+    } finally {
+      _refreshingPlayCounts = false;
+    }
   }
 
   void _openPlayer(List<Track> tracks, int index) {
     context.read<PlayerController>().playQueue(tracks, startIndex: index);
+  }
+
+  Future<void> _playPlaylist(Playlist playlist) async {
+    final tracks =
+        await context.read<NavidromeService>().getPlaylistTracks(playlist.id);
+    if (!mounted || tracks.isEmpty) return;
+    context.read<PlayerController>().playQueue(
+          tracks,
+          startIndex: 0,
+          sourcePlaylist: playlist,
+        );
+  }
+
+  Future<void> _createPlaylist() async {
+    final playlist = await showCreatePlaylistDialog(context);
+    if (playlist == null || !mounted) return;
+    setState(() {
+      _futurePlaylists = context.read<NavidromeService>().getPlaylists();
+    });
   }
 
   Future<void> _runSearch(String query) async {
@@ -133,7 +185,8 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
                 onCredentialsReceived: (creds) async {
                   Navigator.of(ctx).pop();
                   final nav = context.read<NavidromeService>();
-                  await nav.connectByUrl(creds.url, creds.username, creds.password);
+                  await nav.connectByUrl(
+                      creds.url, creds.username, creds.password);
                   await SecureStorage.saveCredentials(
                     serverUrl: creds.url,
                     username: creds.username,
@@ -151,7 +204,9 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
 
   @override
   void dispose() {
+    _serverPlayCountTimer?.cancel();
     _searchController.dispose();
+    _artistsScrollController.dispose();
     super.dispose();
   }
 
@@ -165,7 +220,7 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
         if (!mounted) return;
         setState(() {
           final svc = context.read<NavidromeService>();
-          _futureTracks = svc.getTracks();
+          _futureTracks = _loadTracks();
           _futurePlaylists = svc.getPlaylists();
         });
       });
@@ -393,9 +448,7 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
             color: selected ? context.accent2 : context.bgApp,
             borderRadius: BorderRadius.circular(16),
             border: Border.all(
-              color: selected
-                  ? context.accent
-                  : context.bgElevated,
+              color: selected ? context.accent : context.bgElevated,
             ),
           ),
           child: Text(
@@ -440,7 +493,7 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _quickAccessGrid(tracks),
+              _quickAccessGrid(),
               const SizedBox(height: 24),
               _sectionHeader('Recomendados para ti'),
               const SizedBox(height: 12),
@@ -465,8 +518,22 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
     );
   }
 
-  Widget _quickAccessGrid(List<Track> tracks) {
-    final items = tracks.take(6).toList();
+  Widget _quickAccessGrid() {
+    final mostPlayed = context.watch<PlayerController>().mostPlayed;
+    MostPlayedItem? topPlaylist;
+    final topTracks = <MostPlayedItem>[];
+    for (final item in mostPlayed) {
+      if (item.type == MostPlayedItemType.playlist && topPlaylist == null) {
+        topPlaylist = item;
+      } else if (item.type == MostPlayedItemType.track &&
+          topTracks.length < 4) {
+        topTracks.add(item);
+      }
+    }
+    final items = <MostPlayedItem>[
+      if (topPlaylist != null) topPlaylist,
+      ...topTracks,
+    ];
     return GridView.count(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
@@ -484,17 +551,28 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
             MaterialPageRoute(builder: (_) => const LikedSongsScreen()),
           ),
         ),
-        for (final track in items)
-          _quickAccessCard(
-            label: track.album,
-            color: context.bgCard,
-            albumArtUrl: track.albumArtUrl,
-            artist: track.artist,
-            album: track.album,
-            title: track.title,
-            icon: Icons.album,
-            onTap: () => _openPlayer(tracks, tracks.indexOf(track)),
-          ),
+        for (final item in items)
+          if (item.type == MostPlayedItemType.playlist)
+            _quickAccessCard(
+              label: item.playlist!.name,
+              color: context.accent2,
+              albumArtUrl: item.playlist!.coverArtUrl,
+              icon: Icons.queue_music,
+              onTap: () => _playPlaylist(item.playlist!),
+            )
+          else
+            _quickAccessCard(
+              label: item.track!.title,
+              color: context.bgCard,
+              albumArtUrl: item.track!.albumArtUrl,
+              artist: item.track!.artist,
+              album: item.track!.album,
+              title: item.track!.title,
+              icon: Icons.music_note,
+              onTap: () => context
+                  .read<PlayerController>()
+                  .playQueue([item.track!], startIndex: 0),
+            ),
       ],
     );
   }
@@ -581,7 +659,7 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
               onLongPress: () => TrackContextMenu.show(context, track),
               borderRadius: BorderRadius.circular(8),
               child: Container(
-                width: 125,
+                width: 145,
                 padding: const EdgeInsets.all(6),
                 decoration: BoxDecoration(
                   color: context.bgApp,
@@ -691,8 +769,7 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
                                       album.coverArtUrl!,
                                       fit: BoxFit.cover,
                                     )
-                                  : Icon(Icons.album,
-                                      color: context.textMuted),
+                                  : Icon(Icons.album, color: context.textMuted),
                             ),
                           ),
                         ),
@@ -711,8 +788,8 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
                           album.artist,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                              color: context.textMuted, fontSize: 10),
+                          style:
+                              TextStyle(color: context.textMuted, fontSize: 10),
                         ),
                       ],
                     ),
@@ -750,70 +827,79 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
           return Text('Sin artistas',
               style: TextStyle(color: context.textMuted));
         }
+        final showScrollbar = artists.length > 10;
         return SizedBox(
-          height: 145,
-          child: ListView.builder(
-            scrollDirection: Axis.horizontal,
-            itemCount: artists.length,
-            itemBuilder: (context, index) {
-              final artist = artists[index];
-              return Padding(
-                padding: const EdgeInsets.only(right: 12),
-                child: InkWell(
-                  onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                        builder: (_) => ArtistScreen(artist: artist)),
-                  ),
-                  borderRadius: BorderRadius.circular(8),
-                  child: SizedBox(
-                    width: 100,
-                    child: Column(
-                      children: [
-                        Expanded(
-                          child: Container(
-                            width: 100,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: context.bgElevated,
-                              border: Border.all(
-                                color: context.accent
-                                    .withValues(alpha: 0.35),
-                                width: 1.2,
+          height: showScrollbar ? 165 : 145,
+          child: Scrollbar(
+            controller: _artistsScrollController,
+            thumbVisibility: showScrollbar,
+            interactive: showScrollbar,
+            scrollbarOrientation: ScrollbarOrientation.bottom,
+            child: ListView.builder(
+              controller: _artistsScrollController,
+              scrollDirection: Axis.horizontal,
+              padding: EdgeInsets.only(bottom: showScrollbar ? 20 : 0),
+              itemCount: artists.length,
+              itemBuilder: (context, index) {
+                final artist = artists[index];
+                return Padding(
+                  padding: const EdgeInsets.only(right: 12),
+                  child: InkWell(
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                          builder: (_) => ArtistScreen(artist: artist)),
+                    ),
+                    borderRadius: BorderRadius.circular(8),
+                    child: SizedBox(
+                      width: 100,
+                      child: Column(
+                        children: [
+                          Expanded(
+                            child: Container(
+                              width: 100,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: context.bgElevated,
+                                border: Border.all(
+                                  color: context.accent.withValues(alpha: 0.35),
+                                  width: 1.2,
+                                ),
+                                image: artist.coverArtUrl != null
+                                    ? DecorationImage(
+                                        image:
+                                            NetworkImage(artist.coverArtUrl!),
+                                        fit: BoxFit.cover,
+                                      )
+                                    : null,
                               ),
-                              image: artist.coverArtUrl != null
-                                  ? DecorationImage(
-                                      image: NetworkImage(artist.coverArtUrl!),
-                                      fit: BoxFit.cover,
+                              child: artist.coverArtUrl == null
+                                  ? Center(
+                                      child: Icon(Icons.person,
+                                          color: context.textMuted, size: 32),
                                     )
                                   : null,
                             ),
-                            child: artist.coverArtUrl == null
-                                ? Center(
-                                    child: Icon(Icons.person,
-                                        color: context.textMuted, size: 32),
-                                  )
-                                : null,
                           ),
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          artist.name,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            color: context.textPrimary,
-                            fontSize: 11.5,
-                            fontWeight: FontWeight.w600,
+                          const SizedBox(height: 6),
+                          Text(
+                            artist.name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: context.textPrimary,
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
-                ),
-              );
-            },
+                );
+              },
+            ),
           ),
         );
       },
@@ -870,8 +956,8 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
                         track.artist,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                            color: context.textMuted, fontSize: 11),
+                        style:
+                            TextStyle(color: context.textMuted, fontSize: 11),
                       ),
                     ],
                   ),
@@ -880,7 +966,9 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
                   icon: Icon(Icons.play_circle_fill_rounded,
                       color: context.accent, size: 26),
                   onPressed: () {
-                    context.read<PlayerController>().playQueue([track], startIndex: 0);
+                    context
+                        .read<PlayerController>()
+                        .playQueue([track], startIndex: 0);
                   },
                 ),
               ],
@@ -899,11 +987,12 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
           child: Container(
-            height: 42,
+            // Misma omnibox que escritorio y pantallas de detalle.
+            height: 38,
             padding: const EdgeInsets.symmetric(horizontal: 12),
             decoration: BoxDecoration(
               color: context.inputBg,
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(20),
               border: Border.all(color: context.inputBorder),
             ),
             child: Row(
@@ -918,9 +1007,17 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
                     onChanged: _runSearch,
                     decoration: InputDecoration(
                       hintText: 'Canciones, álbumes o artistas',
-                      hintStyle: TextStyle(color: context.textMuted, fontSize: 13),
-                      border: InputBorder.none,
+                      hintStyle:
+                          TextStyle(color: context.textMuted, fontSize: 13),
                       isDense: true,
+                      filled: false,
+                      fillColor: Colors.transparent,
+                      border: InputBorder.none,
+                      enabledBorder: InputBorder.none,
+                      focusedBorder: InputBorder.none,
+                      disabledBorder: InputBorder.none,
+                      errorBorder: InputBorder.none,
+                      contentPadding: EdgeInsets.zero,
                     ),
                   ),
                 ),
@@ -963,7 +1060,8 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
     }
     if (results.isEmpty) {
       return Center(
-        child: Text('Sin resultados', style: TextStyle(color: context.textMuted)),
+        child:
+            Text('Sin resultados', style: TextStyle(color: context.textMuted)),
       );
     }
 
@@ -996,7 +1094,9 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
               subtitle: Text('${track.artist} · ${track.album}',
                   style: TextStyle(color: context.textMuted, fontSize: 11)),
               onTap: () {
-                context.read<PlayerController>().playQueue([track], startIndex: 0);
+                context
+                    .read<PlayerController>()
+                    .playQueue([track], startIndex: 0);
               },
             ),
         ],
@@ -1051,8 +1151,7 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
                   style: TextStyle(color: context.textMuted, fontSize: 11)),
               onTap: () => Navigator.push(
                 context,
-                MaterialPageRoute(
-                    builder: (_) => ArtistScreen(artist: artist)),
+                MaterialPageRoute(builder: (_) => ArtistScreen(artist: artist)),
               ),
             ),
         ],
@@ -1072,6 +1171,21 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
         return ListView(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           children: [
+            FilledButton.icon(
+              onPressed: _createPlaylist,
+              icon: const Icon(Icons.add_rounded, size: 19),
+              label: const Text('Crear playlist'),
+              style: FilledButton.styleFrom(
+                alignment: Alignment.centerLeft,
+                backgroundColor: context.bgCard,
+                foregroundColor: context.accent,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(9),
+                  side: BorderSide(color: context.borderSubtle),
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
             ListTile(
               contentPadding: EdgeInsets.zero,
               leading: Container(
@@ -1119,8 +1233,7 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
                   style: TextStyle(color: context.textMuted, fontSize: 11.5),
                 ),
                 trailing: nav.isPinnedPlaylist(playlist.id)
-                    ? Icon(Icons.push_pin,
-                        color: context.accent, size: 14)
+                    ? Icon(Icons.push_pin, color: context.accent, size: 14)
                     : null,
                 onTap: () => Navigator.push(
                   context,
@@ -1165,19 +1278,14 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 14, vertical: 3),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 3),
               decoration: BoxDecoration(
-                color: selected
-                    ? context.sidebarActiveBg
-                    : Colors.transparent,
+                color: selected ? context.sidebarActiveBg : Colors.transparent,
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Icon(
                 icon,
-                color: selected
-                    ? context.sidebarActiveText
-                    : context.textMuted,
+                color: selected ? context.sidebarActiveText : context.textMuted,
                 size: 22,
               ),
             ),
@@ -1185,12 +1293,9 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
             Text(
               label,
               style: TextStyle(
-                color: selected
-                    ? context.sidebarActiveText
-                    : context.textMuted,
+                color: selected ? context.sidebarActiveText : context.textMuted,
                 fontSize: 10.5,
-                fontWeight:
-                    selected ? FontWeight.bold : FontWeight.normal,
+                fontWeight: selected ? FontWeight.bold : FontWeight.normal,
               ),
             ),
           ],

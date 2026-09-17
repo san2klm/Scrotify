@@ -28,8 +28,10 @@ class PlayerScreen extends StatefulWidget {
 
 class _PlayerScreenState extends State<PlayerScreen> {
   double? _dragValue;
-  bool _showLyrics = false;
-  bool _lyricsEverOpened = false;
+  // La letra se muestra de entrada; el usuario puede ocultarla desde el
+  // mismo botón si prefiere ver sólo la portada.
+  bool _showLyrics = true;
+  bool _lyricsEverOpened = true;
 
   String _format(Duration d) {
     final minutes = d.inMinutes;
@@ -244,8 +246,12 @@ class _PlayerScreenState extends State<PlayerScreen> {
                             Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                _PlayerVolumeBar(player: player),
-                                const SizedBox(width: 4),
+                                // Barra de volumen: solo en pantalla grande.
+                                // En celular se oculta para no saturar.
+                                if (_isWide(context)) ...[
+                                  _PlayerVolumeBar(player: player),
+                                  const SizedBox(width: 4),
+                                ],
                                 IconButton(
                                   icon: Icon(Icons.music_note,
                                       color: _showLyrics
@@ -334,8 +340,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
             // Blur progresivo para modo "Letra" (karaoke).
             Positioned.fill(
               child: TweenAnimationBuilder<double>(
-                tween: Tween<double>(
-                    begin: 0, end: _showLyrics ? 1.0 : 0.0),
+                tween: Tween<double>(begin: 0, end: _showLyrics ? 1.0 : 0.0),
                 duration: const Duration(milliseconds: 450),
                 curve: Curves.easeOut,
                 builder: (context, t, _) {
@@ -345,11 +350,10 @@ class _PlayerScreenState extends State<PlayerScreen> {
                   return ClipRRect(
                     borderRadius: BorderRadius.circular(20),
                     child: BackdropFilter(
-                      filter: ImageFilter.blur(
-                          sigmaX: 19.5 * t, sigmaY: 19.5 * t),
+                      filter:
+                          ImageFilter.blur(sigmaX: 19.5 * t, sigmaY: 19.5 * t),
                       child: Container(
-                        color:
-                            Colors.black.withValues(alpha: 0.39 * t),
+                        color: Colors.black.withValues(alpha: 0.39 * t),
                       ),
                     ),
                   );
@@ -368,8 +372,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                       ? ClipRRect(
                           borderRadius: BorderRadius.circular(20),
                           child: LyricsOverlay(
-                              key: ValueKey(track.id),
-                              track: track),
+                              key: ValueKey(track.id), track: track),
                         )
                       : const SizedBox.shrink(),
                 ),
@@ -435,16 +438,16 @@ class _PlayerScreenState extends State<PlayerScreen> {
     return StreamBuilder<Duration>(
       stream: player.positionStream,
       builder: (context, snapshot) {
-        final trackTime =
-            Duration(seconds: int.tryParse(player.currentTrack?.duration ?? '') ?? 0);
+        final trackTime = Duration(
+            seconds: int.tryParse(player.currentTrack?.duration ?? '') ?? 0);
         final duration = player.duration ?? trackTime;
         final position = snapshot.data ?? Duration.zero;
 
         final maxMs = duration.inMilliseconds == 0
             ? 1.0
             : duration.inMilliseconds.toDouble();
-        final currentMs =
-            (_dragValue ?? position.inMilliseconds.toDouble()).clamp(0.0, maxMs);
+        final currentMs = (_dragValue ?? position.inMilliseconds.toDouble())
+            .clamp(0.0, maxMs);
 
         return Column(
           children: [
@@ -530,7 +533,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
           icon: Icon(
             repeatMode == LoopMode.one ? Icons.repeat_one : Icons.repeat,
             size: 22,
-            color: repeatMode != LoopMode.off ? context.accent : context.textPrimary,
+            color: repeatMode != LoopMode.off
+                ? context.accent
+                : context.textPrimary,
           ),
           onPressed: player.toggleRepeat,
         ),
@@ -598,8 +603,7 @@ class _PlayerVolumeBarState extends State<_PlayerVolumeBar> {
                   thumbShape:
                       const RoundSliderThumbShape(enabledThumbRadius: 4),
                   overlayColor: context.accentDim,
-                  overlayShape:
-                      const RoundSliderOverlayShape(overlayRadius: 8),
+                  overlayShape: const RoundSliderOverlayShape(overlayRadius: 8),
                 ),
                 child: Slider(
                   min: 0,
@@ -630,5 +634,3 @@ class _PlayerVolumeBarState extends State<_PlayerVolumeBar> {
     );
   }
 }
-
-

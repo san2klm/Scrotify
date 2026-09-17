@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../services/app_theme.dart';
@@ -21,6 +22,8 @@ class ThemesSection extends StatefulWidget {
 }
 
 class _ThemesSectionState extends State<ThemesSection> {
+  static const _themeFolderChannel =
+      MethodChannel('navidrome_client/theme_folder');
   final _scroll = ScrollController();
 
   /// Id ya centrado con scroll (para no re-saltar en cada rebuild).
@@ -36,8 +39,7 @@ class _ThemesSectionState extends State<ThemesSection> {
   void _centerOnSelected(ThemeController themes) {
     if (_scrolledFor == themes.activeId) return;
     if (themes.themes.isEmpty) return;
-    final i =
-        themes.themes.indexWhere((t) => t.id == themes.activeId);
+    final i = themes.themes.indexWhere((t) => t.id == themes.activeId);
     if (i < 0) return;
     _scrolledFor = themes.activeId;
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -126,22 +128,19 @@ class _ThemesSectionState extends State<ThemesSection> {
                         // Margen superior interno: baja las tarjetas 15px
                         // y evita que la ✕ (que sobresale por arriba)
                         // se corte con el recorte del scroll.
-                        padding: const EdgeInsets.only(
-                            top: 15, left: 4, right: 4),
+                        padding:
+                            const EdgeInsets.only(top: 15, left: 4, right: 4),
                         itemCount: themes.themes.length,
-                        separatorBuilder: (_, __) =>
-                            const SizedBox(width: 12),
+                        separatorBuilder: (_, __) => const SizedBox(width: 12),
                         itemBuilder: (context, i) {
                           final t = themes.themes[i];
                           return _ThemeCard(
                             theme: t,
                             selected: t.id == themes.activeId,
-                            onTap: () =>
-                                themes.selectTheme(t.id),
+                            onTap: () => themes.selectTheme(t.id),
                             onDelete: t.sourceZipPath.isEmpty
                                 ? null
-                                : () => _confirmDelete(
-                                    context, themes, t),
+                                : () => _confirmDelete(context, themes, t),
                           );
                         },
                       ),
@@ -154,8 +153,7 @@ class _ThemesSectionState extends State<ThemesSection> {
                 const SizedBox(height: 8),
                 Text(
                   '${themes.skippedInvalid} archivo(s) inválidos ignorados.',
-                  style: TextStyle(
-                      color: context.textMuted, fontSize: 11),
+                  style: TextStyle(color: context.textMuted, fontSize: 11),
                 ),
               ],
 
@@ -163,8 +161,7 @@ class _ThemesSectionState extends State<ThemesSection> {
                 const SizedBox(height: 10),
                 Text(
                   themes.error!,
-                  style: TextStyle(
-                      color: context.warning, fontSize: 12),
+                  style: TextStyle(color: context.warning, fontSize: 12),
                 ),
               ],
 
@@ -183,8 +180,7 @@ class _ThemesSectionState extends State<ThemesSection> {
                       themes.themesDir,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                          color: context.textMuted, fontSize: 12),
+                      style: TextStyle(color: context.textMuted, fontSize: 12),
                     ),
                   ),
                 ],
@@ -196,7 +192,12 @@ class _ThemesSectionState extends State<ThemesSection> {
                 children: [
                   _FolderButton(
                     icon: Icons.folder_open,
-                    label: 'Cambiar carpeta',
+                    // Android usa el Storage Access Framework: una ruta de
+                    // carpeta normal no concede permiso para recorrerla.
+                    // Allí se importan los .zip de la carpeta elegida.
+                    label: Platform.isAndroid
+                        ? 'Importar carpeta'
+                        : 'Cambiar carpeta',
                     onTap: () => _pickDirectory(context, themes),
                   ),
                   _FolderButton(
@@ -220,6 +221,11 @@ class _ThemesSectionState extends State<ThemesSection> {
 
   Future<void> _pickDirectory(
       BuildContext context, ThemeController themes) async {
+    if (Platform.isAndroid) {
+      await _importAndroidFolder(context, themes);
+      return;
+    }
+
     final path = await getDirectoryPath(
       initialDirectory: themes.themesDir,
       confirmButtonText: 'Usar esta carpeta',
@@ -237,8 +243,74 @@ class _ThemesSectionState extends State<ThemesSection> {
     );
   }
 
-  Future<void> _pickZip(
-      BuildContext context, ThemeController themes) async {
+  /// Importa todos los .zip de una carpeta Android por SAF. No usamos la
+  /// ruta devuelta por el selector: Android no permite listar con dart:io una
+  /// carpeta compartida sólo porque el usuario la haya elegido.
+  Future<void> _importAndroidFolder(
+    BuildContext context,
+    ThemeController themes,
+  ) async {
+    List<dynamic>? entries;
+    try {
+      entries = await _themeFolderChannel.invokeMethod<List<dynamic>>(
+        'pickThemeFolder',
+      );
+    } on PlatformException catch (e) {
+      if (!context.mounted) return;
+      _showFolderImportMessage(
+        context,
+        'No se pudo leer la carpeta: ${e.message ?? e.code}',
+      );
+      return;
+    }
+
+    if (!context.mounted || entries == null) return;
+    if (entries.isEmpty) {
+      _showFolderImportMessage(context, 'No hay archivos .zip en esa carpeta.');
+      return;
+    }
+
+    var imported = 0;
+    for (var i = 0; i < entries.length; i++) {
+      final entry = entries[i];
+      if (entry is! Map) continue;
+      final name = entry['name'] as String?;
+      final rawBytes = entry['bytes'];
+      if (name == null || rawBytes is! Uint8List) continue;
+
+      // La carpeta puede contener archivos iguales en subcarpetas distintas.
+      // El prefijo evita que una importación pise a la otra en el directorio
+      // privado; el nombre que ve el usuario sale del manifest del tema.
+      final safeName = name.replaceAll('/', '_').replaceAll('\\', '_');
+      final id = await themes.importZipBytes('$i-$safeName', rawBytes);
+      if (id != null) imported++;
+    }
+
+    if (!context.mounted) return;
+    if (imported > 0) {
+      _showFolderImportMessage(
+        context,
+        imported == 1 ? '1 tema importado.' : '$imported temas importados.',
+      );
+    } else {
+      _showFolderImportMessage(
+        context,
+        themes.error ?? 'No se pudo importar ningún tema de la carpeta.',
+      );
+    }
+  }
+
+  void _showFolderImportMessage(BuildContext context, String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message, style: TextStyle(color: context.textPrimary)),
+        backgroundColor: context.bgCard,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  Future<void> _pickZip(BuildContext context, ThemeController themes) async {
     final file = await openFile(
       acceptedTypeGroups: const [
         XTypeGroup(label: 'Temas PC', extensions: ['zip']),
@@ -255,7 +327,9 @@ class _ThemesSectionState extends State<ThemesSection> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
-          id == null ? (themes.error ?? 'No se pudo importar.') : 'Tema importado',
+          id == null
+              ? (themes.error ?? 'No se pudo importar.')
+              : 'Tema importado',
           style: TextStyle(color: context.textPrimary),
         ),
         backgroundColor: context.bgCard,
@@ -273,8 +347,8 @@ class _ThemesSectionState extends State<ThemesSection> {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: context.bgCard,
-        title: Text('¿Borrar tema?',
-            style: TextStyle(color: context.textPrimary)),
+        title:
+            Text('¿Borrar tema?', style: TextStyle(color: context.textPrimary)),
         content: Text(
           'Se borrará "${theme.name}" (${theme.sourceZipPath}).',
           style: TextStyle(color: context.textSecondary),
@@ -287,8 +361,7 @@ class _ThemesSectionState extends State<ThemesSection> {
           ),
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(true),
-            child: Text('Borrar',
-                style: TextStyle(color: context.danger)),
+            child: Text('Borrar', style: TextStyle(color: context.danger)),
           ),
         ],
       ),
@@ -330,23 +403,19 @@ class _NoticeBanner extends StatelessWidget {
       decoration: BoxDecoration(
         color: context.warning.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(
-            color: context.warning.withValues(alpha: 0.4)),
+        border: Border.all(color: context.warning.withValues(alpha: 0.4)),
       ),
       child: Row(
         children: [
-          Icon(Icons.info_outline,
-              size: 16, color: context.warning),
+          Icon(Icons.info_outline, size: 16, color: context.warning),
           const SizedBox(width: 8),
           Expanded(
             child: Text(text,
-                style: TextStyle(
-                    color: context.textSecondary, fontSize: 12)),
+                style: TextStyle(color: context.textSecondary, fontSize: 12)),
           ),
           GestureDetector(
             onTap: onClose,
-            child: Icon(Icons.close,
-                size: 16, color: context.textMuted),
+            child: Icon(Icons.close, size: 16, color: context.textMuted),
           ),
         ],
       ),
@@ -387,7 +456,8 @@ class _ThemeCard extends StatelessWidget {
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(
-                      color: selected ? context.textPrimary : context.themeBorder,
+                      color:
+                          selected ? context.textPrimary : context.themeBorder,
                       width: selected ? 2.5 : 1,
                     ),
                   ),
@@ -408,8 +478,7 @@ class _ThemeCard extends StatelessWidget {
                         decoration: BoxDecoration(
                           color: context.bgCard,
                           shape: BoxShape.circle,
-                          border:
-                              Border.all(color: context.themeBorder),
+                          border: Border.all(color: context.themeBorder),
                         ),
                         child: Icon(Icons.close,
                             size: 12, color: context.textSecondary),
@@ -437,23 +506,20 @@ class _ThemeCard extends StatelessWidget {
             const SizedBox(height: 3),
             if (theme.isCvdSafe)
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                 decoration: BoxDecoration(
                   color: context.textPrimary.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(6),
                 ),
                 child: Text(
                   'CVD-safe',
-                  style: TextStyle(
-                      color: context.textSecondary, fontSize: 9),
+                  style: TextStyle(color: context.textSecondary, fontSize: 9),
                 ),
               )
             else if (theme.version.isNotEmpty)
               Text(
                 'v${theme.version}',
-                style: TextStyle(
-                    color: context.textMuted, fontSize: 10),
+                style: TextStyle(color: context.textMuted, fontSize: 10),
               ),
           ],
         ),
@@ -512,8 +578,7 @@ class _FolderButton extends StatelessWidget {
       style: OutlinedButton.styleFrom(
         foregroundColor: context.textSecondary,
         side: BorderSide(color: context.themeBorder),
-        padding:
-            const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(9),
         ),

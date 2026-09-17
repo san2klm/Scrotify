@@ -7,31 +7,53 @@ const int kPairingDiscoveryPort = 47622;
 /// Identificador de protocolo para las tramas UDP de emparejamiento.
 const String kPairingDiscoveryAppTag = 'scrotify-pair';
 
-/// Datos que van en el QR: `scrotify://pair?host=192.168.1.42&port=54321&code=X7K9MP`
+/// Datos que van en el QR. Los QR nuevos usan un topic temporal de ntfy; se
+/// conserva el formato LAN para que los QR existentes no dejen de funcionar.
 class QrData {
-  final String host;
-  final int port;
+  final String? host;
+  final int? port;
   final String code;
+  final String? relayTopic;
 
   QrData({
-    required this.host,
-    required this.port,
+    this.host,
+    this.port,
     required this.code,
-  });
+    this.relayTopic,
+  }) : assert(
+          relayTopic != null || (host != null && port != null),
+          'Se requiere relayTopic o host y port.',
+        );
 
-  /// URI completa para el QR: `scrotify://pair?host=...&port=...&code=...`
-  String toUri() =>
-      'scrotify://pair?host=$host&port=$port&code=$code';
+  bool get usesRelay => relayTopic != null;
 
-  /// Parsea `scrotify://pair?host=...&port=...&code=...`
+  /// URI nueva: `scrotify://pair?topic=scrotify-...&code=X7K9MP`.
+  String toUri() {
+    if (relayTopic != null) {
+      return Uri(
+        scheme: 'scrotify',
+        host: 'pair',
+        queryParameters: {'topic': relayTopic!, 'code': code},
+      ).toString();
+    }
+    // Mantener exactamente el formato de los QR LAN ya emitidos.
+    return 'scrotify://pair?host=$host&port=$port&code=$code';
+  }
+
+  /// Parsea tanto el relay actual como el QR LAN anterior.
   static QrData? fromUri(String uri) {
     try {
       final u = Uri.parse(uri);
       if (u.scheme != 'scrotify' || u.host != 'pair') return null;
+      final code = u.queryParameters['code'];
+      if (code == null) return null;
+      final topic = u.queryParameters['topic'];
+      if (topic != null && RegExp(r'^scrotify-[a-z0-9]{32}$').hasMatch(topic)) {
+        return QrData(code: code, relayTopic: topic);
+      }
       final host = u.queryParameters['host'];
       final port = int.tryParse(u.queryParameters['port'] ?? '');
-      final code = u.queryParameters['code'];
-      if (host == null || port == null || code == null) return null;
+      if (host == null || port == null) return null;
       return QrData(host: host, port: port, code: code);
     } catch (_) {
       return null;
@@ -60,7 +82,8 @@ class DiscoveredPc {
     this.expiresIn = 300,
   });
 
-  factory DiscoveredPc.fromJson(Map<String, dynamic> json, String fallbackHost) {
+  factory DiscoveredPc.fromJson(
+      Map<String, dynamic> json, String fallbackHost) {
     return DiscoveredPc(
       host: (json['host'] as String?)?.isNotEmpty == true
           ? json['host'] as String
@@ -95,9 +118,10 @@ class PairCode {
   PairCode._(this.value);
 
   factory PairCode.generate() {
-    final rnd = DateTime.now().millisecondsSinceEpoch;
-    final random = Random(rnd);
-    final chars = List.generate(length, (_) => _charset[random.nextInt(_charset.length)]).join();
+    final random = Random.secure();
+    final chars =
+        List.generate(length, (_) => _charset[random.nextInt(_charset.length)])
+            .join();
     return PairCode._(chars);
   }
 
@@ -126,7 +150,8 @@ class PairClaimRequest {
   Map<String, dynamic> toJson() => {'code': code, 'publicKey': publicKey};
 
   factory PairClaimRequest.fromJson(Map<String, dynamic> json) =>
-      PairClaimRequest(code: json['code'] as String, publicKey: json['publicKey'] as String);
+      PairClaimRequest(
+          code: json['code'] as String, publicKey: json['publicKey'] as String);
 
   String toJsonString() => jsonEncode(toJson());
 }
