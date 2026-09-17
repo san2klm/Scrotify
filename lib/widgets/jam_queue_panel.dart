@@ -242,6 +242,7 @@ class JamQueuePanel extends StatelessWidget {
                   )
                 : inJam
                     ? ReorderableListView.builder(
+                        buildDefaultDragHandles: false,
                         itemCount: queueItems.length,
                         onReorder: (oldIndex, newIndex) {
                           if (oldIndex < newIndex) newIndex -= 1;
@@ -326,6 +327,7 @@ class JamQueuePanel extends StatelessWidget {
                         },
                       )
                     : ReorderableListView.builder(
+                        buildDefaultDragHandles: false,
                         itemCount: queueItems.length,
                         onReorder: (oldIndex, newIndex) {
                           if (oldIndex < newIndex) newIndex -= 1;
@@ -389,17 +391,6 @@ class JamQueuePanel extends StatelessWidget {
                                             fontSize: 11),
                                       ),
                                     ],
-                                  ),
-                                ),
-                                // Segundo agarre junto a eliminar: facilita
-                                // reordenar con el pulgar derecho. Se conserva
-                                // el agarre izquierdo para quien lo prefiera.
-                                ReorderableDragStartListener(
-                                  index: i,
-                                  child: Padding(
-                                    padding: const EdgeInsets.only(left: 6),
-                                    child: Icon(Icons.drag_handle_rounded,
-                                        color: context.textMuted, size: 20),
                                   ),
                                 ),
                                 IconButton(

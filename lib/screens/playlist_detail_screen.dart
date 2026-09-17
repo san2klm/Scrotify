@@ -21,7 +21,6 @@ class PlaylistDetailScreen extends StatefulWidget {
 
 class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
   late Future<List<Track>> _future;
-  List<Track>? _displayTracks;
 
   @override
   void initState() {
@@ -36,7 +35,6 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
     if (tracks.isEmpty) return;
     final player = context.read<PlayerController>();
     await player.playShuffledQueue(tracks, sourcePlaylist: widget.playlist);
-    if (mounted) setState(() => _displayTracks = player.orderedQueue);
   }
 
   /// Confirma y borra la playlist en Navidrome. Al terminar vuelve a la
@@ -127,7 +125,6 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
                   );
                 }
                 final pinned = nav.isPinnedPlaylist(widget.playlist.id);
-                final visibleTracks = _displayTracks ?? tracks;
                 return Column(
                   children: [
                     Padding(
@@ -233,9 +230,9 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
                     Divider(color: context.themeBorder),
                     Expanded(
                       child: ListView.builder(
-                        itemCount: visibleTracks.length,
+                        itemCount: tracks.length,
                         itemBuilder: (context, index) {
-                          final track = visibleTracks[index];
+                          final track = tracks[index];
                           final starred = nav.isStarred(track.id);
                           return ListTile(
                             leading: CoverArt(
@@ -276,7 +273,7 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
                             ),
                             onTap: () =>
                                 context.read<PlayerController>().playQueue(
-                                      visibleTracks,
+                                      tracks,
                                       startIndex: index,
                                       sourcePlaylist: widget.playlist,
                                     ),
