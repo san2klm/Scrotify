@@ -343,15 +343,18 @@ class _HomeScreenState extends State<HomeScreen> {
         children: [
           Icon(Icons.library_music_rounded, color: context.accent, size: 18),
           const SizedBox(width: 8),
-          Text(
-            'Tu Biblioteca',
-            style: TextStyle(
-              color: context.textPrimary,
-              fontSize: 14,
-              fontWeight: FontWeight.bold,
+          Expanded(
+            child: Text(
+              'Tu Biblioteca',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: context.textPrimary,
+                fontSize: 14,
+                fontWeight: FontWeight.bold,
+              ),
             ),
           ),
-          const Spacer(),
           IconButton(
             icon: Icon(Icons.add_rounded, color: context.accent, size: 21),
             tooltip: 'Crear playlist',

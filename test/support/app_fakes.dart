@@ -8,7 +8,13 @@ class FakeNavidrome extends NavidromeService {
   final queries = <String>[];
 
   @override
-  Future<List<Track>> getTracks({String? musicFolderId}) async => [];
+  Future<List<Track>> getTracks({
+    String? artist,
+    String? album,
+    int limit = 500,
+    int offset = 0,
+  }) async =>
+      [];
 
   @override
   Future<List<Playlist>> getPlaylists() async => [];

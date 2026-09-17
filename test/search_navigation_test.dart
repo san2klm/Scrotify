@@ -18,64 +18,68 @@ void main() {
     testWidgets('search and explore share working navigation on $platform',
         (tester) async {
       debugDefaultTargetPlatformOverride = platform;
-      addTearDown(() => debugDefaultTargetPlatformOverride = null);
-      tester.view.physicalSize = platform == TargetPlatform.android
-          ? const Size(390, 844)
-          : const Size(1280, 900);
-      tester.view.devicePixelRatio = 1;
-      addTearDown(tester.view.resetPhysicalSize);
-      addTearDown(tester.view.resetDevicePixelRatio);
-      final nav = FakeNavidrome();
-      await tester.pumpWidget(MultiProvider(
-        providers: [
-          ChangeNotifierProvider<NavidromeService>.value(value: nav),
-          ChangeNotifierProvider(create: (_) => ThemeController()),
-          ChangeNotifierProvider(create: (_) => HomeNavigationController()),
-          ChangeNotifierProvider<PlayerController>.value(value: IdlePlayer()),
-          ChangeNotifierProvider<JamController>.value(value: IdleJam()),
-        ],
-        child: const MaterialApp(home: HomeShell()),
-      ));
-      await tester.pumpAndSettle();
-      if (platform == TargetPlatform.android) {
-        await tester.tap(find.text('Buscar').last);
+      try {
+        tester.view.physicalSize = platform == TargetPlatform.android
+            ? const Size(390, 844)
+            : const Size(1440, 900);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        final nav = FakeNavidrome();
+        await tester.pumpWidget(MultiProvider(
+          providers: [
+            ChangeNotifierProvider<NavidromeService>.value(value: nav),
+            ChangeNotifierProvider(create: (_) => ThemeController()),
+            ChangeNotifierProvider(create: (_) => HomeNavigationController()),
+            ChangeNotifierProvider<PlayerController>.value(value: IdlePlayer()),
+            ChangeNotifierProvider<JamController>.value(value: IdleJam()),
+          ],
+          child: const MaterialApp(home: HomeShell()),
+        ));
         await tester.pumpAndSettle();
-      } else {
-        expect(find.text('SCROTIFY'), findsNothing);
-      }
-      await tester.tap(find.byTooltip('Explorar'));
-      await tester.pumpAndSettle();
-      expect(find.byType(ExploreTracksView), findsOneWidget);
-      expect(find.text('No hay canciones en tu biblioteca'), findsOneWidget);
-      final field = find.byType(TextField).first;
-      await tester.enterText(field, 'consulta');
-      await tester.pumpAndSettle();
-      expect(nav.queries.last, 'consulta');
-      expect(find.byType(ExploreTracksView), findsNothing);
+        expect(tester.takeException(), isNull);
+        if (platform == TargetPlatform.android) {
+          await tester.tap(find.text('Buscar').last);
+          await tester.pumpAndSettle();
+        } else {
+          expect(find.text('SCROTIFY'), findsNothing);
+        }
+        await tester.tap(find.byTooltip('Explorar'));
+        await tester.pumpAndSettle();
+        expect(find.byType(ExploreTracksView), findsOneWidget);
+        expect(find.text('No hay canciones en tu biblioteca'), findsOneWidget);
+        final field = find.byType(TextField).first;
+        await tester.enterText(field, 'consulta');
+        await tester.pumpAndSettle();
+        expect(nav.queries.last, 'consulta');
+        expect(find.byType(ExploreTracksView), findsNothing);
 
-      if (platform == TargetPlatform.windows) {
-        Navigator.of(tester.element(find.byType(HomeShell))).push(
-          MaterialPageRoute<void>(
-              builder: (_) => const Scaffold(
-                    body: GlobalTopBar(title: 'Detalle'),
-                  )),
-        );
+        if (platform == TargetPlatform.windows) {
+          Navigator.of(tester.element(find.byType(HomeShell))).push(
+            MaterialPageRoute<void>(
+                builder: (_) => const Scaffold(
+                      body: GlobalTopBar(title: 'Detalle'),
+                    )),
+          );
+          await tester.pumpAndSettle();
+          await tester.enterText(find.byType(TextField), 'desde detalle');
+          await tester.testTextInput.receiveAction(TextInputAction.search);
+          await tester.pumpAndSettle();
+          expect(nav.queries.last, 'desde detalle');
+          expect(find.byType(HomeShell), findsOneWidget);
+          expect(
+              tester
+                  .widget<TextField>(find.byType(TextField).first)
+                  .controller!
+                  .text,
+              'desde detalle');
+        }
+        expect(tester.takeException(), isNull);
+        await tester.pumpWidget(const SizedBox.shrink());
         await tester.pumpAndSettle();
-        await tester.enterText(find.byType(TextField), 'desde detalle');
-        await tester.testTextInput.receiveAction(TextInputAction.search);
-        await tester.pumpAndSettle();
-        expect(nav.queries.last, 'desde detalle');
-        expect(find.byType(HomeShell), findsOneWidget);
-        expect(
-            tester
-                .widget<TextField>(find.byType(TextField).first)
-                .controller!
-                .text,
-            'desde detalle');
+      } finally {
+        debugDefaultTargetPlatformOverride = null;
       }
-      expect(tester.takeException(), isNull);
-      await tester.pumpWidget(const SizedBox.shrink());
-      await tester.pumpAndSettle();
     });
   }
 }
