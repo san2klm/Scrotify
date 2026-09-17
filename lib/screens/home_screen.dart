@@ -8,6 +8,8 @@ import '../widgets/persistent_player_bar.dart';
 import '../widgets/cover_art.dart';
 import '../widgets/create_playlist_dialog.dart';
 import '../widgets/global_top_bar.dart';
+import '../widgets/explore_tracks_view.dart';
+import '../services/home_navigation_controller.dart';
 import '../widgets/track_context_menu.dart';
 import 'liked_songs_screen.dart';
 import 'playlist_detail_screen.dart';
@@ -33,6 +35,8 @@ class _HomeScreenState extends State<HomeScreen> {
   final TextEditingController _searchController = TextEditingController();
   SearchResults? _searchResults;
   bool _searching = false;
+  int _searchVersion = 0;
+  HomeNavigationController? _homeNavigation;
   Timer? _serverPlayCountTimer;
   bool _refreshingPlayCounts = false;
   final ScrollController _artistsScrollController = ScrollController();
@@ -42,6 +46,8 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
+    _homeNavigation = context.read<HomeNavigationController?>();
+    _homeNavigation?.addListener(_openHomeDestination);
     _futureTracks = _loadTracks();
     _futurePlaylists = context.read<NavidromeService>().getPlaylists();
     _serverPlayCountTimer = Timer.periodic(
@@ -73,7 +79,15 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  void _openHomeDestination() {
+    final request = _homeNavigation!.value!;
+    _searchController.text = request.query;
+    setState(() => _activeNavIndex = request.explore ? 1 : 0);
+    _runSearch(request.query);
+  }
+
   Future<void> _runSearch(String query) async {
+    final version = ++_searchVersion;
     if (query.trim().isEmpty) {
       setState(() {
         _searchResults = null;
@@ -85,14 +99,14 @@ class _HomeScreenState extends State<HomeScreen> {
     try {
       final results =
           await context.read<NavidromeService>().search(query.trim());
-      if (mounted) {
+      if (mounted && version == _searchVersion) {
         setState(() {
           _searchResults = results;
           _searching = false;
         });
       }
     } catch (_) {
-      if (mounted) {
+      if (mounted && version == _searchVersion) {
         setState(() {
           _searchResults = null;
           _searching = false;
@@ -103,6 +117,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   void dispose() {
+    _homeNavigation?.removeListener(_openHomeDestination);
     _serverPlayCountTimer?.cancel();
     _searchController.dispose();
     _artistsScrollController.dispose();
@@ -185,6 +200,7 @@ class _HomeScreenState extends State<HomeScreen> {
         });
       },
       onLogoTap: () {
+        _searchVersion++;
         setState(() {
           _searchResults = null;
           _searchController.clear();
@@ -193,6 +209,7 @@ class _HomeScreenState extends State<HomeScreen> {
         });
       },
       onNavIndexChanged: (index) {
+        _searchVersion++;
         setState(() {
           _searchResults = null;
           _searchController.clear();
@@ -863,199 +880,17 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildExploreContent(List<Track> tracks) {
-    if (tracks.isEmpty) {
-      return Center(
-        child: Text(
-          'No hay canciones en tu biblioteca',
-          style: TextStyle(color: context.textMuted),
-        ),
+  Widget _buildExploreContent(List<Track> tracks) => ExploreTracksView(
+        tracks: tracks,
+        pageSize: _explorePageSize,
+        page: _explorePage,
+        onPageSizeChanged: (size) => setState(() {
+          _explorePageSize = size;
+          _explorePage = 0;
+        }),
+        onPageChanged: (page) => setState(() => _explorePage = page),
+        onPlay: (index) => _openPlayer(tracks, index),
       );
-    }
-
-    final totalPages = (tracks.length / _explorePageSize).ceil();
-    final currentPage = _explorePage.clamp(0, totalPages - 1).toInt();
-    final firstTrack = currentPage * _explorePageSize;
-    final pageTracks = tracks.skip(firstTrack).take(_explorePageSize).toList();
-
-    return ListView.builder(
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-      itemCount: pageTracks.length + 2,
-      itemBuilder: (context, index) {
-        if (index == 0) {
-          return Padding(
-            padding: const EdgeInsets.only(bottom: 14),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Explorar',
-                  style: TextStyle(
-                    color: context.textPrimary,
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ],
-            ),
-          );
-        }
-
-        if (index == pageTracks.length + 1) {
-          return _explorePagination(totalPages, currentPage);
-        }
-
-        final trackIndex = firstTrack + index - 1;
-        final track = pageTracks[index - 1];
-        return ListTile(
-          dense: true,
-          leading: CoverArt(
-            url: track.albumArtUrl,
-            artist: track.artist,
-            album: track.album,
-            title: track.title,
-            width: 40,
-            height: 40,
-            borderRadius: 4,
-            fallbackIcon: Icons.music_note,
-            fallbackIconSize: 20,
-            fallbackColor: context.bgCard,
-          ),
-          title: Text(
-            track.title,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(color: context.textPrimary, fontSize: 13.5),
-          ),
-          subtitle: Text(
-            '${track.artist} · ${track.album}',
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(color: context.textMuted, fontSize: 11.5),
-          ),
-          trailing: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              IconButton(
-                icon: Icon(Icons.more_horiz, color: context.textMuted),
-                onPressed: () => TrackContextMenu.show(context, track),
-              ),
-              Text(
-                _formatDuration(track.duration),
-                style: TextStyle(color: context.textMuted, fontSize: 11.5),
-              ),
-            ],
-          ),
-          onTap: () => _openPlayer(tracks, trackIndex),
-        );
-      },
-    );
-  }
-
-  Widget _explorePagination(int totalPages, int currentPage) {
-    final pages = <int>{0, totalPages - 1, currentPage};
-    if (totalPages <= 5) {
-      pages.addAll(List.generate(totalPages, (index) => index));
-    } else {
-      for (var page = currentPage - 1; page <= currentPage + 1; page++) {
-        if (page >= 0 && page < totalPages) pages.add(page);
-      }
-      if (currentPage <= 2) pages.addAll([1, 2, 3]);
-      if (currentPage >= totalPages - 3) {
-        pages.addAll([totalPages - 4, totalPages - 3, totalPages - 2]);
-      }
-    }
-    final sortedPages = pages.toList()..sort();
-
-    return Padding(
-      padding: const EdgeInsets.only(top: 20, bottom: 28),
-      child: Align(
-        alignment: Alignment.centerRight,
-        child: Wrap(
-          spacing: 12,
-          runSpacing: 8,
-          crossAxisAlignment: WrapCrossAlignment.center,
-          alignment: WrapAlignment.end,
-          children: [
-            Container(
-              height: 34,
-              padding: const EdgeInsets.only(left: 10, right: 6),
-              decoration: BoxDecoration(
-                border: Border.all(color: context.inputBorder),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: DropdownButtonHideUnderline(
-                child: DropdownButton<int>(
-                  value: _explorePageSize,
-                  isDense: true,
-                  dropdownColor: context.bgCard,
-                  icon: Icon(Icons.keyboard_arrow_down_rounded,
-                      color: context.textMuted),
-                  style: TextStyle(
-                    color: context.textPrimary,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                  ),
-                  items: [10, 25, 50, 100]
-                      .map(
-                        (pageSize) => DropdownMenuItem(
-                          value: pageSize,
-                          child: Text('$pageSize'),
-                        ),
-                      )
-                      .toList(),
-                  onChanged: (pageSize) {
-                    if (pageSize == null) return;
-                    setState(() {
-                      _explorePageSize = pageSize;
-                      _explorePage = 0;
-                    });
-                  },
-                ),
-              ),
-            ),
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                IconButton(
-                  tooltip: 'Página anterior',
-                  onPressed: currentPage > 0
-                      ? () => setState(() => _explorePage = currentPage - 1)
-                      : null,
-                  icon: const Icon(Icons.chevron_left_rounded),
-                ),
-                for (var index = 0; index < sortedPages.length; index++) ...[
-                  if (index > 0 &&
-                      sortedPages[index] != sortedPages[index - 1] + 1)
-                    Text('…', style: TextStyle(color: context.textMuted)),
-                  ChoiceChip(
-                    label: Text('${sortedPages[index] + 1}'),
-                    selected: sortedPages[index] == currentPage,
-                    selectedColor: context.accent.withValues(alpha: 0.2),
-                    labelStyle: TextStyle(
-                      color: sortedPages[index] == currentPage
-                          ? context.accent
-                          : context.textSecondary,
-                      fontWeight: FontWeight.w600,
-                    ),
-                    onSelected: (_) =>
-                        setState(() => _explorePage = sortedPages[index]),
-                  ),
-                ],
-                IconButton(
-                  tooltip: 'Página siguiente',
-                  onPressed: currentPage < totalPages - 1
-                      ? () => setState(() => _explorePage = currentPage + 1)
-                      : null,
-                  icon: const Icon(Icons.chevron_right_rounded),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 
   void _openPlayer(List<Track> tracks, int index) {
     context.read<PlayerController>().playQueue(tracks, startIndex: index);

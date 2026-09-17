@@ -1,14 +1,17 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../services/jam_controller.dart';
 import '../services/navidrome_service.dart';
+import '../services/home_navigation_controller.dart';
 import '../services/pairing_server.dart';
 import '../screens/settings_screen.dart';
 import '../utils/app_colors.dart';
 import 'jam_dialog.dart';
 import 'pairing_panel.dart';
 import 'server_activity_panel.dart';
+import 'search_explore_field.dart';
 
 /// Barra superior persistente y global de Scrotify.
 /// Se muestra tanto en la pantalla de inicio como en las pantallas de detalle
@@ -56,6 +59,13 @@ class _GlobalTopBarState extends State<GlobalTopBar> {
   void dispose() {
     _localSearchController?.dispose();
     super.dispose();
+  }
+
+  void _goHome({bool explore = false, String query = ''}) {
+    context
+        .read<HomeNavigationController?>()
+        ?.open(explore: explore, query: query);
+    Navigator.of(context).popUntil((route) => route.isFirst);
   }
 
   void _openPairingDialog(BuildContext context) {
@@ -266,52 +276,53 @@ class _GlobalTopBarState extends State<GlobalTopBar> {
           ],
 
           // Logo de Scrotify
-          InkWell(
-            onTap: () {
-              if (widget.onLogoTap != null) {
-                widget.onLogoTap!();
-              } else if (canPop) {
-                Navigator.of(context).popUntil((route) => route.isFirst);
-              }
-            },
-            borderRadius: BorderRadius.circular(8),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-              child: Row(
-                children: [
-                  Container(
-                    width: 32,
-                    height: 32,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: context.bgElevated,
-                      border: Border.all(
-                        color: context.accent.withValues(alpha: 0.5),
-                        width: 1.2,
+          if (kIsWeb || defaultTargetPlatform != TargetPlatform.windows) ...[
+            InkWell(
+              onTap: () {
+                if (widget.onLogoTap != null) {
+                  widget.onLogoTap!();
+                } else if (canPop) {
+                  _goHome();
+                }
+              },
+              borderRadius: BorderRadius.circular(8),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 32,
+                      height: 32,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: context.bgElevated,
+                        border: Border.all(
+                          color: context.accent.withValues(alpha: 0.5),
+                          width: 1.2,
+                        ),
+                      ),
+                      child: Icon(
+                        Icons.graphic_eq_rounded,
+                        color: context.accent,
+                        size: 18,
                       ),
                     ),
-                    child: Icon(
-                      Icons.graphic_eq_rounded,
-                      color: context.accent,
-                      size: 18,
+                    const SizedBox(width: 10),
+                    Text(
+                      'SCROTIFY',
+                      style: TextStyle(
+                        color: context.textPrimary,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 2,
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 10),
-                  Text(
-                    'SCROTIFY',
-                    style: TextStyle(
-                      color: context.textPrimary,
-                      fontSize: 15,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: 2,
-                    ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
-          ),
-
-          const SizedBox(width: 16),
+            const SizedBox(width: 16),
+          ],
 
           // Botones de navegación persistentes
           _navItem(
@@ -323,109 +334,43 @@ class _GlobalTopBarState extends State<GlobalTopBar> {
               if (widget.onNavIndexChanged != null) {
                 widget.onNavIndexChanged!(0);
               } else if (canPop) {
-                Navigator.of(context).popUntil((route) => route.isFirst);
+                _goHome();
               }
             },
           ),
-          const SizedBox(width: 6),
-          _navItem(
-            context: context,
-            index: 1,
-            icon: Icons.explore_outlined,
-            label: 'Explorar',
-            onTap: () {
-              if (widget.onNavIndexChanged != null) {
-                widget.onNavIndexChanged!(1);
-              } else if (canPop) {
-                Navigator.of(context).popUntil((route) => route.isFirst);
-              }
-            },
-          ),
-
           const SizedBox(width: 16),
 
-          // Barra de Búsqueda Omnibox Central (caja única y limpia)
+          // Misma búsqueda y acceso lateral a Explorar que en móvil.
           Expanded(
             child: Center(
-              child: Container(
-                height: 38,
-                constraints: const BoxConstraints(maxWidth: 480),
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                decoration: BoxDecoration(
-                  color: context.inputBg,
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: context.inputBorder),
-                ),
-                child: Row(
-                  children: [
-                    Icon(Icons.search_rounded,
-                        color: context.textMuted, size: 18),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: TextField(
-                        controller: _controller,
-                        style:
-                            TextStyle(color: context.textPrimary, fontSize: 13),
-                        textInputAction: TextInputAction.search,
-                        onChanged: (val) {
-                          if (widget.onSearch != null) {
-                            widget.onSearch!(val);
-                          }
-                        },
-                        onSubmitted: (val) {
-                          if (widget.onSearch != null) {
-                            widget.onSearch!(val);
-                          } else if (canPop && val.trim().isNotEmpty) {
-                            Navigator.of(context)
-                                .popUntil((route) => route.isFirst);
-                          }
-                        },
-                        decoration: InputDecoration(
-                          hintText: widget.title != null
-                              ? '¿Qué quieres escuchar hoy?'
-                              : '¿Qué quieres escuchar hoy?',
-                          hintStyle:
-                              TextStyle(color: context.textMuted, fontSize: 13),
-                          isDense: true,
-                          filled: false,
-                          fillColor: Colors.transparent,
-                          border: InputBorder.none,
-                          enabledBorder: InputBorder.none,
-                          focusedBorder: InputBorder.none,
-                          disabledBorder: InputBorder.none,
-                          errorBorder: InputBorder.none,
-                          contentPadding: EdgeInsets.zero,
-                        ),
-                      ),
-                    ),
-                    if (_controller.text.isNotEmpty)
-                      IconButton(
-                        icon: Icon(Icons.close_rounded,
-                            size: 16, color: context.textMuted),
-                        onPressed: () {
-                          _controller.clear();
-                          if (widget.onSearch != null) widget.onSearch!('');
-                          if (widget.onSearchCleared != null) {
-                            widget.onSearchCleared!();
-                          }
-                          setState(() {});
-                        },
-                      )
-                    else if (widget.searching)
-                      SizedBox(
-                        width: 14,
-                        height: 14,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 1.8,
-                          color: context.accent,
-                        ),
-                      ),
-                  ],
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 534),
+                child: SearchExploreField(
+                  controller: _controller,
+                  searching: widget.searching,
+                  exploring: widget.activeNavIndex == 1,
+                  onSearch: (value) {
+                    widget.onSearch?.call(value);
+                    if (value.isEmpty) widget.onSearchCleared?.call();
+                  },
+                  onSubmitted: (value) {
+                    if (widget.onSearch != null) {
+                      widget.onSearch!(value);
+                    } else if (value.trim().isNotEmpty) {
+                      _goHome(query: value.trim());
+                    }
+                  },
+                  onExplore: () {
+                    if (widget.onNavIndexChanged != null) {
+                      widget.onNavIndexChanged!(1);
+                    } else {
+                      _goHome(explore: true);
+                    }
+                  },
                 ),
               ),
             ),
           ),
-
           const SizedBox(width: 16),
 
           // Botón Rápido: Jam

@@ -9,6 +9,7 @@ import 'package:window_manager/window_manager.dart';
 import 'services/cover_fallback_service.dart';
 import 'services/jam_controller.dart';
 import 'services/navidrome_service.dart';
+import 'services/home_navigation_controller.dart';
 import 'services/pairing_server.dart';
 import 'services/player_controller.dart';
 import 'services/settings_controller.dart';
@@ -54,6 +55,7 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
+        ChangeNotifierProvider(create: (_) => HomeNavigationController()),
         ChangeNotifierProvider(create: (_) => SettingsController()),
         ChangeNotifierProvider(
             create: (_) => ThemeController(initial: initialTheme)),

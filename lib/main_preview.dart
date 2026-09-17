@@ -3,6 +3,7 @@ import 'package:just_audio_media_kit/just_audio_media_kit.dart';
 import 'package:provider/provider.dart';
 
 import 'services/navidrome_service.dart';
+import 'services/home_navigation_controller.dart';
 import 'services/player_controller.dart';
 import 'services/settings_controller.dart';
 import 'services/theme_controller.dart';
@@ -32,6 +33,7 @@ class _PreviewApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
+        ChangeNotifierProvider(create: (_) => HomeNavigationController()),
         ChangeNotifierProvider.value(value: settings),
         ChangeNotifierProvider.value(value: service),
         ChangeNotifierProvider(create: (_) => ThemeController()),

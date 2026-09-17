@@ -9,6 +9,9 @@ import '../services/secure_storage.dart';
 import '../widgets/persistent_player_bar.dart';
 import '../widgets/cover_art.dart';
 import '../widgets/create_playlist_dialog.dart';
+import '../widgets/search_explore_field.dart';
+import '../widgets/explore_tracks_view.dart';
+import '../services/home_navigation_controller.dart';
 import '../widgets/pairing_panel.dart';
 import '../widgets/jam_dialog.dart';
 import '../widgets/server_activity_panel.dart';
@@ -42,6 +45,11 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
   final TextEditingController _searchController = TextEditingController();
   SearchResults? _searchResults;
   bool _searching = false;
+  int _searchVersion = 0;
+  bool _showExplore = false;
+  int _explorePageSize = 25;
+  int _explorePage = 0;
+  HomeNavigationController? _homeNavigation;
   Timer? _serverPlayCountTimer;
   bool _refreshingPlayCounts = false;
   final ScrollController _artistsScrollController = ScrollController();
@@ -49,6 +57,8 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
   @override
   void initState() {
     super.initState();
+    _homeNavigation = context.read<HomeNavigationController?>();
+    _homeNavigation?.addListener(_openHomeDestination);
     _futureTracks = _loadTracks();
     _futurePlaylists = context.read<NavidromeService>().getPlaylists();
     _serverPlayCountTimer = Timer.periodic(
@@ -103,7 +113,25 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
     });
   }
 
+  void _openHomeDestination() {
+    final request = _homeNavigation!.value!;
+    _searchController.text = request.query;
+    _runSearch(request.query);
+    setState(() {
+      _tabIndex = request.explore || request.query.isNotEmpty ? 1 : 0;
+      _showExplore = request.explore;
+    });
+  }
+
+  void _openExplore() {
+    _searchController.clear();
+    _runSearch('');
+    setState(() => _showExplore = true);
+  }
+
   Future<void> _runSearch(String query) async {
+    final version = ++_searchVersion;
+    _showExplore = false;
     if (query.trim().isEmpty) {
       setState(() {
         _searchResults = null;
@@ -115,14 +143,14 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
     try {
       final results =
           await context.read<NavidromeService>().search(query.trim());
-      if (mounted) {
+      if (mounted && version == _searchVersion) {
         setState(() {
           _searchResults = results;
           _searching = false;
         });
       }
     } catch (_) {
-      if (mounted) {
+      if (mounted && version == _searchVersion) {
         setState(() {
           _searchResults = null;
           _searching = false;
@@ -204,6 +232,7 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
 
   @override
   void dispose() {
+    _homeNavigation?.removeListener(_openHomeDestination);
     _serverPlayCountTimer?.cancel();
     _searchController.dispose();
     _artistsScrollController.dispose();
@@ -986,56 +1015,41 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
       children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-          child: Container(
-            // Misma omnibox que escritorio y pantallas de detalle.
-            height: 38,
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            decoration: BoxDecoration(
-              color: context.inputBg,
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: context.inputBorder),
-            ),
-            child: Row(
-              children: [
-                Icon(Icons.search, color: context.textMuted, size: 19),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: TextField(
-                    controller: _searchController,
-                    style: TextStyle(color: context.textPrimary, fontSize: 13),
-                    textInputAction: TextInputAction.search,
-                    onChanged: _runSearch,
-                    decoration: InputDecoration(
-                      hintText: 'Canciones, álbumes o artistas',
-                      hintStyle:
-                          TextStyle(color: context.textMuted, fontSize: 13),
-                      isDense: true,
-                      filled: false,
-                      fillColor: Colors.transparent,
-                      border: InputBorder.none,
-                      enabledBorder: InputBorder.none,
-                      focusedBorder: InputBorder.none,
-                      disabledBorder: InputBorder.none,
-                      errorBorder: InputBorder.none,
-                      contentPadding: EdgeInsets.zero,
-                    ),
-                  ),
-                ),
-                if (_searchController.text.isNotEmpty)
-                  IconButton(
-                    icon: Icon(Icons.close_rounded,
-                        size: 16, color: context.textMuted),
-                    onPressed: () {
-                      _searchController.clear();
-                      _runSearch('');
-                    },
-                  ),
-              ],
-            ),
+          child: SearchExploreField(
+            controller: _searchController,
+            onSearch: _runSearch,
+            onExplore: _openExplore,
+            searching: _searching,
+            exploring: _showExplore,
+            hintText: 'Canciones, álbumes o artistas',
           ),
         ),
         Expanded(
-          child: _searchResults != null
+          child: _showExplore
+              ? FutureBuilder<List<Track>>(
+                  future: _futureTracks,
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return const Center(child: CircularProgressIndicator());
+                    }
+                    if (snapshot.hasError) {
+                      return const Center(child: Text('Error al cargar contenido'));
+                    }
+                    final tracks = snapshot.data ?? <Track>[];
+                    return ExploreTracksView(
+                      tracks: tracks,
+                      pageSize: _explorePageSize,
+                      page: _explorePage,
+                      onPageSizeChanged: (size) => setState(() {
+                        _explorePageSize = size;
+                        _explorePage = 0;
+                      }),
+                      onPageChanged: (page) => setState(() => _explorePage = page),
+                      onPlay: (index) => _openPlayer(tracks, index),
+                    );
+                  },
+                )
+              : _searchResults != null
               ? _buildSearchResults()
               : Center(
                   child: Text(
