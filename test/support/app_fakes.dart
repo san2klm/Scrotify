@@ -65,5 +65,11 @@ class IdleJam extends ChangeNotifier implements JamController {
   bool get inJam => false;
 
   @override
+  bool get isHost => false;
+
+  @override
+  bool get isGuest => false;
+
+  @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }

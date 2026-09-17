@@ -28,15 +28,18 @@ class PersistentPlayerBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Consumer<PlayerController>(
-      builder: (context, player, _) {
-        final track = player.currentTrack;
-        final playing = player.playing;
+    return Consumer2<PlayerController, JamController>(
+      builder: (context, player, jam, _) {
+        // En modo Party Speaker el invitado no reproduce audio local, pero la
+        // barra debe reflejar fielmente lo que está sonando en el anfitrión.
+        final remoteState = jam.isGuest ? jam.session : null;
+        final track = remoteState?.currentTrack ?? player.currentTrack;
+        final playing = remoteState?.isPlaying ?? player.playing;
 
         if (compact) {
-          return _buildMobileBar(context, player, track, playing);
+          return _buildMobileBar(context, player, jam, track, playing);
         }
-        return _buildDesktopBar(context, player, track, playing);
+        return _buildDesktopBar(context, player, jam, track, playing);
       },
     );
   }
@@ -46,7 +49,7 @@ class PersistentPlayerBar extends StatelessWidget {
   // ---------------------------------------------------------------------------
 
   Widget _buildDesktopBar(BuildContext context, PlayerController player,
-      Track? track, bool playing) {
+      JamController jam, Track? track, bool playing) {
     return Container(
       height: 90,
       color: context.bgPlayer,
@@ -80,20 +83,21 @@ class PersistentPlayerBar extends StatelessWidget {
                               ? context.accent
                               : context.textSecondary,
                         ),
-                        onPressed: player.toggleShuffle,
+                        onPressed: jam.isGuest ? null : player.toggleShuffle,
                       ),
                       IconButton(
                         visualDensity: VisualDensity.compact,
                         icon: Icon(Icons.skip_previous,
                             color: context.textPrimary, size: 26),
-                        onPressed: player.skipPrevious,
+                        onPressed: _playbackHandler(
+                            jam, player, 'skip_previous'),
                       ),
-                      _playButton(context, player, playing),
+                      _playButton(context, player, jam, playing),
                       IconButton(
                         visualDensity: VisualDensity.compact,
                         icon: Icon(Icons.skip_next,
                             color: context.textPrimary, size: 26),
-                        onPressed: player.skipNext,
+                        onPressed: _playbackHandler(jam, player, 'skip_next'),
                       ),
                       IconButton(
                         visualDensity: VisualDensity.compact,
@@ -106,14 +110,17 @@ class PersistentPlayerBar extends StatelessWidget {
                               ? context.accent
                               : context.textSecondary,
                         ),
-                        onPressed: player.toggleRepeat,
+                        onPressed: jam.isGuest ? null : player.toggleRepeat,
                       ),
                     ],
                   ),
                   // Progress bar with time labels
                   SizedBox(
                     width: 500,
-                    child: _DesktopProgressBar(player),
+                    child: _DesktopProgressBar(
+                      player,
+                      onSeek: (target) => _seek(jam, player, target),
+                    ),
                   ),
                 ],
               ),
@@ -138,14 +145,17 @@ class PersistentPlayerBar extends StatelessWidget {
   // ---------------------------------------------------------------------------
 
   Widget _buildMobileBar(BuildContext context, PlayerController player,
-      Track? track, bool playing) {
+      JamController jam, Track? track, bool playing) {
     return Container(
       height: 84,
       color: context.bgPlayer,
       child: Column(
         children: [
           // Thin progress bar at the very top (Spotify mobile style)
-          _MobileProgressBar(player),
+          _MobileProgressBar(
+            player,
+            onSeek: (target) => _seek(jam, player, target),
+          ),
           // Content row
           Expanded(
             child: Padding(
@@ -169,7 +179,7 @@ class PersistentPlayerBar extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(width: 4),
-                  ..._mobileControls(context, player, playing),
+                  ..._mobileControls(context, player, jam, playing),
                 ],
               ),
             ),
@@ -180,19 +190,19 @@ class PersistentPlayerBar extends StatelessWidget {
   }
 
   List<Widget> _mobileControls(
-      BuildContext context, PlayerController player, bool playing) {
+      BuildContext context, PlayerController player, JamController jam, bool playing) {
     return [
       _compactControlIcon(
         context,
         Icons.skip_previous,
-        player.skipPrevious,
+        _playbackHandler(jam, player, 'skip_previous'),
         size: 24,
       ),
-      _playButton(context, player, playing, compact: true),
+      _playButton(context, player, jam, playing, compact: true),
       _compactControlIcon(
         context,
         Icons.skip_next,
-        player.skipNext,
+        _playbackHandler(jam, player, 'skip_next'),
         size: 24,
       ),
       IconButton(
@@ -335,7 +345,7 @@ class PersistentPlayerBar extends StatelessWidget {
   }
 
   Widget _compactControlIcon(
-      BuildContext context, IconData icon, VoidCallback onPressed,
+      BuildContext context, IconData icon, VoidCallback? onPressed,
       {Color? color, double size = 24}) {
     return IconButton(
       visualDensity: VisualDensity.compact,
@@ -347,7 +357,7 @@ class PersistentPlayerBar extends StatelessWidget {
   }
 
   Widget _playButton(
-      BuildContext context, PlayerController player, bool playing,
+      BuildContext context, PlayerController player, JamController jam, bool playing,
       {bool compact = false}) {
     return IconButton(
       visualDensity: compact ? VisualDensity.compact : null,
@@ -359,8 +369,40 @@ class PersistentPlayerBar extends StatelessWidget {
         playing ? Icons.pause_circle_filled : Icons.play_circle_filled,
         color: context.textPrimary,
       ),
-      onPressed: player.togglePlay,
+      onPressed: _playbackHandler(jam, player, 'toggle'),
     );
+  }
+
+  VoidCallback? _playbackHandler(
+    JamController jam,
+    PlayerController player,
+    String action,
+  ) {
+    if (jam.isGuest && !(jam.localParticipant?.canControlPlayback ?? false)) {
+      return null;
+    }
+    if (jam.inJam) {
+      return () {
+        jam.playbackAction(action);
+      };
+    }
+    return switch (action) {
+      'toggle' => player.togglePlay,
+      'skip_next' => player.skipNext,
+      'skip_previous' => player.skipPrevious,
+      _ => null,
+    };
+  }
+
+  void _seek(JamController jam, PlayerController player, Duration target) {
+    if (jam.isGuest && !(jam.localParticipant?.canControlPlayback ?? false)) {
+      return;
+    }
+    if (jam.inJam) {
+      jam.playbackAction('seek', position: target);
+    } else {
+      player.seek(target);
+    }
   }
 
   Widget _openFullButton(BuildContext context) {
@@ -402,7 +444,9 @@ String _format(Duration d) {
 
 class _DesktopProgressBar extends StatefulWidget {
   final PlayerController player;
-  const _DesktopProgressBar(this.player);
+  final ValueChanged<Duration>? onSeek;
+
+  const _DesktopProgressBar(this.player, {this.onSeek});
 
   @override
   State<_DesktopProgressBar> createState() => _DesktopProgressBarState();
@@ -470,8 +514,12 @@ class _DesktopProgressBarState extends State<_DesktopProgressBar> {
                             value: currentMs,
                             onChanged: (v) => setState(() => _dragValue = v),
                             onChangeEnd: (v) async {
-                              await widget.player
-                                  .seek(Duration(milliseconds: v.round()));
+                              final target = Duration(milliseconds: v.round());
+                              if (widget.onSeek != null) {
+                                widget.onSeek!(target);
+                              } else {
+                                await widget.player.seek(target);
+                              }
                               if (mounted) setState(() => _dragValue = null);
                             },
                           ),
@@ -507,7 +555,9 @@ class _DesktopProgressBarState extends State<_DesktopProgressBar> {
 
 class _MobileProgressBar extends StatefulWidget {
   final PlayerController player;
-  const _MobileProgressBar(this.player);
+  final ValueChanged<Duration>? onSeek;
+
+  const _MobileProgressBar(this.player, {this.onSeek});
 
   @override
   State<_MobileProgressBar> createState() => _MobileProgressBarState();
@@ -548,7 +598,12 @@ class _MobileProgressBarState extends State<_MobileProgressBar> {
               value: currentMs,
               onChanged: (v) => setState(() => _dragValue = v),
               onChangeEnd: (v) async {
-                await widget.player.seek(Duration(milliseconds: v.round()));
+                final target = Duration(milliseconds: v.round());
+                if (widget.onSeek != null) {
+                  widget.onSeek!(target);
+                } else {
+                  await widget.player.seek(target);
+                }
                 if (mounted) setState(() => _dragValue = null);
               },
             ),

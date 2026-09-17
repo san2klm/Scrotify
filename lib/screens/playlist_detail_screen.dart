@@ -23,20 +23,24 @@ class PlaylistDetailScreen extends StatefulWidget {
 class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
   late Future<List<Track>> _future;
   late Playlist _playlist;
+  bool _reordering = false;
 
   @override
   void initState() {
     super.initState();
     _playlist = widget.playlist;
-    _future =
-        context.read<NavidromeService>().getPlaylistTracks(_playlist.id);
+    _future = context.read<NavidromeService>().getPlaylistTracks(_playlist.id);
   }
 
-  Future<void> _addTracks() async {
+  Future<void> _addTracks(List<Track> currentTracks) async {
     final nav = context.read<NavidromeService>();
     final added = await showAddPlaylistTracksDialog(context, _playlist);
-    if (added != true || !mounted) return;
-    setState(() => _future = nav.getPlaylistTracks(_playlist.id));
+    if (added == null || added.isEmpty || !mounted) return;
+
+    // El diálogo ya confirmó el guardado. Usamos los propios temas que acaba
+    // de devolver para que aparezcan al cerrar el diálogo, incluso si la
+    // lectura posterior al servidor tarda o falla.
+    setState(() => _future = Future.value([...currentTracks, ...added]));
     try {
       final updated = await nav.getPlaylist(_playlist.id);
       if (mounted && updated != null) setState(() => _playlist = updated);
@@ -46,8 +50,8 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
     }
   }
 
-  Widget _addTracksButton() => FilledButton.icon(
-        onPressed: _addTracks,
+  Widget _addTracksButton(List<Track> tracks) => FilledButton.icon(
+        onPressed: () => _addTracks(tracks),
         icon: const Icon(Icons.playlist_add),
         label: const Text('Añadir canciones'),
       );
@@ -58,6 +62,44 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
     if (tracks.isEmpty) return;
     final player = context.read<PlayerController>();
     await player.playShuffledQueue(tracks, sourcePlaylist: _playlist);
+  }
+
+  Future<void> _reorderTracks(
+      List<Track> tracks, int oldIndex, int newIndex) async {
+    if (_reordering || oldIndex == newIndex) return;
+
+    final reordered = List<Track>.of(tracks);
+    final moved = reordered.removeAt(oldIndex);
+    reordered.insert(newIndex, moved);
+    final nav = context.read<NavidromeService>();
+
+    // La lista responde al soltar el tema, sin esperar la petición de red.
+    setState(() {
+      _reordering = true;
+      _future = Future.value(reordered);
+    });
+    try {
+      await nav.reorderPlaylistTracks(
+        playlistId: _playlist.id,
+        orderedSongIds: reordered.map((track) => track.id).toList(),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _future = Future.value(tracks));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'No se pudo guardar el nuevo orden: '
+            '${error.toString().replaceFirst('Exception: ', '')}',
+            style: TextStyle(color: context.danger),
+          ),
+          backgroundColor: context.bgCard,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _reordering = false);
+    }
   }
 
   /// Confirma y borra la playlist en Navidrome. Al terminar vuelve a la
@@ -141,8 +183,9 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
                           color: context.textPrimary));
                 }
                 if (snapshot.hasError) {
-                  return Center(child: Text('No se pudo cargar la playlist.',
-                      style: TextStyle(color: context.danger)));
+                  return Center(
+                      child: Text('No se pudo cargar la playlist.',
+                          style: TextStyle(color: context.danger)));
                 }
                 final tracks = snapshot.data ?? <Track>[];
                 if (tracks.isEmpty) {
@@ -153,7 +196,7 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
                         Text('Playlist vacía',
                             style: TextStyle(color: context.textMuted)),
                         const SizedBox(height: 12),
-                        _addTracksButton(),
+                        _addTracksButton(tracks),
                       ],
                     ),
                   );
@@ -265,17 +308,21 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
                       padding: const EdgeInsets.symmetric(horizontal: 16),
                       child: Align(
                         alignment: Alignment.centerLeft,
-                        child: _addTracksButton(),
+                        child: _addTracksButton(tracks),
                       ),
                     ),
                     Divider(color: context.themeBorder),
                     Expanded(
-                      child: ListView.builder(
+                      child: ReorderableListView.builder(
+                        buildDefaultDragHandles: false,
                         itemCount: tracks.length,
+                        onReorderItem: (oldIndex, newIndex) =>
+                            _reorderTracks(tracks, oldIndex, newIndex),
                         itemBuilder: (context, index) {
                           final track = tracks[index];
                           final starred = nav.isStarred(track.id);
                           return ListTile(
+                            key: ValueKey('playlist-${track.id}-$index'),
                             leading: CoverArt(
                               url: track.albumArtUrl,
                               artist: track.artist,
@@ -298,19 +345,35 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
                                 overflow: TextOverflow.ellipsis,
                                 style: TextStyle(
                                     color: context.textMuted, fontSize: 12)),
-                            trailing: IconButton(
-                              icon: Icon(
-                                starred
-                                    ? Icons.favorite
-                                    : Icons.favorite_border,
-                                color: starred
-                                    ? context.accent
-                                    : context.textMuted,
-                              ),
-                              onPressed: () async {
-                                await nav.toggleStar(track);
-                                setState(() {});
-                              },
+                            trailing: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                IconButton(
+                                  icon: Icon(
+                                    starred
+                                        ? Icons.favorite
+                                        : Icons.favorite_border,
+                                    color: starred
+                                        ? context.accent
+                                        : context.textMuted,
+                                  ),
+                                  onPressed: () async {
+                                    await nav.toggleStar(track);
+                                    if (mounted) setState(() {});
+                                  },
+                                ),
+                                ReorderableDragStartListener(
+                                  index: index,
+                                  enabled: !_reordering,
+                                  child: Padding(
+                                    padding: const EdgeInsets.only(left: 4),
+                                    child: Icon(
+                                      Icons.drag_handle_rounded,
+                                      color: context.textMuted,
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
                             onTap: () =>
                                 context.read<PlayerController>().playQueue(

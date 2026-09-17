@@ -351,6 +351,7 @@ class NavidromeService with ChangeNotifier {
         if (data['subsonic-response']['status'] == 'ok') {
           _connected = true;
           await _loadPins();
+          await _loadStarredOrder();
           notifyListeners();
         } else {
           throw Exception(
@@ -713,6 +714,30 @@ class NavidromeService with ChangeNotifier {
     bumpPlaylists();
   }
 
+  /// Reemplaza el contenido de una playlist en el orden indicado.
+  ///
+  /// `createPlaylist` con el ID de una lista existente es la operación
+  /// Subsonic destinada a actualizarla por completo. Así el orden se conserva
+  /// también con temas repetidos, sin depender de cómo el servidor procese
+  /// índices eliminados y canciones añadidas en una misma petición.
+  Future<void> reorderPlaylistTracks({
+    required String playlistId,
+    required List<String> orderedSongIds,
+  }) async {
+    if (orderedSongIds.length < 2) return;
+    if (!_connected) throw Exception('Not connected');
+    final (salt, token) = _auth();
+    final buffer = StringBuffer('$_url/rest/createPlaylist.view');
+    buffer.write('?u=${Uri.encodeQueryComponent(_user!)}');
+    buffer.write('&s=$salt&t=$token&v=1.16.1&c=Psysonic&f=json');
+    buffer.write('&playlistId=${Uri.encodeQueryComponent(playlistId)}');
+    for (final id in orderedSongIds) {
+      buffer.write('&songId=${Uri.encodeQueryComponent(id)}');
+    }
+    _playlistResponse(await _client.get(Uri.parse(buffer.toString())));
+    bumpPlaylists();
+  }
+
   Future<void> deletePlaylist(String playlistId) async {
     if (!_connected) throw Exception('Not connected');
     final (salt, token) = _auth();
@@ -834,12 +859,72 @@ class NavidromeService with ChangeNotifier {
     _starredIds
       ..clear()
       ..addAll(tracks.map((t) => t.id));
-    return tracks;
+    return _applyStarredOrder(tracks);
   }
 
   final Set<String> _starredIds = {};
+  final List<String> _starredSongOrder = [];
 
   bool isStarred(String id) => _starredIds.contains(id);
+
+  /// Conserva el orden manual de "Me gustas" en este dispositivo. El
+  /// protocolo Subsonic sólo expone favoritos, no un orden de favoritos que se
+  /// pueda modificar en el servidor.
+  void reorderStarredTracks(List<Track> tracks) {
+    _starredSongOrder
+      ..clear()
+      ..addAll(tracks.map((track) => track.id));
+    notifyListeners();
+    _saveStarredOrder();
+  }
+
+  List<Track> _applyStarredOrder(List<Track> tracks) {
+    var changed = false;
+    final activeIds = tracks.map((track) => track.id).toSet();
+    final originalLength = _starredSongOrder.length;
+    _starredSongOrder.removeWhere((id) => !activeIds.contains(id));
+    changed = _starredSongOrder.length != originalLength;
+    for (final track in tracks) {
+      if (!_starredSongOrder.contains(track.id)) {
+        _starredSongOrder.add(track.id);
+        changed = true;
+      }
+    }
+    if (changed) _saveStarredOrder();
+
+    final positions = <String, int>{
+      for (var index = 0; index < _starredSongOrder.length; index++)
+        _starredSongOrder[index]: index,
+    };
+    return [...tracks]..sort((a, b) => (positions[a.id] ?? tracks.length)
+        .compareTo(positions[b.id] ?? tracks.length));
+  }
+
+  Future<void> _loadStarredOrder() async {
+    try {
+      final dir = await getApplicationDocumentsDirectory();
+      final file = File('${dir.path}/starred_track_order.json');
+      if (await file.exists()) {
+        final content = await file.readAsString();
+        final list = jsonDecode(content) as List;
+        _starredSongOrder
+          ..clear()
+          ..addAll(list.cast<String>());
+      }
+    } catch (_) {
+      // El orden manual es una preferencia local; no bloquea los favoritos.
+    }
+  }
+
+  Future<void> _saveStarredOrder() async {
+    try {
+      final dir = await getApplicationDocumentsDirectory();
+      final file = File('${dir.path}/starred_track_order.json');
+      await file.writeAsString(jsonEncode(_starredSongOrder));
+    } catch (_) {
+      // El cambio ya está aplicado en memoria aunque no pueda persistirse.
+    }
+  }
 
   // ---------------------------------------------------------------------------
   // Fijar (pin) playlists — persistido en disco vía path_provider
@@ -886,14 +971,18 @@ class NavidromeService with ChangeNotifier {
 
   Future<void> toggleStar(Track track) async {
     final wasStarred = _starredIds.contains(track.id);
+    final previousOrderIndex = _starredSongOrder.indexOf(track.id);
     // Actualización optimista: reflejamos el cambio de inmediato para que la
     // UI no espere al round-trip de red, y revertimos si algo falla.
     if (wasStarred) {
       _starredIds.remove(track.id);
+      _starredSongOrder.remove(track.id);
     } else {
       _starredIds.add(track.id);
+      _starredSongOrder.add(track.id);
     }
     notifyListeners();
+    _saveStarredOrder();
 
     try {
       if (wasStarred) {
@@ -904,10 +993,18 @@ class NavidromeService with ChangeNotifier {
     } catch (_) {
       if (wasStarred) {
         _starredIds.add(track.id);
+        _starredSongOrder.insert(
+          previousOrderIndex < 0
+              ? _starredSongOrder.length
+              : previousOrderIndex,
+          track.id,
+        );
       } else {
         _starredIds.remove(track.id);
+        _starredSongOrder.remove(track.id);
       }
       notifyListeners();
+      _saveStarredOrder();
     }
   }
 
@@ -1332,7 +1429,7 @@ class NavidromeService with ChangeNotifier {
   /// Publica o anuncia una sesión Jam activa en el servidor Navidrome para que
   /// cualquier usuario conectado a la misma instancia pueda descubrirla y unirse.
   Future<void> publishServerJam(JamSessionState session) async {
-    if (!_connected) return;
+    if (!_connected || !session.isPublic) return;
     try {
       final payload = jsonEncode({
         'tag': 'SCROTIFY_JAM',
@@ -1347,6 +1444,9 @@ class NavidromeService with ChangeNotifier {
         'albumArtUrl': session.currentTrack?.albumArtUrl,
         'mode': session.mode.name,
         'participantCount': session.participants.length,
+        'isPublic': session.isPublic,
+        if (session.remoteHost != null) 'remoteHost': session.remoteHost,
+        if (session.remotePort != null) 'remotePort': session.remotePort,
         'timestamp': DateTime.now().millisecondsSinceEpoch,
       });
 
@@ -1374,7 +1474,7 @@ class NavidromeService with ChangeNotifier {
             final ts = (data['timestamp'] as num?)?.toInt() ?? 0;
 
             // Ignorar sesiones con más de 25 minutos sin actualización
-            if (now - ts < 25 * 60 * 1000) {
+            if (data['isPublic'] != false && now - ts < 25 * 60 * 1000) {
               final host = (data['host'] as String?) ?? '127.0.0.1';
               final port = (data['port'] as num?)?.toInt() ?? 0;
               final pin = (data['pin'] as String?) ?? '';
@@ -1401,6 +1501,8 @@ class NavidromeService with ChangeNotifier {
                   currentTrackArtist: data['trackArtist'] as String?,
                   albumArtUrl: data['albumArtUrl'] as String?,
                   mode: mode,
+                  remoteHost: data['remoteHost'] as String?,
+                  remotePort: (data['remotePort'] as num?)?.toInt(),
                 );
               }
             }

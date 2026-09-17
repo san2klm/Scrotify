@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../services/jam_controller.dart';
 import '../services/navidrome_service.dart';
 import '../services/player_controller.dart';
 import '../services/secure_storage.dart';
@@ -13,7 +12,6 @@ import '../widgets/search_explore_field.dart';
 import '../widgets/explore_tracks_view.dart';
 import '../services/home_navigation_controller.dart';
 import '../widgets/pairing_panel.dart';
-import '../widgets/jam_dialog.dart';
 import '../widgets/server_activity_panel.dart';
 import '../widgets/track_context_menu.dart';
 import 'liked_songs_screen.dart';
@@ -390,33 +388,6 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
                 icon: Icon(Icons.people_alt_outlined,
                     color: context.accent, size: 21),
                 onPressed: () => ServerActivityPanel.show(context),
-              ),
-
-              // Botón rápido Jam (Social / Colaborativo)
-              Consumer<JamController>(
-                builder: (context, jam, _) {
-                  if (jam.inJam) {
-                    return IconButton(
-                      tooltip: 'Sesión Jam Activa',
-                      icon: Container(
-                        padding: const EdgeInsets.all(4),
-                        decoration: BoxDecoration(
-                          color: context.accent.withValues(alpha: 0.2),
-                          shape: BoxShape.circle,
-                        ),
-                        child: Icon(Icons.speaker_group_rounded,
-                            color: context.accent, size: 18),
-                      ),
-                      onPressed: () => JamDialog.showAsBottomSheet(context),
-                    );
-                  }
-                  return IconButton(
-                    tooltip: 'Jam (Escucha grupal)',
-                    icon: Icon(Icons.speaker_group_outlined,
-                        color: context.accent, size: 21),
-                    onPressed: () => JamDialog.showAsBottomSheet(context),
-                  );
-                },
               ),
 
               // Botón rápido Vincular PC

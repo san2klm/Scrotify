@@ -1,14 +1,11 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../services/jam_controller.dart';
 import '../services/navidrome_service.dart';
 import '../services/home_navigation_controller.dart';
 import '../services/pairing_server.dart';
 import '../screens/settings_screen.dart';
 import '../utils/app_colors.dart';
-import 'jam_dialog.dart';
 import 'pairing_panel.dart';
 import 'server_activity_panel.dart';
 import 'search_explore_field.dart';
@@ -108,8 +105,12 @@ class _GlobalTopBarState extends State<GlobalTopBar> {
             ),
           ],
         ),
-        content: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 420),
+        // AlertDialog calcula su tamaño intrínseco. El panel contiene un QR y
+        // filas con Expanded, por lo que necesita un ancho real antes de que
+        // Flutter construya el widget; de otro modo, en escritorio puede
+        // quedarse en una superficie vacía.
+        content: SizedBox(
+          width: 380,
           child: PairingSharePanel(
             compact: true,
             server: server,
@@ -216,21 +217,6 @@ class _GlobalTopBarState extends State<GlobalTopBar> {
                   color: context.accent, size: 20),
               onPressed: () => ServerActivityPanel.show(context),
             ),
-            Consumer<JamController>(
-              builder: (context, jam, _) {
-                return IconButton(
-                  tooltip: 'Jam',
-                  icon: Icon(
-                    jam.inJam
-                        ? Icons.speaker_group_rounded
-                        : Icons.speaker_group_outlined,
-                    color: context.accent,
-                    size: 20,
-                  ),
-                  onPressed: () => JamDialog.showAsBottomSheet(context),
-                );
-              },
-            ),
             IconButton(
               tooltip: 'Ajustes',
               icon: Icon(Icons.settings_outlined,
@@ -273,55 +259,6 @@ class _GlobalTopBarState extends State<GlobalTopBar> {
               onPressed: () => Navigator.of(context).pop(),
             ),
             const SizedBox(width: 4),
-          ],
-
-          // Logo de Scrotify
-          if (kIsWeb || defaultTargetPlatform != TargetPlatform.windows) ...[
-            InkWell(
-              onTap: () {
-                if (widget.onLogoTap != null) {
-                  widget.onLogoTap!();
-                } else if (canPop) {
-                  _goHome();
-                }
-              },
-              borderRadius: BorderRadius.circular(8),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 32,
-                      height: 32,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: context.bgElevated,
-                        border: Border.all(
-                          color: context.accent.withValues(alpha: 0.5),
-                          width: 1.2,
-                        ),
-                      ),
-                      child: Icon(
-                        Icons.graphic_eq_rounded,
-                        color: context.accent,
-                        size: 18,
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Text(
-                      'SCROTIFY',
-                      style: TextStyle(
-                        color: context.textPrimary,
-                        fontSize: 15,
-                        fontWeight: FontWeight.w900,
-                        letterSpacing: 2,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(width: 16),
           ],
 
           // Botones de navegación persistentes
@@ -372,51 +309,6 @@ class _GlobalTopBarState extends State<GlobalTopBar> {
             ),
           ),
           const SizedBox(width: 16),
-
-          // Botón Rápido: Jam
-          Consumer<JamController>(
-            builder: (context, jam, _) {
-              if (jam.inJam) {
-                return FilledButton.tonalIcon(
-                  onPressed: () => JamDialog.show(context),
-                  style: FilledButton.styleFrom(
-                    backgroundColor: context.accent.withValues(alpha: 0.18),
-                    foregroundColor: context.accent,
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
-                      side: BorderSide(color: context.accent, width: 0.8),
-                    ),
-                  ),
-                  icon: const Icon(Icons.speaker_group_rounded, size: 17),
-                  label: Text(
-                    'Jam (${jam.participants.length})',
-                    style: const TextStyle(
-                        fontSize: 12, fontWeight: FontWeight.bold),
-                  ),
-                );
-              }
-              return FilledButton.tonalIcon(
-                onPressed: () => JamDialog.show(context),
-                style: FilledButton.styleFrom(
-                  backgroundColor: context.accent.withValues(alpha: 0.12),
-                  foregroundColor: context.accent,
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10)),
-                ),
-                icon: const Icon(Icons.speaker_group_outlined, size: 17),
-                label: const Text(
-                  'Jam',
-                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
-                ),
-              );
-            },
-          ),
-
-          const SizedBox(width: 8),
 
           // Botón Rápido: Comunidad
           IconButton(

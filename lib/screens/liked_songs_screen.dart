@@ -25,6 +25,16 @@ class _LikedSongsScreenState extends State<LikedSongsScreen> {
     _future = context.read<NavidromeService>().getStarred();
   }
 
+  void _reorderTracks(List<Track> tracks, int oldIndex, int newIndex) {
+    if (oldIndex == newIndex) return;
+
+    final reordered = List<Track>.of(tracks);
+    final moved = reordered.removeAt(oldIndex);
+    reordered.insert(newIndex, moved);
+    context.read<NavidromeService>().reorderStarredTracks(reordered);
+    setState(() => _future = Future.value(reordered));
+  }
+
   @override
   Widget build(BuildContext context) {
     final nav = context.read<NavidromeService>();
@@ -109,12 +119,16 @@ class _LikedSongsScreenState extends State<LikedSongsScreen> {
                     ),
                     Divider(color: context.themeBorder),
                     Expanded(
-                      child: ListView.builder(
+                      child: ReorderableListView.builder(
+                        buildDefaultDragHandles: false,
                         itemCount: tracks.length,
+                        onReorderItem: (oldIndex, newIndex) =>
+                            _reorderTracks(tracks, oldIndex, newIndex),
                         itemBuilder: (context, index) {
                           final track = tracks[index];
                           final starred = nav.isStarred(track.id);
                           return ListTile(
+                            key: ValueKey('liked-${track.id}-$index'),
                             leading: CoverArt(
                               url: track.albumArtUrl,
                               artist: track.artist,
@@ -137,21 +151,37 @@ class _LikedSongsScreenState extends State<LikedSongsScreen> {
                                 overflow: TextOverflow.ellipsis,
                                 style: TextStyle(
                                     color: context.textMuted, fontSize: 12)),
-                            trailing: IconButton(
-                              icon: Icon(
-                                starred
-                                    ? Icons.favorite
-                                    : Icons.favorite_border,
-                                color: starred
-                                    ? context.accent
-                                    : context.textMuted,
-                              ),
-                              onPressed: () async {
-                                await nav.toggleStar(track);
-                                setState(() {
-                                  _future = nav.getStarred();
-                                });
-                              },
+                            trailing: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                IconButton(
+                                  icon: Icon(
+                                    starred
+                                        ? Icons.favorite
+                                        : Icons.favorite_border,
+                                    color: starred
+                                        ? context.accent
+                                        : context.textMuted,
+                                  ),
+                                  onPressed: () async {
+                                    await nav.toggleStar(track);
+                                    if (mounted) {
+                                      setState(
+                                          () => _future = nav.getStarred());
+                                    }
+                                  },
+                                ),
+                                ReorderableDragStartListener(
+                                  index: index,
+                                  child: Padding(
+                                    padding: const EdgeInsets.only(left: 4),
+                                    child: Icon(
+                                      Icons.drag_handle_rounded,
+                                      color: context.textMuted,
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
                             onTap: () => context
                                 .read<PlayerController>()

@@ -50,6 +50,33 @@ void main() {
       expect(JamQrData.fromUri('http://example.com'), isNull);
       expect(JamQrData.fromUri('scrotify://other?host=1.1.1.1'), isNull);
     });
+
+    test('roundtrips optional remote connection data', () {
+      final qr = JamQrData(
+        host: '192.168.1.50',
+        port: kJamHostPort,
+        code: 'AB34EF',
+        remoteHost: '203.0.113.10',
+        remotePort: 47620,
+      );
+
+      final parsed = JamQrData.fromUri(qr.toUri());
+      expect(parsed, isNotNull);
+      expect(parsed!.remoteHost, '203.0.113.10');
+      expect(parsed.remotePort, 47620);
+    });
+
+    test('rejects an invalid PIN or port in a QR URI', () {
+      expect(
+        JamQrData.fromUri('scrotify://jam?host=10.0.0.2&port=0&code=ABC123'),
+        isNull,
+      );
+      expect(
+        JamQrData.fromUri(
+            'scrotify://jam?host=10.0.0.2&port=47620&code=ABCIO0'),
+        isNull,
+      );
+    });
   });
 
   group('Jam Models Serialization', () {
@@ -140,6 +167,33 @@ void main() {
       expect(fromJson.allowGuestControls, true);
     });
 
+    test('preserves session access settings', () {
+      const state = JamSessionState(
+        sessionId: 'private_session',
+        pinCode: 'AB34EF',
+        hostName: 'Alice',
+        hostIp: '192.168.1.2',
+        port: kJamHostPort,
+        mode: JamMode.synchronizedListening,
+        isPlaying: false,
+        positionMs: 0,
+        updatedAtMs: 1,
+        queue: [],
+        participants: [],
+        allowGuestControls: false,
+        allowGuestQueueManage: false,
+        isPublic: false,
+        initialPlaylistId: 'playlist_1',
+        maxParticipants: 3,
+      );
+
+      final parsed = JamSessionState.fromJson(state.toJson());
+      expect(parsed.allowGuestQueueManage, isFalse);
+      expect(parsed.isPublic, isFalse);
+      expect(parsed.initialPlaylistId, 'playlist_1');
+      expect(parsed.maxParticipants, 3);
+    });
+
     test('DiscoveredJamSession JSON roundtrip', () {
       const disc = DiscoveredJamSession(
         host: '192.168.1.100',
@@ -165,6 +219,21 @@ void main() {
       expect(fromJson.currentTrackTitle, 'Awesome Track');
       expect(fromJson.mode, JamMode.synchronizedListening);
     });
+
+    test('Radar discovery prefers the UDP sender address', () {
+      final discovered = DiscoveredJamSession.fromJson(
+        {
+          'host': '100.64.0.4',
+          'port': kJamHostPort,
+          'pin': 'AB34EF',
+          'mode': JamMode.partySpeaker.name,
+        },
+        '192.168.1.35',
+        preferFallbackHost: true,
+      );
+
+      expect(discovered.host, '192.168.1.35');
+    });
   });
 
   group('Jam Network Services (Host & Guest Handshake)', () {
@@ -181,7 +250,8 @@ void main() {
       await hostService.stop();
     });
 
-    test('Host starts, Guest connects via WebSocket and exchanges state', () async {
+    test('Host starts, Guest connects via WebSocket and exchanges state',
+        () async {
       final pin = JamCode('JK94MN');
       await hostService.start(
         sessionId: 'jam_test_session',
@@ -220,6 +290,31 @@ void main() {
       expect(syncedState.pinCode, pin.value);
       expect(syncedState.hostName, 'TestHost');
       expect(syncedState.mode, JamMode.partySpeaker);
+    });
+
+    test('Guest discovers a public host through the Jam radar', () async {
+      final pin = JamCode('JK94MN');
+      await hostService.start(
+        sessionId: 'jam_radar_session',
+        pinCode: pin,
+        hostName: 'TestHost',
+        isPublic: true,
+      );
+
+      final discovered = await guestService.scanRadar(
+        timeout: const Duration(seconds: 2),
+      );
+      final matches =
+          discovered.where((item) => item.pin == pin.value).toList();
+      expect(matches, isNotEmpty);
+
+      final session = matches.firstWhere(
+        (item) => item.port == hostService.port,
+        orElse: () => matches.first,
+      );
+
+      expect(session.port, hostService.port);
+      expect(session.hostName, 'TestHost');
     });
 
     test('Guest sends add_to_queue and Host receives it', () async {
@@ -263,6 +358,72 @@ void main() {
       expect(receivedTrack.id, 't_collab_1');
       expect(receivedTrack.title, 'Collaborative Tune');
       expect(receivedTrack.artist, 'The Guests');
+    });
+
+    test('Host rejects an incorrect PIN and sessions at capacity', () async {
+      final pin = JamCode('JK94MN');
+      await hostService.start(
+        sessionId: 'jam_limited_session',
+        pinCode: pin,
+        hostName: 'TestHost',
+        maxParticipants: 1,
+      );
+
+      final host = hostService.hostIp ?? '127.0.0.1';
+      final wrongPin = await guestService.connect(
+        host: host,
+        port: hostService.port,
+        pin: 'AB34EF',
+        name: 'GuestUser',
+        avatarColorValue: 0xFF10B981,
+      );
+      expect(wrongPin, isFalse);
+
+      final fullSession = await guestService.connect(
+        host: host,
+        port: hostService.port,
+        pin: pin.value,
+        name: 'GuestUser',
+        avatarColorValue: 0xFF10B981,
+      );
+      expect(fullSession, isFalse);
+    });
+
+    test('Host blocks queue changes when guest queue management is disabled',
+        () async {
+      final pin = JamCode('JK94MN');
+      await hostService.start(
+        sessionId: 'jam_read_only_queue',
+        pinCode: pin,
+        hostName: 'TestHost',
+        allowGuestQueueManage: false,
+      );
+
+      var addRequestReceived = false;
+      hostService.onTrackAddRequested = (_, __, ___) {
+        addRequestReceived = true;
+      };
+
+      final host = hostService.hostIp ?? '127.0.0.1';
+      final connected = await guestService.connect(
+        host: host,
+        port: hostService.port,
+        pin: pin.value,
+        name: 'GuestUser',
+        avatarColorValue: 0xFF10B981,
+      );
+      expect(connected, isTrue);
+      expect(guestService.localParticipant!.canManageQueue, isFalse);
+
+      guestService.addToQueue(Track(
+        id: 'blocked_track',
+        title: 'Blocked track',
+        artist: 'Guest',
+        album: 'Jam',
+        duration: '180',
+      ));
+      await Future<void>.delayed(const Duration(milliseconds: 150));
+      expect(addRequestReceived, isFalse);
     });
   });
 }

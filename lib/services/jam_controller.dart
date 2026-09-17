@@ -26,13 +26,16 @@ class JamController extends ChangeNotifier {
   List<DiscoveredJamSession> _discoveredSessions = [];
   bool _isScanningRadar = false;
 
+  /// Motivo legible del último [joinSession] fallido, para mostrar en UI.
+  String? lastJoinError;
+
   // Cola de items con trazabilidad (solo en Host)
   final List<JamQueueItem> _hostJamQueue = [];
+  final Map<Track, JamParticipant?> _trackAddedBy = {};
   JamParticipant? _currentTrackAddedBy;
 
-  StreamSubscription? _playerStateSub;
-  StreamSubscription? _playerPositionSub;
   Timer? _hostSyncHeartbeat;
+  Timer? _hostPublishTimer;
 
   JamController(this._player, this._navidrome) {
     _initHostCallbacks();
@@ -53,6 +56,9 @@ class JamController extends ChangeNotifier {
   bool get inJam => _role != JamRole.none;
   List<DiscoveredJamSession> get discoveredSessions => _discoveredSessions;
   bool get isScanningRadar => _isScanningRadar;
+  String? get allHostIpsFormatted => _hostService.allLocalIps.isEmpty
+      ? null
+      : _hostService.allLocalIps.join(', ');
   String? get currentCodeFormatted =>
       _hostService.pinCode?.formatted ??
       (_session?.pinCode.isNotEmpty == true
@@ -62,6 +68,9 @@ class JamController extends ChangeNotifier {
   String? get hostIp => _hostService.hostIp;
   int get port => _hostService.port;
   bool get allowGuestControls => _session?.allowGuestControls ?? true;
+  bool get allowGuestQueueManage => _session?.allowGuestQueueManage ?? true;
+  bool get isPublic => _session?.isPublic ?? true;
+  int get maxParticipants => _session?.maxParticipants ?? 0;
   JamParticipant? get currentTrackAddedBy => _currentTrackAddedBy;
 
   // ---------------------------------------------------------------------------
@@ -69,15 +78,14 @@ class JamController extends ChangeNotifier {
   // ---------------------------------------------------------------------------
   void _initHostCallbacks() {
     _hostService.onJoinRequested = (participant, socket) async {
-      _session = _session?.copyWith(
-        participants: [..._session!.participants, participant],
-      );
+      if (!isHost || _session == null) return false;
+      _syncHostState();
       // Enviar respuesta afirmativa con el estado inicial
       _hostService.sendToClient(participant.id, {
         'op': 'join_response',
         'accepted': true,
         'assignedParticipant': participant.toJson(),
-        'state': _session?.toJson(),
+        'state': _session!.toJson(),
       });
       _hostService.broadcastSessionState(_session!);
       notifyListeners();
@@ -85,83 +93,190 @@ class JamController extends ChangeNotifier {
     };
 
     _hostService.onTrackAddRequested = (track, participant, playNext) {
-      final queueItem = JamQueueItem(
-        id: 'item_${DateTime.now().millisecondsSinceEpoch}_${_hostJamQueue.length}',
-        track: track,
-        addedBy: participant,
-        addedAt: DateTime.now(),
-      );
-
-      if (playNext) {
-        _hostJamQueue.insert(0, queueItem);
-        _player.addNextInQueue(track);
-      } else {
-        _hostJamQueue.add(queueItem);
-        _player.addToQueue(track);
-      }
-
-      _syncHostState();
-      _hostService.broadcastSessionState(_session!);
-      notifyListeners();
+      unawaited(_addTrackAsHost(track, participant, playNext: playNext));
     };
 
     _hostService.onTrackRemoveRequested = (queueItemId, participant) {
-      final idx = _hostJamQueue.indexWhere((it) => it.id == queueItemId);
-      if (idx >= 0) {
-        _hostJamQueue.removeAt(idx);
-        _player.removeFromQueue(idx);
-        _syncHostState();
-        _hostService.broadcastSessionState(_session!);
-        notifyListeners();
-      }
+      _removeTrackAsHost(queueItemId);
     };
 
     _hostService.onQueueReorderRequested = (oldIndex, newIndex, participant) {
-      if (oldIndex >= 0 &&
-          oldIndex < _hostJamQueue.length &&
-          newIndex >= 0 &&
-          newIndex < _hostJamQueue.length) {
-        final item = _hostJamQueue.removeAt(oldIndex);
-        _hostJamQueue.insert(newIndex, item);
-        _player.reorderQueue(oldIndex, newIndex);
-        _syncHostState();
-        _hostService.broadcastSessionState(_session!);
-        notifyListeners();
-      }
+      _reorderQueueAsHost(oldIndex, newIndex);
     };
 
     _hostService.onPlaybackControlRequested =
         (action, positionMs, participant) async {
-      switch (action) {
-        case 'toggle':
-        case 'play':
-        case 'pause':
-          await _player.togglePlay();
-          break;
-        case 'skip_next':
-          await _player.skipNext();
-          break;
-        case 'skip_previous':
-          await _player.skipPrevious();
-          break;
-        case 'seek':
-          if (positionMs != null) {
-            await _player.seek(Duration(milliseconds: positionMs));
-          }
-          break;
-      }
-      _syncHostPlayback();
+      await _applyPlaybackAction(
+        action,
+        position: positionMs == null
+            ? null
+            : Duration(milliseconds: positionMs.clamp(0, 24 * 60 * 60 * 1000)),
+      );
     };
 
     _hostService.onParticipantLeft = (participant) {
-      if (_session != null) {
-        final updated = _session!.participants
-            .where((p) => p.id != participant.id)
-            .toList();
-        _session = _session!.copyWith(participants: updated);
-        notifyListeners();
-      }
+      if (!isHost) return;
+      _syncHostState();
+      if (_session != null) _hostService.broadcastSessionState(_session!);
+      notifyListeners();
     };
+  }
+
+  Future<void> _addTrackAsHost(
+    Track track,
+    JamParticipant? addedBy, {
+    required bool playNext,
+  }) async {
+    if (!isHost) return;
+
+    final queueItem = JamQueueItem(
+      id: 'item_${DateTime.now().microsecondsSinceEpoch}_${_hostJamQueue.length}',
+      track: track,
+      addedBy: addedBy,
+      addedAt: DateTime.now(),
+    );
+    _trackAddedBy[track] = addedBy;
+    if (playNext) {
+      _hostJamQueue.insert(0, queueItem);
+      await _player.addNextInQueue(track);
+    } else {
+      _hostJamQueue.add(queueItem);
+      await _player.addToQueue(track);
+    }
+
+    _rebuildHostQueueFromPlayer();
+    _publishHostState(includePlayback: true);
+  }
+
+  void _removeTrackAsHost(String queueItemId) {
+    if (!isHost) return;
+    final queueIndex =
+        _hostJamQueue.indexWhere((item) => item.id == queueItemId);
+    if (queueIndex < 0) return;
+
+    final item = _hostJamQueue[queueIndex];
+    final playerIndex = _playerOrderIndexForQueueItem(queueIndex, item);
+    if (playerIndex < 0) return;
+
+    _hostJamQueue.removeAt(queueIndex);
+    _trackAddedBy.remove(item.track);
+    _player.removeFromQueue(playerIndex);
+    _rebuildHostQueueFromPlayer();
+    _publishHostState();
+  }
+
+  void _reorderQueueAsHost(int oldIndex, int newIndex) {
+    if (!isHost ||
+        oldIndex < 0 ||
+        oldIndex >= _hostJamQueue.length ||
+        newIndex < 0 ||
+        newIndex >= _hostJamQueue.length ||
+        oldIndex == newIndex) {
+      return;
+    }
+
+    final playerOffset = _player.currentOrderPos + 1;
+    if (playerOffset <= 0) return;
+    _player.reorderQueue(playerOffset + oldIndex, playerOffset + newIndex);
+    _rebuildHostQueueFromPlayer();
+    _publishHostState();
+  }
+
+  int _playerOrderIndexForQueueItem(int queueIndex, JamQueueItem item) {
+    final expected = _player.currentOrderPos + 1 + queueIndex;
+    final ordered = _player.orderedQueue;
+    if (expected >= 0 &&
+        expected < ordered.length &&
+        identical(ordered[expected], item.track)) {
+      return expected;
+    }
+    return ordered.indexWhere((track) => identical(track, item.track));
+  }
+
+  /// Reconcilia la cola compartida con la cola efectiva del reproductor. El
+  /// reproductor conserva la pista actual; la Jam sólo publica las siguientes.
+  void _rebuildHostQueueFromPlayer() {
+    if (!isHost || _localParticipant == null) return;
+
+    final ordered = _player.orderedQueue;
+    final currentOrderPos = _player.currentOrderPos;
+    final current = _player.currentTrack;
+    if (current != null) {
+      _currentTrackAddedBy = _trackAddedBy[current] ?? _localParticipant;
+    }
+
+    final futureTracks =
+        currentOrderPos >= 0 && currentOrderPos < ordered.length
+            ? ordered.skip(currentOrderPos + 1)
+            : ordered;
+    final remaining = List<JamQueueItem>.of(_hostJamQueue);
+    final rebuilt = <JamQueueItem>[];
+
+    for (final track in futureTracks) {
+      final exactIndex =
+          remaining.indexWhere((item) => identical(item.track, track));
+      final matchingIndex = exactIndex >= 0
+          ? exactIndex
+          : remaining.indexWhere((item) => item.track.id == track.id);
+      if (matchingIndex >= 0) {
+        rebuilt.add(remaining.removeAt(matchingIndex));
+        continue;
+      }
+
+      final addedBy = _trackAddedBy[track] ?? _localParticipant;
+      _trackAddedBy[track] = addedBy;
+      rebuilt.add(JamQueueItem(
+        id: 'item_${DateTime.now().microsecondsSinceEpoch}_${rebuilt.length}',
+        track: track,
+        addedBy: addedBy,
+        addedAt: DateTime.now(),
+      ));
+    }
+
+    _hostJamQueue
+      ..clear()
+      ..addAll(rebuilt);
+  }
+
+  void _publishHostState({bool includePlayback = false}) {
+    if (!isHost) return;
+    _syncHostState();
+    if (_session == null) return;
+    _hostService.broadcastQueueUpdate(_hostJamQueue);
+    _hostService.broadcastSessionState(_session!);
+    if (includePlayback) _syncHostPlayback();
+    _publishToNavidromeIfPublic();
+    notifyListeners();
+  }
+
+  Future<void> _applyPlaybackAction(
+    String action, {
+    Duration? position,
+  }) async {
+    if (!isHost) return;
+
+    switch (action) {
+      case 'toggle':
+        await _player.togglePlay();
+        break;
+      case 'play':
+        if (!_player.playing) await _player.togglePlay();
+        break;
+      case 'pause':
+        if (_player.playing) await _player.togglePlay();
+        break;
+      case 'skip_next':
+        await _player.skipNext();
+        break;
+      case 'skip_previous':
+        await _player.skipPrevious();
+        break;
+      case 'seek':
+        if (position != null) await _player.seek(position);
+        break;
+    }
+    _rebuildHostQueueFromPlayer();
+    _publishHostState(includePlayback: true);
   }
 
   // ---------------------------------------------------------------------------
@@ -224,6 +339,10 @@ class JamController extends ChangeNotifier {
   Future<void> startHostSession({
     JamMode mode = JamMode.partySpeaker,
     bool allowGuestControls = true,
+    bool allowGuestQueueManage = true,
+    bool isPublic = true,
+    int maxParticipants = 0,
+    String? initialPlaylistId,
     String? customName,
   }) async {
     await leaveOrEndSession();
@@ -245,6 +364,7 @@ class JamController extends ChangeNotifier {
     );
 
     _hostJamQueue.clear();
+    _trackAddedBy.clear();
     _currentTrackAddedBy = _localParticipant;
 
     await _hostService.start(
@@ -253,15 +373,18 @@ class JamController extends ChangeNotifier {
       hostName: hostName,
       mode: mode,
       allowGuestControls: allowGuestControls,
+      allowGuestQueueManage: allowGuestQueueManage,
+      isPublic: isPublic,
+      maxParticipants: maxParticipants,
+      initialPlaylistId: initialPlaylistId,
     );
 
     _role = JamRole.host;
+    _rebuildHostQueueFromPlayer();
+    _onPlayerChangedAsHost();
     _syncHostState();
 
-    // Publicar la sesión en el servidor Navidrome para oyentes remotos
-    if (_session != null) {
-      _navidrome.publishServerJam(_session!);
-    }
+    _publishToNavidromeIfPublic();
 
     // Suscribirse a cambios en PlayerController
     _player.addListener(_onPlayerChangedAsHost);
@@ -271,6 +394,11 @@ class JamController extends ChangeNotifier {
       if (_role == JamRole.host && _hostService.isRunning) {
         _syncHostPlayback();
       }
+    });
+
+    // El anuncio remoto expira, por lo que se renueva mientras el host exista.
+    _hostPublishTimer = Timer.periodic(const Duration(minutes: 1), (_) {
+      _publishToNavidromeIfPublic();
     });
 
     notifyListeners();
@@ -286,16 +414,25 @@ class JamController extends ChangeNotifier {
       albumArtUrl: curTrack?.albumArtUrl,
     );
 
+    _rebuildHostQueueFromPlayer();
     _syncHostState();
+    if (_session != null) _hostService.broadcastSessionState(_session!);
+    _syncHostPlayback();
+    _publishToNavidromeIfPublic();
+    notifyListeners();
   }
 
   void _syncHostState() {
     final curTrack = _player.currentTrack;
+    final allIps = _hostService.allLocalIps;
+    final hostIp = _hostService.hostIp ?? '';
+    final fallbackIp =
+        allIps.length > 1 ? allIps.firstWhere((ip) => ip != hostIp) : null;
     _session = JamSessionState(
       sessionId: _hostService.sessionId ?? '',
       pinCode: _hostService.pinCode?.value ?? '',
       hostName: _localParticipant?.name ?? 'Host',
-      hostIp: _hostService.hostIp ?? '',
+      hostIp: hostIp,
       port: _hostService.port,
       mode: _hostService.mode,
       currentTrack: curTrack,
@@ -306,6 +443,12 @@ class JamController extends ChangeNotifier {
       queue: List.of(_hostJamQueue),
       participants: [_localParticipant!, ..._hostService.participants],
       allowGuestControls: _hostService.allowGuestControls,
+      allowGuestQueueManage: _hostService.allowGuestQueueManage,
+      remoteHost: fallbackIp,
+      remotePort: fallbackIp != null ? _hostService.port : null,
+      isPublic: _hostService.isPublic,
+      maxParticipants: _hostService.maxParticipants,
+      initialPlaylistId: _hostService.initialPlaylistId,
     );
   }
 
@@ -319,6 +462,11 @@ class JamController extends ChangeNotifier {
     );
   }
 
+  void _publishToNavidromeIfPublic() {
+    if (!isHost || _session == null || !_session!.isPublic) return;
+    unawaited(_navidrome.publishServerJam(_session!));
+  }
+
   // ---------------------------------------------------------------------------
   // Acciones de Invitado (Guest)
   // ---------------------------------------------------------------------------
@@ -329,24 +477,68 @@ class JamController extends ChangeNotifier {
     required String pin,
     String? customName,
     int? customColor,
+    String? fallbackHost,
+    int? fallbackPort,
   }) async {
     await leaveOrEndSession();
+    lastJoinError = null;
+
+    String normalizedPin;
+    try {
+      normalizedPin = JamCode(pin).value;
+    } on ArgumentError {
+      lastJoinError = 'PIN inválido: debe tener 6 caracteres.';
+      return false;
+    }
 
     final name = customName?.trim().isNotEmpty == true
         ? customName!.trim()
         : _navidrome.username ?? _getDefaultDeviceName();
     final color = customColor ?? 0xFF10B981; // Neon Emerald
 
-    final success = await _guestService.connect(
-      host: host,
-      port: port,
-      pin: pin,
+    final candidates = <(String, int)>[
+      (host, port),
+      if (fallbackHost != null && fallbackPort != null)
+        (fallbackHost, fallbackPort),
+      if (port != kJamHostPort) (host, kJamHostPort),
+    ];
+    final seen = <String>{};
+    var success = false;
+
+    // El callback de state_sync puede llegar antes de que connect() devuelva.
+    // Establecer el rol primero permite que el modo sincronizado cargue audio
+    // inmediatamente al aceptar la sesión.
+    _role = JamRole.guest;
+    _localParticipant = JamParticipant(
+      id: 'guest_local',
       name: name,
       avatarColorValue: color,
+      isHost: false,
+      joinedAt: DateTime.now(),
     );
 
+    for (final candidate in candidates) {
+      final candidateHost = candidate.$1.trim();
+      final candidatePort = candidate.$2;
+      if (candidateHost.isEmpty ||
+          candidatePort <= 0 ||
+          candidatePort > 65535 ||
+          !seen.add('$candidateHost:$candidatePort')) {
+        continue;
+      }
+      success = await _guestService.connect(
+        host: candidateHost,
+        port: candidatePort,
+        pin: normalizedPin,
+        name: name,
+        avatarColorValue: color,
+      );
+      if (success) break;
+      lastJoinError = _guestService.lastError;
+    }
+
     if (success) {
-      _role = JamRole.guest;
+      lastJoinError = null;
       _localParticipant = _guestService.localParticipant ??
           JamParticipant(
             id: 'guest_local',
@@ -360,10 +552,17 @@ class JamController extends ChangeNotifier {
       return true;
     } else {
       _role = JamRole.none;
+      _localParticipant = null;
+      _session = null;
+      lastJoinError ??= 'No se pudo conectar al host indicado.';
       notifyListeners();
       return false;
     }
   }
+
+  /// Prueba HTTP rápida contra `http://host:port/jam/status`.
+  Future<String> testHostReachable(String host, int port) =>
+      _guestService.testHostReachable(host, port);
 
   Future<void> scanRadar() async {
     _isScanningRadar = true;
@@ -382,12 +581,12 @@ class JamController extends ChangeNotifier {
       final Map<String, DiscoveredJamSession> map = {};
 
       for (final s in lanResults) {
-        final key = '${s.host}:${s.port}:${s.pin}';
+        final key = '${s.host}:${s.pin}';
         map[key] = s;
       }
 
       for (final s in serverResults) {
-        final key = '${s.host}:${s.port}:${s.pin}';
+        final key = '${s.host}:${s.pin}';
         if (!map.containsKey(key)) {
           map[key] = s;
         }
@@ -413,6 +612,8 @@ class JamController extends ChangeNotifier {
       pin: disc.pin,
       customName: customName,
       customColor: customColor,
+      fallbackHost: disc.remoteHost,
+      fallbackPort: disc.remotePort,
     );
   }
 
@@ -429,6 +630,8 @@ class JamController extends ChangeNotifier {
       pin: data.code,
       customName: customName,
       customColor: customColor,
+      fallbackHost: data.remoteHost,
+      fallbackPort: data.remotePort,
     );
   }
 
@@ -492,8 +695,7 @@ class JamController extends ChangeNotifier {
       // Compensación de latencia de red
       final now = DateTime.now().millisecondsSinceEpoch;
       final transitDelayMs = (now - serverTs).clamp(0, 5000);
-      final targetPositionMs =
-          positionMs + (isPlaying ? transitDelayMs : 0);
+      final targetPositionMs = positionMs + (isPlaying ? transitDelayMs : 0);
 
       final currentPosMs = _player.position.inMilliseconds;
       final drift = (targetPositionMs - currentPosMs).abs();
@@ -514,28 +716,11 @@ class JamController extends ChangeNotifier {
   // Acciones Compartidas (Cola y Reproducción)
   // ---------------------------------------------------------------------------
 
-  void addTrackToJam(Track track, {bool playNext = false}) {
+  Future<void> addTrackToJam(Track track, {bool playNext = false}) async {
     if (!inJam) return;
 
     if (isHost) {
-      final queueItem = JamQueueItem(
-        id: 'item_${DateTime.now().millisecondsSinceEpoch}_${_hostJamQueue.length}',
-        track: track,
-        addedBy: _localParticipant,
-        addedAt: DateTime.now(),
-      );
-
-      if (playNext) {
-        _hostJamQueue.insert(0, queueItem);
-        _player.addNextInQueue(track);
-      } else {
-        _hostJamQueue.add(queueItem);
-        _player.addToQueue(track);
-      }
-
-      _syncHostState();
-      _hostService.broadcastSessionState(_session!);
-      notifyListeners();
+      await _addTrackAsHost(track, _localParticipant, playNext: playNext);
     } else if (isGuest) {
       _guestService.addToQueue(track, playNext: playNext);
     }
@@ -545,14 +730,7 @@ class JamController extends ChangeNotifier {
     if (!inJam) return;
 
     if (isHost) {
-      final idx = _hostJamQueue.indexWhere((it) => it.id == queueItemId);
-      if (idx >= 0) {
-        _hostJamQueue.removeAt(idx);
-        _player.removeFromQueue(orderIndex ?? idx);
-        _syncHostState();
-        _hostService.broadcastSessionState(_session!);
-        notifyListeners();
-      }
+      _removeTrackAsHost(queueItemId);
     } else if (isGuest) {
       _guestService.removeFromQueue(queueItemId);
     }
@@ -562,43 +740,17 @@ class JamController extends ChangeNotifier {
     if (!inJam) return;
 
     if (isHost) {
-      if (oldIndex >= 0 &&
-          oldIndex < _hostJamQueue.length &&
-          newIndex >= 0 &&
-          newIndex < _hostJamQueue.length) {
-        final item = _hostJamQueue.removeAt(oldIndex);
-        _hostJamQueue.insert(newIndex, item);
-        _player.reorderQueue(oldIndex, newIndex);
-        _syncHostState();
-        _hostService.broadcastSessionState(_session!);
-        notifyListeners();
-      }
+      _reorderQueueAsHost(oldIndex, newIndex);
     } else if (isGuest) {
       _guestService.reorderQueue(oldIndex, newIndex);
     }
   }
 
-  void playbackAction(String action, {Duration? position}) async {
+  Future<void> playbackAction(String action, {Duration? position}) async {
     if (!inJam) return;
 
     if (isHost) {
-      switch (action) {
-        case 'toggle':
-        case 'play':
-        case 'pause':
-          await _player.togglePlay();
-          break;
-        case 'skip_next':
-          await _player.skipNext();
-          break;
-        case 'skip_previous':
-          await _player.skipPrevious();
-          break;
-        case 'seek':
-          if (position != null) await _player.seek(position);
-          break;
-      }
-      _syncHostPlayback();
+      await _applyPlaybackAction(action, position: position);
     } else if (isGuest) {
       _guestService.sendPlaybackControl(
         action,
@@ -607,38 +759,44 @@ class JamController extends ChangeNotifier {
     }
   }
 
-  void updateJamSettings({JamMode? mode, bool? allowGuestControls}) {
+  void updateJamSettings({
+    JamMode? mode,
+    bool? allowGuestControls,
+    bool? allowGuestQueueManage,
+    bool? isPublic,
+    int? maxParticipants,
+    String? initialPlaylistId,
+  }) {
     if (!isHost) return;
 
     _hostService.updateSettings(
       mode: mode,
       allowGuestControls: allowGuestControls,
+      allowGuestQueueManage: allowGuestQueueManage,
+      isPublic: isPublic,
+      maxParticipants: maxParticipants,
+      initialPlaylistId: initialPlaylistId,
     );
 
-    if (_session != null) {
-      _session = _session!.copyWith(
-        mode: mode ?? _session!.mode,
-        allowGuestControls: allowGuestControls ?? _session!.allowGuestControls,
-      );
-      _hostService.broadcastSessionState(_session!);
-      notifyListeners();
-    }
+    _syncHostState();
+    if (_session != null) _hostService.broadcastSessionState(_session!);
+    _publishToNavidromeIfPublic();
+    notifyListeners();
   }
 
   void kickParticipant(String participantId) {
     if (!isHost) return;
     _hostService.kickParticipant(participantId);
-    if (_session != null) {
-      final updated =
-          _session!.participants.where((p) => p.id != participantId).toList();
-      _session = _session!.copyWith(participants: updated);
-      notifyListeners();
-    }
+    _syncHostState();
+    if (_session != null) _hostService.broadcastSessionState(_session!);
+    notifyListeners();
   }
 
   Future<void> leaveOrEndSession() async {
     _hostSyncHeartbeat?.cancel();
     _hostSyncHeartbeat = null;
+    _hostPublishTimer?.cancel();
+    _hostPublishTimer = null;
 
     _player.removeListener(_onPlayerChangedAsHost);
 
@@ -652,6 +810,7 @@ class JamController extends ChangeNotifier {
     _session = null;
     _localParticipant = null;
     _hostJamQueue.clear();
+    _trackAddedBy.clear();
     _currentTrackAddedBy = null;
     notifyListeners();
   }
@@ -667,9 +826,8 @@ class JamController extends ChangeNotifier {
   @override
   void dispose() {
     _hostSyncHeartbeat?.cancel();
+    _hostPublishTimer?.cancel();
     _player.removeListener(_onPlayerChangedAsHost);
-    _playerStateSub?.cancel();
-    _playerPositionSub?.cancel();
     _hostService.stop();
     _guestService.disconnect();
     super.dispose();

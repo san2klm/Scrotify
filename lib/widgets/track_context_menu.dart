@@ -109,7 +109,9 @@ class TrackContextMenu extends StatelessWidget {
 
               // Acciones Jam (si hay Jam activo)
               if (jam.inJam) ...[
-                ListTile(
+                if (jam.isHost ||
+                    (jam.localParticipant?.canManageQueue ?? false))
+                  ListTile(
                   leading: Container(
                     padding: const EdgeInsets.all(6),
                     decoration: BoxDecoration(
@@ -146,7 +148,9 @@ class TrackContextMenu extends StatelessWidget {
                     );
                   },
                 ),
-                ListTile(
+                if (jam.isHost ||
+                    (jam.localParticipant?.canManageQueue ?? false))
+                  ListTile(
                   leading: Icon(Icons.playlist_play_rounded,
                       color: context.textSecondary),
                   title: Text(
@@ -168,7 +172,18 @@ class TrackContextMenu extends StatelessWidget {
                       ),
                     );
                   },
-                ),
+                  ),
+                if (jam.isGuest &&
+                    !(jam.localParticipant?.canManageQueue ?? false))
+                  ListTile(
+                    enabled: false,
+                    leading: Icon(Icons.lock_outline_rounded,
+                        color: context.textMuted),
+                    title: Text(
+                      'La cola está controlada por el anfitrión',
+                      style: TextStyle(color: context.textMuted, fontSize: 13),
+                    ),
+                  ),
               ] else ...[
                 ListTile(
                   leading: Icon(Icons.play_arrow_rounded,

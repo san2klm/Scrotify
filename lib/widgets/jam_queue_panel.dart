@@ -34,10 +34,14 @@ class JamQueuePanel extends StatelessWidget {
   Widget build(BuildContext context) {
     final player = context.watch<PlayerController>();
     final jam = context.watch<JamController>();
-    final currentTrack = player.currentTrack;
+    final currentTrack = jam.isGuest
+        ? jam.session?.currentTrack ?? player.currentTrack
+        : player.currentTrack;
 
     // Si estamos en Jam, usamos jam.jamQueue, sino usamos la cola de player.orderedQueue
     final inJam = jam.inJam;
+    final canManageJamQueue =
+        jam.isHost || (jam.localParticipant?.canManageQueue ?? false);
     final List<dynamic> queueItems = inJam
         ? jam.jamQueue
         : [
@@ -106,7 +110,7 @@ class JamQueuePanel extends StatelessWidget {
                   ],
                 ),
               ),
-              if (queueItems.isNotEmpty && (!inJam || jam.isHost))
+              if (queueItems.isNotEmpty && (!inJam || canManageJamQueue))
                 TextButton(
                   onPressed: () {
                     if (inJam) {
@@ -244,14 +248,15 @@ class JamQueuePanel extends StatelessWidget {
                     ? ReorderableListView.builder(
                         buildDefaultDragHandles: false,
                         itemCount: queueItems.length,
-                        onReorder: (oldIndex, newIndex) {
-                          if (oldIndex < newIndex) newIndex -= 1;
-                          jam.reorderJamQueue(oldIndex, newIndex);
-                        },
+                        onReorder: canManageJamQueue
+                            ? (oldIndex, newIndex) {
+                                if (oldIndex < newIndex) newIndex -= 1;
+                                jam.reorderJamQueue(oldIndex, newIndex);
+                              }
+                            : (_, __) {},
                         itemBuilder: (ctx, i) {
                           final item = queueItems[i] as JamQueueItem;
-                          final canRemove = jam.isHost ||
-                              item.addedBy?.id == jam.localParticipant?.id;
+                          final canRemove = canManageJamQueue;
 
                           return Container(
                             key: ValueKey(item.id),
@@ -265,14 +270,21 @@ class JamQueuePanel extends StatelessWidget {
                             ),
                             child: Row(
                               children: [
-                                ReorderableDragStartListener(
-                                  index: i,
-                                  child: Padding(
-                                    padding: EdgeInsets.only(right: 10),
-                                    child: Icon(Icons.drag_handle_rounded,
-                                        color: context.textMuted, size: 20),
+                                if (canManageJamQueue)
+                                  ReorderableDragStartListener(
+                                    index: i,
+                                    child: Padding(
+                                      padding: const EdgeInsets.only(right: 10),
+                                      child: Icon(Icons.drag_handle_rounded,
+                                          color: context.textMuted, size: 20),
+                                    ),
+                                  )
+                                else
+                                  Padding(
+                                    padding: const EdgeInsets.only(right: 10),
+                                    child: Icon(Icons.lock_outline_rounded,
+                                        color: context.textMuted, size: 17),
                                   ),
-                                ),
                                 CoverArt(
                                   url: item.track.albumArtUrl,
                                   artist: item.track.artist,

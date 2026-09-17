@@ -49,20 +49,23 @@ class _QrUnavailable extends StatelessWidget {
     return SizedBox(
       width: size,
       height: size,
-      child: const Center(
-        child: Padding(
-          padding: EdgeInsets.all(16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.qr_code_2_rounded, color: Colors.black54, size: 32),
-              SizedBox(height: 8),
-              Text(
-                'No se pudo generar el código QR',
-                textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.black87, fontSize: 12),
-              ),
-            ],
+      child: const ColoredBox(
+        color: Colors.white,
+        child: Center(
+          child: Padding(
+            padding: EdgeInsets.all(16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.qr_code_2_rounded, color: Colors.black54, size: 32),
+                SizedBox(height: 8),
+                Text(
+                  'No se pudo generar el código QR',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: Colors.black87, fontSize: 12),
+                ),
+              ],
+            ),
           ),
         ),
       ),

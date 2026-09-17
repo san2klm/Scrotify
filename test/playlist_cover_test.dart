@@ -15,6 +15,7 @@ void main() {
   late bool rejectCreate;
   late bool rejectUpdate;
   List<String>? addedIds;
+  List<String>? replacementIds;
   late bool uploaded;
   String? uploadBody;
   String? uploadAuth;
@@ -29,6 +30,7 @@ void main() {
     rejectCreate = false;
     rejectUpdate = false;
     addedIds = null;
+    replacementIds = null;
     uploaded = false;
     uploadBody = null;
     uploadAuth = null;
@@ -61,6 +63,9 @@ void main() {
         final data = <String, dynamic>{'status': 'ok'};
         if (path.endsWith('/updatePlaylist.view')) {
           addedIds = request.uri.queryParametersAll['songIdToAdd'];
+        }
+        if (path.endsWith('/createPlaylist.view')) {
+          replacementIds = request.uri.queryParametersAll['songId'];
         }
         if ((path.endsWith('/createPlaylist.view') && rejectCreate) ||
             (path.endsWith('/updatePlaylist.view') && rejectUpdate)) {
@@ -153,5 +158,15 @@ void main() {
       throwsA(predicate((e) => e.toString().contains('Permiso denegado'))),
     );
     expect(nav.playlistVersion, 0);
+  });
+
+  test('reordering a playlist replaces entries in the chosen order', () async {
+    await nav.reorderPlaylistTracks(
+      playlistId: 'playlist-1',
+      orderedSongIds: ['tercera', 'primera', 'segunda'],
+    );
+
+    expect(replacementIds, ['tercera', 'primera', 'segunda']);
+    expect(nav.playlistVersion, 1);
   });
 }

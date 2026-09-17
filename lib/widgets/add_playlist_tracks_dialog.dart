@@ -6,10 +6,12 @@ import 'package:provider/provider.dart';
 import '../services/navidrome_service.dart';
 import '../utils/app_colors.dart';
 
-Future<bool?> showAddPlaylistTracksDialog(
+/// Devuelve los temas guardados para que la vista que abrió el diálogo pueda
+/// incorporarlos inmediatamente, sin esperar una segunda petición al servidor.
+Future<List<Track>?> showAddPlaylistTracksDialog(
     BuildContext context, Playlist playlist) {
   final nav = context.read<NavidromeService>();
-  return showDialog<bool>(
+  return showDialog<List<Track>>(
     context: context,
     builder: (_) => _AddPlaylistTracksDialog(nav: nav, playlist: playlist),
   );
@@ -28,7 +30,7 @@ class _AddPlaylistTracksDialog extends StatefulWidget {
 
 class _AddPlaylistTracksDialogState extends State<_AddPlaylistTracksDialog> {
   final _controller = TextEditingController();
-  final _selected = <String>{};
+  final _selected = <String, Track>{};
   List<Track> _results = [];
   Timer? _debounce;
   int _searchVersion = 0;
@@ -77,9 +79,11 @@ class _AddPlaylistTracksDialogState extends State<_AddPlaylistTracksDialog> {
     try {
       await widget.nav.updatePlaylist(
         playlistId: widget.playlist.id,
-        songIdsToAdd: _selected.toList(),
+        songIdsToAdd: _selected.keys.toList(),
       );
-      if (mounted) Navigator.of(context).pop(true);
+      if (mounted) {
+        Navigator.of(context).pop(_selected.values.toList(growable: false));
+      }
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -129,7 +133,7 @@ class _AddPlaylistTracksDialogState extends State<_AddPlaylistTracksDialog> {
                             itemBuilder: (context, index) {
                               final track = _results[index];
                               return CheckboxListTile(
-                                value: _selected.contains(track.id),
+                                value: _selected.containsKey(track.id),
                                 title: Text(track.title,
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis),
@@ -140,7 +144,7 @@ class _AddPlaylistTracksDialogState extends State<_AddPlaylistTracksDialog> {
                                     ? null
                                     : (selected) => setState(() {
                                           if (selected == true) {
-                                            _selected.add(track.id);
+                                            _selected[track.id] = track;
                                           } else {
                                             _selected.remove(track.id);
                                           }
@@ -154,7 +158,7 @@ class _AddPlaylistTracksDialogState extends State<_AddPlaylistTracksDialog> {
         ),
         actions: [
           TextButton(
-            onPressed: _saving ? null : () => Navigator.of(context).pop(false),
+            onPressed: _saving ? null : () => Navigator.of(context).pop(),
             child: const Text('Cancelar'),
           ),
           FilledButton.icon(
