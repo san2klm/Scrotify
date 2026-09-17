@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart';
 import 'package:flutter/foundation.dart';
 import 'package:crypto/crypto.dart';
 import 'package:path_provider/path_provider.dart';
@@ -120,6 +121,18 @@ class Playlist {
       duration: (json['duration'] as num?)?.toInt() ?? 0,
     );
   }
+}
+
+/// La playlist ya existe aunque su portada no haya podido guardarse.
+class PlaylistCoverUploadException implements Exception {
+  final Playlist playlist;
+  final Object cause;
+
+  PlaylistCoverUploadException(this.playlist, this.cause);
+
+  @override
+  String toString() => 'La playlist se creó, pero la portada no se guardó. '
+      '${cause.toString().replaceFirst('Exception: ', '')}';
 }
 
 class SearchResults {
@@ -548,9 +561,8 @@ class NavidromeService with ChangeNotifier {
         .toList();
   }
 
-  /// Crea una playlist y, si el servidor Navidrome lo permite, le adjunta una
-  /// portada PNG, JPG o WebP. La portada usa multipart para no convertir la
-  /// imagen a texto ni guardarla localmente.
+  /// Crea primero la playlist mediante Subsonic y sube la portada por la API
+  /// nativa de Navidrome, que es la que admite imágenes de playlists.
   Future<Playlist?> createPlaylist(
     String name, {
     List<int>? coverBytes,
@@ -561,8 +573,8 @@ class NavidromeService with ChangeNotifier {
     if (cleanName.isEmpty) {
       throw ArgumentError.value(name, 'name', 'El nombre es obligatorio.');
     }
+    if (coverBytes != null) _playlistCoverType(coverBytes);
     final (salt, token) = _auth();
-
     final uri =
         Uri.parse('$_url/rest/createPlaylist.view').replace(queryParameters: {
       'u': _user!,
@@ -573,31 +585,102 @@ class NavidromeService with ChangeNotifier {
       'f': 'json',
       'name': cleanName,
     });
+    final data = _playlistResponse(await _client.get(uri));
+    final p = data['playlist'] as Map<String, dynamic>?;
+    if (p == null || (p['id'] as String? ?? '').isEmpty) {
+      throw Exception('El servidor no devolvió la playlist creada.');
+    }
+    final playlist = Playlist.fromJson(p,
+        coverArtUrl: _coverArtUrl(p['coverArt'], salt, token));
+    if (coverBytes == null) return playlist;
+    try {
+      return await uploadPlaylistCover(playlist.id, coverBytes,
+          fileName: coverFileName);
+    } catch (e) {
+      throw PlaylistCoverUploadException(playlist, e);
+    }
+  }
 
-    late http.Response response;
-    if (coverBytes == null) {
-      response = await _client.get(uri);
-    } else {
-      if (coverBytes.length > 10 * 1024 * 1024) {
-        throw ArgumentError('La portada supera el máximo de 10 MB.');
-      }
-      final request = http.MultipartRequest('POST', uri)
-        ..files.add(http.MultipartFile.fromBytes(
-          'coverArt',
-          coverBytes,
-          filename: coverFileName ?? 'playlist-cover.png',
-        ));
-      response = await http.Response.fromStream(await request.send());
+  Map<String, dynamic> _playlistResponse(http.Response response) {
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception('No se pudo actualizar o cargar la playlist '
+          '(HTTP ${response.statusCode}).');
+    }
+    final data = jsonDecode(response.body)['subsonic-response'];
+    if (data is! Map<String, dynamic>) {
+      throw Exception('El servidor devolvió una respuesta de playlist inválida.');
+    }
+    if (data['status'] != 'ok') {
+      throw Exception(data['error']?['message'] ??
+          'El servidor rechazó la operación de playlist.');
+    }
+    return data;
+  }
+
+  MediaType _playlistCoverType(List<int> bytes) {
+    if (bytes.length > 10 * 1024 * 1024) {
+      throw ArgumentError('La portada supera el máximo de 10 MB.');
+    }
+    bool startsWith(List<int> signature) => bytes.length >= signature.length &&
+        List.generate(signature.length, (i) => bytes[i] == signature[i])
+            .every((match) => match);
+    if (startsWith([137, 80, 78, 71, 13, 10, 26, 10])) {
+      return MediaType('image', 'png');
+    }
+    if (startsWith([255, 216, 255])) return MediaType('image', 'jpeg');
+    if (bytes.length >= 12 &&
+        startsWith([82, 73, 70, 70]) &&
+        String.fromCharCodes(bytes.sublist(8, 12)) == 'WEBP') {
+      return MediaType('image', 'webp');
+    }
+    throw ArgumentError('Selecciona una imagen PNG, JPG o WebP válida.');
+  }
+
+  Future<Playlist> uploadPlaylistCover(String playlistId, List<int> bytes,
+      {String? fileName}) async {
+    if (!_connected) throw Exception('Not connected');
+    final type = _playlistCoverType(bytes);
+    final login = await _client.post(
+      Uri.parse('$_url/auth/login'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'username': _user, 'password': _pass}),
+    );
+    if (login.statusCode != 200) {
+      throw Exception('No se pudo autorizar la carga de portada '
+          '(HTTP ${login.statusCode}).');
+    }
+    final nativeToken = jsonDecode(login.body)['token'];
+    if (nativeToken is! String || nativeToken.isEmpty) {
+      throw Exception('El servidor no permite cargar portadas desde esta app.');
+    }
+    // Mismo endpoint y campo que la interfaz web de Navidrome. Subsonic
+    // createPlaylist no admite el antiguo multipart "coverArt".
+    final request = http.MultipartRequest('POST',
+        Uri.parse('$_url/api/playlist/${Uri.encodeComponent(playlistId)}/image'))
+      ..headers['X-ND-Authorization'] = 'Bearer $nativeToken'
+      ..files.add(http.MultipartFile.fromBytes('image', bytes,
+          filename: fileName ?? 'playlist-cover.${type.subtype}',
+          contentType: type));
+    final response = await http.Response.fromStream(await _client.send(request));
+    if (response.statusCode == 404 || response.statusCode == 405) {
+      throw Exception('Esta versión de Navidrome no admite cargar portadas.');
+    }
+    if (response.statusCode == 403) {
+      throw Exception('El servidor no permite cambiar esta portada. '
+          'Comprueba los permisos de la playlist y de carga de imágenes.');
     }
     if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw Exception(
-          'No se pudo crear la playlist (HTTP ${response.statusCode}).');
+      throw Exception('No se pudo guardar la portada '
+          '(HTTP ${response.statusCode}).');
     }
-    final data = jsonDecode(response.body);
-    final p = data['subsonic-response']?['playlist'];
-    if (p == null) return null;
-    return Playlist.fromJson(p as Map<String, dynamic>,
-        coverArtUrl: _coverArtUrl(p['coverArt'], salt, token));
+    if (jsonDecode(response.body)['status'] != 'ok') {
+      throw Exception('El servidor no confirmó la carga de la portada.');
+    }
+    final updated = await getPlaylist(playlistId);
+    if (updated == null) {
+      throw Exception('No se pudo recargar la playlist después de la portada.');
+    }
+    return updated;
   }
 
   Future<void> updatePlaylist({
@@ -659,8 +742,8 @@ class NavidromeService with ChangeNotifier {
       'id': playlistId,
     });
     final response = await _client.get(uri);
-    final data = jsonDecode(response.body);
-    final p = data['subsonic-response']?['playlist'];
+    final data = _playlistResponse(response);
+    final p = data['playlist'];
     if (p == null) return null;
     return Playlist.fromJson(p as Map<String, dynamic>,
         coverArtUrl: _coverArtUrl(p['coverArt'], salt, token));

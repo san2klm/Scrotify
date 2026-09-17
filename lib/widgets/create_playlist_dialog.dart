@@ -32,6 +32,7 @@ class _CreatePlaylistDialogState extends State<_CreatePlaylistDialog> {
   Uint8List? coverBytes;
   String? coverName;
   String? error;
+  Playlist? createdPlaylist;
   bool saving = false;
   bool picking = false;
 
@@ -85,11 +86,15 @@ class _CreatePlaylistDialogState extends State<_CreatePlaylistDialog> {
       error = null;
     });
     try {
-      final playlist = await widget.nav.createPlaylist(
-        name,
-        coverBytes: coverBytes,
-        coverFileName: coverName,
-      );
+      final playlist = createdPlaylist == null
+          ? await widget.nav.createPlaylist(
+              name,
+              coverBytes: coverBytes,
+              coverFileName: coverName,
+            )
+          : await widget.nav.uploadPlaylistCover(
+              createdPlaylist!.id, coverBytes!,
+              fileName: coverName);
       if (!mounted) return;
       if (playlist == null) {
         throw Exception('El servidor no devolvió la playlist.');
@@ -97,6 +102,12 @@ class _CreatePlaylistDialogState extends State<_CreatePlaylistDialog> {
       Navigator.of(context).pop(playlist);
     } catch (e) {
       if (!mounted) return;
+      if (e is PlaylistCoverUploadException) {
+        createdPlaylist = e.playlist;
+        // Incluso si se cierra con Atrás o tocando fuera, la playlist creada
+        // debe aparecer en la biblioteca. Reintentar sólo subirá la portada.
+        widget.nav.bumpPlaylists();
+      }
       setState(() {
         saving = false;
         error = e.toString().replaceFirst('Exception: ', '');
@@ -138,7 +149,7 @@ class _CreatePlaylistDialogState extends State<_CreatePlaylistDialog> {
             children: [
               TextField(
                 controller: nameController,
-                enabled: !saving,
+                enabled: !saving && createdPlaylist == null,
                 autofocus: true,
                 textInputAction: TextInputAction.done,
                 onSubmitted: (_) {
@@ -223,8 +234,10 @@ class _CreatePlaylistDialogState extends State<_CreatePlaylistDialog> {
         ),
         actions: [
           TextButton(
-            onPressed: saving ? null : () => Navigator.of(context).pop(),
-            child: Text('Cancelar',
+            onPressed: saving
+                ? null
+                : () => Navigator.of(context).pop(createdPlaylist),
+            child: Text(createdPlaylist == null ? 'Cancelar' : 'Cerrar',
                 style: TextStyle(color: context.textSecondary)),
           ),
           FilledButton.icon(
@@ -236,7 +249,8 @@ class _CreatePlaylistDialogState extends State<_CreatePlaylistDialog> {
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
                 : const Icon(Icons.add_rounded, size: 18),
-            label: const Text('Crear'),
+            label:
+                Text(createdPlaylist == null ? 'Crear' : 'Reintentar portada'),
           ),
         ],
       ),
