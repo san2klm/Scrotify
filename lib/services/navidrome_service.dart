@@ -709,7 +709,8 @@ class NavidromeService with ChangeNotifier {
       buffer.write('&songIndexToRemove=$index');
     }
 
-    await _client.get(Uri.parse(buffer.toString()));
+    _playlistResponse(await _client.get(Uri.parse(buffer.toString())));
+    bumpPlaylists();
   }
 
   Future<void> deletePlaylist(String playlistId) async {
@@ -763,8 +764,8 @@ class NavidromeService with ChangeNotifier {
       'id': playlistId,
     });
     final response = await _client.get(uri);
-    final data = jsonDecode(response.body);
-    final entries = data['subsonic-response']?['playlist']?['entry'] as List?;
+    final data = _playlistResponse(response);
+    final entries = data['playlist']?['entry'] as List?;
     if (entries == null) return [];
     return entries
         .map((j) => Track.fromJson(j as Map<String, dynamic>,

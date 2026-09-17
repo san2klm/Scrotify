@@ -13,6 +13,8 @@ void main() {
   final calls = <String>[];
   late int uploadStatus;
   late bool rejectCreate;
+  late bool rejectUpdate;
+  List<String>? addedIds;
   late bool uploaded;
   String? uploadBody;
   String? uploadAuth;
@@ -25,6 +27,8 @@ void main() {
     calls.clear();
     uploadStatus = 200;
     rejectCreate = false;
+    rejectUpdate = false;
+    addedIds = null;
     uploaded = false;
     uploadBody = null;
     uploadAuth = null;
@@ -55,7 +59,11 @@ void main() {
         response.write(jsonEncode({'status': uploaded ? 'ok' : 'failed'}));
       } else {
         final data = <String, dynamic>{'status': 'ok'};
-        if (path.endsWith('/createPlaylist.view') && rejectCreate) {
+        if (path.endsWith('/updatePlaylist.view')) {
+          addedIds = request.uri.queryParametersAll['songIdToAdd'];
+        }
+        if ((path.endsWith('/createPlaylist.view') && rejectCreate) ||
+            (path.endsWith('/updatePlaylist.view') && rejectUpdate)) {
           data['status'] = 'failed';
           data['error'] = {'code': 50, 'message': 'Permiso denegado'};
         } else if (path.endsWith('/createPlaylist.view') ||
@@ -129,5 +137,21 @@ void main() {
     await expectLater(nav.createPlaylist('Mi playlist', coverBytes: [1, 2, 3]),
         throwsArgumentError);
     expect(calls, ['/music/rest/ping.view']);
+  });
+  test('adding tracks sends repeated IDs and refreshes playlists after success',
+      () async {
+    await nav
+        .updatePlaylist(playlistId: 'playlist-1', songIdsToAdd: ['a', 'b']);
+    expect(addedIds, ['a', 'b']);
+    expect(nav.playlistVersion, 1);
+  });
+
+  test('failed addition does not notify success', () async {
+    rejectUpdate = true;
+    await expectLater(
+      nav.updatePlaylist(playlistId: 'playlist-1', songIdsToAdd: ['a']),
+      throwsA(predicate((e) => e.toString().contains('Permiso denegado'))),
+    );
+    expect(nav.playlistVersion, 0);
   });
 }

@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../services/navidrome_service.dart';
 import '../services/player_controller.dart';
 import '../widgets/cover_art.dart';
+import '../widgets/add_playlist_tracks_dialog.dart';
 import '../widgets/persistent_player_bar.dart';
 import '../widgets/global_top_bar.dart';
 import '../utils/app_colors.dart';
@@ -21,20 +22,42 @@ class PlaylistDetailScreen extends StatefulWidget {
 
 class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
   late Future<List<Track>> _future;
+  late Playlist _playlist;
 
   @override
   void initState() {
     super.initState();
+    _playlist = widget.playlist;
     _future =
-        context.read<NavidromeService>().getPlaylistTracks(widget.playlist.id);
+        context.read<NavidromeService>().getPlaylistTracks(_playlist.id);
   }
+
+  Future<void> _addTracks() async {
+    final nav = context.read<NavidromeService>();
+    final added = await showAddPlaylistTracksDialog(context, _playlist);
+    if (added != true || !mounted) return;
+    setState(() => _future = nav.getPlaylistTracks(_playlist.id));
+    try {
+      final updated = await nav.getPlaylist(_playlist.id);
+      if (mounted && updated != null) setState(() => _playlist = updated);
+    } catch (_) {
+      // Las canciones ya están guardadas; conservar la cabecera si no se
+      // pudieron recargar sus metadatos en este momento.
+    }
+  }
+
+  Widget _addTracksButton() => FilledButton.icon(
+        onPressed: _addTracks,
+        icon: const Icon(Icons.playlist_add),
+        label: const Text('Añadir canciones'),
+      );
 
   /// Reproduce la playlist con el modo aleatorio activo (igual que la opción
   /// "Reproducir al azar" del menú contextual de la biblioteca).
   Future<void> _playShuffled(List<Track> tracks) async {
     if (tracks.isEmpty) return;
     final player = context.read<PlayerController>();
-    await player.playShuffledQueue(tracks, sourcePlaylist: widget.playlist);
+    await player.playShuffledQueue(tracks, sourcePlaylist: _playlist);
   }
 
   /// Confirma y borra la playlist en Navidrome. Al terminar vuelve a la
@@ -48,7 +71,7 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
         title: Text('¿Eliminar playlist?',
             style: TextStyle(color: context.textPrimary)),
         content: Text(
-          'Se borrará "${widget.playlist.name}" permanentemente.',
+          'Se borrará "${_playlist.name}" permanentemente.',
           style: TextStyle(color: context.textSecondary),
         ),
         actions: [
@@ -67,10 +90,10 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
     if (confirmed != true || !mounted) return;
 
     try {
-      if (nav.isPinnedPlaylist(widget.playlist.id)) {
-        nav.togglePinPlaylist(widget.playlist.id);
+      if (nav.isPinnedPlaylist(_playlist.id)) {
+        nav.togglePinPlaylist(_playlist.id);
       }
-      await nav.deletePlaylist(widget.playlist.id);
+      await nav.deletePlaylist(_playlist.id);
       nav.bumpPlaylists();
       if (!mounted) return;
       Navigator.of(context).pop();
@@ -117,14 +140,25 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
                       child: CircularProgressIndicator(
                           color: context.textPrimary));
                 }
+                if (snapshot.hasError) {
+                  return Center(child: Text('No se pudo cargar la playlist.',
+                      style: TextStyle(color: context.danger)));
+                }
                 final tracks = snapshot.data ?? <Track>[];
                 if (tracks.isEmpty) {
                   return Center(
-                    child: Text('Playlist vacía',
-                        style: TextStyle(color: context.textMuted)),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text('Playlist vacía',
+                            style: TextStyle(color: context.textMuted)),
+                        const SizedBox(height: 12),
+                        _addTracksButton(),
+                      ],
+                    ),
                   );
                 }
-                final pinned = nav.isPinnedPlaylist(widget.playlist.id);
+                final pinned = nav.isPinnedPlaylist(_playlist.id);
                 return Column(
                   children: [
                     Padding(
@@ -138,9 +172,9 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
                               color: context.accent2,
                               borderRadius: BorderRadius.circular(8),
                             ),
-                            child: widget.playlist.coverArtUrl != null
+                            child: _playlist.coverArtUrl != null
                                 ? Image.network(
-                                    widget.playlist.coverArtUrl!,
+                                    _playlist.coverArtUrl!,
                                     fit: BoxFit.cover,
                                   )
                                 : Icon(Icons.queue_music,
@@ -152,7 +186,7 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  widget.playlist.name,
+                                  _playlist.name,
                                   maxLines: 2,
                                   overflow: TextOverflow.ellipsis,
                                   style: TextStyle(
@@ -168,7 +202,7 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
                                 const SizedBox(height: 8),
                                 InkWell(
                                   onTap: () =>
-                                      nav.togglePinPlaylist(widget.playlist.id),
+                                      nav.togglePinPlaylist(_playlist.id),
                                   child: Row(
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
@@ -213,7 +247,7 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
                                     context.read<PlayerController>().playQueue(
                                           tracks,
                                           startIndex: 0,
-                                          sourcePlaylist: widget.playlist,
+                                          sourcePlaylist: _playlist,
                                         ),
                               ),
                               IconButton(
@@ -225,6 +259,13 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
                             ],
                           ),
                         ],
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: _addTracksButton(),
                       ),
                     ),
                     Divider(color: context.themeBorder),
@@ -275,7 +316,7 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
                                 context.read<PlayerController>().playQueue(
                                       tracks,
                                       startIndex: index,
-                                      sourcePlaylist: widget.playlist,
+                                      sourcePlaylist: _playlist,
                                     ),
                           );
                         },

@@ -556,18 +556,21 @@ class TrackContextMenu extends StatelessWidget {
                                     .active
                                     .bgElevated;
                                 Navigator.of(context).pop();
-                                await nav.updatePlaylist(
-                                  playlistId: p.id,
-                                  songIdsToAdd: [track.id],
-                                );
-                                if (context.mounted) {
-                                  messenger.showSnackBar(
-                                    SnackBar(
-                                      content: Text(
-                                          'Añadida a "${p.name}"'),
-                                      backgroundColor: bg,
-                                    ),
+                                String message;
+                                try {
+                                  await nav.updatePlaylist(
+                                    playlistId: p.id,
+                                    songIdsToAdd: [track.id],
                                   );
+                                  message = 'Añadida a "${p.name}"';
+                                } catch (e) {
+                                  message = e.toString().replaceFirst('Exception: ', '');
+                                }
+                                if (messenger.mounted) {
+                                  messenger.showSnackBar(SnackBar(
+                                    content: Text(message),
+                                    backgroundColor: bg,
+                                  ));
                                 }
                               },
                             );
