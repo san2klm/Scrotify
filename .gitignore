@@ -53,6 +53,9 @@ linux/*
 linux/runner/*
 !linux/runner/my_application.cc
 
+# Node.js dependencies
+**/node_modules/
+
 # Other
 .dart_tool/
 build/

@@ -125,7 +125,7 @@ class _KaraokeScreenState extends State<KaraokeScreen> {
                     if (track.albumArtUrl != null && track.albumArtUrl!.isNotEmpty) {
                       return track.albumArtUrl;
                     }
-                    if (track.artist != null || track.album != null || track.title != null) {
+                    if (track.artist.isNotEmpty || track.album.isNotEmpty || track.title.isNotEmpty) {
                       return CoverFallbackService.instance.findCover(
                         artist: track.artist,
                         album: track.album,

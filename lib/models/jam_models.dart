@@ -16,6 +16,9 @@ const String kJamDiscoveryMulticastGroup = '239.255.0.1';
 /// Identificador de protocolo para las tramas UDP de Jam.
 const String kJamDiscoveryAppTag = 'scrotify-jam';
 
+/// Endpoint WebSocket remoto por defecto para Scrotify Jam en la nube.
+const String kDefaultRemoteJamEndpoint = 'wss://jam.templo.cloud/';
+
 /// Rol del usuario actual en la sesión Jam.
 enum JamRole { none, host, guest }
 
