@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../services/navidrome_service.dart';
 import '../services/player_controller.dart';
+import '../widgets/interactive_artist_text.dart';
 import '../widgets/persistent_player_bar.dart';
 import '../widgets/global_top_bar.dart';
 import '../utils/app_colors.dart';
@@ -132,11 +133,7 @@ class _AlbumDetailScreenState extends State<AlbumDetailScreen> {
                                 overflow: TextOverflow.ellipsis,
                                 style: TextStyle(
                                     color: context.textPrimary, fontSize: 14)),
-                            subtitle: Text(track.artist,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                    color: context.textMuted, fontSize: 12)),
+                            subtitle: InteractiveArtistText(artistString: track.artist),
                             trailing: IconButton(
                               icon: Icon(
                                 starred

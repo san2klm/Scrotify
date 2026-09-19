@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../services/navidrome_service.dart';
 import '../utils/app_colors.dart';
 import 'cover_art.dart';
+import 'interactive_artist_text.dart';
 import 'track_context_menu.dart';
 
 /// Listado existente de Explorar, compartido por ambos diseños responsive.
@@ -89,11 +90,20 @@ class ExploreTracksView extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
             style: TextStyle(color: context.textPrimary, fontSize: 13.5),
           ),
-          subtitle: Text(
-            '${track.artist} · ${track.album}',
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(color: context.textMuted, fontSize: 11.5),
+          subtitle: Wrap(
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              InteractiveArtistText(
+                artistString: track.artist,
+                fontSize: 11.5,
+              ),
+              Text(
+                ' · ${track.album}',
+                style: TextStyle(color: context.textMuted, fontSize: 11.5),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
           ),
           trailing: Row(
             mainAxisSize: MainAxisSize.min,

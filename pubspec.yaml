@@ -33,6 +33,7 @@ dependencies:
   cryptography: ^2.9.0
   media_kit: ^1.2.0
   window_manager: ^0.5.2
+  uuid: ^4.6.0
 
 dev_dependencies:
   flutter_test:

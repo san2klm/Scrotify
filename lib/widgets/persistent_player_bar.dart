@@ -9,6 +9,7 @@ import '../screens/player_screen.dart';
 import 'cover_art.dart';
 import 'jam_dialog.dart';
 import 'jam_queue_panel.dart';
+import 'track_context_menu.dart';
 import '../utils/app_colors.dart';
 
 /// Panel de control persistente (barra inferior del reproductor).
@@ -57,12 +58,12 @@ class PersistentPlayerBar extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 16),
         child: Row(
           children: [
-            // ── Left: artwork + track info + favorite ──
+            // ── Left: drag + artwork + track info (title, artist, favorite) ──
+            Icon(Icons.drag_handle_rounded, color: context.textSecondary),
+            const SizedBox(width: 8),
             _artwork(context, track),
             const SizedBox(width: 12),
             _trackInfo(context, track),
-            const SizedBox(width: 12),
-            _favoriteButton(context, track),
             const SizedBox(width: 8),
 
             // ── Center: playback controls on top, progress bar below ──
@@ -126,7 +127,7 @@ class PersistentPlayerBar extends StatelessWidget {
               ),
             ),
 
-            // ── Right: Jam + Queue + volume + fullscreen ──
+            // ── Right: Jam + Queue + volume + fullscreen + three dots ──
             _jamButton(context),
             const SizedBox(width: 6),
             _queueButton(context),
@@ -134,6 +135,8 @@ class PersistentPlayerBar extends StatelessWidget {
             _VolumeBar(player),
             const SizedBox(width: 8),
             _openFullButton(context),
+            const SizedBox(width: 4),
+            _threeDotsMenu(context, track),
           ],
         ),
       ),
@@ -162,7 +165,7 @@ class PersistentPlayerBar extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 12),
               child: Row(
                 children: [
-                  // La zona completa (portada + nombre + corazón) abre el
+                  // La zona completa abre el
                   // reproductor en pantalla completa al tocarla.
                   Expanded(
                     child: InkWell(
@@ -170,16 +173,17 @@ class PersistentPlayerBar extends StatelessWidget {
                       borderRadius: BorderRadius.circular(8),
                       child: Row(
                         children: [
+                          Icon(Icons.drag_handle_rounded, color: context.textSecondary),
+                          const SizedBox(width: 8),
                           _artwork(context, track),
                           const SizedBox(width: 10),
                           Expanded(child: _trackInfo(context, track)),
-                          _favoriteButton(context, track, compact: true),
                         ],
                       ),
                     ),
                   ),
                   const SizedBox(width: 4),
-                  ..._mobileControls(context, player, jam, playing),
+                  ..._mobileControls(context, player, jam, playing, track),
                 ],
               ),
             ),
@@ -190,7 +194,7 @@ class PersistentPlayerBar extends StatelessWidget {
   }
 
   List<Widget> _mobileControls(
-      BuildContext context, PlayerController player, JamController jam, bool playing) {
+      BuildContext context, PlayerController player, JamController jam, bool playing, Track? track) {
     return [
       _compactControlIcon(
         context,
@@ -213,6 +217,7 @@ class PersistentPlayerBar extends StatelessWidget {
             color: context.textSecondary, size: 20),
         onPressed: () => JamQueuePanel.show(context),
       ),
+      _threeDotsMenu(context, track),
     ];
   }
 
@@ -313,13 +318,34 @@ class PersistentPlayerBar extends StatelessWidget {
             fontWeight: FontWeight.w600,
           ),
         ),
-        Text(
-          track?.artist ?? 'Selecciona algo para escuchar',
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: TextStyle(color: context.playerArtist, fontSize: 12),
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Flexible(
+              child: Text(
+                track?.artist ?? 'Selecciona algo para escuchar',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(color: context.playerArtist, fontSize: 12),
+              ),
+            ),
+            const SizedBox(width: 4),
+            _favoriteButton(context, track, compact: true),
+          ],
         ),
       ],
+    );
+  }
+
+  Widget _threeDotsMenu(BuildContext context, Track? track) {
+    if (track == null) return const SizedBox.shrink();
+    return IconButton(
+      visualDensity: compact ? VisualDensity.compact : null,
+      icon: Icon(Icons.more_vert_rounded, color: context.textSecondary, size: 20),
+      onPressed: () {
+        final player = context.read<PlayerController>();
+        TrackContextMenu.show(context, track, playlistId: player.sourcePlaylist?.id);
+      },
     );
   }
 

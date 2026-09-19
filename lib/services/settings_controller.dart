@@ -61,6 +61,7 @@ class SettingsController extends ChangeNotifier {
   double _initialVolume = 0.7;
   bool _gapless = false;
   Duration _crossfade = Duration.zero;
+  String? _installationId;
 
   // Red actual detectada. Si no se puede saber (sin NetworkManager, etc.) se
   // asume "casa" para no degradar la calidad sin motivo.

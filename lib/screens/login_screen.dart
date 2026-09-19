@@ -88,16 +88,16 @@ class _LoginScreenState extends State<LoginScreen> {
 
     if (isMobile) {
       return MobileLoginScreen(
-        initialUrl: _savedUrl ?? 'https://navidrome.templo.cloud',
-        initialUser: _savedUser ?? 'Proyecto',
-        initialPass: _savedPass ?? 'Proyecto123',
+        initialUrl: _savedUrl ?? '',
+        initialUser: _savedUser ?? '',
+        initialPass: _savedPass ?? '',
       );
     }
 
     return DesktopLoginScreen(
-      initialUrl: _savedUrl ?? 'https://navidrome.templo.cloud',
-      initialUser: _savedUser ?? 'Proyecto',
-      initialPass: _savedPass ?? 'Proyecto123',
+      initialUrl: _savedUrl ?? '',
+      initialUser: _savedUser ?? '',
+      initialPass: _savedPass ?? '',
     );
   }
 }

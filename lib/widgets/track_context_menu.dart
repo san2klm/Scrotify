@@ -2,21 +2,25 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../screens/karaoke_screen.dart';
+import '../screens/artist_screen.dart';
+import '../screens/album_detail_screen.dart';
 import '../services/jam_controller.dart';
 import '../services/navidrome_service.dart';
 import '../services/player_controller.dart';
 import '../services/theme_controller.dart';
 import 'cover_art.dart';
+import 'interactive_artist_text.dart';
+import 'server_activity_panel.dart';
 import '../utils/app_colors.dart';
 
 /// Menú contextual unificado para pistas/canciones en toda la aplicación.
 class TrackContextMenu extends StatelessWidget {
   final Track track;
+  final String? playlistId;
 
-  const TrackContextMenu({super.key, required this.track});
+  const TrackContextMenu({super.key, required this.track, this.playlistId});
 
-  static void show(BuildContext context, Track track) {
-    // NOTA: no usar context.bgApp aquí (usa watch y revienta fuera del build).
+  static void show(BuildContext context, Track track, {String? playlistId}) {
     final theme = context.read<ThemeController>().active;
     showModalBottomSheet<void>(
       context: context,
@@ -25,7 +29,7 @@ class TrackContextMenu extends StatelessWidget {
         borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
         side: BorderSide(color: theme.bgElevated, width: 1.2),
       ),
-      builder: (ctx) => TrackContextMenu(track: track),
+      builder: (ctx) => TrackContextMenu(track: track, playlistId: playlistId),
     );
   }
 
@@ -84,12 +88,20 @@ class TrackContextMenu extends StatelessWidget {
                           ),
                         ),
                         const SizedBox(height: 2),
-                        Text(
-                          '${track.artist} · ${track.album}',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                              color: context.textMuted, fontSize: 12),
+                        Wrap(
+                          children: [
+                            InteractiveArtistText(
+                              artistString: track.artist,
+                              fontSize: 12,
+                            ),
+                            Text(
+                              ' · ${track.album}',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                  color: context.textMuted, fontSize: 12),
+                            ),
+                          ],
                         ),
                       ],
                     ),
@@ -246,7 +258,7 @@ class TrackContextMenu extends StatelessWidget {
                 ),
               ],
 
-              // Añadir a Playlist
+              // 1. Añadir a Playlist
               ListTile(
                 leading: Icon(Icons.playlist_add_rounded,
                     color: context.textSecondary),
@@ -254,51 +266,111 @@ class TrackContextMenu extends StatelessWidget {
                   'Añadir a una playlist',
                   style: TextStyle(color: context.textPrimary, fontSize: 14),
                 ),
+                trailing: Icon(Icons.chevron_right_rounded,
+                    color: context.textMuted, size: 20),
                 onTap: () {
                   Navigator.of(context).pop();
                   _showAddToPlaylistSheet(context, nav, track);
                 },
               ),
 
-              Divider(color: context.bgElevated, height: 1),
+              // 2. Eliminar de esta playlist
+              if (playlistId != null && playlistId!.isNotEmpty)
+                ListTile(
+                  leading: Icon(Icons.playlist_remove_rounded,
+                      color: context.textSecondary),
+                  title: Text(
+                    'Eliminar de esta playlist',
+                    style: TextStyle(color: context.textPrimary, fontSize: 14),
+                  ),
+                  onTap: () async {
+                    final messenger = ScaffoldMessenger.of(context);
+                    final bg =
+                        context.read<ThemeController>().active.bgElevated;
+                    Navigator.of(context).pop();
+                    try {
+                      // Obtener las pistas de la playlist y encontrar el índice
+                      final tracks =
+                          await nav.getPlaylistTracks(playlistId!);
+                      final index =
+                          tracks.indexWhere((t) => t.id == track.id);
+                      if (index >= 0) {
+                        await nav.updatePlaylist(
+                          playlistId: playlistId!,
+                          songIndexesToRemove: [index],
+                        );
+                        if (messenger.mounted) {
+                          messenger.showSnackBar(SnackBar(
+                            content: Text(
+                                '"${track.title}" eliminada de la playlist'),
+                            backgroundColor: bg,
+                          ));
+                        }
+                      }
+                    } catch (e) {
+                      if (messenger.mounted) {
+                        messenger.showSnackBar(SnackBar(
+                          content: Text(e
+                              .toString()
+                              .replaceFirst('Exception: ', '')),
+                          backgroundColor: bg,
+                        ));
+                      }
+                    }
+                  },
+                ),
 
-              // Modo Karaoke
+              // 3. Guardar en Tus me gusta
               ListTile(
-                leading: Container(
-                  padding: const EdgeInsets.all(6),
-                  decoration: BoxDecoration(
-                    color: Colors.transparent,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Icon(
-                    Icons.mic_external_on_rounded,
-                    color: context.accent,
-                    size: 22,
-                  ),
+                leading: Icon(
+                  isStarred ? Icons.favorite : Icons.favorite_border,
+                  color: isStarred ? context.accent : context.textSecondary,
                 ),
                 title: Text(
-                  'Modo Karaoke',
+                  isStarred
+                      ? 'Quitar de Tus me gusta'
+                      : 'Guardar en Tus me gusta',
                   style: TextStyle(
-                    color: context.textPrimary,
+                    color: isStarred ? context.accent : context.textPrimary,
                     fontSize: 14,
-                    fontWeight: FontWeight.normal,
                   ),
                 ),
-                subtitle: Text(
-                  PlayerController.isVocalReductionSupported
-                      ? 'Letra grande y reducción de voz'
-                      : 'Letra sincronizada a pantalla completa',
-                  style: TextStyle(color: context.textMuted, fontSize: 11),
-                ),
-                trailing: Icon(Icons.chevron_right_rounded,
-                    color: context.textMuted, size: 20),
                 onTap: () {
+                  nav.toggleStar(track);
                   Navigator.of(context).pop();
-                  KaraokeScreen.open(context);
                 },
               ),
 
-              // Apagado automático (sleep timer)
+              // 4. Añadir a la fila
+              if (!jam.inJam)
+                ListTile(
+                  leading: Icon(Icons.queue_music_rounded,
+                      color: context.textSecondary),
+                  title: Text(
+                    'Añadir a la fila',
+                    style:
+                        TextStyle(color: context.textPrimary, fontSize: 14),
+                  ),
+                  onTap: () {
+                    final messenger = ScaffoldMessenger.of(context);
+                    final bg =
+                        context.read<ThemeController>().active.bgElevated;
+                    Navigator.of(context).pop();
+                    player.addToQueue(track);
+                    messenger.showSnackBar(
+                      SnackBar(
+                        content:
+                            Text('"${track.title}" añadida a la cola'),
+                        duration: const Duration(seconds: 2),
+                        backgroundColor: bg,
+                      ),
+                    );
+                  },
+                ),
+
+              Divider(color: context.bgElevated, height: 1),
+
+              // 5. Apagado automático (sleep timer)
               ListTile(
                 leading: Container(
                   padding: const EdgeInsets.all(6),
@@ -340,6 +412,117 @@ class TrackContextMenu extends StatelessWidget {
                 onTap: () {
                   Navigator.of(context).pop();
                   _showSleepTimerSheet(context);
+                },
+              ),
+
+              // Modo Karaoke
+              ListTile(
+                leading: Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: Colors.transparent,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(
+                    Icons.mic_external_on_rounded,
+                    color: context.accent,
+                    size: 22,
+                  ),
+                ),
+                title: Text(
+                  'Modo Karaoke',
+                  style: TextStyle(
+                    color: context.textPrimary,
+                    fontSize: 14,
+                    fontWeight: FontWeight.normal,
+                  ),
+                ),
+                subtitle: Text(
+                  PlayerController.isVocalReductionSupported
+                      ? 'Letra grande y reducción de voz'
+                      : 'Letra sincronizada a pantalla completa',
+                  style: TextStyle(color: context.textMuted, fontSize: 11),
+                ),
+                trailing: Icon(Icons.chevron_right_rounded,
+                    color: context.textMuted, size: 20),
+                onTap: () {
+                  Navigator.of(context).pop();
+                  KaraokeScreen.open(context);
+                },
+              ),
+
+              // 6. Ir a radio de la canción
+              ListTile(
+                leading: Icon(Icons.radio_rounded,
+                    color: context.textSecondary),
+                title: Text(
+                  'Ir a radio de la canción',
+                  style: TextStyle(color: context.textPrimary, fontSize: 14),
+                ),
+                onTap: () {
+                  Navigator.of(context).pop();
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                    content: Text('Ir a radio de la canción (Próximamente)'),
+                    backgroundColor: context.read<ThemeController>().active.bgElevated,
+                  ));
+                },
+              ),
+
+              Divider(color: context.bgElevated, height: 1),
+
+              // 7. Ir al artista
+              ListTile(
+                leading: Icon(Icons.person_rounded,
+                    color: context.textSecondary),
+                title: Text(
+                  'Ir al artista',
+                  style: TextStyle(color: context.textPrimary, fontSize: 14),
+                ),
+                subtitle: Text(
+                  track.artist,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(color: context.textMuted, fontSize: 11),
+                ),
+                onTap: () async {
+                  Navigator.of(context).pop();
+                  await _navigateToArtist(context, nav, track);
+                },
+              ),
+
+              // 8. Ir al álbum
+              ListTile(
+                leading: Icon(Icons.album_rounded,
+                    color: context.textSecondary),
+                title: Text(
+                  'Ir al álbum',
+                  style: TextStyle(color: context.textPrimary, fontSize: 14),
+                ),
+                subtitle: Text(
+                  track.album,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(color: context.textMuted, fontSize: 11),
+                ),
+                onTap: () async {
+                  Navigator.of(context).pop();
+                  await _navigateToAlbum(context, nav, track);
+                },
+              ),
+
+              Divider(color: context.bgElevated, height: 1),
+
+              // 9. Compartir con la comunidad
+              ListTile(
+                leading: Icon(Icons.people_outline_rounded,
+                    color: context.textSecondary),
+                title: Text(
+                  'Compartir con la comunidad',
+                  style: TextStyle(color: context.textPrimary, fontSize: 14),
+                ),
+                onTap: () {
+                  Navigator.of(context).pop();
+                  ServerActivityPanel.show(context);
                 },
               ),
             ],
@@ -600,5 +783,64 @@ class TrackContextMenu extends StatelessWidget {
         );
       },
     );
+  }
+
+  Future<void> _navigateToArtist(BuildContext context, NavidromeService nav, Track track) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final bg = context.read<ThemeController>().active.bgElevated;
+
+    try {
+      final artists = await nav.getArtists();
+      Artist? targetArtist;
+      for (final a in artists) {
+        if (a['id'] == track.artistId ||
+            a['name'].toString().toLowerCase() == track.artist.toLowerCase()) {
+          targetArtist = Artist.fromJson(a as Map<String, dynamic>,
+              coverArtUrl: a['coverArt'] as String?);
+          break;
+        }
+      }
+
+      if (targetArtist != null && context.mounted) {
+        Navigator.push(context,
+            MaterialPageRoute(builder: (_) => ArtistScreen(artist: targetArtist!)));
+      } else {
+        messenger.showSnackBar(SnackBar(
+          content: const Text('No se pudo encontrar al artista principal.'),
+          backgroundColor: bg,
+        ));
+      }
+    } catch (_) {
+      messenger.showSnackBar(SnackBar(
+        content: const Text('Error al buscar al artista.'),
+        backgroundColor: bg,
+      ));
+    }
+  }
+
+  Future<void> _navigateToAlbum(BuildContext context, NavidromeService nav, Track track) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final bg = context.read<ThemeController>().active.bgElevated;
+
+    if (track.albumId == null || track.albumId!.isEmpty) {
+      messenger.showSnackBar(SnackBar(
+        content: const Text('Esta canción no tiene un álbum asociado.'),
+        backgroundColor: bg,
+      ));
+      return;
+    }
+
+    try {
+      final album = await nav.getAlbumInfo(track.albumId!);
+      if (context.mounted) {
+        Navigator.push(context,
+            MaterialPageRoute(builder: (_) => AlbumDetailScreen(album: album)));
+      }
+    } catch (_) {
+      messenger.showSnackBar(SnackBar(
+        content: const Text('No se pudo encontrar el álbum.'),
+        backgroundColor: bg,
+      ));
+    }
   }
 }

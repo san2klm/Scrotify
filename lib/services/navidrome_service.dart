@@ -18,6 +18,8 @@ class Track {
   final String duration;
   final String? albumArtUrl;
   final int playCount;
+  final String? artistId;
+  final String? albumId;
 
   Track({
     required this.id,
@@ -27,6 +29,8 @@ class Track {
     required this.duration,
     this.albumArtUrl,
     this.playCount = 0,
+    this.artistId,
+    this.albumId,
   });
 
   factory Track.fromJson(Map<String, dynamic> json, {String? albumArtUrl}) {
@@ -45,6 +49,8 @@ class Track {
       duration: duration,
       albumArtUrl: coverArt,
       playCount: (json['playCount'] as num?)?.toInt() ?? 0,
+      artistId: json['artistId'] as String?,
+      albumId: json['albumId'] as String?,
     );
   }
 }
@@ -103,6 +109,8 @@ class Playlist {
   final String? coverArtUrl;
   final int songCount;
   final int duration;
+  final String? owner;
+  final bool public;
 
   Playlist({
     required this.id,
@@ -110,6 +118,8 @@ class Playlist {
     this.coverArtUrl,
     required this.songCount,
     required this.duration,
+    this.owner,
+    this.public = false,
   });
 
   factory Playlist.fromJson(Map<String, dynamic> json, {String? coverArtUrl}) {
@@ -119,6 +129,8 @@ class Playlist {
       coverArtUrl: coverArtUrl ?? json['coverArt'] as String?,
       songCount: (json['songCount'] as num?)?.toInt() ?? 0,
       duration: (json['duration'] as num?)?.toInt() ?? 0,
+      owner: json['owner'] as String?,
+      public: json['public'] == true,
     );
   }
 }
@@ -554,12 +566,21 @@ class NavidromeService with ChangeNotifier {
     final response = await _client.get(uri);
     final data = jsonDecode(response.body);
     final list = data['subsonic-response']?['playlists']?['playlist'] as List?;
+
     if (list == null) return [];
 
-    return list
+    final playlists = list
         .map((j) => Playlist.fromJson(j as Map<String, dynamic>,
             coverArtUrl: _coverArtUrl(j['coverArt'], salt, token)))
         .toList();
+
+    // Filtramos las playlists para mostrar solo las creadas por el usuario actual.
+    // Si 'owner' no viene en la API (es nulo), por precaución la mostramos.
+    final currentUser = _user?.toLowerCase() ?? '';
+    return playlists.where((p) {
+      if (p.owner == null || p.owner!.isEmpty) return true;
+      return p.owner?.toLowerCase() == currentUser;
+    }).toList();
   }
 
   /// Crea primero la playlist mediante Subsonic y sube la portada por la API

@@ -136,6 +136,7 @@ class PlayerController extends ChangeNotifier {
   // como entradas independientes para que una reproducción de playlist no
   // cuente también como reproducción individual de cada canción.
   final Map<String, MostPlayedItem> _mostPlayedByKey = {};
+  Playlist? get sourcePlaylist => _sourcePlaylist;
   Playlist? _sourcePlaylist;
   String? _mostPlayedSession;
   int _mostPlayedLoadGeneration = 0;
@@ -506,6 +507,8 @@ class PlayerController extends ChangeNotifier {
         'duration': t.duration,
         'albumArtUrl': t.albumArtUrl,
         'playCount': t.playCount,
+        if (t.artistId != null) 'artistId': t.artistId,
+        if (t.albumId != null) 'albumId': t.albumId,
       };
 
   static Track _trackFromJson(Map<String, dynamic> j) => Track(
@@ -516,6 +519,8 @@ class PlayerController extends ChangeNotifier {
         duration: (j['duration'] as String?) ?? '',
         albumArtUrl: j['albumArtUrl'] as String?,
         playCount: (j['playCount'] as num?)?.toInt() ?? 0,
+        artistId: j['artistId'] as String?,
+        albumId: j['albumId'] as String?,
       );
 
   // ---------------------------------------------------------------------------

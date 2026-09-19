@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../services/navidrome_service.dart';
+import 'interactive_artist_text.dart';
 import '../utils/app_colors.dart';
 
 /// Devuelve los temas guardados para que la vista que abrió el diálogo pueda
@@ -137,9 +138,7 @@ class _AddPlaylistTracksDialogState extends State<_AddPlaylistTracksDialog> {
                                 title: Text(track.title,
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis),
-                                subtitle: Text(track.artist,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis),
+                                subtitle: InteractiveArtistText(artistString: track.artist),
                                 onChanged: _saving
                                     ? null
                                     : (selected) => setState(() {

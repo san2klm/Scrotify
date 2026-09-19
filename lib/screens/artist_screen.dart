@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import "../widgets/server_activity_panel.dart";
 import '../services/navidrome_service.dart';
 import '../services/player_controller.dart';
 import '../widgets/cover_art.dart';
@@ -116,7 +117,31 @@ class _ArtistScreenState extends State<ArtistScreen> {
                       ),
                     ),
                     const SizedBox(height: 16),
-                    _buildPlayButton(),
+                    // Actions row: Play | Follow | Menu
+                    Row(
+                      children: [
+                        _buildPlayButton(),
+                        const Spacer(),
+                        OutlinedButton(
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: context.textPrimary,
+                            side: BorderSide(color: context.textSecondary),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                          ),
+                          onPressed: () {
+                            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                              content: const Text('Comenzaste a seguir al artista'),
+                              backgroundColor: context.bgElevated,
+                            ));
+                          },
+                          child: const Text('Seguir'),
+                        ),
+                        const SizedBox(width: 8),
+                        _buildArtistMenu(),
+                      ],
+                    ),
                   ],
                 ),
               ),
@@ -124,6 +149,46 @@ class _ArtistScreenState extends State<ArtistScreen> {
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildArtistMenu() {
+    return PopupMenuButton<String>(
+      icon: Icon(Icons.more_vert_rounded, color: context.textSecondary),
+      color: context.bgApp,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: context.bgElevated),
+      ),
+      onSelected: (value) {
+        if (value == 'follow') {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: const Text('Dejaste de seguir al artista'),
+            backgroundColor: context.bgElevated,
+          ));
+        } else if (value == 'exclude') {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: const Text('No se reproducirá a este artista'),
+            backgroundColor: context.bgElevated,
+          ));
+        } else if (value == 'community') {
+          ServerActivityPanel.show(context);
+        }
+      },
+      itemBuilder: (context) => [
+        PopupMenuItem(
+          value: 'follow',
+          child: Text('Dejar de seguir', style: TextStyle(color: context.textPrimary)),
+        ),
+        PopupMenuItem(
+          value: 'exclude',
+          child: Text('No reproducir a este artista', style: TextStyle(color: context.textPrimary)),
+        ),
+        PopupMenuItem(
+          value: 'community',
+          child: Text('Compartir con la comunidad', style: TextStyle(color: context.textPrimary)),
+        ),
+      ],
     );
   }
 
