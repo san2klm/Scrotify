@@ -1,7 +1,21 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../services/navidrome_service.dart';
-import 'player_screen.dart';
+import '../services/player_controller.dart';
+import '../widgets/persistent_player_bar.dart';
+import '../widgets/cover_art.dart';
+import '../widgets/create_playlist_dialog.dart';
+import '../widgets/global_top_bar.dart';
+import '../widgets/explore_tracks_view.dart';
+import '../services/home_navigation_controller.dart';
+import '../widgets/track_context_menu.dart';
+import 'liked_songs_screen.dart';
+import 'playlist_detail_screen.dart';
+import 'album_detail_screen.dart';
+import 'artist_screen.dart';
+import '../utils/app_colors.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -10,46 +24,316 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-enum _LibraryFilter { playlists, podcasts, albums, artists }
-
 class _HomeScreenState extends State<HomeScreen> {
   late Future<List<Track>> _futureTracks;
-  _LibraryFilter _filter = _LibraryFilter.playlists;
+  late Future<List<Playlist>> _futurePlaylists;
   bool _libraryCollapsed = false;
+  int _coverArtVersion = -1;
+  int _playlistVersion = -1;
+  int _activeNavIndex = 0; // 0 = Inicio, 1 = Explorar
+
+  final TextEditingController _searchController = TextEditingController();
+  SearchResults? _searchResults;
+  bool _searching = false;
+  int _searchVersion = 0;
+  HomeNavigationController? _homeNavigation;
+  Timer? _serverPlayCountTimer;
+  bool _refreshingPlayCounts = false;
+  final ScrollController _artistsScrollController = ScrollController();
+  int _explorePageSize = 25;
+  int _explorePage = 0;
 
   @override
   void initState() {
     super.initState();
-    _futureTracks = context.read<NavidromeService>().getTracks();
+    _homeNavigation = context.read<HomeNavigationController?>();
+    _homeNavigation?.addListener(_openHomeDestination);
+    _futureTracks = _loadTracks();
+    _futurePlaylists = context.read<NavidromeService>().getPlaylists();
+    _serverPlayCountTimer = Timer.periodic(
+      const Duration(seconds: 30),
+      (_) => _refreshServerPlayCounts(),
+    );
+  }
+
+  Future<List<Track>> _loadTracks() async {
+    final tracks = await context.read<NavidromeService>().getTracks();
+    if (mounted) {
+      context.read<PlayerController>().syncServerPlayCounts(tracks);
+    }
+    return tracks;
+  }
+
+  Future<void> _refreshServerPlayCounts() async {
+    if (_refreshingPlayCounts || !mounted) return;
+    _refreshingPlayCounts = true;
+    try {
+      final tracks = await context.read<NavidromeService>().getTracks();
+      if (mounted) {
+        context.read<PlayerController>().syncServerPlayCounts(tracks);
+      }
+    } catch (_) {
+      // La siguiente actualización periódica reintentará si no hay conexión.
+    } finally {
+      _refreshingPlayCounts = false;
+    }
+  }
+
+  void _openHomeDestination() {
+    final request = _homeNavigation!.value!;
+    _searchController.text = request.query;
+    setState(() => _activeNavIndex = request.explore ? 1 : 0);
+    _runSearch(request.query);
+  }
+
+  Future<void> _runSearch(String query) async {
+    final version = ++_searchVersion;
+    if (query.trim().isEmpty) {
+      setState(() {
+        _searchResults = null;
+        _searching = false;
+      });
+      return;
+    }
+    setState(() => _searching = true);
+    try {
+      final results =
+          await context.read<NavidromeService>().search(query.trim());
+      if (mounted && version == _searchVersion) {
+        setState(() {
+          _searchResults = results;
+          _searching = false;
+        });
+      }
+    } catch (_) {
+      if (mounted && version == _searchVersion) {
+        setState(() {
+          _searchResults = null;
+          _searching = false;
+        });
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _homeNavigation?.removeListener(_openHomeDestination);
+    _serverPlayCountTimer?.cancel();
+    _searchController.dispose();
+    _artistsScrollController.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    final nav = context.watch<NavidromeService>();
+    final version = nav.coverArtVersion;
+    if (version != _coverArtVersion && _coverArtVersion >= 0) {
+      _coverArtVersion = version;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        setState(() {
+          final svc = context.read<NavidromeService>();
+          _futureTracks = _loadTracks();
+          _futurePlaylists = svc.getPlaylists();
+        });
+      });
+    }
+    _coverArtVersion = version;
+
+    final pVersion = nav.playlistVersion;
+    if (pVersion != _playlistVersion && _playlistVersion >= 0) {
+      _playlistVersion = pVersion;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        setState(() {
+          final svc = context.read<NavidromeService>();
+          _futurePlaylists = svc.getPlaylists();
+        });
+      });
+    }
+    _playlistVersion = pVersion;
+
     return Scaffold(
-      backgroundColor: const Color(0xFF121212),
-      body: Row(
+      backgroundColor: context.bgApp, // Pure AMOLED Black
+      body: Column(
         children: [
-          if (!_libraryCollapsed) _buildLibraryPanel(),
-          Expanded(child: _buildMainPanel()),
+          // -----------------------------------------------------------------
+          // 1. BARRA SUPERIOR PERSISTENTE (Global Header de extremo a extremo)
+          // -----------------------------------------------------------------
+          _buildPersistentGlobalTopBar(nav),
+
+          // -----------------------------------------------------------------
+          // 2. CUERPO: Panel Lateral de Biblioteca + Área Principal
+          // -----------------------------------------------------------------
+          Expanded(
+            child: Row(
+              children: [
+                _libraryCollapsed
+                    ? _buildCollapsedLibraryPanel()
+                    : _buildLibraryPanel(),
+                Expanded(child: _buildMainPanel()),
+              ],
+            ),
+          ),
         ],
       ),
-      bottomNavigationBar: _buildPlayerBar(),
+      bottomNavigationBar: const PersistentPlayerBar(),
     );
   }
 
-  // ---------------------------------------------------------------------------
+  // ===========================================================================
+  // BARRA SUPERIOR PERSISTENTE (GLOBAL HEADER)
+  // ===========================================================================
+  Widget _buildPersistentGlobalTopBar(NavidromeService nav) {
+    return GlobalTopBar(
+      searchController: _searchController,
+      searching: _searching,
+      activeNavIndex: _activeNavIndex,
+      showBackButton: false,
+      onSearch: _runSearch,
+      onSearchCleared: () {
+        if (!mounted) return;
+        setState(() {
+          _searchResults = null;
+          _searching = false;
+        });
+      },
+      onLogoTap: () {
+        _searchVersion++;
+        setState(() {
+          _searchResults = null;
+          _searchController.clear();
+          _searching = false;
+          _activeNavIndex = 0;
+        });
+      },
+      onNavIndexChanged: (index) {
+        _searchVersion++;
+        setState(() {
+          _searchResults = null;
+          _searchController.clear();
+          _searching = false;
+          _activeNavIndex = index;
+        });
+      },
+    );
+  }
+
+  // ===========================================================================
   // Panel Izquierdo: Tu Biblioteca
-  // ---------------------------------------------------------------------------
+  // ===========================================================================
+  Widget _buildCollapsedLibraryPanel() {
+    return Container(
+      width: 68,
+      color: context.bgSidebar,
+      child: Column(
+        children: [
+          SizedBox(
+            height: 54,
+            child: IconButton(
+              icon: Icon(Icons.library_music_rounded,
+                  color: context.accent, size: 21),
+              tooltip: 'Expandir biblioteca',
+              onPressed: () => setState(() => _libraryCollapsed = false),
+            ),
+          ),
+          Divider(height: 1, color: context.bgCard),
+          Expanded(child: _collapsedLibraryList()),
+        ],
+      ),
+    );
+  }
+
+  Widget _collapsedLibraryList() {
+    final nav = context.watch<NavidromeService>();
+    return FutureBuilder<List<Playlist>>(
+      future: _futurePlaylists,
+      builder: (context, snapshot) {
+        final playlists = snapshot.data ?? [];
+        // Fijadas primero.
+        final sorted = [
+          ...playlists.where((p) => nav.isPinnedPlaylist(p.id)),
+          ...playlists.where((p) => !nav.isPinnedPlaylist(p.id)),
+        ];
+        return ListView(
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          children: [
+            Tooltip(
+              message: 'Tus me gusta',
+              child: IconButton(
+                icon: Icon(Icons.favorite_rounded, color: context.accent2),
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const LikedSongsScreen()),
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            for (final playlist in sorted)
+              _collapsedPlaylistTile(
+                playlist,
+                nav.isPinnedPlaylist(playlist.id),
+              ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _collapsedPlaylistTile(Playlist playlist, bool pinned) {
+    return Tooltip(
+      message: playlist.name,
+      child: Semantics(
+        button: true,
+        label: playlist.name,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(8),
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => PlaylistDetailScreen(playlist: playlist),
+            ),
+          ),
+          onLongPress: () => _showPlaylistActions(playlist),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
+            child: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                CoverArt(
+                  url: playlist.coverArtUrl,
+                  width: 40,
+                  height: 40,
+                  borderRadius: 6,
+                  fallbackIcon: Icons.queue_music,
+                  fallbackIconSize: 18,
+                  fallbackColor: context.bgElevated,
+                ),
+                if (pinned)
+                  Positioned(
+                    top: -4,
+                    right: -4,
+                    child:
+                        Icon(Icons.push_pin, color: context.accent, size: 12),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildLibraryPanel() {
     return Container(
-      width: 280,
-      color: const Color(0xFF0A0A0A),
+      width: 270,
+      color: context.bgSidebar,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _libraryHeader(),
-          _libraryFilters(),
-          const Divider(height: 1, color: Colors.white12),
+          Divider(height: 1, color: context.bgCard),
           _librarySearchBar(),
           Expanded(child: _libraryList()),
         ],
@@ -59,15 +343,30 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _libraryHeader() {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 20, 16, 12),
+      padding: const EdgeInsets.fromLTRB(16, 14, 12, 10),
       child: Row(
         children: [
-          const Icon(Icons.arrow_back_ios_new, color: Colors.white54, size: 18),
-          const SizedBox(width: 16),
-          const Icon(Icons.arrow_forward_ios, color: Colors.white54, size: 18),
-          const Spacer(),
+          Icon(Icons.library_music_rounded, color: context.accent, size: 18),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'Tu Biblioteca',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: context.textPrimary,
+                fontSize: 14,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
           IconButton(
-            icon: const Icon(Icons.menu_open, color: Colors.white, size: 20),
+            icon: Icon(Icons.add_rounded, color: context.accent, size: 21),
+            tooltip: 'Crear playlist',
+            onPressed: _createPlaylist,
+          ),
+          IconButton(
+            icon: Icon(Icons.menu_open, color: context.textMuted, size: 18),
             tooltip: 'Colapsar biblioteca',
             onPressed: () => setState(() => _libraryCollapsed = true),
           ),
@@ -76,121 +375,377 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _libraryFilters() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: Row(
-        children: [
-          _chip('Playlists', _LibraryFilter.playlists),
-          _chip('Podcasts', _LibraryFilter.podcasts),
-          _chip('Álbumes', _LibraryFilter.albums),
-          _chip('Artistas', _LibraryFilter.artists),
-        ],
-      ),
-    );
-  }
-
-  Widget _chip(String label, _LibraryFilter value) {
-    final selected = _filter == value;
-    return Padding(
-      padding: const EdgeInsets.only(right: 8, bottom: 8),
-      child: ChoiceChip(
-        label: Text(label),
-        selected: selected,
-        showCheckmark: false,
-        backgroundColor: const Color(0xFF1F1F1F),
-        selectedColor: const Color(0xFF323232),
-        labelStyle: TextStyle(
-          color: selected ? Colors.white : Colors.white70,
-          fontSize: 12,
-        ),
-        onSelected: (_) => setState(() => _filter = value),
-      ),
-    );
-  }
-
   Widget _librarySearchBar() {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-      child: Row(
-        children: [
-          Expanded(
-            child: Container(
-              height: 38,
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              decoration: BoxDecoration(
-                color: const Color(0xFF242424),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: const Row(
-                children: [
-                  Icon(Icons.search, color: Colors.white54, size: 18),
-                  SizedBox(width: 8),
-                  Expanded(
-                    child: TextField(
-                      style: TextStyle(color: Colors.white, fontSize: 13),
-                      decoration: InputDecoration(
-                        hintText: 'Buscar en tu biblioteca',
-                        hintStyle: TextStyle(color: Colors.white38, fontSize: 13),
-                        border: InputBorder.none,
-                        isDense: true,
-                      ),
-                    ),
-                  ),
-                ],
+      padding: const EdgeInsets.fromLTRB(12, 6, 12, 10),
+      child: Container(
+        height: 34,
+        padding: const EdgeInsets.symmetric(horizontal: 10),
+        decoration: BoxDecoration(
+          color: context.bgApp,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: context.inputBorder),
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.search, color: context.textMuted, size: 16),
+            SizedBox(width: 6),
+            Expanded(
+              child: TextField(
+                style: TextStyle(color: context.textPrimary, fontSize: 12),
+                decoration: InputDecoration(
+                  hintText: 'Buscar en playlists...',
+                  hintStyle: TextStyle(color: context.textMuted, fontSize: 12),
+                  isDense: true,
+                  filled: false,
+                  fillColor: Colors.transparent,
+                  border: InputBorder.none,
+                  enabledBorder: InputBorder.none,
+                  focusedBorder: InputBorder.none,
+                  disabledBorder: InputBorder.none,
+                  errorBorder: InputBorder.none,
+                  contentPadding: EdgeInsets.zero,
+                ),
               ),
             ),
-          ),
-          const SizedBox(width: 8),
-          IconButton(
-            icon: const Icon(Icons.swap_vert, color: Colors.white70, size: 20),
-            onPressed: () {},
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
 
   Widget _libraryList() {
-    return FutureBuilder<List<Track>>(
-      future: _futureTracks,
+    final nav = context.watch<NavidromeService>();
+    return FutureBuilder<List<Playlist>>(
+      future: _futurePlaylists,
       builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(
-            child: CircularProgressIndicator(color: Colors.white),
-          );
-        }
-        if (snapshot.hasError || !snapshot.hasData) {
-          return const Center(
-            child: Text('Sin contenido', style: TextStyle(color: Colors.white54)),
-          );
-        }
-
-        final tracks = snapshot.data!.take(40).toList();
-        return ListView.builder(
-          padding: const EdgeInsets.symmetric(horizontal: 8),
-          itemCount: tracks.length + 1,
-          itemBuilder: (context, index) {
-            if (index == 0) {
-              return _libraryTile(
-                icon: Icons.favorite,
-                title: 'Liked Songs',
-                subtitle: 'Playlist · ${tracks.length} canciones',
-                background: const Color(0xFF353588),
-              );
-            }
-            final track = tracks[index - 1];
-            return _libraryTile(
-              icon: Icons.album,
-              title: track.album,
-              subtitle: 'Álbum · ${track.artist}',
-              background: Colors.grey.shade800,
-              albumArtUrl: track.albumArtUrl,
-            );
-          },
+        final playlists = snapshot.data ?? [];
+        // Fijadas primero, luego el resto en el orden original.
+        final sorted = [
+          ...playlists.where((p) => nav.isPinnedPlaylist(p.id)),
+          ...playlists.where((p) => !nav.isPinnedPlaylist(p.id)),
+        ];
+        final followedIds = nav.followedArtistIds;
+        return ListView(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+          children: [
+            _libraryTile(
+              icon: Icons.favorite_rounded,
+              title: 'Tus me gusta',
+              subtitle: 'Canciones favoritas',
+              background: context.accent2,
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const LikedSongsScreen()),
+              ),
+            ),
+            // Artistas seguidos (entre Me gusta y playlists)
+            for (final artistId in followedIds)
+              _followedArtistTile(artistId, nav),
+            const SizedBox(height: 4),
+            for (final playlist in sorted) ...[
+              _playlistTile(playlist, nav.isPinnedPlaylist(playlist.id)),
+            ],
+          ],
         );
       },
     );
+  }
+
+  Widget _followedArtistTile(String artistId, NavidromeService nav) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(8),
+      onTap: () async {
+        try {
+          final raw = await nav.getArtists();
+          final match = raw.firstWhere(
+            (a) => a['id'] == artistId,
+            orElse: () => null,
+          );
+          if (match != null && mounted) {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => ArtistScreen(
+                  artist: Artist.fromJson(match as Map<String, dynamic>),
+                ),
+              ),
+            );
+          }
+        } catch (_) {}
+      },
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 5, horizontal: 4),
+        child: Row(
+          children: [
+            // Avatar circular para artistas
+            FutureBuilder<List<dynamic>>(
+              future: nav.getArtists(),
+              builder: (context, snap) {
+                String? url;
+                if (snap.hasData) {
+                  final found = snap.data!.firstWhere(
+                    (a) => a['id'] == artistId,
+                    orElse: () => null,
+                  );
+                  url = found?['coverArt'] as String?;
+                }
+                return CoverArt(
+                  url: url,
+                  width: 40,
+                  height: 40,
+                  borderRadius: 20,
+                  circle: true,
+                  fallbackIcon: Icons.person,
+                  fallbackIconSize: 18,
+                  fallbackColor: context.bgElevated,
+                );
+              },
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  FutureBuilder<List<dynamic>>(
+                    future: nav.getArtists(),
+                    builder: (context, snap) {
+                      String name = artistId;
+                      if (snap.hasData) {
+                        final found = snap.data!.firstWhere(
+                          (a) => a['id'] == artistId,
+                          orElse: () => null,
+                        );
+                        name = found?['name'] as String? ?? artistId;
+                      }
+                      return Text(
+                        name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: context.textPrimary,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      );
+                    },
+                  ),
+                  Text(
+                    'Artista · Siguiendo',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(color: context.textMuted, fontSize: 11),
+                  ),
+                ],
+              ),
+            ),
+            Icon(Icons.person_rounded, color: context.accent, size: 16),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _playlistTile(Playlist playlist, bool pinned) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(8),
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => PlaylistDetailScreen(playlist: playlist),
+        ),
+      ),
+      onLongPress: () => _showPlaylistActions(playlist),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 5, horizontal: 4),
+        child: Row(
+          children: [
+            CoverArt(
+              url: playlist.coverArtUrl,
+              width: 40,
+              height: 40,
+              borderRadius: 6,
+              fallbackIcon: Icons.queue_music,
+              fallbackIconSize: 18,
+              fallbackColor: context.bgElevated,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      if (pinned) ...[
+                        Icon(Icons.push_pin, color: context.accent, size: 12),
+                        const SizedBox(width: 3),
+                      ],
+                      Expanded(
+                        child: Text(
+                          playlist.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: context.textPrimary,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  Text(
+                    'Playlist · ${playlist.songCount} canciones',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(color: context.textMuted, fontSize: 11),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showPlaylistActions(Playlist playlist) {
+    final nav = context.read<NavidromeService>();
+    final pinned = nav.isPinnedPlaylist(playlist.id);
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: context.bgApp,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: Icon(Icons.play_arrow, color: context.textPrimary),
+              title: Text('Reproducir',
+                  style: TextStyle(color: context.textPrimary)),
+              onTap: () {
+                Navigator.of(context).pop();
+                _playPlaylist(playlist);
+              },
+            ),
+            ListTile(
+              leading: Icon(Icons.shuffle, color: context.accent),
+              title: Text('Reproducir al azar',
+                  style: TextStyle(color: context.textPrimary)),
+              onTap: () {
+                Navigator.of(context).pop();
+                _playPlaylistShuffled(playlist);
+              },
+            ),
+            ListTile(
+              leading: Icon(
+                pinned ? Icons.push_pin_outlined : Icons.push_pin,
+                color: context.textPrimary,
+              ),
+              title: Text(
+                pinned ? 'Quitar de arriba' : 'Fijar arriba',
+                style: TextStyle(color: context.textPrimary),
+              ),
+              onTap: () {
+                Navigator.of(context).pop();
+                nav.togglePinPlaylist(playlist.id);
+              },
+            ),
+            ListTile(
+              leading: Icon(Icons.delete_outline, color: context.danger),
+              title: Text('Eliminar playlist',
+                  style: TextStyle(color: context.danger)),
+              onTap: () {
+                Navigator.of(context).pop();
+                _confirmDeletePlaylist(playlist);
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _playPlaylist(Playlist playlist) async {
+    final tracks =
+        await context.read<NavidromeService>().getPlaylistTracks(playlist.id);
+    if (mounted && tracks.isNotEmpty) {
+      context.read<PlayerController>().playQueue(
+            tracks,
+            startIndex: 0,
+            sourcePlaylist: playlist,
+          );
+    }
+  }
+
+  Future<void> _playPlaylistShuffled(Playlist playlist) async {
+    final tracks =
+        await context.read<NavidromeService>().getPlaylistTracks(playlist.id);
+    if (mounted && tracks.isNotEmpty) {
+      final player = context.read<PlayerController>();
+      await player.playShuffledQueue(tracks, sourcePlaylist: playlist);
+    }
+  }
+
+  Future<void> _createPlaylist() async {
+    final playlist = await showCreatePlaylistDialog(context);
+    if (playlist == null || !mounted) return;
+    setState(() {
+      _futurePlaylists = context.read<NavidromeService>().getPlaylists();
+    });
+  }
+
+  Future<void> _confirmDeletePlaylist(Playlist playlist) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: context.bgCard,
+        title: Text('¿Eliminar playlist?',
+            style: TextStyle(color: context.textPrimary)),
+        content: Text(
+          'Se borrará "${playlist.name}" permanentemente.',
+          style: TextStyle(color: context.textSecondary),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text('Cancelar',
+                style: TextStyle(color: context.textSecondary)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: Text('Eliminar', style: TextStyle(color: context.danger)),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    final nav = context.read<NavidromeService>();
+    try {
+      await nav.deletePlaylist(playlist.id);
+      nav.bumpPlaylists();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Playlist eliminada',
+              style: TextStyle(color: context.textPrimary)),
+          backgroundColor: context.bgElevated,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error: $e', style: TextStyle(color: context.danger)),
+          backgroundColor: context.bgElevated,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
   }
 
   Widget _libraryTile({
@@ -199,223 +754,277 @@ class _HomeScreenState extends State<HomeScreen> {
     required String subtitle,
     required Color background,
     String? albumArtUrl,
+    VoidCallback? onTap,
   }) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        children: [
-          Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              color: background,
-              borderRadius: BorderRadius.circular(6),
-              image: albumArtUrl != null
-                  ? DecorationImage(
-                      image: NetworkImage(albumArtUrl),
-                      fit: BoxFit.cover,
-                    )
-                  : null,
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 5, horizontal: 4),
+        child: Row(
+          children: [
+            CoverArt(
+              url: albumArtUrl,
+              width: 40,
+              height: 40,
+              borderRadius: 6,
+              fallbackIcon: icon,
+              fallbackIconSize: 18,
+              fallbackColor: background,
             ),
-            child: albumArtUrl == null
-                ? Icon(icon, color: Colors.white, size: 20)
-                : null,
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-                Text(
-                  subtitle,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(color: Colors.white54, fontSize: 12),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ---------------------------------------------------------------------------
-  // Panel Central: Descubrimiento y Contenido
-  // ---------------------------------------------------------------------------
-  Widget _buildMainPanel() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        _mainTopBar(),
-        Expanded(
-          child: FutureBuilder<List<Track>>(
-            future: _futureTracks,
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                return const Center(
-                  child: CircularProgressIndicator(color: Colors.white),
-                );
-              }
-              if (snapshot.hasError || !snapshot.hasData) {
-                return const Center(
-                  child: Text('Error al cargar',
-                      style: TextStyle(color: Colors.white54)),
-                );
-              }
-              final tracks = snapshot.data!;
-              return _mainContent(tracks);
-            },
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _mainTopBar() {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 16, 24, 8),
-      child: Row(
-        children: [
-          if (_libraryCollapsed)
-            IconButton(
-              icon: const Icon(Icons.menu, color: Colors.white),
-              onPressed: () => setState(() => _libraryCollapsed = false),
-            ),
-          IconButton(
-            icon: const Icon(Icons.home, color: Colors.white, size: 24),
-            onPressed: () {},
-          ),
-          IconButton(
-            icon: const Icon(Icons.explore_outlined, color: Colors.white, size: 24),
-            onPressed: () {},
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Container(
-              height: 44,
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              decoration: BoxDecoration(
-                color: const Color(0xFF242424),
-                borderRadius: BorderRadius.circular(24),
-              ),
-              child: const Row(
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(Icons.search, color: Colors.white54, size: 20),
-                  SizedBox(width: 8),
-                  Expanded(
-                    child: TextField(
-                      style: TextStyle(color: Colors.white, fontSize: 14),
-                      decoration: InputDecoration(
-                        hintText: 'What do you want to play?',
-                        hintStyle: TextStyle(color: Colors.white38, fontSize: 14),
-                        border: InputBorder.none,
-                      ),
+                  Text(
+                    title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: context.textPrimary,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
                     ),
                   ),
-                  Icon(Icons.mic_none, color: Colors.white54, size: 20),
+                  Text(
+                    subtitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(color: context.textMuted, fontSize: 11),
+                  ),
                 ],
               ),
             ),
-          ),
-          const SizedBox(width: 16),
-          IconButton(
-            icon: const Icon(Icons.add_circle_outline, color: Colors.white),
-            onPressed: () {},
-          ),
-          IconButton(
-            icon: const Icon(Icons.chat_bubble_outline, color: Colors.white),
-            onPressed: () {},
-          ),
-          IconButton(
-            icon: const Icon(Icons.history, color: Colors.white),
-            onPressed: () {},
-          ),
-          const CircleAvatar(
-            radius: 15,
-            backgroundColor: Colors.deepPurple,
-            child: Text('T', style: TextStyle(color: Colors.white)),
-          ),
-        ],
+          ],
+        ),
       ),
+    );
+  }
+
+  // ===========================================================================
+  // Panel Central: Descubrimiento y Contenido AMOLED
+  // ===========================================================================
+  Widget _buildMainPanel() {
+    return Container(
+      color: context.bgApp, // AMOLED
+      child: _searchResults != null
+          ? _buildSearchResultsPanel()
+          : FutureBuilder<List<Track>>(
+              future: _futureTracks,
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return Center(
+                    child: CircularProgressIndicator(
+                      color: context.accent,
+                      strokeWidth: 2,
+                    ),
+                  );
+                }
+                if (snapshot.hasError || !snapshot.hasData) {
+                  return Center(
+                    child: Text('Error al cargar contenido',
+                        style: TextStyle(color: context.textMuted)),
+                  );
+                }
+                final tracks = snapshot.data!;
+                return _activeNavIndex == 1
+                    ? _buildExploreContent(tracks)
+                    : _mainContent(tracks);
+              },
+            ),
+    );
+  }
+
+  Widget _buildSearchResultsPanel() {
+    final results = _searchResults!;
+    if (_searching && results.isEmpty) {
+      return Center(
+        child: CircularProgressIndicator(
+          color: context.accent,
+          strokeWidth: 2,
+        ),
+      );
+    }
+    if (results.isEmpty) {
+      return Center(
+        child: Text('Sin resultados para tu búsqueda',
+            style: TextStyle(color: context.textMuted)),
+      );
+    }
+
+    final songs = results.songs;
+    final albums = results.albums;
+    final artists = results.artists;
+
+    return ListView(
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+      children: [
+        if (songs.isNotEmpty) ...[
+          const _SectionLabel('Canciones'),
+          for (final track in songs)
+            ListTile(
+              dense: true,
+              leading: CoverArt(
+                url: track.albumArtUrl,
+                artist: track.artist,
+                album: track.album,
+                title: track.title,
+                width: 40,
+                height: 40,
+                borderRadius: 4,
+                fallbackIcon: Icons.music_note,
+                fallbackIconSize: 20,
+                fallbackColor: context.bgCard,
+              ),
+              title: Text(track.title,
+                  style: TextStyle(color: context.textPrimary, fontSize: 13.5)),
+              subtitle: Text('${track.artist} · ${track.album}',
+                  style: TextStyle(color: context.textMuted, fontSize: 11.5)),
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    icon: Icon(Icons.more_horiz, color: context.textMuted),
+                    onPressed: () => TrackContextMenu.show(context, track),
+                  ),
+                  Text(
+                    _formatDuration(track.duration),
+                    style: TextStyle(color: context.textMuted, fontSize: 11.5),
+                  ),
+                ],
+              ),
+              onTap: () {
+                context
+                    .read<PlayerController>()
+                    .playQueue([track], startIndex: 0);
+              },
+            ),
+        ],
+        if (albums.isNotEmpty) ...[
+          const SizedBox(height: 16),
+          const _SectionLabel('Álbumes'),
+          for (final album in albums)
+            ListTile(
+              dense: true,
+              leading: CoverArt(
+                url: album.coverArtUrl,
+                width: 40,
+                height: 40,
+                borderRadius: 4,
+                fallbackIcon: Icons.album,
+                fallbackIconSize: 20,
+                fallbackColor: context.bgCard,
+              ),
+              title: Text(album.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(color: context.textPrimary, fontSize: 13.5)),
+              subtitle: Text(album.artist,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(color: context.textMuted, fontSize: 11.5)),
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                    builder: (_) => AlbumDetailScreen(album: album)),
+              ),
+            ),
+        ],
+        if (artists.isNotEmpty) ...[
+          const SizedBox(height: 16),
+          const _SectionLabel('Artistas'),
+          for (final artist in artists)
+            ListTile(
+              dense: true,
+              leading: CoverArt(
+                url: artist.coverArtUrl,
+                width: 40,
+                height: 40,
+                circle: true,
+                fallbackIcon: Icons.person,
+                fallbackIconSize: 20,
+                fallbackColor: context.bgCard,
+              ),
+              title: Text(artist.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(color: context.textPrimary, fontSize: 13.5)),
+              subtitle: Text('Artista',
+                  style: TextStyle(color: context.textMuted, fontSize: 11.5)),
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => ArtistScreen(artist: artist)),
+              ),
+            ),
+        ],
+      ],
     );
   }
 
   Widget _mainContent(List<Track> tracks) {
     return SingleChildScrollView(
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              _pill('AI'),
-              _pill('Music', selected: true),
-              _pill('Podcasts'),
-            ],
-          ),
-          const SizedBox(height: 16),
-          _quickAccessGrid(tracks),
-          const SizedBox(height: 24),
-          _sectionHeader('Recommended for today'),
-          const SizedBox(height: 12),
+          _quickAccessGrid(),
+          const SizedBox(height: 28),
+          _sectionHeader('Recomendados para ti'),
+          const SizedBox(height: 14),
           _recommendedGrid(tracks),
-          const SizedBox(height: 24),
-          _sectionHeader('Recommended Stations'),
+          const SizedBox(height: 28),
+          _sectionHeader('Álbumes destacados'),
+          const SizedBox(height: 14),
+          _albumsCarousel(),
+          const SizedBox(height: 28),
+          _sectionHeader('Artistas en tu biblioteca'),
+          const SizedBox(height: 14),
+          _artistsCarousel(),
+          const SizedBox(height: 28),
+          _sectionHeader('Escuchados recientemente'),
           const SizedBox(height: 12),
-          _stationsRow(tracks),
-          const SizedBox(height: 24),
-          _sectionHeader('Recents'),
-          const SizedBox(height: 12),
-          _recentsList(tracks),
-          const SizedBox(height: 24),
+          _recentsList(),
+          const SizedBox(height: 32),
         ],
       ),
     );
   }
 
-  Widget _pill(String label, {bool selected = false}) {
-    return Padding(
-      padding: const EdgeInsets.only(right: 8),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-        decoration: BoxDecoration(
-          color: selected ? Colors.white : const Color(0xFF1F1F1F),
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            color: selected ? Colors.black : Colors.white,
-            fontSize: 13,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-      ),
-    );
-  }
+  Widget _buildExploreContent(List<Track> tracks) => ExploreTracksView(
+        tracks: tracks,
+        pageSize: _explorePageSize,
+        page: _explorePage,
+        onPageSizeChanged: (size) => setState(() {
+          _explorePageSize = size;
+          _explorePage = 0;
+        }),
+        onPageChanged: (page) => setState(() => _explorePage = page),
+        onPlay: (index) => _openPlayer(tracks, index),
+      );
 
   void _openPlayer(List<Track> tracks, int index) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => PlayerScreen(tracks: tracks, initialIndex: index),
-      ),
-    );
+    context.read<PlayerController>().playQueue(tracks, startIndex: index);
   }
 
-  Widget _quickAccessGrid(List<Track> tracks) {
-    final items = tracks.take(6).toList();
+  // Tarjetas de Acceso Rápido AMOLED
+  Widget _quickAccessGrid() {
+    // Orden fijo: favoritos, la playlist más reproducida y cuatro canciones.
+    final mostPlayed = context.watch<PlayerController>().mostPlayed;
+    MostPlayedItem? topPlaylist;
+    final topTracks = <MostPlayedItem>[];
+    for (final item in mostPlayed) {
+      if (item.type == MostPlayedItemType.playlist && topPlaylist == null) {
+        topPlaylist = item;
+      } else if (item.type == MostPlayedItemType.track &&
+          topTracks.length < 4) {
+        topTracks.add(item);
+      }
+    }
+    final items = <MostPlayedItem>[
+      if (topPlaylist != null) topPlaylist,
+      ...topTracks,
+    ];
     return LayoutBuilder(
       builder: (context, constraints) {
         final cols = (constraints.maxWidth / 220).floor().clamp(2, 3);
@@ -424,26 +1033,50 @@ class _HomeScreenState extends State<HomeScreen> {
           physics: const NeverScrollableScrollPhysics(),
           gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: cols,
-            childAspectRatio: 2.6,
+            // Estas seis tarjetas se muestran en dos o tres filas. Al
+            // duplicar la proporción y reducir el espaciado, el bloque ocupa
+            // aproximadamente la mitad de alto sin sacrificar la portada.
+            childAspectRatio: 5.6,
             crossAxisSpacing: 12,
-            mainAxisSpacing: 12,
+            mainAxisSpacing: 6,
           ),
           itemCount: items.length + 1,
           itemBuilder: (context, index) {
             if (index == 0) {
               return _quickAccessCard(
-                label: 'Liked Songs',
-                color: const Color(0xFF353588),
-                icon: Icons.favorite,
+                label: 'Tus Me Gusta',
+                color: context.accent2,
+                icon: Icons.favorite_rounded,
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const LikedSongsScreen()),
+                ),
               );
             }
-            final track = items[index - 1];
+            final item = items[index - 1];
+            if (item.type == MostPlayedItemType.playlist) {
+              final playlist = item.playlist!;
+              return _quickAccessCard(
+                label: playlist.name,
+                color: context.accent2,
+                albumArtUrl: playlist.coverArtUrl,
+                icon: Icons.queue_music,
+                onTap: () => _playPlaylist(playlist),
+              );
+            }
+
+            final track = item.track!;
             return _quickAccessCard(
-              label: track.album,
-              color: Colors.grey.shade800,
+              label: track.title,
+              color: context.bgCard,
               albumArtUrl: track.albumArtUrl,
-              icon: Icons.album,
-              onTap: () => _openPlayer(tracks, tracks.indexOf(track)),
+              artist: track.artist,
+              album: track.album,
+              title: track.title,
+              icon: Icons.music_note,
+              onTap: () => context
+                  .read<PlayerController>()
+                  .playQueue([track], startIndex: 0),
             );
           },
         );
@@ -454,37 +1087,38 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _quickAccessCard({
     required String label,
     required Color color,
-    IconData? icon,
+    required IconData icon,
     String? albumArtUrl,
-    VoidCallback? onTap,
+    String? artist,
+    String? album,
+    String? title,
+    required VoidCallback onTap,
   }) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(8),
+      borderRadius: BorderRadius.circular(10),
       child: Container(
-        padding: const EdgeInsets.all(8),
         decoration: BoxDecoration(
-          color: const Color(0xFF1F1F1F),
-          borderRadius: BorderRadius.circular(8),
+          color: context.bgApp,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: context.bgElevated, width: 1),
         ),
         child: Row(
           children: [
-            Container(
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(
-                color: color,
-                borderRadius: BorderRadius.circular(6),
-                image: albumArtUrl != null
-                    ? DecorationImage(
-                        image: NetworkImage(albumArtUrl),
-                        fit: BoxFit.cover,
-                      )
-                    : null,
+            SizedBox(
+              width: 52,
+              height: double.infinity,
+              child: CoverArt(
+                url: albumArtUrl,
+                artist: artist,
+                album: album,
+                title: title,
+                width: 52,
+                borderRadius: 9,
+                fallbackIcon: icon,
+                fallbackIconSize: 22,
+                fallbackColor: color,
               ),
-              child: albumArtUrl == null
-                  ? Icon(icon, color: Colors.white, size: 20)
-                  : null,
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -492,8 +1126,8 @@ class _HomeScreenState extends State<HomeScreen> {
                 label,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  color: Colors.white,
+                style: TextStyle(
+                  color: context.textPrimary,
                   fontSize: 13,
                   fontWeight: FontWeight.w600,
                 ),
@@ -508,8 +1142,8 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _sectionHeader(String title) {
     return Text(
       title,
-      style: const TextStyle(
-        color: Colors.white,
+      style: TextStyle(
+        color: context.textPrimary,
         fontSize: 18,
         fontWeight: FontWeight.bold,
       ),
@@ -518,24 +1152,20 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _recommendedGrid(List<Track> tracks) {
     final items = tracks.take(10).toList();
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final cols = (constraints.maxWidth / 170).floor().clamp(3, 6);
-        return GridView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: cols,
-            childAspectRatio: 0.72,
-            crossAxisSpacing: 12,
-            mainAxisSpacing: 16,
-          ),
-          itemCount: items.length,
-          itemBuilder: (context, index) {
-            final track = items[index];
-            return _recommendedCard(track, tracks);
-          },
-        );
+    return GridView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      // Coincide con las tarjetas de «Álbumes destacados»: 130 × 180 px.
+      gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+        maxCrossAxisExtent: 130,
+        childAspectRatio: 13 / 18,
+        crossAxisSpacing: 14,
+        mainAxisSpacing: 16,
+      ),
+      itemCount: items.length,
+      itemBuilder: (context, index) {
+        final track = items[index];
+        return _recommendedCard(track, tracks);
       },
     );
   }
@@ -543,112 +1173,268 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _recommendedCard(Track track, List<Track> allTracks) {
     return InkWell(
       onTap: () => _openPlayer(allTracks, allTracks.indexOf(track)),
-      borderRadius: BorderRadius.circular(8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(
-            child: Container(
-              width: double.infinity,
-              decoration: BoxDecoration(
-                color: Colors.grey.shade800,
+      borderRadius: BorderRadius.circular(10),
+      child: Container(
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: context.bgApp,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: context.bgCard),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: ClipRRect(
                 borderRadius: BorderRadius.circular(8),
-                image: track.albumArtUrl != null
-                    ? DecorationImage(
-                        image: NetworkImage(track.albumArtUrl!),
-                        fit: BoxFit.cover,
-                      )
-                    : null,
+                child: CoverArt(
+                  url: track.albumArtUrl,
+                  artist: track.artist,
+                  album: track.album,
+                  title: track.title,
+                  borderRadius: 0,
+                  fallbackIcon: Icons.music_note,
+                  fallbackColor: context.bgCard,
+                ),
               ),
-              child: track.albumArtUrl == null
-                  ? const Icon(Icons.music_note, color: Colors.white54)
-                  : null,
             ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            track.title,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 13,
-              fontWeight: FontWeight.bold,
+            const SizedBox(height: 8),
+            Text(
+              track.title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: context.textPrimary,
+                fontSize: 12.5,
+                fontWeight: FontWeight.bold,
+              ),
             ),
-          ),
-          Text(
-            track.artist,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(color: Colors.white54, fontSize: 12),
-          ),
-        ],
+            Text(
+              track.artist,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(color: context.textMuted, fontSize: 11),
+            ),
+          ],
+        ),
       ),
     );
   }
 
-  Widget _stationsRow(List<Track> tracks) {
-    final uniqueArtists = <String>{};
-    final artists = tracks
-        .where((t) => uniqueArtists.add(t.artist))
-        .take(6)
-        .toList();
-
-    return SizedBox(
-      height: 180,
-      child: ListView.builder(
-        scrollDirection: Axis.horizontal,
-        itemCount: artists.length,
-        itemBuilder: (context, index) {
-          final artist = artists[index];
-          return Padding(
-            padding: const EdgeInsets.only(right: 16),
-            child: Column(
-              children: [
-                Container(
-                  width: 120,
-                  height: 120,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: Colors.deepPurple.shade300,
-                    image: artist.albumArtUrl != null
-                        ? DecorationImage(
-                            image: NetworkImage(artist.albumArtUrl!),
-                            fit: BoxFit.cover,
-                          )
-                        : null,
-                  ),
-                  child: artist.albumArtUrl == null
-                      ? const Center(
-                          child: Icon(Icons.person, color: Colors.white, size: 40),
-                        )
-                      : null,
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  artist.artist,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const Text(
-                  'Estación',
-                  style: TextStyle(color: Colors.white54, fontSize: 11),
-                ),
-              ],
+  Widget _albumsCarousel() {
+    final nav = context.read<NavidromeService>();
+    return FutureBuilder<List<Album>>(
+      future: nav.getAlbums(),
+      builder: (context, snapshot) {
+        final albums = snapshot.data ?? [];
+        if (snapshot.connectionState == ConnectionState.waiting &&
+            albums.isEmpty) {
+          return SizedBox(
+            height: 170,
+            child: Center(
+              child: CircularProgressIndicator(
+                  strokeWidth: 2, color: context.accent),
             ),
           );
-        },
-      ),
+        }
+        if (albums.isEmpty) {
+          return Text('Sin álbumes disponibles',
+              style: TextStyle(color: context.textMuted));
+        }
+        return SizedBox(
+          height: 180,
+          child: ListView.builder(
+            scrollDirection: Axis.horizontal,
+            itemCount: albums.length,
+            itemBuilder: (context, index) {
+              final album = albums[index];
+              return Padding(
+                padding: const EdgeInsets.only(right: 14),
+                child: InkWell(
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                        builder: (_) => AlbumDetailScreen(album: album)),
+                  ),
+                  borderRadius: BorderRadius.circular(10),
+                  child: Container(
+                    width: 130,
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: context.bgApp,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: context.bgCard),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(6),
+                            child: Container(
+                              width: double.infinity,
+                              color: context.bgCard,
+                              child: album.coverArtUrl != null
+                                  ? Image.network(
+                                      album.coverArtUrl!,
+                                      fit: BoxFit.cover,
+                                      errorBuilder: (_, __, ___) => Center(
+                                        child: Icon(Icons.album,
+                                            color: context.textMuted, size: 28),
+                                      ),
+                                    )
+                                  : Center(
+                                      child: Icon(Icons.album,
+                                          color: context.textMuted, size: 28),
+                                    ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          album.title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: context.textPrimary,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        Text(
+                          album.artist,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style:
+                              TextStyle(color: context.textMuted, fontSize: 11),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        );
+      },
     );
   }
 
-  Widget _recentsList(List<Track> tracks) {
-    final items = tracks.take(5).toList();
+  Widget _artistsCarousel() {
+    final nav = context.read<NavidromeService>();
+    return FutureBuilder<List<Artist>>(
+      future: nav.getArtists().then(
+            (raw) => raw
+                .map((e) => Artist.fromJson(e as Map<String, dynamic>))
+                .toList(),
+          ),
+      builder: (context, snapshot) {
+        final artists = snapshot.data ?? <Artist>[];
+        if (snapshot.connectionState == ConnectionState.waiting &&
+            artists.isEmpty) {
+          return SizedBox(
+            height: 160,
+            child: Center(
+              child: CircularProgressIndicator(
+                  strokeWidth: 2, color: context.accent),
+            ),
+          );
+        }
+        if (artists.isEmpty) {
+          return Text('Sin artistas',
+              style: TextStyle(color: context.textMuted));
+        }
+        final showScrollbar = artists.length > 10;
+        return SizedBox(
+          height: showScrollbar ? 180 : 160,
+          child: Scrollbar(
+            controller: _artistsScrollController,
+            thumbVisibility: showScrollbar,
+            interactive: showScrollbar,
+            scrollbarOrientation: ScrollbarOrientation.bottom,
+            child: ListView.builder(
+              controller: _artistsScrollController,
+              scrollDirection: Axis.horizontal,
+              padding: EdgeInsets.only(bottom: showScrollbar ? 20 : 0),
+              itemCount: artists.length,
+              itemBuilder: (context, index) {
+                final artist = artists[index];
+                return Padding(
+                  padding: const EdgeInsets.only(right: 14),
+                  child: InkWell(
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                          builder: (_) => ArtistScreen(artist: artist)),
+                    ),
+                    borderRadius: BorderRadius.circular(10),
+                    child: SizedBox(
+                      width: 110,
+                      child: Column(
+                        children: [
+                          Expanded(
+                            child: Container(
+                              width: 110,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: context.bgElevated,
+                                border: Border.all(
+                                  color: context.accent.withValues(alpha: 0.35),
+                                  width: 1.2,
+                                ),
+                                image: artist.coverArtUrl != null
+                                    ? DecorationImage(
+                                        image:
+                                            NetworkImage(artist.coverArtUrl!),
+                                        fit: BoxFit.cover,
+                                      )
+                                    : null,
+                              ),
+                              child: artist.coverArtUrl == null
+                                  ? Center(
+                                      child: Icon(Icons.person,
+                                          color: context.textMuted, size: 36),
+                                    )
+                                  : null,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            artist.name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: context.textPrimary,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _recentsList() {
+    final player = context.watch<PlayerController>();
+    final items = player.recentlyPlayed.take(6).toList();
+    if (items.isEmpty) {
+      return Padding(
+        padding: EdgeInsets.symmetric(vertical: 8),
+        child: Text(
+          'Todavía no has reproducido ninguna canción',
+          style: TextStyle(color: context.textMuted, fontSize: 12.5),
+        ),
+      );
+    }
     return Column(
       children: [
         for (final track in items)
@@ -656,19 +1442,17 @@ class _HomeScreenState extends State<HomeScreen> {
             padding: const EdgeInsets.symmetric(vertical: 4),
             child: Row(
               children: [
-                Container(
+                CoverArt(
+                  url: track.albumArtUrl,
+                  artist: track.artist,
+                  album: track.album,
+                  title: track.title,
                   width: 40,
                   height: 40,
-                  decoration: BoxDecoration(
-                    color: Colors.grey.shade800,
-                    borderRadius: BorderRadius.circular(4),
-                    image: track.albumArtUrl != null
-                        ? DecorationImage(
-                            image: NetworkImage(track.albumArtUrl!),
-                            fit: BoxFit.cover,
-                          )
-                        : null,
-                  ),
+                  borderRadius: 6,
+                  fallbackIcon: Icons.music_note,
+                  fallbackIconSize: 20,
+                  fallbackColor: context.bgCard,
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -679,21 +1463,30 @@ class _HomeScreenState extends State<HomeScreen> {
                         track.title,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(color: Colors.white, fontSize: 14),
+                        style: TextStyle(
+                          color: context.textPrimary,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                       Text(
                         track.artist,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(color: Colors.white54, fontSize: 12),
+                        style:
+                            TextStyle(color: context.textMuted, fontSize: 11.5),
                       ),
                     ],
                   ),
                 ),
                 IconButton(
-                  icon: const Icon(Icons.play_circle_outline,
-                      color: Colors.white, size: 28),
-                  onPressed: () => _openPlayer(tracks, tracks.indexOf(track)),
+                  icon: Icon(Icons.play_circle_fill_rounded,
+                      color: context.accent, size: 28),
+                  onPressed: () {
+                    context
+                        .read<PlayerController>()
+                        .playQueue([track], startIndex: 0);
+                  },
                 ),
               ],
             ),
@@ -702,92 +1495,29 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // ---------------------------------------------------------------------------
-  // Barra Inferior: Reproductor
-  // ---------------------------------------------------------------------------
-  Widget _buildPlayerBar() {
-    return Container(
-      height: 72,
-      color: const Color(0xFF181818),
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: Row(
-        children: [
-          const Icon(Icons.music_note, color: Colors.deepPurple, size: 28),
-          const SizedBox(width: 12),
-          const Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Nada en reproducción',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              Text(
-                'Selecciona algo para escuchar',
-                style: TextStyle(color: Colors.white54, fontSize: 12),
-              ),
-            ],
-          ),
-          const SizedBox(width: 16),
-          IconButton(
-            icon: const Icon(Icons.favorite_border, color: Colors.white70),
-            onPressed: () {},
-          ),
-          Expanded(
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                IconButton(
-                  icon: const Icon(Icons.shuffle, color: Colors.white70, size: 20),
-                  onPressed: () {},
-                ),
-                const Icon(Icons.skip_previous, color: Colors.white, size: 28),
-                const Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 12),
-                  child: Icon(Icons.play_circle_filled,
-                      color: Colors.white, size: 38),
-                ),
-                const Icon(Icons.skip_next, color: Colors.white, size: 28),
-                IconButton(
-                  icon: const Icon(Icons.repeat, color: Colors.white70, size: 20),
-                  onPressed: () {},
-                ),
-              ],
-            ),
-          ),
-          IconButton(
-            icon: const Icon(Icons.format_quote, color: Colors.white70, size: 20),
-            onPressed: () {},
-          ),
-          IconButton(
-            icon: const Icon(Icons.queue_music, color: Colors.white70, size: 20),
-            onPressed: () {},
-          ),
-          IconButton(
-            icon: const Icon(Icons.volume_up, color: Colors.white70, size: 20),
-            onPressed: () {},
-          ),
-          const SizedBox(width: 8),
-          Container(
-            width: 90,
-            height: 4,
-            color: Colors.white24,
-            child: FractionallySizedBox(
-              alignment: Alignment.centerLeft,
-              widthFactor: 0.6,
-              child: Container(color: Colors.white),
-            ),
-          ),
-          const SizedBox(width: 8),
-          IconButton(
-            icon: const Icon(Icons.fullscreen, color: Colors.white70, size: 18),
-            onPressed: () {},
-          ),
-        ],
+  String _formatDuration(String raw) {
+    final s = int.tryParse(raw) ?? 0;
+    final m = s ~/ 60;
+    final r = s % 60;
+    return '$m:${r.toString().padLeft(2, '0')}';
+  }
+}
+
+class _SectionLabel extends StatelessWidget {
+  final String label;
+  const _SectionLabel(this.label);
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Text(
+        label,
+        style: TextStyle(
+          color: context.accent,
+          fontSize: 15,
+          fontWeight: FontWeight.bold,
+        ),
       ),
     );
   }
