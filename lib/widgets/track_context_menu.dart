@@ -754,21 +754,41 @@ class TrackContextMenu extends StatelessWidget {
                                     .active
                                     .bgElevated;
                                 Navigator.of(context).pop();
-                                String message;
+                                // Verificar si la canción ya está antes de añadir.
                                 try {
+                                  final existing =
+                                      await nav.getPlaylistTracks(p.id);
+                                  final alreadyIn =
+                                      existing.any((t) => t.id == track.id);
+                                  if (alreadyIn) {
+                                    if (messenger.mounted) {
+                                      messenger.showSnackBar(SnackBar(
+                                        content: Text(
+                                            '"${track.title}" ya está en "${p.name}"'),
+                                        backgroundColor: bg,
+                                      ));
+                                    }
+                                    return;
+                                  }
                                   await nav.updatePlaylist(
                                     playlistId: p.id,
                                     songIdsToAdd: [track.id],
                                   );
-                                  message = 'Añadida a "${p.name}"';
+                                  if (messenger.mounted) {
+                                    messenger.showSnackBar(SnackBar(
+                                      content: Text('Añadida a "${p.name}"'),
+                                      backgroundColor: bg,
+                                    ));
+                                  }
                                 } catch (e) {
-                                  message = e.toString().replaceFirst('Exception: ', '');
-                                }
-                                if (messenger.mounted) {
-                                  messenger.showSnackBar(SnackBar(
-                                    content: Text(message),
-                                    backgroundColor: bg,
-                                  ));
+                                  if (messenger.mounted) {
+                                    messenger.showSnackBar(SnackBar(
+                                      content: Text(e
+                                          .toString()
+                                          .replaceFirst('Exception: ', '')),
+                                      backgroundColor: bg,
+                                    ));
+                                  }
                                 }
                               },
                             );

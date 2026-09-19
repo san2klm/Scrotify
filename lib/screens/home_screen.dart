@@ -251,6 +251,11 @@ class _HomeScreenState extends State<HomeScreen> {
       future: _futurePlaylists,
       builder: (context, snapshot) {
         final playlists = snapshot.data ?? [];
+        // Fijadas primero.
+        final sorted = [
+          ...playlists.where((p) => nav.isPinnedPlaylist(p.id)),
+          ...playlists.where((p) => !nav.isPinnedPlaylist(p.id)),
+        ];
         return ListView(
           padding: const EdgeInsets.symmetric(vertical: 10),
           children: [
@@ -265,7 +270,7 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
             const SizedBox(height: 8),
-            for (final playlist in playlists)
+            for (final playlist in sorted)
               _collapsedPlaylistTile(
                 playlist,
                 nav.isPinnedPlaylist(playlist.id),
@@ -415,6 +420,11 @@ class _HomeScreenState extends State<HomeScreen> {
       future: _futurePlaylists,
       builder: (context, snapshot) {
         final playlists = snapshot.data ?? [];
+        // Fijadas primero, luego el resto en el orden original.
+        final sorted = [
+          ...playlists.where((p) => nav.isPinnedPlaylist(p.id)),
+          ...playlists.where((p) => !nav.isPinnedPlaylist(p.id)),
+        ];
         return ListView(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
           children: [
@@ -429,7 +439,7 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
             const SizedBox(height: 4),
-            for (final playlist in playlists) ...[
+            for (final playlist in sorted) ...[
               _playlistTile(playlist, nav.isPinnedPlaylist(playlist.id)),
             ],
           ],
