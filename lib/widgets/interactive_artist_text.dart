@@ -1,3 +1,4 @@
+import 'dart:math';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -62,7 +63,7 @@ class InteractiveArtistText extends StatelessWidget {
       if (i > 0) {
         final prev = parts[i - 1].trim();
         final prevEnd =
-            artistString.indexOf(prev, searchStart - prev.length - 3) +
+            artistString.indexOf(prev, max(0, searchStart - prev.length - 3)) +
                 prev.length;
         final nextStart = artistString.indexOf(name, prevEnd);
         if (nextStart > prevEnd) {

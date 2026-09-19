@@ -7,6 +7,7 @@ import '../widgets/cover_art.dart';
 import '../widgets/interactive_artist_text.dart';
 import '../widgets/persistent_player_bar.dart';
 import '../widgets/global_top_bar.dart';
+import '../widgets/track_context_menu.dart';
 import '../utils/app_colors.dart';
 
 /// Pantalla que muestra las canciones marcadas como favoritas (me gusta).
@@ -27,11 +28,16 @@ class _LikedSongsScreenState extends State<LikedSongsScreen> {
   }
 
   void _reorderTracks(List<Track> tracks, int oldIndex, int newIndex) {
-    if (oldIndex == newIndex) return;
+    // Ajustar índice para reordenamiento correcto
+    final int finalNewIndex = (newIndex > oldIndex) ? newIndex - 1 : newIndex;
+
+    if (oldIndex < 0 || oldIndex >= tracks.length ||
+        finalNewIndex < 0 || finalNewIndex >= tracks.length ||
+        oldIndex == finalNewIndex) return;
 
     final reordered = List<Track>.of(tracks);
     final moved = reordered.removeAt(oldIndex);
-    reordered.insert(newIndex, moved);
+    reordered.insert(finalNewIndex, moved);
     context.read<NavidromeService>().reorderStarredTracks(reordered);
     setState(() => _future = Future.value(reordered));
   }
@@ -129,7 +135,7 @@ class _LikedSongsScreenState extends State<LikedSongsScreen> {
                           final track = tracks[index];
                           final starred = nav.isStarred(track.id);
                           return ListTile(
-                            key: ValueKey('liked-${track.id}-$index'),
+                            key: ValueKey('liked-${track.id}'),
                             leading: CoverArt(
                               url: track.albumArtUrl,
                               artist: track.artist,
@@ -151,7 +157,20 @@ class _LikedSongsScreenState extends State<LikedSongsScreen> {
                             trailing: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
+                                ReorderableDragStartListener(
+                                  index: index,
+                                  child: Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 6),
+                                    child: Icon(
+                                      Icons.drag_handle_rounded,
+                                      color: context.textMuted,
+                                      size: 22,
+                                    ),
+                                  ),
+                                ),
                                 IconButton(
+                                  visualDensity: VisualDensity.compact,
                                   icon: Icon(
                                     starred
                                         ? Icons.favorite
@@ -159,6 +178,7 @@ class _LikedSongsScreenState extends State<LikedSongsScreen> {
                                     color: starred
                                         ? context.accent
                                         : context.textMuted,
+                                    size: 20,
                                   ),
                                   onPressed: () async {
                                     await nav.toggleStar(track);
@@ -168,15 +188,13 @@ class _LikedSongsScreenState extends State<LikedSongsScreen> {
                                     }
                                   },
                                 ),
-                                ReorderableDragStartListener(
-                                  index: index,
-                                  child: Padding(
-                                    padding: const EdgeInsets.only(left: 4),
-                                    child: Icon(
-                                      Icons.drag_handle_rounded,
-                                      color: context.textMuted,
-                                    ),
-                                  ),
+                                // Menú contextual ⋮
+                                IconButton(
+                                  visualDensity: VisualDensity.compact,
+                                  icon: Icon(Icons.more_vert_rounded,
+                                      color: context.textMuted, size: 20),
+                                  onPressed: () =>
+                                      TrackContextMenu.show(context, track),
                                 ),
                               ],
                             ),

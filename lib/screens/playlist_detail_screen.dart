@@ -69,11 +69,18 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
 
   Future<void> _reorderTracks(
       List<Track> tracks, int oldIndex, int newIndex) async {
-    if (_reordering || oldIndex == newIndex) return;
+    // Seguridad para evitar índices fuera de rango y ajustar el índice al mover
+    if (_reordering || oldIndex < 0 || oldIndex >= tracks.length) return;
+
+    // Si arrastramos hacia abajo, el índice nuevo debe ajustarse porque
+    // removeAt cambia el índice de los siguientes elementos.
+    final int finalNewIndex = (newIndex > oldIndex) ? newIndex - 1 : newIndex;
+
+    if (finalNewIndex < 0 || finalNewIndex >= tracks.length || oldIndex == finalNewIndex) return;
 
     final reordered = List<Track>.of(tracks);
     final moved = reordered.removeAt(oldIndex);
-    reordered.insert(newIndex, moved);
+    reordered.insert(finalNewIndex, moved);
     final nav = context.read<NavidromeService>();
 
     // La lista responde al soltar el tema, sin esperar la petición de red.
@@ -188,7 +195,7 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
       ),
       body: Column(
         children: [
-          const GlobalTopBar(title: 'Playlist'),
+          const GlobalTopBar(title: 'Playlist', showBackButton: true),
           Expanded(
             child: FutureBuilder<List<Track>>(
               future: _future,
@@ -320,25 +327,26 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
                         ],
                       ),
                     ),
+                    // Padding reducido al mínimo para evitar espacio muerto
                     Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                       child: Align(
                         alignment: Alignment.centerLeft,
                         child: _addTracksButton(tracks),
                       ),
                     ),
-                    Divider(color: context.themeBorder),
+                    Divider(color: context.themeBorder, height: 1),
                     Expanded(
                       child: ReorderableListView.builder(
+                        physics: const BouncingScrollPhysics(),
                         buildDefaultDragHandles: false,
                         itemCount: tracks.length,
-                        onReorderItem: (oldIndex, newIndex) =>
+                        onReorder: (oldIndex, newIndex) =>
                             _reorderTracks(tracks, oldIndex, newIndex),
                         itemBuilder: (context, index) {
                           final track = tracks[index];
-                          // Fila con drag handle centrado verticalmente y ⋮ en trailing.
                           return InkWell(
-                            key: ValueKey('playlist-${track.id}-$index'),
+                            key: ValueKey('playlist-${track.id}'),
                             onTap: () =>
                                 context.read<PlayerController>().playQueue(
                                       tracks,
@@ -387,7 +395,6 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
                                   // Drag handle centrado
                                   ReorderableDragStartListener(
                                     index: index,
-                                    enabled: !_reordering,
                                     child: Padding(
                                       padding: const EdgeInsets.symmetric(
                                           horizontal: 6),

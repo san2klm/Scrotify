@@ -4,10 +4,13 @@ import 'package:provider/provider.dart';
 import "../widgets/server_activity_panel.dart";
 import '../services/navidrome_service.dart';
 import '../services/player_controller.dart';
+import '../services/theme_controller.dart';
 import '../widgets/cover_art.dart';
 import '../widgets/persistent_player_bar.dart';
 import '../widgets/global_top_bar.dart';
+import '../widgets/track_context_menu.dart';
 import 'album_detail_screen.dart';
+import '../widgets/interactive_artist_text.dart';
 import '../utils/app_colors.dart';
 
 /// Pantalla de un artista estilo Spotify:
@@ -45,7 +48,7 @@ class _ArtistScreenState extends State<ArtistScreen> {
       backgroundColor: context.bgApp,
       body: Column(
         children: [
-          const GlobalTopBar(title: 'Artista'),
+          const GlobalTopBar(title: 'Artista', showBackButton: true),
           Expanded(
             child: CustomScrollView(
               slivers: [
@@ -67,6 +70,7 @@ class _ArtistScreenState extends State<ArtistScreen> {
     return SliverAppBar(
       expandedHeight: 280,
       pinned: true,
+      automaticallyImplyLeading: false, // Quita el botón de atrás automático
       backgroundColor: context.bgApp,
       foregroundColor: context.textPrimary,
       flexibleSpace: FlexibleSpaceBar(
@@ -141,12 +145,13 @@ class _ArtistScreenState extends State<ArtistScreen> {
                               ),
                               onPressed: () {
                                 nav.toggleFollowArtist(widget.artist.id);
-                                ScaffoldMessenger.of(context)
-                                    .showSnackBar(SnackBar(
+                                final messenger = ScaffoldMessenger.of(context);
+                                final theme = context.read<ThemeController>().active;
+                                messenger.showSnackBar(SnackBar(
                                   content: Text(following
                                       ? 'Dejaste de seguir a ${widget.artist.name}'
                                       : 'Siguiendo a ${widget.artist.name}'),
-                                  backgroundColor: context.bgElevated,
+                                  backgroundColor: theme.bgElevated,
                                 ));
                               },
                               child:
@@ -169,42 +174,44 @@ class _ArtistScreenState extends State<ArtistScreen> {
   }
 
   Widget _buildArtistMenu(NavidromeService nav) {
+    final theme = context.read<ThemeController>().active;
     final following = nav.isFollowingArtist(widget.artist.id);
     final excluded = nav.isArtistExcluded(widget.artist.id);
+
     return PopupMenuButton<String>(
-      icon: Icon(Icons.more_vert_rounded, color: context.textSecondary),
-      color: context.bgApp,
+      icon: Icon(Icons.more_vert_rounded, color: theme.textSecondary),
+      color: theme.bgApp,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: context.bgElevated),
+        side: BorderSide(color: theme.bgElevated),
       ),
       onSelected: (value) async {
+        final messenger = ScaffoldMessenger.of(context);
         if (value == 'follow') {
           nav.toggleFollowArtist(widget.artist.id);
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          messenger.showSnackBar(SnackBar(
             content: Text(following
                 ? 'Dejaste de seguir a ${widget.artist.name}'
                 : 'Siguiendo a ${widget.artist.name}'),
-            backgroundColor: context.bgElevated,
+            backgroundColor: theme.bgElevated,
           ));
         } else if (value == 'exclude') {
           nav.toggleExcludeArtist(widget.artist.id);
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          messenger.showSnackBar(SnackBar(
             content: Text(excluded
                 ? 'Se reproducirá a ${widget.artist.name} nuevamente'
                 : 'No se reproducirá a ${widget.artist.name} en modo aleatorio'),
-            backgroundColor: context.bgElevated,
+            backgroundColor: theme.bgElevated,
           ));
         } else if (value == 'community') {
-          // Compartir link del artista al chat de comunidad
           final msg =
               '🎤 [ARTIST:${widget.artist.id}] ${widget.artist.name}';
           await nav.addChatMessage(msg);
           if (context.mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            messenger.showSnackBar(SnackBar(
               content:
                   Text('${widget.artist.name} compartido en la comunidad'),
-              backgroundColor: context.bgElevated,
+              backgroundColor: theme.bgElevated,
             ));
             ServerActivityPanel.show(context);
           }
@@ -215,7 +222,7 @@ class _ArtistScreenState extends State<ArtistScreen> {
           value: 'follow',
           child: Text(
             following ? 'Dejar de seguir' : 'Seguir artista',
-            style: TextStyle(color: context.textPrimary),
+            style: TextStyle(color: theme.textPrimary),
           ),
         ),
         PopupMenuItem(
@@ -225,13 +232,13 @@ class _ArtistScreenState extends State<ArtistScreen> {
                 ? 'Volver a reproducir este artista'
                 : 'No reproducir este artista',
             style: TextStyle(
-                color: excluded ? context.accent : context.textPrimary),
+                color: excluded ? theme.accent : theme.textPrimary),
           ),
         ),
         PopupMenuItem(
           value: 'community',
           child: Text('Compartir con la comunidad',
-              style: TextStyle(color: context.textPrimary)),
+              style: TextStyle(color: theme.textPrimary)),
         ),
       ],
     );
@@ -466,14 +473,10 @@ class _ArtistScreenState extends State<ArtistScreen> {
                     ),
                   ),
                   const SizedBox(height: 2),
-                  Text(
-                    track.artist,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: context.textMuted,
-                      fontSize: 12,
-                    ),
+                  InteractiveArtistText(
+                    artistString: track.artist,
+                    fontSize: 12,
+                    color: context.textMuted,
                   ),
                 ],
               ),
@@ -495,7 +498,7 @@ class _ArtistScreenState extends State<ArtistScreen> {
                 ),
                 IconButton(
                   icon: Icon(Icons.more_vert, color: context.textMuted),
-                  onPressed: () {}, // TODO: menú contextual
+                  onPressed: () => TrackContextMenu.show(context, track),
                 ),
               ],
             ),
@@ -506,13 +509,14 @@ class _ArtistScreenState extends State<ArtistScreen> {
   }
 
   Widget _buildAlbumsGrid(List<Album> albums) {
+    final compact = MediaQuery.sizeOf(context).width < 700;
     return GridView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        childAspectRatio: 0.8,
-        crossAxisSpacing: 12,
+      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: compact ? 2 : 5,
+        childAspectRatio: compact ? 0.8 : 1.0,
+        crossAxisSpacing: compact ? 12 : 6,
         mainAxisSpacing: 16,
       ),
       itemCount: albums.length,

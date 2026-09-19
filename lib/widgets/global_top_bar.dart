@@ -250,16 +250,18 @@ class _GlobalTopBarState extends State<GlobalTopBar> {
       ),
       child: Row(
         children: [
-          // Botón volver (si se abrió una pantalla secundaria)
-          if (widget.showBackButton && canPop) ...[
-            IconButton(
-              icon: const Icon(Icons.arrow_back_rounded, size: 20),
-              color: context.textPrimary,
-              tooltip: 'Volver',
-              onPressed: () => Navigator.of(context).pop(),
-            ),
-            const SizedBox(width: 4),
-          ],
+          // Botón volver (si se abrió una pantalla secundaria) - Izquierda de Inicio.
+          SizedBox(
+            width: (widget.showBackButton && canPop) ? 48 : 0,
+            child: (widget.showBackButton && canPop)
+                ? IconButton(
+                    icon: const Icon(Icons.arrow_back_rounded, size: 20),
+                    color: context.textPrimary,
+                    tooltip: 'Volver',
+                    onPressed: () => Navigator.of(context).pop(),
+                  )
+                : null,
+          ),
 
           // Botones de navegación persistentes
           _navItem(

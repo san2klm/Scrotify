@@ -24,16 +24,19 @@ class CoverFallbackService {
     String? title,
     int size = 600,
   }) {
+    // Validar size
+    final safeSize = size.clamp(100, 2000);
+
     final cleanArtist = _clean(artist);
     final cleanAlbum = _clean(album);
     final cleanTitle = _clean(title);
-    print('[CoverFallback] findCover called: artist="$artist"->"$cleanArtist" album="$album"->"$cleanAlbum" title="$title"->"$cleanTitle" size=$size');
+    print('[CoverFallback] findCover called: artist="$artist"->"$cleanArtist" album="$album"->"$cleanAlbum" title="$title"->"$cleanTitle" size=$safeSize');
     if (cleanArtist.isEmpty && cleanAlbum.isEmpty && cleanTitle.isEmpty) {
       print('[CoverFallback] empty metadata, returning null');
       return Future.value(null);
     }
 
-    final key = '$cleanArtist|$cleanAlbum|$cleanTitle|$size';
+    final key = '$cleanArtist|$cleanAlbum|$cleanTitle|$safeSize';
     if (_cache.containsKey(key)) {
       print('[CoverFallback] cache hit: $key -> ${_cache[key]}');
       return Future.value(_cache[key]);
@@ -43,7 +46,7 @@ class CoverFallbackService {
       return _pending[key]!;
     }
 
-    final future = _search(cleanArtist, cleanAlbum, cleanTitle, size).then((url) {
+    final future = _search(cleanArtist, cleanAlbum, cleanTitle, safeSize).then((url) {
       if (url != null && url.isNotEmpty) {
         _cache[key] = url;
         print('[CoverFallback] cached: $key -> $url');

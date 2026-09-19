@@ -92,7 +92,12 @@ class _CoverArtState extends State<CoverArt> {
 
   void _fetchExternal() {
     final dpr = MediaQuery.maybeDevicePixelRatioOf(context) ?? 2.0;
-    final size = ((widget.width ?? 300).clamp(100, 1000) * dpr).round();
+
+    double rawSize = (widget.width ?? 300.0).toDouble();
+    if (rawSize < 0) rawSize = 300.0;
+
+    final size = (rawSize.clamp(100.0, 1000.0) * dpr).round();
+
     print('[CoverArt] _fetchExternal: calling findCover artist="${widget.artist}" album="${widget.album}" title="${widget.title}" size=$size');
     CoverFallbackService.instance
         .findCover(

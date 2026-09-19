@@ -10,6 +10,7 @@ import 'cover_art.dart';
 import 'jam_dialog.dart';
 import 'jam_queue_panel.dart';
 import 'track_context_menu.dart';
+import 'interactive_artist_text.dart';
 import '../utils/app_colors.dart';
 
 /// Panel de control persistente (barra inferior del reproductor).
@@ -318,11 +319,10 @@ class PersistentPlayerBar extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             Flexible(
-              child: Text(
-                track?.artist ?? 'Selecciona algo para escuchar',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(color: context.playerArtist, fontSize: 12),
+              child: InteractiveArtistText(
+                artistString: track?.artist ?? 'Selecciona algo para escuchar',
+                fontSize: 12,
+                color: context.playerArtist, // Usar el color del tema anterior
               ),
             ),
             const SizedBox(width: 4),
