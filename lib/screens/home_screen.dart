@@ -425,6 +425,7 @@ class _HomeScreenState extends State<HomeScreen> {
           ...playlists.where((p) => nav.isPinnedPlaylist(p.id)),
           ...playlists.where((p) => !nav.isPinnedPlaylist(p.id)),
         ];
+        final followedIds = nav.followedArtistIds;
         return ListView(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
           children: [
@@ -438,6 +439,9 @@ class _HomeScreenState extends State<HomeScreen> {
                 MaterialPageRoute(builder: (_) => const LikedSongsScreen()),
               ),
             ),
+            // Artistas seguidos (entre Me gusta y playlists)
+            for (final artistId in followedIds)
+              _followedArtistTile(artistId, nav),
             const SizedBox(height: 4),
             for (final playlist in sorted) ...[
               _playlistTile(playlist, nav.isPinnedPlaylist(playlist.id)),
@@ -445,6 +449,100 @@ class _HomeScreenState extends State<HomeScreen> {
           ],
         );
       },
+    );
+  }
+
+  Widget _followedArtistTile(String artistId, NavidromeService nav) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(8),
+      onTap: () async {
+        try {
+          final raw = await nav.getArtists();
+          final match = raw.firstWhere(
+            (a) => a['id'] == artistId,
+            orElse: () => null,
+          );
+          if (match != null && mounted) {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => ArtistScreen(
+                  artist: Artist.fromJson(match as Map<String, dynamic>),
+                ),
+              ),
+            );
+          }
+        } catch (_) {}
+      },
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 5, horizontal: 4),
+        child: Row(
+          children: [
+            // Avatar circular para artistas
+            FutureBuilder<List<dynamic>>(
+              future: nav.getArtists(),
+              builder: (context, snap) {
+                String? url;
+                if (snap.hasData) {
+                  final found = snap.data!.firstWhere(
+                    (a) => a['id'] == artistId,
+                    orElse: () => null,
+                  );
+                  url = found?['coverArt'] as String?;
+                }
+                return CoverArt(
+                  url: url,
+                  width: 40,
+                  height: 40,
+                  borderRadius: 20,
+                  circle: true,
+                  fallbackIcon: Icons.person,
+                  fallbackIconSize: 18,
+                  fallbackColor: context.bgElevated,
+                );
+              },
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  FutureBuilder<List<dynamic>>(
+                    future: nav.getArtists(),
+                    builder: (context, snap) {
+                      String name = artistId;
+                      if (snap.hasData) {
+                        final found = snap.data!.firstWhere(
+                          (a) => a['id'] == artistId,
+                          orElse: () => null,
+                        );
+                        name = found?['name'] as String? ?? artistId;
+                      }
+                      return Text(
+                        name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: context.textPrimary,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      );
+                    },
+                  ),
+                  Text(
+                    'Artista · Siguiendo',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(color: context.textMuted, fontSize: 11),
+                  ),
+                ],
+              ),
+            ),
+            Icon(Icons.person_rounded, color: context.accent, size: 16),
+          ],
+        ),
+      ),
     );
   }
 

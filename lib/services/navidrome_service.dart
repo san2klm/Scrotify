@@ -948,13 +948,18 @@ class NavidromeService with ChangeNotifier {
   }
 
   // ---------------------------------------------------------------------------
-  // Fijar (pin) playlists — persistido en disco vía path_provider
+  // Fijar (pin) playlists, artistas seguidos y excluidos
   // ---------------------------------------------------------------------------
   final Set<String> _pinnedPlaylistIds = {};
+  final Set<String> _followedArtistIds = {};
+  final Set<String> _excludedArtistIds = {};
 
   bool isPinnedPlaylist(String id) => _pinnedPlaylistIds.contains(id);
+  bool isFollowingArtist(String id) => _followedArtistIds.contains(id);
+  bool isArtistExcluded(String id) => _excludedArtistIds.contains(id);
 
   List<String> get pinnedPlaylistIds => _pinnedPlaylistIds.toList()..sort();
+  List<String> get followedArtistIds => _followedArtistIds.toList();
 
   void togglePinPlaylist(String id) {
     if (_pinnedPlaylistIds.contains(id)) {
@@ -966,20 +971,60 @@ class NavidromeService with ChangeNotifier {
     _savePins();
   }
 
+  void toggleFollowArtist(String id) {
+    if (_followedArtistIds.contains(id)) {
+      _followedArtistIds.remove(id);
+    } else {
+      _followedArtistIds.add(id);
+    }
+    notifyListeners();
+    _saveFollowedArtists();
+  }
+
+  void toggleExcludeArtist(String id) {
+    if (_excludedArtistIds.contains(id)) {
+      _excludedArtistIds.remove(id);
+    } else {
+      _excludedArtistIds.add(id);
+    }
+    notifyListeners();
+    _saveExcludedArtists();
+  }
+
   Future<void> _loadPins() async {
     try {
       final dir = await getApplicationDocumentsDirectory();
-      final file = File('${dir.path}/pinned_playlists.json');
-      if (await file.exists()) {
-        final content = await file.readAsString();
+
+      // Load Pins
+      final pinFile = File('${dir.path}/pinned_playlists.json');
+      if (await pinFile.exists()) {
+        final content = await pinFile.readAsString();
         final list = jsonDecode(content) as List;
         _pinnedPlaylistIds
           ..clear()
           ..addAll(list.cast<String>());
       }
-    } catch (_) {
-      // Silently ignore — pins are a convenience, not critical.
-    }
+
+      // Load Followed
+      final followFile = File('${dir.path}/followed_artists.json');
+      if (await followFile.exists()) {
+        final content = await followFile.readAsString();
+        final list = jsonDecode(content) as List;
+        _followedArtistIds
+          ..clear()
+          ..addAll(list.cast<String>());
+      }
+
+      // Load Excluded
+      final excludeFile = File('${dir.path}/excluded_artists.json');
+      if (await excludeFile.exists()) {
+        final content = await excludeFile.readAsString();
+        final list = jsonDecode(content) as List;
+        _excludedArtistIds
+          ..clear()
+          ..addAll(list.cast<String>());
+      }
+    } catch (_) {}
   }
 
   Future<void> _savePins() async {
@@ -987,6 +1032,22 @@ class NavidromeService with ChangeNotifier {
       final dir = await getApplicationDocumentsDirectory();
       final file = File('${dir.path}/pinned_playlists.json');
       await file.writeAsString(jsonEncode(_pinnedPlaylistIds.toList()));
+    } catch (_) {}
+  }
+
+  Future<void> _saveFollowedArtists() async {
+    try {
+      final dir = await getApplicationDocumentsDirectory();
+      final file = File('${dir.path}/followed_artists.json');
+      await file.writeAsString(jsonEncode(_followedArtistIds.toList()));
+    } catch (_) {}
+  }
+
+  Future<void> _saveExcludedArtists() async {
+    try {
+      final dir = await getApplicationDocumentsDirectory();
+      final file = File('${dir.path}/excluded_artists.json');
+      await file.writeAsString(jsonEncode(_excludedArtistIds.toList()));
     } catch (_) {}
   }
 

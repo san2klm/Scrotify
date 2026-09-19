@@ -118,29 +118,45 @@ class _ArtistScreenState extends State<ArtistScreen> {
                     ),
                     const SizedBox(height: 16),
                     // Actions row: Play | Follow | Menu
-                    Row(
-                      children: [
-                        _buildPlayButton(),
-                        const Spacer(),
-                        OutlinedButton(
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: context.textPrimary,
-                            side: BorderSide(color: context.textSecondary),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(20),
+                    Consumer<NavidromeService>(
+                      builder: (context, nav, _) {
+                        final following =
+                            nav.isFollowingArtist(widget.artist.id);
+                        return Row(
+                          children: [
+                            _buildPlayButton(),
+                            const Spacer(),
+                            OutlinedButton(
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: following
+                                    ? context.accent
+                                    : context.textPrimary,
+                                side: BorderSide(
+                                    color: following
+                                        ? context.accent
+                                        : context.textSecondary),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                              ),
+                              onPressed: () {
+                                nav.toggleFollowArtist(widget.artist.id);
+                                ScaffoldMessenger.of(context)
+                                    .showSnackBar(SnackBar(
+                                  content: Text(following
+                                      ? 'Dejaste de seguir a ${widget.artist.name}'
+                                      : 'Siguiendo a ${widget.artist.name}'),
+                                  backgroundColor: context.bgElevated,
+                                ));
+                              },
+                              child:
+                                  Text(following ? 'Siguiendo' : 'Seguir'),
                             ),
-                          ),
-                          onPressed: () {
-                            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                              content: const Text('Comenzaste a seguir al artista'),
-                              backgroundColor: context.bgElevated,
-                            ));
-                          },
-                          child: const Text('Seguir'),
-                        ),
-                        const SizedBox(width: 8),
-                        _buildArtistMenu(),
-                      ],
+                            const SizedBox(width: 8),
+                            _buildArtistMenu(nav),
+                          ],
+                        );
+                      },
                     ),
                   ],
                 ),
@@ -152,7 +168,9 @@ class _ArtistScreenState extends State<ArtistScreen> {
     );
   }
 
-  Widget _buildArtistMenu() {
+  Widget _buildArtistMenu(NavidromeService nav) {
+    final following = nav.isFollowingArtist(widget.artist.id);
+    final excluded = nav.isArtistExcluded(widget.artist.id);
     return PopupMenuButton<String>(
       icon: Icon(Icons.more_vert_rounded, color: context.textSecondary),
       color: context.bgApp,
@@ -160,33 +178,60 @@ class _ArtistScreenState extends State<ArtistScreen> {
         borderRadius: BorderRadius.circular(12),
         side: BorderSide(color: context.bgElevated),
       ),
-      onSelected: (value) {
+      onSelected: (value) async {
         if (value == 'follow') {
+          nav.toggleFollowArtist(widget.artist.id);
           ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: const Text('Dejaste de seguir al artista'),
+            content: Text(following
+                ? 'Dejaste de seguir a ${widget.artist.name}'
+                : 'Siguiendo a ${widget.artist.name}'),
             backgroundColor: context.bgElevated,
           ));
         } else if (value == 'exclude') {
+          nav.toggleExcludeArtist(widget.artist.id);
           ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: const Text('No se reproducirá a este artista'),
+            content: Text(excluded
+                ? 'Se reproducirá a ${widget.artist.name} nuevamente'
+                : 'No se reproducirá a ${widget.artist.name} en modo aleatorio'),
             backgroundColor: context.bgElevated,
           ));
         } else if (value == 'community') {
-          ServerActivityPanel.show(context);
+          // Compartir link del artista al chat de comunidad
+          final msg =
+              '🎤 [ARTIST:${widget.artist.id}] ${widget.artist.name}';
+          await nav.addChatMessage(msg);
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+              content:
+                  Text('${widget.artist.name} compartido en la comunidad'),
+              backgroundColor: context.bgElevated,
+            ));
+            ServerActivityPanel.show(context);
+          }
         }
       },
       itemBuilder: (context) => [
         PopupMenuItem(
           value: 'follow',
-          child: Text('Dejar de seguir', style: TextStyle(color: context.textPrimary)),
+          child: Text(
+            following ? 'Dejar de seguir' : 'Seguir artista',
+            style: TextStyle(color: context.textPrimary),
+          ),
         ),
         PopupMenuItem(
           value: 'exclude',
-          child: Text('No reproducir a este artista', style: TextStyle(color: context.textPrimary)),
+          child: Text(
+            excluded
+                ? 'Volver a reproducir este artista'
+                : 'No reproducir este artista',
+            style: TextStyle(
+                color: excluded ? context.accent : context.textPrimary),
+          ),
         ),
         PopupMenuItem(
           value: 'community',
-          child: Text('Compartir con la comunidad', style: TextStyle(color: context.textPrimary)),
+          child: Text('Compartir con la comunidad',
+              style: TextStyle(color: context.textPrimary)),
         ),
       ],
     );
