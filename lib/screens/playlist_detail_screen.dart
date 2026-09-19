@@ -26,6 +26,7 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
   late Future<List<Track>> _future;
   late Playlist _playlist;
   bool _reordering = false;
+  int _playlistVersion = -1;
 
   @override
   void initState() {
@@ -163,7 +164,20 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final nav = context.read<NavidromeService>();
+    final nav = context.watch<NavidromeService>();
+    // Refresco reactivo: si bumpPlaylists() fue llamado (añadir/eliminar),
+    // relanzamos el future para reflejar los cambios sin salir de la pantalla.
+    final currentVersion = nav.playlistVersion;
+    if (_playlistVersion >= 0 && currentVersion != _playlistVersion) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        setState(() {
+          _future = nav.getPlaylistTracks(_playlist.id);
+        });
+      });
+    }
+    _playlistVersion = currentVersion;
+
     // Misma lógica que HomeShell: < 700px es móvil (barra compacta).
     final compact = MediaQuery.sizeOf(context).width < 700;
     return Scaffold(

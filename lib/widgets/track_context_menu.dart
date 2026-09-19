@@ -520,9 +520,25 @@ class TrackContextMenu extends StatelessWidget {
                   'Compartir con la comunidad',
                   style: TextStyle(color: context.textPrimary, fontSize: 14),
                 ),
-                onTap: () {
+                onTap: () async {
+                  final nav = context.read<NavidromeService>();
+                  final messenger = ScaffoldMessenger.of(context);
+                  final bg =
+                      context.read<ThemeController>().active.bgElevated;
                   Navigator.of(context).pop();
-                  ServerActivityPanel.show(context);
+                  // Enviar link de canción al chat de comunidad
+                  final msg =
+                      '🎵 [TRACK:${track.id}:${track.title}:${track.artist}]';
+                  final ok = await nav.addChatMessage(msg);
+                  if (ok && context.mounted) {
+                    ServerActivityPanel.show(context);
+                  } else if (!ok && messenger.mounted) {
+                    messenger.showSnackBar(SnackBar(
+                      content:
+                          const Text('No se pudo compartir en la comunidad'),
+                      backgroundColor: bg,
+                    ));
+                  }
                 },
               ),
             ],

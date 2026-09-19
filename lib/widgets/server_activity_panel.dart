@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../screens/artist_screen.dart';
 import '../services/navidrome_service.dart';
 import '../services/player_controller.dart';
 import 'cover_art.dart';
@@ -427,11 +428,36 @@ class _ServerActivityPanelState extends State<ServerActivityPanel>
                     final isMe = msg.username.toLowerCase() ==
                         (nav.username ?? '').toLowerCase();
 
-                    // Comprobar si es un anuncio de Jam
-                    final isJamLive = msg.message.startsWith('[JAM_LIVE]:');
-
-                    if (isJamLive) {
+                    // Anuncio de Jam
+                    if (msg.message.startsWith('[JAM_LIVE]:')) {
                       return _buildJamAnnouncementCard(msg);
+                    }
+
+                    // Link de canción compartida
+                    final trackMatch =
+                        _trackLinkPattern.firstMatch(msg.message);
+                    if (trackMatch != null) {
+                      return _buildTrackLinkCard(
+                        msg: msg,
+                        isMe: isMe,
+                        trackId: trackMatch.group(1)!,
+                        title: trackMatch.group(2)!,
+                        artist: trackMatch.group(3)!,
+                        nav: nav,
+                      );
+                    }
+
+                    // Link de artista compartido
+                    final artistMatch =
+                        _artistLinkPattern.firstMatch(msg.message);
+                    if (artistMatch != null) {
+                      return _buildArtistLinkCard(
+                        msg: msg,
+                        isMe: isMe,
+                        artistId: artistMatch.group(1)!,
+                        artistName: artistMatch.group(2)!,
+                        nav: nav,
+                      );
                     }
 
                     return Container(
@@ -625,6 +651,237 @@ class _ServerActivityPanelState extends State<ServerActivityPanel>
             ),
             child: const Text('Ver Jam',
                 style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // Patrones para links de canción y artista en el chat
+  // ---------------------------------------------------------------------------
+  static final _trackLinkPattern =
+      RegExp(r'\[TRACK:([^:]+):([^:]+):([^\]]+)\]');
+  static final _artistLinkPattern =
+      RegExp(r'\[ARTIST:([^:]+):([^\]]+)\]');
+
+  /// Tarjeta de canción compartida en el chat.
+  Widget _buildTrackLinkCard({
+    required ChatMessage msg,
+    required bool isMe,
+    required String trackId,
+    required String title,
+    required String artist,
+    required NavidromeService nav,
+  }) {
+    final player = context.read<PlayerController>();
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: context.bgElevated,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: isMe
+              ? context.accent.withValues(alpha: 0.3)
+              : context.bgElevated,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Remitente + hora
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                isMe ? 'Tú' : msg.username,
+                style: TextStyle(
+                    color: context.accent,
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold),
+              ),
+              Text(
+                '${msg.time.hour.toString().padLeft(2, '0')}:${msg.time.minute.toString().padLeft(2, '0')}',
+                style: TextStyle(color: context.textMuted, fontSize: 10),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          // Tile de la canción
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: context.bgApp,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: context.accent.withValues(alpha: 0.2)),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.music_note_rounded,
+                    color: context.accent, size: 20),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: context.textPrimary,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      Text(
+                        artist,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                            color: context.textMuted, fontSize: 11),
+                      ),
+                    ],
+                  ),
+                ),
+                // Botón reproducir
+                IconButton(
+                  visualDensity: VisualDensity.compact,
+                  tooltip: 'Reproducir',
+                  icon: Icon(Icons.play_circle_filled_rounded,
+                      color: context.accent, size: 28),
+                  onPressed: () async {
+                    try {
+                      // Buscar la canción por id en la biblioteca
+                      final tracks = await nav.getTracks();
+                      final track = tracks.firstWhere(
+                        (t) => t.id == trackId,
+                        orElse: () => Track(
+                          id: '',
+                          title: '',
+                          artist: '',
+                          album: '',
+                          duration: '0',
+                        ),
+                      );
+                      if (track.id.isNotEmpty) {
+                        player.playQueue([track], startIndex: 0);
+                        if (context.mounted) Navigator.of(context).pop();
+                      }
+                    } catch (_) {}
+                  },
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Tarjeta de artista compartido en el chat.
+  Widget _buildArtistLinkCard({
+    required ChatMessage msg,
+    required bool isMe,
+    required String artistId,
+    required String artistName,
+    required NavidromeService nav,
+  }) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: context.bgElevated,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: isMe
+              ? context.accent.withValues(alpha: 0.3)
+              : context.bgElevated,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                isMe ? 'Tú' : msg.username,
+                style: TextStyle(
+                    color: context.accent,
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold),
+              ),
+              Text(
+                '${msg.time.hour.toString().padLeft(2, '0')}:${msg.time.minute.toString().padLeft(2, '0')}',
+                style: TextStyle(color: context.textMuted, fontSize: 10),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: context.bgApp,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: context.accent.withValues(alpha: 0.2)),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.person_rounded, color: context.accent, size: 20),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        artistName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: context.textPrimary,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      Text(
+                        'Artista',
+                        style: TextStyle(
+                            color: context.textMuted, fontSize: 11),
+                      ),
+                    ],
+                  ),
+                ),
+                // Botón ver artista
+                TextButton(
+                  style: TextButton.styleFrom(
+                      foregroundColor: context.accent),
+                  onPressed: () async {
+                    try {
+                      final raw = await nav.getArtists();
+                      final match = raw.firstWhere(
+                        (a) => a['id'] == artistId,
+                        orElse: () => null,
+                      );
+                      if (match != null && context.mounted) {
+                        Navigator.of(context).pop();
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => ArtistScreen(
+                              artist: Artist.fromJson(
+                                  match as Map<String, dynamic>),
+                            ),
+                          ),
+                        );
+                      }
+                    } catch (_) {}
+                  },
+                  child: const Text('Ver', style: TextStyle(fontSize: 12)),
+                ),
+              ],
+            ),
           ),
         ],
       ),
