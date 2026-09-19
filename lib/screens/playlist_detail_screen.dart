@@ -8,6 +8,7 @@ import '../widgets/interactive_artist_text.dart';
 import '../widgets/add_playlist_tracks_dialog.dart';
 import '../widgets/persistent_player_bar.dart';
 import '../widgets/global_top_bar.dart';
+import '../widgets/track_context_menu.dart';
 import '../utils/app_colors.dart';
 
 /// Pantalla que muestra las canciones de una playlist específica.
@@ -321,63 +322,80 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
                             _reorderTracks(tracks, oldIndex, newIndex),
                         itemBuilder: (context, index) {
                           final track = tracks[index];
-                          final starred = nav.isStarred(track.id);
-                          return ListTile(
+                          // Fila con drag handle centrado verticalmente y ⋮ en trailing.
+                          return InkWell(
                             key: ValueKey('playlist-${track.id}-$index'),
-                            leading: CoverArt(
-                              url: track.albumArtUrl,
-                              artist: track.artist,
-                              album: track.album,
-                              title: track.title,
-                              width: 40,
-                              height: 40,
-                              borderRadius: 4,
-                              fallbackIcon: Icons.music_note,
-                              fallbackIconSize: 20,
-                              fallbackColor: context.bgElevated,
-                            ),
-                            title: Text(track.title,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                    color: context.textPrimary, fontSize: 14)),
-                            subtitle: InteractiveArtistText(artistString: track.artist),
-                            trailing: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                IconButton(
-                                  icon: Icon(
-                                    starred
-                                        ? Icons.favorite
-                                        : Icons.favorite_border,
-                                    color: starred
-                                        ? context.accent
-                                        : context.textMuted,
-                                  ),
-                                  onPressed: () async {
-                                    await nav.toggleStar(track);
-                                    if (mounted) setState(() {});
-                                  },
-                                ),
-                                ReorderableDragStartListener(
-                                  index: index,
-                                  enabled: !_reordering,
-                                  child: Padding(
-                                    padding: const EdgeInsets.only(left: 4),
-                                    child: Icon(
-                                      Icons.drag_handle_rounded,
-                                      color: context.textMuted,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
                             onTap: () =>
                                 context.read<PlayerController>().playQueue(
                                       tracks,
                                       startIndex: index,
                                       sourcePlaylist: _playlist,
                                     ),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 4),
+                              child: Row(
+                                children: [
+                                  // Portada
+                                  CoverArt(
+                                    url: track.albumArtUrl,
+                                    artist: track.artist,
+                                    album: track.album,
+                                    title: track.title,
+                                    width: 40,
+                                    height: 40,
+                                    borderRadius: 4,
+                                    fallbackIcon: Icons.music_note,
+                                    fallbackIconSize: 20,
+                                    fallbackColor: context.bgElevated,
+                                  ),
+                                  const SizedBox(width: 10),
+                                  // Título + artista
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Text(
+                                          track.title,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: TextStyle(
+                                              color: context.textPrimary,
+                                              fontSize: 14),
+                                        ),
+                                        InteractiveArtistText(
+                                            artistString: track.artist),
+                                      ],
+                                    ),
+                                  ),
+                                  // Drag handle centrado
+                                  ReorderableDragStartListener(
+                                    index: index,
+                                    enabled: !_reordering,
+                                    child: Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 6),
+                                      child: Icon(
+                                        Icons.drag_handle_rounded,
+                                        color: context.textMuted,
+                                        size: 22,
+                                      ),
+                                    ),
+                                  ),
+                                  // Tres puntitos → menú contextual
+                                  IconButton(
+                                    visualDensity: VisualDensity.compact,
+                                    icon: Icon(Icons.more_vert_rounded,
+                                        color: context.textMuted, size: 20),
+                                    onPressed: () =>
+                                        TrackContextMenu.show(context, track,
+                                            playlistId: _playlist.id),
+                                  ),
+                                ],
+                              ),
+                            ),
                           );
                         },
                       ),

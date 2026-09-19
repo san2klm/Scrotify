@@ -58,9 +58,7 @@ class PersistentPlayerBar extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 16),
         child: Row(
           children: [
-            // ── Left: drag + artwork + track info (title, artist, favorite) ──
-            Icon(Icons.drag_handle_rounded, color: context.textSecondary),
-            const SizedBox(width: 8),
+            // ── Left: artwork + track info (title, artist, favorite) ──
             _artwork(context, track),
             const SizedBox(width: 12),
             _trackInfo(context, track),
@@ -173,8 +171,6 @@ class PersistentPlayerBar extends StatelessWidget {
                       borderRadius: BorderRadius.circular(8),
                       child: Row(
                         children: [
-                          Icon(Icons.drag_handle_rounded, color: context.textSecondary),
-                          const SizedBox(width: 8),
                           _artwork(context, track),
                           const SizedBox(width: 10),
                           Expanded(child: _trackInfo(context, track)),
