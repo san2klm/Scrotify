@@ -104,7 +104,7 @@ class _ArtistScreenState extends State<ArtistScreen> {
           Expanded(
             child: CustomScrollView(
               slivers: [
-                _buildSliverAppBar(),
+                _buildSliverAppBar(context),
                 SliverToBoxAdapter(child: _buildContent()),
               ],
             ),
@@ -118,9 +118,15 @@ class _ArtistScreenState extends State<ArtistScreen> {
     );
   }
 
-  Widget _buildSliverAppBar() {
+  Widget _buildSliverAppBar(BuildContext context) {
+    // La imagen Fanart (TheAudioDB) suele ser 1920x1080 (16:9).
+    // Adaptamos el alto para que la foto encaje perfecto sin cortes.
+    final width = MediaQuery.sizeOf(context).width;
+    final idealHeight = width * (1080 / 1920);
+    final clampedHeight = idealHeight.clamp(240.0, 500.0);
+
     return SliverAppBar(
-      expandedHeight: 280,
+      expandedHeight: clampedHeight,
       pinned: true,
       automaticallyImplyLeading: false, // Quita el botón de atrás automático
       backgroundColor: context.bgApp,
