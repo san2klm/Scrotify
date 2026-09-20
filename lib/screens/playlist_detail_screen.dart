@@ -341,7 +341,7 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
                         physics: const BouncingScrollPhysics(),
                         buildDefaultDragHandles: false,
                         itemCount: tracks.length,
-                        onReorder: (oldIndex, newIndex) =>
+                        onReorderItem: (oldIndex, newIndex) =>
                             _reorderTracks(tracks, oldIndex, newIndex),
                         itemBuilder: (context, index) {
                           final track = tracks[index];
@@ -357,6 +357,7 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
                               padding: const EdgeInsets.symmetric(
                                   horizontal: 8, vertical: 4),
                               child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.center,
                                 children: [
                                   // Portada
                                   CoverArt(
@@ -392,18 +393,36 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
                                       ],
                                     ),
                                   ),
-                                  // Drag handle centrado
+                                  // Drag handle centrado horizontalmente (en la mitad)
                                   ReorderableDragStartListener(
                                     index: index,
                                     child: Padding(
                                       padding: const EdgeInsets.symmetric(
-                                          horizontal: 6),
+                                          horizontal: 8, vertical: 4),
                                       child: Icon(
                                         Icons.drag_handle_rounded,
                                         color: context.textMuted,
                                         size: 22,
                                       ),
                                     ),
+                                  ),
+                                  const Spacer(),
+                                  // Botón de me gusta
+                                  IconButton(
+                                    visualDensity: VisualDensity.compact,
+                                    icon: Icon(
+                                      nav.isStarred(track.id)
+                                          ? Icons.favorite
+                                          : Icons.favorite_border,
+                                      color: nav.isStarred(track.id)
+                                          ? context.accent
+                                          : context.textMuted,
+                                      size: 20,
+                                    ),
+                                    onPressed: () async {
+                                      await nav.toggleStar(track);
+                                      setState(() {});
+                                    },
                                   ),
                                   // Tres puntitos → menú contextual
                                   IconButton(

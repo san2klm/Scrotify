@@ -134,73 +134,96 @@ class _LikedSongsScreenState extends State<LikedSongsScreen> {
                         itemBuilder: (context, index) {
                           final track = tracks[index];
                           final starred = nav.isStarred(track.id);
-                          return ListTile(
+                          return InkWell(
                             key: ValueKey('liked-${track.id}'),
-                            leading: CoverArt(
-                              url: track.albumArtUrl,
-                              artist: track.artist,
-                              album: track.album,
-                              title: track.title,
-                              width: 40,
-                              height: 40,
-                              borderRadius: 4,
-                              fallbackIcon: Icons.music_note,
-                              fallbackIconSize: 20,
-                              fallbackColor: context.bgElevated,
-                            ),
-                            title: Text(track.title,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                    color: context.textPrimary, fontSize: 14)),
-                            subtitle: InteractiveArtistText(artistString: track.artist),
-                            trailing: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                ReorderableDragStartListener(
-                                  index: index,
-                                  child: Padding(
-                                    padding: const EdgeInsets.symmetric(
-                                        horizontal: 6),
-                                    child: Icon(
-                                      Icons.drag_handle_rounded,
-                                      color: context.textMuted,
-                                      size: 22,
-                                    ),
-                                  ),
-                                ),
-                                IconButton(
-                                  visualDensity: VisualDensity.compact,
-                                  icon: Icon(
-                                    starred
-                                        ? Icons.favorite
-                                        : Icons.favorite_border,
-                                    color: starred
-                                        ? context.accent
-                                        : context.textMuted,
-                                    size: 20,
-                                  ),
-                                  onPressed: () async {
-                                    await nav.toggleStar(track);
-                                    if (mounted) {
-                                      setState(
-                                          () => _future = nav.getStarred());
-                                    }
-                                  },
-                                ),
-                                // Menú contextual ⋮
-                                IconButton(
-                                  visualDensity: VisualDensity.compact,
-                                  icon: Icon(Icons.more_vert_rounded,
-                                      color: context.textMuted, size: 20),
-                                  onPressed: () =>
-                                      TrackContextMenu.show(context, track),
-                                ),
-                              ],
-                            ),
                             onTap: () => context
                                 .read<PlayerController>()
                                 .playQueue(tracks, startIndex: index),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 4),
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.center,
+                                children: [
+                                  // Portada
+                                  CoverArt(
+                                    url: track.albumArtUrl,
+                                    artist: track.artist,
+                                    album: track.album,
+                                    title: track.title,
+                                    width: 40,
+                                    height: 40,
+                                    borderRadius: 4,
+                                    fallbackIcon: Icons.music_note,
+                                    fallbackIconSize: 20,
+                                    fallbackColor: context.bgElevated,
+                                  ),
+                                  const SizedBox(width: 10),
+                                  // Título + artista
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Text(
+                                          track.title,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: TextStyle(
+                                              color: context.textPrimary,
+                                              fontSize: 14),
+                                        ),
+                                        InteractiveArtistText(
+                                            artistString: track.artist),
+                                      ],
+                                    ),
+                                  ),
+                                  // Drag handle centrado horizontalmente (en la mitad)
+                                  ReorderableDragStartListener(
+                                    index: index,
+                                    child: Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 8, vertical: 4),
+                                      child: Icon(
+                                        Icons.drag_handle_rounded,
+                                        color: context.textMuted,
+                                        size: 22,
+                                      ),
+                                    ),
+                                  ),
+                                  const Spacer(),
+                                  // Botón de me gusta
+                                  IconButton(
+                                    visualDensity: VisualDensity.compact,
+                                    icon: Icon(
+                                      starred
+                                          ? Icons.favorite
+                                          : Icons.favorite_border,
+                                      color: starred
+                                          ? context.accent
+                                          : context.textMuted,
+                                      size: 20,
+                                    ),
+                                    onPressed: () async {
+                                      await nav.toggleStar(track);
+                                      if (mounted) {
+                                        setState(
+                                            () => _future = nav.getStarred());
+                                      }
+                                    },
+                                  ),
+                                  // Menú contextual ⋮
+                                  IconButton(
+                                    visualDensity: VisualDensity.compact,
+                                    icon: Icon(Icons.more_vert_rounded,
+                                        color: context.textMuted, size: 20),
+                                    onPressed: () =>
+                                        TrackContextMenu.show(context, track),
+                                  ),
+                                ],
+                              ),
+                            ),
                           );
                         },
                       ),
