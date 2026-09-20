@@ -24,7 +24,6 @@ class GlobalTopBar extends StatefulWidget implements PreferredSizeWidget {
   final ValueChanged<int>? onNavIndexChanged;
   final VoidCallback? onLogoTap;
   final bool showBackButton;
-  final bool transparent;
 
   const GlobalTopBar({
     super.key,
@@ -37,7 +36,6 @@ class GlobalTopBar extends StatefulWidget implements PreferredSizeWidget {
     this.onNavIndexChanged,
     this.onLogoTap,
     this.showBackButton = true,
-    this.transparent = false,
   });
 
   @override
@@ -152,12 +150,10 @@ class _GlobalTopBarState extends State<GlobalTopBar> {
       child: Container(
         padding: const EdgeInsets.fromLTRB(8, 6, 10, 6),
         decoration: BoxDecoration(
-          color: widget.transparent ? Colors.transparent : context.bgApp,
-          border: widget.transparent
-            ? null
-            : Border(
-                bottom: BorderSide(color: context.bgCard, width: 1),
-              ),
+          color: context.bgApp,
+          border: Border(
+            bottom: BorderSide(color: context.bgCard, width: 1),
+          ),
         ),
         child: Row(
           children: [
@@ -247,12 +243,10 @@ class _GlobalTopBarState extends State<GlobalTopBar> {
       height: 60,
       padding: const EdgeInsets.symmetric(horizontal: 16),
       decoration: BoxDecoration(
-        color: widget.transparent ? Colors.transparent : context.bgApp,
-        border: widget.transparent
-            ? null
-            : Border(
-                bottom: BorderSide(color: context.bgElevated, width: 1.2),
-              ),
+        color: context.bgApp,
+        border: Border(
+          bottom: BorderSide(color: context.bgElevated, width: 1.2),
+        ),
       ),
       child: Row(
         children: [
