@@ -1,3 +1,5 @@
+import 'dart:convert';
+import 'package:http/http.dart' as http;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -33,12 +35,62 @@ class _ArtistScreenState extends State<ArtistScreen> {
   bool _showAllTracks = false;
   static const int _initialTrackCount = 5;
 
+  String? _bannerImageUrl;
+
   @override
   void initState() {
+    // Iniciar con la portada de Navidrome para que no haya pantalla negra mientas busca
+    _bannerImageUrl = widget.artist.coverArtUrl;
     super.initState();
     final nav = context.read<NavidromeService>();
     _futureTopTracks = nav.getArtistTracks(widget.artist.id);
     _futureAlbums = nav.getArtistAlbums(widget.artist.id);
+
+    _fetchBetterArtistImage();
+  }
+
+  Future<void> _fetchBetterArtistImage() async {
+    final artistName = widget.artist.name;
+    try {
+      // 1. Intentar TheAudioDB (prioridad para Fanart apaisado real)
+      final uri = Uri.parse(
+          'https://www.theaudiodb.com/api/v1/json/2/search.php?s=${Uri.encodeQueryComponent(artistName)}');
+      final res = await http.get(uri);
+      if (res.statusCode == 200) {
+        final data = json.decode(res.body);
+        final artists = data['artists'];
+        if (artists != null && artists.isNotEmpty) {
+          final fanart = artists[0]['strArtistFanart'];
+          if (fanart != null && fanart.toString().trim().isNotEmpty) {
+            if (mounted) setState(() => _bannerImageUrl = fanart);
+            return;
+          }
+        }
+      }
+    } catch (_) {}
+
+    try {
+      // 2. Fallback a Deezer (picture_xl es una foto real del artista, no portada cuadrada de disco)
+      final uri = Uri.parse(
+          'https://api.deezer.com/search/artist?q=${Uri.encodeQueryComponent(artistName)}');
+      final res = await http.get(uri);
+      if (res.statusCode == 200) {
+        final data = json.decode(res.body);
+        final items = data['data'];
+        if (items != null && items.isNotEmpty) {
+          final img = items[0]['picture_xl'] ?? items[0]['picture_big'];
+          if (img != null && img.toString().trim().isNotEmpty) {
+            if (mounted) setState(() => _bannerImageUrl = img);
+            return;
+          }
+        }
+      }
+    } catch (_) {}
+
+    // 3. Fallback original Navidrome
+    if (mounted && widget.artist.coverArtUrl != null) {
+      setState(() => _bannerImageUrl = widget.artist.coverArtUrl);
+    }
   }
 
   @override
@@ -78,18 +130,27 @@ class _ArtistScreenState extends State<ArtistScreen> {
           fit: StackFit.expand,
           children: [
             // Fondo con imagen del artista + gradiente
-            widget.artist.coverArtUrl != null
-                ? Image.network(
-                    widget.artist.coverArtUrl!,
-                    fit: BoxFit.cover,
-                    loadingBuilder: (context, child, progress) {
-                      if (progress == null) return child;
-                      return Container(color: context.accent2);
-                    },
-                    errorBuilder: (_, __, ___) =>
-                        Container(color: context.accent2),
-                  )
-                : Container(color: context.accent2),
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 600),
+              child: _bannerImageUrl != null
+                  ? Image.network(
+                      _bannerImageUrl!,
+                      key: ValueKey(_bannerImageUrl),
+                      fit: BoxFit.cover,
+                      width: double.infinity,
+                      height: double.infinity,
+                      loadingBuilder: (context, child, progress) {
+                        if (progress == null) return child;
+                        return Container(color: context.accent2);
+                      },
+                      errorBuilder: (_, __, ___) =>
+                          Container(color: context.accent2),
+                    )
+                  : Container(
+                      key: const ValueKey('empty_banner'),
+                      color: context.accent2,
+                    ),
+            ),
             // Gradiente oscuro abajo para legibilidad
             DecoratedBox(
               decoration: BoxDecoration(
@@ -207,7 +268,7 @@ class _ArtistScreenState extends State<ArtistScreen> {
           final msg =
               '🎤 [ARTIST:${widget.artist.id}] ${widget.artist.name}';
           await nav.addChatMessage(msg);
-          if (context.mounted) {
+          if (mounted) {
             messenger.showSnackBar(SnackBar(
               content:
                   Text('${widget.artist.name} compartido en la comunidad'),
