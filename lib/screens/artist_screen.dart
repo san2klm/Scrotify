@@ -35,10 +35,18 @@ class _ArtistScreenState extends State<ArtistScreen> {
   bool _showAllTracks = false;
   static const int _initialTrackCount = 5;
 
+  final ScrollController _scrollController = ScrollController();
+  bool _isScrolledDown = false;
   String? _bannerImageUrl;
 
   @override
   void initState() {
+    _scrollController.addListener(() {
+      final scrolled = _scrollController.offset > 80;
+      if (scrolled != _isScrolledDown) {
+        setState(() => _isScrolledDown = scrolled);
+      }
+    });
     // Iniciar con la portada de Navidrome para que no haya pantalla negra mientas busca
     _bannerImageUrl = widget.artist.coverArtUrl;
     super.initState();
@@ -94,19 +102,37 @@ class _ArtistScreenState extends State<ArtistScreen> {
   }
 
   @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final compact = MediaQuery.sizeOf(context).width < 700;
     return Scaffold(
       backgroundColor: context.bgApp,
-      body: Column(
+      body: Stack(
         children: [
-          const GlobalTopBar(title: 'Artista', showBackButton: true),
-          Expanded(
-            child: CustomScrollView(
-              slivers: [
-                _buildSliverAppBar(),
-                SliverToBoxAdapter(child: _buildContent()),
-              ],
+          CustomScrollView(
+            controller: _scrollController,
+            slivers: [
+              _buildSliverAppBar(),
+              SliverToBoxAdapter(child: _buildContent()),
+            ],
+          ),
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 250),
+              color: _isScrolledDown ? context.bgApp : Colors.transparent,
+              child: GlobalTopBar(
+                title: 'Artista',
+                showBackButton: true,
+                transparent: !_isScrolledDown,
+              ),
             ),
           ),
         ],
@@ -120,7 +146,7 @@ class _ArtistScreenState extends State<ArtistScreen> {
 
   Widget _buildSliverAppBar() {
     return SliverAppBar(
-      expandedHeight: 280,
+      expandedHeight: 320,
       pinned: true,
       automaticallyImplyLeading: false, // Quita el botón de atrás automático
       backgroundColor: context.bgApp,
@@ -151,14 +177,19 @@ class _ArtistScreenState extends State<ArtistScreen> {
                       color: context.accent2,
                     ),
             ),
-            // Gradiente oscuro abajo para legibilidad
+            // Gradiente oscuro arriba (legibilidad top bar) y abajo (título)
             DecoratedBox(
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
-                  colors: [Colors.transparent, context.bgApp],
-                  stops: [0.6, 1.0],
+                  colors: [
+                    Colors.black.withValues(alpha: 0.5), 
+                    Colors.transparent, 
+                    Colors.transparent, 
+                    context.bgApp
+                  ],
+                  stops: const [0.0, 0.25, 0.6, 1.0],
                 ),
               ),
             ),
