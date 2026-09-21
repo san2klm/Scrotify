@@ -80,10 +80,7 @@ class _ArtistScreenState extends State<ArtistScreen> {
         if (items != null && items.isNotEmpty) {
           final img = items[0]['picture_xl'] ?? items[0]['picture_big'];
           if (img != null && img.toString().trim().isNotEmpty) {
-            // Forzar a Deezer CDN a devolver 1920x1080 (16:9) recortando del original,
-            // para que tenga las mismas dimensiones y encuadramiento que TheAudioDB
-            final replacedImg = img.toString().replaceFirst(RegExp(r'\d+x\d+-'), '1920x1080-');
-            if (mounted) setState(() => _bannerImageUrl = replacedImg);
+            if (mounted) setState(() => _bannerImageUrl = img);
             return;
           }
         }
@@ -107,7 +104,7 @@ class _ArtistScreenState extends State<ArtistScreen> {
           Expanded(
             child: CustomScrollView(
               slivers: [
-                _buildSliverAppBar(context),
+                _buildSliverAppBar(),
                 SliverToBoxAdapter(child: _buildContent()),
               ],
             ),
@@ -121,15 +118,9 @@ class _ArtistScreenState extends State<ArtistScreen> {
     );
   }
 
-  Widget _buildSliverAppBar(BuildContext context) {
-    // La imagen Fanart (TheAudioDB) suele ser 1920x1080 (16:9).
-    // Adaptamos el alto para que la foto encaje perfecto sin cortes.
-    final width = MediaQuery.sizeOf(context).width;
-    final idealHeight = width * (1080 / 1920);
-    final clampedHeight = idealHeight.clamp(240.0, 500.0);
-
+  Widget _buildSliverAppBar() {
     return SliverAppBar(
-      expandedHeight: clampedHeight,
+      expandedHeight: 280,
       pinned: true,
       automaticallyImplyLeading: false, // Quita el botón de atrás automático
       backgroundColor: context.bgApp,
