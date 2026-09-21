@@ -80,7 +80,10 @@ class _ArtistScreenState extends State<ArtistScreen> {
         if (items != null && items.isNotEmpty) {
           final img = items[0]['picture_xl'] ?? items[0]['picture_big'];
           if (img != null && img.toString().trim().isNotEmpty) {
-            if (mounted) setState(() => _bannerImageUrl = img);
+            // Forzar a Deezer CDN a devolver 1920x1080 (16:9) recortando del original,
+            // para que tenga las mismas dimensiones y encuadramiento que TheAudioDB
+            final replacedImg = img.toString().replaceFirst(RegExp(r'\d+x\d+-'), '1920x1080-');
+            if (mounted) setState(() => _bannerImageUrl = replacedImg);
             return;
           }
         }
