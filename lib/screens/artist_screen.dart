@@ -119,8 +119,9 @@ class _ArtistScreenState extends State<ArtistScreen> {
   }
 
   Widget _buildSliverAppBar() {
+    final compact = MediaQuery.sizeOf(context).width < 700;
     return SliverAppBar(
-      expandedHeight: 384,
+      expandedHeight: compact ? 384 : 480,
       pinned: true,
       automaticallyImplyLeading: false, // Quita el botón de atrás automático
       backgroundColor: context.bgApp,
