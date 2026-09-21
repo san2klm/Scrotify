@@ -120,7 +120,7 @@ class _ArtistScreenState extends State<ArtistScreen> {
 
   Widget _buildSliverAppBar() {
     return SliverAppBar(
-      expandedHeight: 280,
+      expandedHeight: 320,
       pinned: true,
       automaticallyImplyLeading: false, // Quita el botón de atrás automático
       backgroundColor: context.bgApp,
@@ -137,6 +137,7 @@ class _ArtistScreenState extends State<ArtistScreen> {
                       _bannerImageUrl!,
                       key: ValueKey(_bannerImageUrl),
                       fit: BoxFit.cover,
+                      alignment: const Alignment(0, -0.6),
                       width: double.infinity,
                       height: double.infinity,
                       loadingBuilder: (context, child, progress) {
