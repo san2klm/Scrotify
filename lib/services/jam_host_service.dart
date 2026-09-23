@@ -530,7 +530,7 @@ class JamHostService {
         InternetAddress.anyIPv4,
         kJamDiscoveryPort,
         reuseAddress: true,
-        reusePort: true,
+        reusePort: !Platform.isWindows,
       );
       _discoverySocket!.broadcastEnabled = true;
       final multicastGroup = InternetAddress(kJamDiscoveryMulticastGroup);

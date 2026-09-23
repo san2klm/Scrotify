@@ -414,7 +414,7 @@ class PairingServer {
         InternetAddress.anyIPv4,
         kPairingDiscoveryPort,
         reuseAddress: true,
-        reusePort: true,
+        reusePort: !Platform.isWindows,
       );
       _discoverySocket!.broadcastEnabled = true;
       _discoverySocket!.listen((event) {

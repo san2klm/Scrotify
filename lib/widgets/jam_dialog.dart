@@ -1099,7 +1099,7 @@ class _JamDialogState extends State<JamDialog>
                 ),
                 const SizedBox(height: 10),
                 DropdownButtonFormField<JamMode>(
-                  value: _selectedMode,
+                  initialValue: _selectedMode,
                   dropdownColor: context.bgElevated,
                   style: TextStyle(color: context.textPrimary, fontSize: 13),
                   decoration: InputDecoration(
@@ -1166,7 +1166,7 @@ class _JamDialogState extends State<JamDialog>
                       setState(() => _allowGuestQueueManage = value),
                 ),
                 DropdownButtonFormField<int>(
-                  value: _maxParticipants,
+                  initialValue: _maxParticipants,
                   dropdownColor: context.bgElevated,
                   style: TextStyle(color: context.textPrimary, fontSize: 13),
                   decoration: InputDecoration(

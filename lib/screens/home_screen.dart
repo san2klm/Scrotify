@@ -723,6 +723,7 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
     );
     if (confirmed != true) return;
+    if (!mounted) return;
     final nav = context.read<NavidromeService>();
     try {
       await nav.deletePlaylist(playlist.id);
@@ -972,7 +973,7 @@ class _HomeScreenState extends State<HomeScreen> {
           const SizedBox(height: 28),
           _sectionHeader('Recomendados para ti'),
           const SizedBox(height: 14),
-          _recommendedGrid(tracks),
+          _recommendedGrid(tracks, context.watch<PlayerController>()),
           const SizedBox(height: 28),
           _sectionHeader('Álbumes destacados'),
           const SizedBox(height: 14),
@@ -1150,8 +1151,25 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _recommendedGrid(List<Track> tracks) {
-    final items = tracks.take(10).toList();
+  Widget _recommendedGrid(List<Track> tracks, PlayerController player) {
+    // Calcular peso de artistas basado en reproducciones
+    final artistScores = <String, int>{};
+    for (final item in player.mostPlayed) {
+      if (item.type == MostPlayedItemType.track && item.track != null) {
+        final artist = item.track!.artist;
+        artistScores[artist] = (artistScores[artist] ?? 0) + item.playCount;
+      }
+    }
+
+    // Ordenar tracks basado en el artista más escuchado
+    final sortedTracks = List<Track>.from(tracks);
+    sortedTracks.sort((a, b) {
+      final scoreA = artistScores[a.artist] ?? 0;
+      final scoreB = artistScores[b.artist] ?? 0;
+      return scoreB.compareTo(scoreA);
+    });
+
+    final items = sortedTracks.take(10).toList();
     return GridView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),

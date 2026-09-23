@@ -306,6 +306,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final defaultName = parsed.suggestedName ??
         xFile.name.split('.').first.replaceAll(RegExp(r'[_\-]+'), ' ').trim();
 
+    if (!mounted) return;
     final controller = TextEditingController(text: defaultName);
     final confirm = await showDialog<bool>(
       context: context,
@@ -357,6 +358,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     setState(() => _importing = true);
 
+    if (!mounted) return;
     final nav = context.read<NavidromeService>();
     try {
       final result = await showDialog<PlaylistImportResult>(

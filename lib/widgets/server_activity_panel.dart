@@ -767,7 +767,7 @@ class _ServerActivityPanelState extends State<ServerActivityPanel>
                       );
                       if (track.id.isNotEmpty) {
                         player.playQueue([track], startIndex: 0);
-                        if (context.mounted) Navigator.of(context).pop();
+                        if (mounted) Navigator.of(context).pop();
                       }
                     } catch (_) {}
                   },
@@ -864,7 +864,7 @@ class _ServerActivityPanelState extends State<ServerActivityPanel>
                         (a) => a['id'] == artistId,
                         orElse: () => null,
                       );
-                      if (match != null && context.mounted) {
+                      if (match != null && mounted) {
                         Navigator.of(context).pop();
                         Navigator.push(
                           context,

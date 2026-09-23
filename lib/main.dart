@@ -24,7 +24,10 @@ Future<void> main() async {
   if (!kIsWeb && (Platform.isLinux || Platform.isWindows || Platform.isMacOS)) {
     await windowManager.ensureInitialized();
     windowManager.waitUntilReadyToShow(
-      const WindowOptions(titleBarStyle: TitleBarStyle.hidden),
+      const WindowOptions(
+        titleBarStyle: TitleBarStyle.hidden,
+        minimumSize: Size(400, 500),
+      ),
       () async {
         await windowManager.setAsFrameless();
         await windowManager.show();

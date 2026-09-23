@@ -39,6 +39,26 @@ class _AddPlaylistTracksDialogState extends State<_AddPlaylistTracksDialog> {
   bool _saving = false;
   String? _error;
 
+  /// IDs de las canciones que ya están en la playlist (cargados al init).
+  Set<String> _existingIds = {};
+
+  @override
+  void initState() {
+    super.initState();
+    _loadExistingTracks();
+  }
+
+  Future<void> _loadExistingTracks() async {
+    try {
+      final tracks = await widget.nav.getPlaylistTracks(widget.playlist.id);
+      if (mounted) {
+        setState(() => _existingIds = tracks.map((t) => t.id).toSet());
+      }
+    } catch (_) {
+      // Si falla la carga no bloqueamos el diálogo; simplemente no deshabilitamos nada.
+    }
+  }
+
   @override
   void dispose() {
     _debounce?.cancel();
@@ -73,6 +93,12 @@ class _AddPlaylistTracksDialogState extends State<_AddPlaylistTracksDialog> {
   }
 
   Future<void> _save() async {
+    // Solo enviamos las que no estén ya en la playlist (doble seguridad).
+    final toAdd = _selected.keys
+        .where((id) => !_existingIds.contains(id))
+        .toList();
+    if (toAdd.isEmpty) return;
+
     setState(() {
       _saving = true;
       _error = null;
@@ -80,10 +106,13 @@ class _AddPlaylistTracksDialogState extends State<_AddPlaylistTracksDialog> {
     try {
       await widget.nav.updatePlaylist(
         playlistId: widget.playlist.id,
-        songIdsToAdd: _selected.keys.toList(),
+        songIdsToAdd: toAdd,
       );
       if (mounted) {
-        Navigator.of(context).pop(_selected.values.toList(growable: false));
+        // Devolvemos solo las que realmente se añadieron.
+        final added =
+            toAdd.map((id) => _selected[id]!).toList(growable: false);
+        Navigator.of(context).pop(added);
       }
     } catch (e) {
       if (!mounted) return;
@@ -133,13 +162,50 @@ class _AddPlaylistTracksDialogState extends State<_AddPlaylistTracksDialog> {
                             itemCount: _results.length,
                             itemBuilder: (context, index) {
                               final track = _results[index];
+                              final alreadyIn =
+                                  _existingIds.contains(track.id);
                               return CheckboxListTile(
-                                value: _selected.containsKey(track.id),
-                                title: Text(track.title,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis),
-                                subtitle: InteractiveArtistText(artistString: track.artist),
-                                onChanged: _saving
+                                value: alreadyIn
+                                    ? true
+                                    : _selected.containsKey(track.id),
+                                tristate: false,
+                                // Deshabilitado si ya está o si se está guardando.
+                                enabled: !_saving && !alreadyIn,
+                                title: Text(
+                                  track.title,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    color: alreadyIn
+                                        ? context.textMuted
+                                        : null,
+                                  ),
+                                ),
+                                subtitle: alreadyIn
+                                    ? Row(
+                                        children: [
+                                          InteractiveArtistText(
+                                              artistString: track.artist),
+                                          const SizedBox(width: 6),
+                                          Text(
+                                            '· Ya en esta playlist',
+                                            style: TextStyle(
+                                              color: context.accent,
+                                              fontSize: 11,
+                                              fontStyle: FontStyle.italic,
+                                            ),
+                                          ),
+                                        ],
+                                      )
+                                    : InteractiveArtistText(
+                                        artistString: track.artist),
+                                checkColor: alreadyIn
+                                    ? context.accent
+                                    : null,
+                                activeColor: alreadyIn
+                                    ? context.accent.withValues(alpha: 0.45)
+                                    : null,
+                                onChanged: (_saving || alreadyIn)
                                     ? null
                                     : (selected) => setState(() {
                                           if (selected == true) {

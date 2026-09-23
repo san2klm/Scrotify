@@ -18,9 +18,9 @@ class MobileLoginScreen extends StatefulWidget {
 
   const MobileLoginScreen({
     super.key,
-    this.initialUrl = 'https://navidrome.templo.cloud',
-    this.initialUser = 'Proyecto',
-    this.initialPass = 'Proyecto123',
+    this.initialUrl = '',
+    this.initialUser = '',
+    this.initialPass = '',
   });
 
   @override

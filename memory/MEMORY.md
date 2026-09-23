@@ -1,0 +1,3 @@
+- [Spotify Jam Feature](spotify-jam-feature.md) — Plan y arquitectura para la función de sesiones grupales y cola compartida Jam en Scrotify
+- [Fix Liked Songs Persistence Issue](scrotify-liked-songs-persistence.md) — Bugfix: `NavidromeService` not validating HTTP responses.
+- [Personalized Recommendations](scrotify-personalized-recommendations.md) — Recomendación de artistas más escuchados en HomeScreen.

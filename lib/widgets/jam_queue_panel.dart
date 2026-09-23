@@ -248,9 +248,8 @@ class JamQueuePanel extends StatelessWidget {
                     ? ReorderableListView.builder(
                         buildDefaultDragHandles: false,
                         itemCount: queueItems.length,
-                        onReorder: canManageJamQueue
+                        onReorderItem: canManageJamQueue
                             ? (oldIndex, newIndex) {
-                                if (oldIndex < newIndex) newIndex -= 1;
                                 jam.reorderJamQueue(oldIndex, newIndex);
                               }
                             : (_, __) {},
@@ -341,8 +340,7 @@ class JamQueuePanel extends StatelessWidget {
                     : ReorderableListView.builder(
                         buildDefaultDragHandles: false,
                         itemCount: queueItems.length,
-                        onReorder: (oldIndex, newIndex) {
-                          if (oldIndex < newIndex) newIndex -= 1;
+                        onReorderItem: (oldIndex, newIndex) {
                           final realOld = player.currentOrderPos + 1 + oldIndex;
                           final realNew = player.currentOrderPos + 1 + newIndex;
                           player.reorderQueue(realOld, realNew);

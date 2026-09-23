@@ -70,55 +70,67 @@ class ExploreTracksView extends StatelessWidget {
 
         final trackIndex = firstTrack + index - 1;
         final track = pageTracks[index - 1];
-        return ListTile(
-          dense: true,
-          leading: CoverArt(
-            url: track.albumArtUrl,
-            artist: track.artist,
-            album: track.album,
-            title: track.title,
-            width: 40,
-            height: 40,
-            borderRadius: 4,
-            fallbackIcon: Icons.music_note,
-            fallbackIconSize: 20,
-            fallbackColor: context.bgCard,
-          ),
-          title: Text(
-            track.title,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(color: context.textPrimary, fontSize: 13.5),
-          ),
-          subtitle: Wrap(
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: [
-              InteractiveArtistText(
-                artistString: track.artist,
-                fontSize: 11.5,
-              ),
-              Text(
-                ' · ${track.album}',
-                style: TextStyle(color: context.textMuted, fontSize: 11.5),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ],
-          ),
-          trailing: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              IconButton(
-                icon: Icon(Icons.more_horiz, color: context.textMuted),
-                onPressed: () => TrackContextMenu.show(context, track),
-              ),
-              Text(
-                _formatDuration(track.duration),
-                style: TextStyle(color: context.textMuted, fontSize: 11.5),
-              ),
-            ],
-          ),
+        return InkWell(
           onTap: () => onPlay(trackIndex),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 6),
+            child: Row(
+              children: [
+                CoverArt(
+                  url: track.albumArtUrl,
+                  artist: track.artist,
+                  album: track.album,
+                  title: track.title,
+                  width: 40,
+                  height: 40,
+                  borderRadius: 4,
+                  fallbackIcon: Icons.music_note,
+                  fallbackIconSize: 20,
+                  fallbackColor: context.bgCard,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        track.title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(color: context.textPrimary, fontSize: 13.5),
+                      ),
+                      const SizedBox(height: 2),
+                      Wrap(
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        children: [
+                          InteractiveArtistText(
+                            artistString: track.artist,
+                            fontSize: 11.5,
+                          ),
+                          Text(
+                            ' · ${track.album}',
+                            style: TextStyle(color: context.textMuted, fontSize: 11.5),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  icon: Icon(Icons.more_horiz, color: context.textMuted),
+                  onPressed: () => TrackContextMenu.show(context, track),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  _formatDuration(track.duration),
+                  style: TextStyle(color: context.textMuted, fontSize: 11.5),
+                ),
+                const SizedBox(width: 8),
+              ],
+            ),
+          ),
         );
       },
     );

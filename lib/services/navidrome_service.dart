@@ -854,7 +854,10 @@ class NavidromeService with ChangeNotifier {
 
     final uri =
         Uri.parse('$_url/rest/$endpoint').replace(queryParameters: params);
-    await _client.get(uri);
+    final response = await _client.get(uri);
+    if (response.statusCode != 200) {
+      throw Exception('Failed request (HTTP ${response.statusCode})');
+    }
   }
 
   Future<List<Track>> getStarred() async {
