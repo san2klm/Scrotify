@@ -25,3 +25,9 @@
 ## Fase 5 — Refresco instantáneo
 
 - [x] **5.1** `playlist_detail_screen.dart` + `track_context_menu.dart` — Al añadir/eliminar canciones de playlist, refresco inmediato sin salir y volver; `bumpPlaylists()` propaga cambios al Consumer
+
+## Fase 6 — Correcciones pendientes (Jam, Artistas y Pantalla de Inicio)
+
+- [ ] **6.1** `Jam` — Revisar y arreglar detalles pendientes de la funcionalidad Jam (sincronización, UI o conexión).
+- [ ] **6.2** `Artistas (Seguir)` — Arreglar defectos visuales en la interfaz relacionados con la funcionalidad de seguir a los artistas.
+- [ ] **6.3** `Pantalla de Inicio` — Añadir cosas que faltan y pulir defectos visuales en la home (HomeScreen).
