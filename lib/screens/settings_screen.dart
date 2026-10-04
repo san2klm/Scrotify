@@ -11,7 +11,10 @@ import '../services/secure_storage.dart';
 import '../services/settings_controller.dart';
 import '../widgets/pairing_panel.dart';
 import '../widgets/theme_grid.dart';
+import 'equalizer_screen.dart';
 import 'login_screen.dart';
+import 'server_profiles_screen.dart';
+import 'stats_screen.dart';
 import '../utils/app_colors.dart';
 
 /// Pantalla de ajustes. Centraliza las preferencias del usuario: calidad de
@@ -97,7 +100,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ListTile(
                     contentPadding: EdgeInsets.zero,
                     title: Text('Volumen inicial',
-                        style: TextStyle(color: context.textPrimary, fontSize: 14)),
+                        style: TextStyle(
+                            color: context.textPrimary, fontSize: 14)),
                     subtitle: Slider(
                       value: settings.initialVolume,
                       activeColor: context.accent,
@@ -106,24 +110,25 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ),
                     trailing: Text(
                       '${(settings.initialVolume * 100).round()}%',
-                      style: TextStyle(color: context.textSecondary, fontSize: 13),
+                      style:
+                          TextStyle(color: context.textSecondary, fontSize: 13),
                     ),
                   ),
                   _switchTile(
                     title: 'Reproducción sin cortes',
-                    subtitle: 'Evita silencios entre canciones (depende del backend)',
+                    subtitle:
+                        'Evita silencios entre canciones (depende del backend)',
                     value: settings.gapless,
                     onChanged: settings.setGapless,
                   ),
                   const SizedBox(height: 8),
                   _switchTile(
                     title: 'Crossfade',
-                    subtitle: 'Funde el final de una canción con el inicio de la siguiente',
+                    subtitle:
+                        'Funde el final de una canción con el inicio de la siguiente',
                     value: settings.crossfade > Duration.zero,
                     onChanged: (enabled) => settings.setCrossfade(
-                      enabled
-                          ? const Duration(seconds: 5)
-                          : Duration.zero,
+                      enabled ? const Duration(seconds: 5) : Duration.zero,
                     ),
                   ),
                   if (settings.crossfade > Duration.zero) ...[
@@ -131,7 +136,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ListTile(
                       contentPadding: EdgeInsets.zero,
                       title: Text('Duración del fundido',
-                          style: TextStyle(color: context.textPrimary, fontSize: 14)),
+                          style: TextStyle(
+                              color: context.textPrimary, fontSize: 14)),
                       subtitle: Slider(
                         value: settings.crossfade.inSeconds
                             .clamp(1, 10)
@@ -145,10 +151,128 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       ),
                       trailing: Text(
                         '${settings.crossfade.inSeconds} s',
-                        style: TextStyle(color: context.textSecondary, fontSize: 13),
+                        style: TextStyle(
+                            color: context.textSecondary, fontSize: 13),
                       ),
                     ),
                   ],
+                  const SizedBox(height: 8),
+                  _choiceTiles<ReplayGainMode>(
+                    title: 'Normalización de volumen (ReplayGain)',
+                    value: settings.replayGainMode,
+                    options: const [
+                      (
+                        value: ReplayGainMode.off,
+                        label: 'Desactivado',
+                        subtitle: 'Sin normalización de volumen',
+                      ),
+                      (
+                        value: ReplayGainMode.track,
+                        label: 'Pista (Track)',
+                        subtitle: 'Normaliza cada pista individualmente',
+                      ),
+                      (
+                        value: ReplayGainMode.album,
+                        label: 'Álbum (Album)',
+                        subtitle: 'Preserva la dinámica del álbum completo',
+                      ),
+                    ],
+                    onChanged: settings.setReplayGainMode,
+                  ),
+                  if (settings.replayGainMode != ReplayGainMode.off) ...[
+                    const SizedBox(height: 8),
+                    ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: Text(
+                        'Preamplificador (Preamp)',
+                        style:
+                            TextStyle(color: context.textPrimary, fontSize: 14),
+                      ),
+                      subtitle: Slider(
+                        value: settings.replayGainPreamp.clamp(-12.0, 12.0),
+                        min: -12.0,
+                        max: 12.0,
+                        divisions: 48,
+                        activeColor: context.accent,
+                        inactiveColor: context.themeBorder,
+                        onChanged: settings.setReplayGainPreamp,
+                      ),
+                      trailing: Text(
+                        '${settings.replayGainPreamp > 0 ? '+' : ''}${settings.replayGainPreamp.toStringAsFixed(1)} dB',
+                        style: TextStyle(
+                            color: context.textSecondary, fontSize: 13),
+                      ),
+                    ),
+                    _switchTile(
+                      title: 'Evitar distorsión (Prevent clipping)',
+                      subtitle:
+                          'Atenúa la ganancia si el pico de la pista superaría 0 dBFS',
+                      value: settings.replayGainPreventClipping,
+                      onChanged: settings.setReplayGainPreventClipping,
+                    ),
+                    const SizedBox(height: 4),
+                    const _InfoText(
+                      'ReplayGain opera únicamente por atenuación (≤ 0 dB) en este '
+                      'reproductor para evitar distorsión digital.',
+                    ),
+                  ],
+                  const SizedBox(height: 8),
+                  _switchTile(
+                    title: 'Eliminar silencios',
+                    subtitle:
+                        'Recorta silencios al inicio y final de las canciones usando análisis de waveform',
+                    value: settings.silenceRemovalEnabled,
+                    onChanged: settings.setSilenceRemovalEnabled,
+                  ),
+                  _switchTile(
+                    title: 'Mezcla inteligente',
+                    subtitle:
+                        'Evita repetir el mismo artista seguido en modo aleatorio',
+                    value: settings.isSmartMixEnabled,
+                    onChanged: settings.setSmartMixEnabled,
+                  ),
+                  const Divider(height: 24),
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: Icon(Icons.equalizer_rounded,
+                        color: context.textSecondary),
+                    title: Text('Ecualizador',
+                        style: TextStyle(
+                            color: context.textPrimary, fontSize: 14)),
+                    subtitle: Text(
+                      'Ajustes de 10 bandas y presets',
+                      style: TextStyle(color: context.textMuted, fontSize: 12),
+                    ),
+                    trailing:
+                        Icon(Icons.chevron_right, color: context.textMuted),
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                            builder: (_) => const EqualizerScreen()),
+                      );
+                    },
+                  ),
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: Icon(Icons.insights_rounded,
+                        color: context.textSecondary),
+                    title: Text('Estadísticas de escucha',
+                        style: TextStyle(
+                            color: context.textPrimary, fontSize: 14)),
+                    subtitle: Text(
+                      'Tiempo reproducido, canciones y artistas más escuchados',
+                      style: TextStyle(color: context.textMuted, fontSize: 12),
+                    ),
+                    trailing:
+                        Icon(Icons.chevron_right, color: context.textMuted),
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const StatsScreen()),
+                      );
+                    },
+                  ),
                 ],
               ),
 
@@ -162,7 +286,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     title: 'Resolución de portadas',
                     value: settings.coverArtSize,
                     options: const [
-                      (value: 600, label: 'Alta', subtitle: 'Portadas nítidas · más datos'),
+                      (
+                        value: 600,
+                        label: 'Alta',
+                        subtitle: 'Portadas nítidas · más datos'
+                      ),
                       (value: 300, label: 'Baja', subtitle: 'Ahorra datos'),
                     ],
                     onChanged: settings.setCoverArtSize,
@@ -185,14 +313,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 children: [
                   ListTile(
                     contentPadding: EdgeInsets.zero,
-                    leading: Icon(Icons.upload_file, color: context.textSecondary),
+                    leading:
+                        Icon(Icons.upload_file, color: context.textSecondary),
                     title: Text('Importar playlist',
-                        style: TextStyle(color: context.textPrimary, fontSize: 14)),
+                        style: TextStyle(
+                            color: context.textPrimary, fontSize: 14)),
                     subtitle: Text(
                       'Desde CSV, M3U/M3U8, PLS o TXT',
                       style: TextStyle(color: context.textMuted, fontSize: 12),
                     ),
-                    trailing: Icon(Icons.chevron_right, color: context.textMuted),
+                    trailing:
+                        Icon(Icons.chevron_right, color: context.textMuted),
                     onTap: _importing ? null : _pickAndImport,
                   ),
                 ],
@@ -202,30 +333,36 @@ class _SettingsScreenState extends State<SettingsScreen> {
               // Playlists (gestionar/borrar)
               // ---------------------------------------------------------------
               _sectionTitle('Mis playlists'),
-              _PlaylistsManager(),
+              const _PlaylistsManager(),
 
               // ---------------------------------------------------------------
-              // Cuenta
+              // Cuenta y Perfiles
               // ---------------------------------------------------------------
-              _sectionTitle('Cuenta'),
+              _sectionTitle('Cuenta y Perfiles'),
               _card(
                 children: [
                   ListTile(
                     contentPadding: EdgeInsets.zero,
-                    leading: Icon(Icons.dns_outlined, color: context.textSecondary),
-                    title: Text(
-                      nav.serverUrl ?? 'Sin conexión',
-                      style: TextStyle(color: context.textPrimary, fontSize: 14),
-                    ),
+                    leading: Icon(Icons.switch_account_outlined,
+                        color: context.textSecondary),
+                    title: Text('Gestionar perfiles de servidor',
+                        style: TextStyle(
+                            color: context.textPrimary, fontSize: 14)),
                     subtitle: Text(
                       nav.connected
-                          ? 'Conectado como ${nav.username ?? "usuario"}'
-                          : 'Desconectado',
-                      style: TextStyle(
-                        color: nav.connected ? context.accent : context.textMuted,
-                        fontSize: 12,
-                      ),
+                          ? '${nav.username} en ${nav.serverUrl}'
+                          : 'Sin conexión',
+                      style: TextStyle(color: context.textMuted, fontSize: 12),
                     ),
+                    trailing:
+                        Icon(Icons.chevron_right, color: context.textMuted),
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                            builder: (_) => const ServerProfilesScreen()),
+                      );
+                    },
                   ),
                   const SizedBox(height: 8),
                   SizedBox(
@@ -237,7 +374,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         padding: const EdgeInsets.symmetric(vertical: 12),
                       ),
                       icon: const Icon(Icons.logout, size: 18),
-                      label: const Text('Cerrar sesión'),
+                      label: const Text('Cerrar sesión plana'),
                       onPressed: () => _confirmLogout(context),
                     ),
                   ),
@@ -285,7 +422,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   // ---------------------------------------------------------------------------
 
   Future<void> _pickAndImport() async {
-    final xType = XTypeGroup(
+    const xType = XTypeGroup(
       label: 'Playlists',
       extensions: ['csv', 'm3u', 'm3u8', 'pls', 'txt'],
     );
@@ -306,6 +443,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final defaultName = parsed.suggestedName ??
         xFile.name.split('.').first.replaceAll(RegExp(r'[_\-]+'), ' ').trim();
 
+    if (!mounted) return;
     final controller = TextEditingController(text: defaultName);
     final confirm = await showDialog<bool>(
       context: context,
@@ -338,7 +476,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
-            child: Text('Cancelar', style: TextStyle(color: context.textSecondary)),
+            child: Text('Cancelar',
+                style: TextStyle(color: context.textSecondary)),
           ),
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(true),
@@ -357,13 +496,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     setState(() => _importing = true);
 
+    if (!mounted) return;
     final nav = context.read<NavidromeService>();
     try {
       final result = await showDialog<PlaylistImportResult>(
         context: context,
         barrierDismissible: false,
         builder: (_) => _ImportingDialog(
-          future: PlaylistImporter.import(name: name, tracks: parsed.tracks, nav: nav),
+          future: PlaylistImporter.import(
+              name: name, tracks: parsed.tracks, nav: nav),
         ),
       );
 
@@ -415,12 +556,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
-            child: Text('Cancelar', style: TextStyle(color: context.textSecondary)),
+            child: Text('Cancelar',
+                style: TextStyle(color: context.textSecondary)),
           ),
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(true),
-            child: Text('Cerrar sesión',
-                style: TextStyle(color: context.danger)),
+            child:
+                Text('Cerrar sesión', style: TextStyle(color: context.danger)),
           ),
         ],
       ),
@@ -536,8 +678,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 InkWell(
                   onTap: () => onChanged(q),
                   child: Padding(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 10),
                     child: Row(
                       children: [
                         Icon(
@@ -556,7 +698,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             children: [
                               Text(q.label,
                                   style: TextStyle(
-                                      color: context.textPrimary, fontSize: 14)),
+                                      color: context.textPrimary,
+                                      fontSize: 14)),
                               Text(q.subtitle,
                                   style: TextStyle(
                                       color: context.textMuted, fontSize: 12)),
@@ -609,8 +752,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 InkWell(
                   onTap: () => onChanged(opt.value),
                   child: Padding(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 10),
                     child: Row(
                       children: [
                         Icon(
@@ -629,7 +772,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             children: [
                               Text(opt.label,
                                   style: TextStyle(
-                                      color: context.textPrimary, fontSize: 14)),
+                                      color: context.textPrimary,
+                                      fontSize: 14)),
                               Text(opt.subtitle,
                                   style: TextStyle(
                                       color: context.textMuted, fontSize: 12)),
@@ -691,9 +835,9 @@ class _ImportResultDialogState extends State<_ImportResultDialog> {
   Future<void> _exportCsv() async {
     final result = widget.result;
     final safeName = result.name
-        .replaceAll(RegExp(r'[^\w\s\-áéíóúüñÁÉÍÓÚÜÑ]'), '')
-        .trim()
-        .isEmpty
+            .replaceAll(RegExp(r'[^\w\s\-áéíóúüñÁÉÍÓÚÜÑ]'), '')
+            .trim()
+            .isEmpty
         ? 'playlist'
         : result.name
             .replaceAll(RegExp(r'[^\w\s\-áéíóúüñÁÉÍÓÚÜÑ]'), '')
@@ -719,7 +863,8 @@ class _ImportResultDialogState extends State<_ImportResultDialog> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('CSV guardado', style: TextStyle(color: context.textPrimary)),
+          content: Text('CSV guardado',
+              style: TextStyle(color: context.textPrimary)),
           backgroundColor: context.bgCard,
           behavior: SnackBarBehavior.floating,
         ),
@@ -765,13 +910,11 @@ class _ImportResultDialogState extends State<_ImportResultDialog> {
             const SizedBox(height: 6),
             Row(
               children: [
-                Icon(Icons.check_circle,
-                    color: context.accent, size: 18),
+                Icon(Icons.check_circle, color: context.accent, size: 18),
                 const SizedBox(width: 8),
                 Text(
                   '${result.matched} importadas',
-                  style: TextStyle(
-                      color: context.accent, fontSize: 14),
+                  style: TextStyle(color: context.accent, fontSize: 14),
                 ),
               ],
             ),
@@ -782,9 +925,7 @@ class _ImportResultDialogState extends State<_ImportResultDialog> {
                   result.hasUnmatched
                       ? Icons.error_outline
                       : Icons.check_circle,
-                  color: result.hasUnmatched
-                      ? context.warning
-                      : context.accent,
+                  color: result.hasUnmatched ? context.warning : context.accent,
                   size: 18,
                 ),
                 const SizedBox(width: 8),
@@ -793,9 +934,8 @@ class _ImportResultDialogState extends State<_ImportResultDialog> {
                       ? '${result.unmatched.length} no encontradas'
                       : 'Todas las canciones fueron importadas',
                   style: TextStyle(
-                    color: result.hasUnmatched
-                        ? context.warning
-                        : context.accent,
+                    color:
+                        result.hasUnmatched ? context.warning : context.accent,
                     fontSize: 14,
                   ),
                 ),
@@ -818,7 +958,8 @@ class _ImportResultDialogState extends State<_ImportResultDialog> {
                     final t = result.unmatched[i];
                     return Text(
                       t.display,
-                      style: TextStyle(color: context.textSecondary, fontSize: 12),
+                      style:
+                          TextStyle(color: context.textSecondary, fontSize: 12),
                     );
                   },
                 ),
@@ -872,15 +1013,17 @@ class _PlaylistsManager extends StatelessWidget {
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
               return Padding(
-                padding: EdgeInsets.all(16),
+                padding: const EdgeInsets.all(16),
                 child: Center(
                   child: CircularProgressIndicator(color: context.accent),
                 ),
               );
             }
-            if (snapshot.hasError || !snapshot.hasData || snapshot.data!.isEmpty) {
+            if (snapshot.hasError ||
+                !snapshot.hasData ||
+                snapshot.data!.isEmpty) {
               return Padding(
-                padding: EdgeInsets.all(16),
+                padding: const EdgeInsets.all(16),
                 child: Text(
                   'No tienes playlists creadas.',
                   style: TextStyle(color: context.textMuted),
@@ -978,7 +1121,8 @@ class _PlaylistTile extends StatelessWidget {
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
-            child: Text('Cancelar', style: TextStyle(color: context.textSecondary)),
+            child: Text('Cancelar',
+                style: TextStyle(color: context.textSecondary)),
           ),
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(true),
@@ -994,7 +1138,8 @@ class _PlaylistTile extends StatelessWidget {
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Playlist eliminada', style: TextStyle(color: context.textPrimary)),
+          content: Text('Playlist eliminada',
+              style: TextStyle(color: context.textPrimary)),
           backgroundColor: context.bgCard,
           behavior: SnackBarBehavior.floating,
         ),

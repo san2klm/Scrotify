@@ -33,21 +33,29 @@ enum JamMode {
   synchronizedListening,
 }
 
+/// Estado de la conexión de red en una sesión Jam.
+enum JamConnectionState {
+  connected,
+  reconnecting,
+  disconnected,
+  failed,
+}
+
 /// Código PIN de 6 caracteres para unirse a un Jam (sin caracteres ambiguos).
 class JamCode {
-  static const _charset = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  static const charset = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  static const _charset = charset;
   static const length = 6;
 
   final String value;
 
   JamCode._(this.value);
 
-  factory JamCode.generate() {
-    final rnd = DateTime.now().millisecondsSinceEpoch;
-    final random = Random(rnd);
+  factory JamCode.generate([Random? random]) {
+    final rnd = random ?? Random.secure();
     final chars = List.generate(
       length,
-      (_) => _charset[random.nextInt(_charset.length)],
+      (_) => _charset[rnd.nextInt(_charset.length)],
     ).join();
     return JamCode._(chars);
   }
@@ -76,6 +84,7 @@ class JamQrData {
   final String? sessionId;
   final String? remoteHost;
   final int? remotePort;
+  final String? tlsFingerprint;
 
   JamQrData({
     required this.host,
@@ -84,6 +93,7 @@ class JamQrData {
     this.sessionId,
     this.remoteHost,
     this.remotePort,
+    this.tlsFingerprint,
   });
 
   String toUri() {
@@ -98,6 +108,8 @@ class JamQrData {
         if (remoteHost != null && remotePort != null) 'remoteHost': remoteHost!,
         if (remoteHost != null && remotePort != null)
           'remotePort': '$remotePort',
+        if (tlsFingerprint != null) 'transport': 'wss',
+        if (tlsFingerprint != null) 'tlsFingerprint': tlsFingerprint!,
       },
     ).toString();
   }
@@ -112,12 +124,18 @@ class JamQrData {
       final sessionId = u.queryParameters['sessionId'];
       final remoteHost = u.queryParameters['remoteHost'];
       final remotePort = int.tryParse(u.queryParameters['remotePort'] ?? '');
+      final transport = u.queryParameters['transport'];
+      final tlsFingerprint = u.queryParameters['tlsFingerprint'];
       if (host == null ||
           host.isEmpty ||
           port == null ||
           port <= 0 ||
           port > 65535 ||
           code == null) {
+        return null;
+      }
+      if (transport != 'wss' ||
+          !RegExp(r'^[a-f0-9]{64}$').hasMatch(tlsFingerprint ?? '')) {
         return null;
       }
       final normalizedCode = JamCode(code).value;
@@ -130,6 +148,7 @@ class JamQrData {
         remotePort: remotePort != null && remotePort > 0 && remotePort <= 65535
             ? remotePort
             : null,
+        tlsFingerprint: tlsFingerprint,
       );
     } catch (_) {
       return null;
@@ -277,6 +296,7 @@ class JamSessionState {
   final bool isPublic;
   final String? initialPlaylistId;
   final int maxParticipants;
+  final int queueRevision;
 
   const JamSessionState({
     required this.sessionId,
@@ -299,6 +319,7 @@ class JamSessionState {
     this.isPublic = true,
     this.initialPlaylistId,
     this.maxParticipants = 0,
+    this.queueRevision = 0,
   });
 
   Map<String, dynamic> toJson() => {
@@ -331,6 +352,7 @@ class JamSessionState {
         'isPublic': isPublic,
         if (initialPlaylistId != null) 'initialPlaylistId': initialPlaylistId,
         'maxParticipants': maxParticipants,
+        'queueRevision': queueRevision,
       };
 
   factory JamSessionState.fromJson(Map<String, dynamic> json) {
@@ -388,6 +410,7 @@ class JamSessionState {
       isPublic: json['isPublic'] as bool? ?? true,
       initialPlaylistId: json['initialPlaylistId'] as String?,
       maxParticipants: (json['maxParticipants'] as num?)?.toInt() ?? 0,
+      queueRevision: (json['queueRevision'] as num?)?.toInt() ?? 0,
     );
   }
 
@@ -414,6 +437,7 @@ class JamSessionState {
     bool? isPublic,
     String? initialPlaylistId,
     int? maxParticipants,
+    int? queueRevision,
   }) {
     return JamSessionState(
       sessionId: sessionId ?? this.sessionId,
@@ -440,6 +464,7 @@ class JamSessionState {
       isPublic: isPublic ?? this.isPublic,
       initialPlaylistId: initialPlaylistId ?? this.initialPlaylistId,
       maxParticipants: maxParticipants ?? this.maxParticipants,
+      queueRevision: queueRevision ?? this.queueRevision,
     );
   }
 }
@@ -458,6 +483,7 @@ class DiscoveredJamSession {
   final JamMode mode;
   final String? remoteHost;
   final int? remotePort;
+  final String? tlsFingerprint;
 
   const DiscoveredJamSession({
     required this.host,
@@ -472,6 +498,7 @@ class DiscoveredJamSession {
     required this.mode,
     this.remoteHost,
     this.remotePort,
+    this.tlsFingerprint,
   });
 
   /// Construye una sesión descubierta. Para una respuesta que llega por UDP se
@@ -509,6 +536,8 @@ class DiscoveredJamSession {
       mode: mode,
       remoteHost: json['remoteHost'] as String?,
       remotePort: (json['remotePort'] as num?)?.toInt(),
+      tlsFingerprint:
+          json['transport'] == 'wss' ? json['tlsFingerprint'] as String? : null,
     );
   }
 
@@ -526,5 +555,7 @@ class DiscoveredJamSession {
         'mode': mode.name,
         if (remoteHost != null) 'remoteHost': remoteHost,
         if (remotePort != null) 'remotePort': remotePort,
+        if (tlsFingerprint != null) 'transport': 'wss',
+        if (tlsFingerprint != null) 'tlsFingerprint': tlsFingerprint,
       };
 }

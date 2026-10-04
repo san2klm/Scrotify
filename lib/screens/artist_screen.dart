@@ -43,6 +43,7 @@ class _ArtistScreenState extends State<ArtistScreen> {
     _bannerImageUrl = widget.artist.coverArtUrl;
     super.initState();
     final nav = context.read<NavidromeService>();
+    nav.cacheArtist(widget.artist);
     _futureTopTracks = nav.getArtistTracks(widget.artist.id);
     _futureAlbums = nav.getArtistAlbums(widget.artist.id);
 
@@ -160,7 +161,7 @@ class _ArtistScreenState extends State<ArtistScreen> {
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
                   colors: [Colors.transparent, context.bgApp],
-                  stops: [0.6, 1.0],
+                  stops: const [0.6, 1.0],
                 ),
               ),
             ),
@@ -189,40 +190,49 @@ class _ArtistScreenState extends State<ArtistScreen> {
                       builder: (context, nav, _) {
                         final following =
                             nav.isFollowingArtist(widget.artist.id);
-                        return Row(
-                          children: [
-                            _buildPlayButton(),
-                            const Spacer(),
-                            OutlinedButton(
-                              style: OutlinedButton.styleFrom(
-                                foregroundColor: following
-                                    ? context.accent
-                                    : context.textPrimary,
-                                side: BorderSide(
-                                    color: following
+                        return LayoutBuilder(
+                          builder: (context, constraints) {
+                            final compact = constraints.maxWidth < 360;
+                            return Row(
+                              children: [
+                                _buildPlayButton(compact: compact),
+                                const Spacer(),
+                                OutlinedButton(
+                                  style: OutlinedButton.styleFrom(
+                                    padding: EdgeInsets.symmetric(
+                                      horizontal: compact ? 12 : 16,
+                                      vertical: compact ? 8 : 10,
+                                    ),
+                                    foregroundColor: following
                                         ? context.accent
-                                        : context.textSecondary),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(20),
+                                        : context.textPrimary,
+                                    side: BorderSide(
+                                        color: following
+                                            ? context.accent
+                                            : context.textSecondary),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(20),
+                                    ),
+                                  ),
+                                  onPressed: () {
+                                    nav.toggleFollowArtist(widget.artist.id);
+                                    final messenger = ScaffoldMessenger.of(context);
+                                    final theme = context.read<ThemeController>().active;
+                                    messenger.showSnackBar(SnackBar(
+                                      content: Text(following
+                                          ? 'Dejaste de seguir a ${widget.artist.name}'
+                                          : 'Siguiendo a ${widget.artist.name}'),
+                                      backgroundColor: theme.bgElevated,
+                                    ));
+                                  },
+                                  child:
+                                      Text(following ? 'Siguiendo' : 'Seguir'),
                                 ),
-                              ),
-                              onPressed: () {
-                                nav.toggleFollowArtist(widget.artist.id);
-                                final messenger = ScaffoldMessenger.of(context);
-                                final theme = context.read<ThemeController>().active;
-                                messenger.showSnackBar(SnackBar(
-                                  content: Text(following
-                                      ? 'Dejaste de seguir a ${widget.artist.name}'
-                                      : 'Siguiendo a ${widget.artist.name}'),
-                                  backgroundColor: theme.bgElevated,
-                                ));
-                              },
-                              child:
-                                  Text(following ? 'Siguiendo' : 'Seguir'),
-                            ),
-                            const SizedBox(width: 8),
-                            _buildArtistMenu(nav),
-                          ],
+                                SizedBox(width: compact ? 4 : 8),
+                                _buildArtistMenu(nav),
+                              ],
+                            );
+                          },
                         );
                       },
                     ),
@@ -307,14 +317,17 @@ class _ArtistScreenState extends State<ArtistScreen> {
     );
   }
 
-  Widget _buildPlayButton() {
+  Widget _buildPlayButton({bool compact = false}) {
     return Consumer<PlayerController>(
       builder: (context, player, _) {
         return InkWell(
           onTap: () => _playArtistTopTracks(),
           borderRadius: BorderRadius.circular(30),
           child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
+            padding: EdgeInsets.symmetric(
+              horizontal: compact ? 16 : 32,
+              vertical: compact ? 9 : 12,
+            ),
             decoration: BoxDecoration(
               color: context.accent,
               borderRadius: BorderRadius.circular(30),
@@ -328,14 +341,14 @@ class _ArtistScreenState extends State<ArtistScreen> {
                       ? Icons.pause
                       : Icons.play_arrow,
                   color: context.onAccent,
-                  size: 24,
+                  size: compact ? 20 : 24,
                 ),
-                const SizedBox(width: 8),
+                SizedBox(width: compact ? 6 : 8),
                 Text(
                   'Reproducir',
                   style: TextStyle(
                     color: context.onAccent,
-                    fontSize: 16,
+                    fontSize: compact ? 14 : 16,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
@@ -377,14 +390,14 @@ class _ArtistScreenState extends State<ArtistScreen> {
                   if (loading && tracks.isEmpty)
                     Center(
                       child: Padding(
-                        padding: EdgeInsets.all(16),
+                        padding: const EdgeInsets.all(16),
                         child: CircularProgressIndicator(
                             color: context.textPrimary),
                       ),
                     )
                   else if (tracks.isEmpty)
                     Padding(
-                      padding: EdgeInsets.symmetric(vertical: 16),
+                      padding: const EdgeInsets.symmetric(vertical: 16),
                       child: Text('Sin canciones',
                           style: TextStyle(color: context.textMuted)),
                     )
@@ -401,14 +414,14 @@ class _ArtistScreenState extends State<ArtistScreen> {
                       albums.isEmpty)
                     Center(
                       child: Padding(
-                        padding: EdgeInsets.all(16),
+                        padding: const EdgeInsets.all(16),
                         child: CircularProgressIndicator(
                             color: context.textPrimary),
                       ),
                     )
                   else if (albums.isEmpty)
                     Padding(
-                      padding: EdgeInsets.symmetric(vertical: 16),
+                      padding: const EdgeInsets.symmetric(vertical: 16),
                       child: Text('Sin álbumes',
                           style: TextStyle(color: context.textMuted)),
                     )

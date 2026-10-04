@@ -7,11 +7,13 @@ import '../services/navidrome_service.dart';
 import '../services/player_controller.dart';
 import '../screens/player_screen.dart';
 import 'cover_art.dart';
+import 'player_position_builder.dart';
 import 'jam_dialog.dart';
 import 'jam_queue_panel.dart';
 import 'track_context_menu.dart';
 import 'interactive_artist_text.dart';
 import '../utils/app_colors.dart';
+import '../utils/playback_time.dart';
 
 /// Panel de control persistente (barra inferior del reproductor).
 /// Refleja el estado real del [PlayerController] y permite controlar la
@@ -37,6 +39,13 @@ class PersistentPlayerBar extends StatelessWidget {
         final remoteState = jam.isGuest ? jam.session : null;
         final track = remoteState?.currentTrack ?? player.currentTrack;
         final playing = remoteState?.isPlaying ?? player.playing;
+        final canCtrl = jam.isGuest
+            ? (jam.localParticipant?.canControlPlayback ?? false)
+            : true;
+        debugPrint(
+          '[JAM] PersistentPlayerBar.build: id=${identityHashCode(jam)} role=${jam.role.name} '
+          'trackId=${track?.id} canCtrl=$canCtrl',
+        );
 
         if (compact) {
           return _buildMobileBar(context, player, jam, track, playing);
@@ -89,8 +98,8 @@ class PersistentPlayerBar extends StatelessWidget {
                         visualDensity: VisualDensity.compact,
                         icon: Icon(Icons.skip_previous,
                             color: context.textPrimary, size: 26),
-                        onPressed: _playbackHandler(
-                            jam, player, 'skip_previous'),
+                        onPressed:
+                            _playbackHandler(jam, player, 'skip_previous'),
                       ),
                       _playButton(context, player, jam, playing),
                       IconButton(
@@ -190,8 +199,8 @@ class PersistentPlayerBar extends StatelessWidget {
     );
   }
 
-  List<Widget> _mobileControls(
-      BuildContext context, PlayerController player, JamController jam, bool playing, Track? track) {
+  List<Widget> _mobileControls(BuildContext context, PlayerController player,
+      JamController jam, bool playing, Track? track) {
     return [
       _compactControlIcon(
         context,
@@ -337,10 +346,12 @@ class PersistentPlayerBar extends StatelessWidget {
     if (track == null) return const SizedBox.shrink();
     return IconButton(
       visualDensity: compact ? VisualDensity.compact : null,
-      icon: Icon(Icons.more_vert_rounded, color: context.textSecondary, size: 20),
+      icon:
+          Icon(Icons.more_vert_rounded, color: context.textSecondary, size: 20),
       onPressed: () {
         final player = context.read<PlayerController>();
-        TrackContextMenu.show(context, track, playlistId: player.sourcePlaylist?.id);
+        TrackContextMenu.show(context, track,
+            playlistId: player.sourcePlaylist?.id);
       },
     );
   }
@@ -378,12 +389,12 @@ class PersistentPlayerBar extends StatelessWidget {
     );
   }
 
-  Widget _playButton(
-      BuildContext context, PlayerController player, JamController jam, bool playing,
+  Widget _playButton(BuildContext context, PlayerController player,
+      JamController jam, bool playing,
       {bool compact = false}) {
     return IconButton(
-      visualDensity: compact ? VisualDensity.compact : null,
-      padding: compact ? EdgeInsets.zero : null,
+      visualDensity: VisualDensity.compact,
+      padding: compact ? EdgeInsets.zero : const EdgeInsets.all(2),
       constraints:
           compact ? const BoxConstraints(minWidth: 40, minHeight: 40) : null,
       iconSize: compact ? 38 : 36,
@@ -441,18 +452,15 @@ class PersistentPlayerBar extends StatelessWidget {
 
   void _openPlayerScreen(BuildContext context) {
     final player = context.read<PlayerController>();
-    if (player.currentTrack == null) return;
+    final jam = context.read<JamController>();
+    final track =
+        (jam.isGuest ? jam.session?.currentTrack : null) ?? player.currentTrack;
+    if (track == null) return;
     Navigator.push(
       context,
       MaterialPageRoute(builder: (_) => const PlayerScreen()),
     );
   }
-}
-
-String _format(Duration d) {
-  final minutes = d.inMinutes;
-  final secs = d.inSeconds % 60;
-  return '$minutes:${secs.toString().padLeft(2, '0')}';
 }
 
 // =============================================================================
@@ -477,6 +485,7 @@ class _DesktopProgressBar extends StatefulWidget {
 class _DesktopProgressBarState extends State<_DesktopProgressBar> {
   double? _dragValue;
   bool _hovering = false;
+  bool _showRemainingTime = false;
 
   @override
   Widget build(BuildContext context) {
@@ -491,6 +500,7 @@ class _DesktopProgressBarState extends State<_DesktopProgressBar> {
             : duration.inMilliseconds.toDouble();
         final currentMs = (_dragValue ?? position.inMilliseconds.toDouble())
             .clamp(0.0, maxMs);
+        final currentPosition = Duration(milliseconds: currentMs.round());
 
         return MouseRegion(
           onEnter: (_) => setState(() => _hovering = true),
@@ -507,7 +517,7 @@ class _DesktopProgressBarState extends State<_DesktopProgressBar> {
                     SizedBox(
                       width: 40,
                       child: Text(
-                        _format(Duration(milliseconds: currentMs.round())),
+                        formatPlaybackTime(currentPosition),
                         style: TextStyle(
                             color: context.textSecondary, fontSize: 11),
                         textAlign: TextAlign.right,
@@ -548,13 +558,44 @@ class _DesktopProgressBarState extends State<_DesktopProgressBar> {
                         ),
                       ),
                     ),
-                    // Total time
-                    SizedBox(
-                      width: 40,
-                      child: Text(
-                        _format(duration),
-                        style: TextStyle(
-                            color: context.textSecondary, fontSize: 11),
+                    // Total or remaining time
+                    Tooltip(
+                      message: _showRemainingTime
+                          ? 'Mostrar duración total'
+                          : 'Mostrar tiempo restante',
+                      child: Semantics(
+                        button: true,
+                        label: _showRemainingTime
+                            ? 'Tiempo restante: ${formatRemainingPlaybackTime(currentPosition, duration)}'
+                            : 'Duración total: ${formatPlaybackTime(duration)}',
+                        hint: 'Alternar entre duración total y tiempo restante',
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(4),
+                          onTap: () {
+                            setState(() {
+                              _showRemainingTime = !_showRemainingTime;
+                            });
+                          },
+                          child: ConstrainedBox(
+                            constraints: const BoxConstraints(
+                              minWidth: 40,
+                              minHeight: 40,
+                            ),
+                            child: Container(
+                              alignment: Alignment.centerLeft,
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 2),
+                              child: Text(
+                                _showRemainingTime
+                                    ? formatRemainingPlaybackTime(
+                                        currentPosition, duration)
+                                    : formatPlaybackTime(duration),
+                                style: TextStyle(
+                                    color: context.textSecondary, fontSize: 11),
+                              ),
+                            ),
+                          ),
+                        ),
                       ),
                     ),
                   ],
@@ -590,12 +631,13 @@ class _MobileProgressBarState extends State<_MobileProgressBar> {
 
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder<Duration>(
-      stream: widget.player.positionStream,
-      builder: (context, snapshot) {
-        final duration = widget.player.duration ?? Duration.zero;
-        final position = snapshot.data ?? Duration.zero;
-
+    final duration = widget.player.duration ?? Duration.zero;
+    // Posición interpolada a 250 ms: en Android el backend emite ~1 Hz y
+    // la línea delgada se vería congelada con solo el StreamBuilder.
+    return PlayerPositionBuilder(
+      player: widget.player,
+      duration: duration,
+      builder: (context, position) {
         final maxMs = duration.inMilliseconds == 0
             ? 1.0
             : duration.inMilliseconds.toDouble();
@@ -610,9 +652,9 @@ class _MobileProgressBarState extends State<_MobileProgressBar> {
               activeTrackColor: context.waveformPlayed,
               inactiveTrackColor: context.waveformUnplayed,
               thumbColor: context.waveformPlayed,
-              thumbShape: RoundSliderThumbShape(enabledThumbRadius: 0),
+              thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 0),
               overlayColor: Colors.transparent,
-              overlayShape: RoundSliderOverlayShape(overlayRadius: 0),
+              overlayShape: const RoundSliderOverlayShape(overlayRadius: 0),
             ),
             child: Slider(
               min: 0,
@@ -681,9 +723,9 @@ class _VolumeBarState extends State<_VolumeBar> {
                   activeTrackColor: context.volumeAccent,
                   inactiveTrackColor: context.themeBorder,
                   thumbColor: context.sliderThumb,
-                  thumbShape: RoundSliderThumbShape(enabledThumbRadius: 5),
+                  thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 5),
                   overlayColor: context.accentDim,
-                  overlayShape: RoundSliderOverlayShape(overlayRadius: 12),
+                  overlayShape: const RoundSliderOverlayShape(overlayRadius: 12),
                 ),
                 child: Slider(
                   min: 0,

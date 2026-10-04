@@ -57,7 +57,7 @@ void main() {
       final t = AppTheme.fromZipBytes(bytes);
       expect(t, isNotNull);
       // rgba(255,0,0,0.5)
-      expect(t!.accentDim, Color.fromRGBO(255, 0, 0, 0.5));
+      expect(t!.accentDim, const Color.fromRGBO(255, 0, 0, 0.5));
       expect(t.bgPlayer, const Color(0xFF222222));
       expect(t.bgSidebar, const Color(0xFF333333));
       expect(t.waveformPlayed, const Color(0xFF00FF00));
@@ -78,7 +78,7 @@ void main() {
       expect(
           AppTheme.parseCssColor('#12345678'), const Color(0x78123456));
       expect(AppTheme.parseCssColor('rgba(0, 0, 0, 0.5)'),
-          Color.fromRGBO(0, 0, 0, 0.5));
+          const Color.fromRGBO(0, 0, 0, 0.5));
       expect(AppTheme.parseCssColor('transparent'), Colors.transparent);
     });
   });

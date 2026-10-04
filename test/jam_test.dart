@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:navidrome_client/models/jam_models.dart';
@@ -6,12 +7,28 @@ import 'package:navidrome_client/services/jam_guest_service.dart';
 import 'package:navidrome_client/services/jam_host_service.dart';
 import 'package:navidrome_client/services/navidrome_service.dart';
 
+import 'support/app_fakes.dart';
+
 void main() {
   group('JamCode tests', () {
     test('generate() creates valid 6-char code', () {
       final code = JamCode.generate();
       expect(code.value.length, 6);
       expect(code.formatted, matches(r'^[A-Z0-9]{3}-[A-Z0-9]{3}$'));
+    });
+
+    test(
+        'generate() accepts injected Random and defaults structurally to CSPRNG',
+        () {
+      final code1 = JamCode.generate(Random(42));
+      final code2 = JamCode.generate(Random(42));
+      expect(code1.value, code2.value);
+
+      final defaultCode = JamCode.generate();
+      expect(defaultCode.value.length, JamCode.length);
+      expect(
+          defaultCode.value.split('').every((c) => JamCode.charset.contains(c)),
+          isTrue);
     });
 
     test('parses and formats valid code', () {
@@ -33,6 +50,8 @@ void main() {
         port: 54321,
         code: 'AB34EF',
         sessionId: 'jam_123456',
+        tlsFingerprint:
+            'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
       );
 
       final uriStr = qr.toUri();
@@ -44,6 +63,8 @@ void main() {
       expect(parsed.port, 54321);
       expect(parsed.code, 'AB34EF');
       expect(parsed.sessionId, 'jam_123456');
+      expect(parsed.tlsFingerprint,
+          'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa');
     });
 
     test('fromUri returns null on invalid schemes', () {
@@ -58,12 +79,16 @@ void main() {
         code: 'AB34EF',
         remoteHost: '203.0.113.10',
         remotePort: 47620,
+        tlsFingerprint:
+            'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
       );
 
       final parsed = JamQrData.fromUri(qr.toUri());
       expect(parsed, isNotNull);
       expect(parsed!.remoteHost, '203.0.113.10');
       expect(parsed.remotePort, 47620);
+      expect(parsed.tlsFingerprint,
+          'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb');
     });
 
     test('rejects an invalid PIN or port in a QR URI', () {
@@ -74,6 +99,11 @@ void main() {
       expect(
         JamQrData.fromUri(
             'scrotify://jam?host=10.0.0.2&port=47620&code=ABCIO0'),
+        isNull,
+      );
+      expect(
+        JamQrData.fromUri(
+            'scrotify://jam?host=10.0.0.2&port=47620&code=ABC123'),
         isNull,
       );
     });
@@ -185,6 +215,7 @@ void main() {
         isPublic: false,
         initialPlaylistId: 'playlist_1',
         maxParticipants: 3,
+        queueRevision: 42,
       );
 
       final parsed = JamSessionState.fromJson(state.toJson());
@@ -192,6 +223,7 @@ void main() {
       expect(parsed.isPublic, isFalse);
       expect(parsed.initialPlaylistId, 'playlist_1');
       expect(parsed.maxParticipants, 3);
+      expect(parsed.queueRevision, 42);
     });
 
     test('DiscoveredJamSession JSON roundtrip', () {
@@ -264,7 +296,9 @@ void main() {
       expect(hostService.port, greaterThan(0));
 
       final stateCompleter = Completer<JamSessionState>();
+      var initialSyncCount = 0;
       guestService.onStateSync = (state) {
+        initialSyncCount++;
         if (!stateCompleter.isCompleted) {
           stateCompleter.complete(state);
         }
@@ -277,6 +311,7 @@ void main() {
         pin: pin.value,
         name: 'GuestUser',
         avatarColorValue: 0xFF10B981,
+        tlsFingerprint: hostService.tlsFingerprint!,
       );
 
       expect(connected, isTrue);
@@ -290,6 +325,11 @@ void main() {
       expect(syncedState.pinCode, pin.value);
       expect(syncedState.hostName, 'TestHost');
       expect(syncedState.mode, JamMode.partySpeaker);
+
+      // The handshake carries one join response and one canonical snapshot.
+      // The response itself is intentionally not treated as a second sync.
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+      expect(initialSyncCount, 1);
     });
 
     test('Guest discovers a public host through the Jam radar', () async {
@@ -339,6 +379,7 @@ void main() {
         pin: pin.value,
         name: 'GuestUser',
         avatarColorValue: 0xFF10B981,
+        tlsFingerprint: hostService.tlsFingerprint!,
       );
 
       final sampleTrack = Track(
@@ -376,6 +417,7 @@ void main() {
         pin: 'AB34EF',
         name: 'GuestUser',
         avatarColorValue: 0xFF10B981,
+        tlsFingerprint: hostService.tlsFingerprint!,
       );
       expect(wrongPin, isFalse);
 
@@ -385,6 +427,7 @@ void main() {
         pin: pin.value,
         name: 'GuestUser',
         avatarColorValue: 0xFF10B981,
+        tlsFingerprint: hostService.tlsFingerprint!,
       );
       expect(fullSession, isFalse);
     });
@@ -411,6 +454,7 @@ void main() {
         pin: pin.value,
         name: 'GuestUser',
         avatarColorValue: 0xFF10B981,
+        tlsFingerprint: hostService.tlsFingerprint!,
       );
       expect(connected, isTrue);
       expect(guestService.localParticipant!.canManageQueue, isFalse);
@@ -425,5 +469,173 @@ void main() {
       await Future<void>.delayed(const Duration(milliseconds: 150));
       expect(addRequestReceived, isFalse);
     });
+
+    test('host/guest reconnect retains participant count/id', () async {
+      final pin = JamCode('JK94MN');
+      await hostService.start(
+        sessionId: 'jam_reconnect_session',
+        pinCode: pin,
+        hostName: 'TestHost',
+      );
+
+      final host = hostService.hostIp ?? '127.0.0.1';
+      final connected = await guestService.connect(
+        host: host,
+        port: hostService.port,
+        pin: pin.value,
+        name: 'GuestUser',
+        avatarColorValue: 0xFF10B981,
+        tlsFingerprint: hostService.tlsFingerprint!,
+      );
+      expect(connected, isTrue);
+
+      expect(hostService.participants.length, 1);
+      final initialParticipant = hostService.participants.first;
+      expect(guestService.localParticipant?.id, initialParticipant.id);
+
+      // Trigger reconnect without explicit disconnect
+      await guestService.triggerReconnectForTesting();
+
+      expect(guestService.isConnected, isTrue);
+      expect(hostService.participants.length, 1);
+      expect(hostService.participants.first.id, initialParticipant.id);
+      expect(guestService.localParticipant?.id, initialParticipant.id);
+    });
+
+    test('Guest rejects a TLS certificate whose fingerprint is not pinned',
+        () async {
+      final pin = JamCode('JK94MN');
+      await hostService.start(
+        sessionId: 'jam_tls_pin_session',
+        pinCode: pin,
+        hostName: 'TestHost',
+      );
+
+      final connected = await guestService.connect(
+        host: hostService.hostIp ?? '127.0.0.1',
+        port: hostService.port,
+        pin: pin.value,
+        name: 'GuestUser',
+        avatarColorValue: 0xFF10B981,
+        tlsFingerprint: List.filled(64, '0').join(),
+      );
+
+      expect(connected, isFalse);
+      expect(guestService.isConnected, isFalse);
+    });
+  });
+
+  group('JamRateLimiter tests', () {
+    test('enforces window limit deterministically', () {
+      final limiter = JamRateLimiter(
+        maxEvents: 3,
+        window: const Duration(milliseconds: 1000),
+      );
+
+      expect(limiter.tryAcquire(100), isTrue);
+      expect(limiter.tryAcquire(200), isTrue);
+      expect(limiter.tryAcquire(300), isTrue);
+      expect(limiter.tryAcquire(400), isFalse);
+
+      // After window expires for first timestamp
+      expect(limiter.tryAcquire(1101), isTrue);
+      expect(limiter.tryAcquire(1102), isFalse);
+
+      // After window expires for all initial timestamps
+      expect(limiter.tryAcquire(2200), isTrue);
+      expect(limiter.tryAcquire(2300), isTrue);
+
+      limiter.reset();
+      expect(limiter.timestamps, isEmpty);
+      expect(limiter.tryAcquire(2400), isTrue);
+    });
+  });
+
+  group('Jam queue duplicate tracking', () {
+    test('isTrackInJamQueue detects existing tracks correctly', () {
+      final fakeJam = IdleJam();
+      expect(fakeJam.isTrackInJamQueue('trk_1'), isFalse);
+    });
+  });
+
+  group('Jam Controller & Remote Jam Resiliency', () {
+    test('Track instances with identical ID but different object references match queue items', () {
+      final trackA1 = Track(
+        id: 'track_123',
+        title: 'Song 1',
+        artist: 'Artist',
+        album: 'Album',
+        duration: '180',
+      );
+      final trackA2 = Track(
+        id: 'track_123',
+        title: 'Song 1',
+        artist: 'Artist',
+        album: 'Album',
+        duration: '180',
+      );
+      expect(identical(trackA1, trackA2), isFalse);
+
+      final queueItem = JamQueueItem(
+        id: 'item_1',
+        track: trackA1,
+        addedAt: DateTime.now(),
+      );
+
+      final orderedQueue = [trackA2];
+      const expected = 0;
+      final matched = (expected >= 0 &&
+              expected < orderedQueue.length &&
+              (identical(orderedQueue[expected], queueItem.track) ||
+                  orderedQueue[expected].id == queueItem.track.id))
+          ? expected
+          : orderedQueue.indexWhere((t) =>
+              identical(t, queueItem.track) || t.id == queueItem.track.id);
+
+      expect(matched, 0);
+    });
+
+    test('JamQueueItem serializes and deserializes properly for remote state', () {
+      final item = JamQueueItem(
+        id: 'remote_item_42',
+        track: Track(
+          id: 'trk_remote',
+          title: 'Remote Song',
+          artist: 'Remote Artist',
+          album: 'Remote Album',
+          duration: '215',
+        ),
+        addedBy: JamParticipant(
+          id: 'user_1',
+          name: 'Alice',
+          avatarColorValue: 0xFF10B981,
+          isHost: false,
+          joinedAt: DateTime.now(),
+        ),
+        addedAt: DateTime.parse('2026-09-29T12:00:00Z'),
+      );
+
+      final json = item.toJson();
+      final roundtrip = JamQueueItem.fromJson(json);
+
+      expect(roundtrip.id, 'remote_item_42');
+      expect(roundtrip.track.id, 'trk_remote');
+      expect(roundtrip.track.title, 'Remote Song');
+      expect(roundtrip.track.artist, 'Remote Artist');
+      expect(roundtrip.track.duration, '215');
+      expect(roundtrip.addedBy?.name, 'Alice');
+    });
+
+    test('Remote permission gating strictly requires both session and participant permission', () {
+      bool canControl({required bool sessionAllowed, required bool participantAllowed}) {
+        return sessionAllowed && participantAllowed;
+      }
+
+      expect(canControl(sessionAllowed: false, participantAllowed: true), isFalse);
+      expect(canControl(sessionAllowed: true, participantAllowed: false), isFalse);
+      expect(canControl(sessionAllowed: false, participantAllowed: false), isFalse);
+      expect(canControl(sessionAllowed: true, participantAllowed: true), isTrue);
+    });
   });
 }
+

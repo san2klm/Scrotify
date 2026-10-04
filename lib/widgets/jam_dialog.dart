@@ -62,7 +62,7 @@ class _JamDialogState extends State<JamDialog>
   String? _directError;
   bool _isCameraActive = false;
   MobileScannerController? _scannerController;
-  JamMode _selectedMode = JamMode.partySpeaker;
+  JamMode _selectedMode = JamMode.synchronizedListening;
   bool _isPublicSession = true;
   bool _allowGuestControls = true;
   bool _allowGuestQueueManage = true;
@@ -187,172 +187,7 @@ class _JamDialogState extends State<JamDialog>
     );
   }
 
-  /// Alternativa al radar para routers que aíslan clientes Wi‑Fi o bloquean
-  /// broadcast UDP. El anfitrión puede compartir la dirección LAN que aparece
-  /// debajo de su PIN.
-  Future<void> _showDirectConnectDialog(JamController jam) async {
-    final messenger = ScaffoldMessenger.of(context);
-    final dangerColor = context.danger;
-    final hostController = TextEditingController();
-    final portController = TextEditingController(text: '$kJamHostPort');
-    final pinController = TextEditingController(text: _pinController.text);
-    String? dialogError;
-    String? probeResult;
-    bool busy = false;
 
-    try {
-      await showDialog<void>(
-        context: context,
-        builder: (dialogContext) => StatefulBuilder(
-          builder: (dialogContext, setDialogState) {
-            Future<void> runProbe() async {
-              final port = int.tryParse(portController.text.trim());
-              if (port == null) {
-                setDialogState(() {
-                  probeResult = 'Puerto inválido.';
-                });
-                return;
-              }
-              setDialogState(() {
-                busy = true;
-                probeResult = 'Probando…';
-              });
-              final result = await jam.testHostReachable(
-                hostController.text.trim(),
-                port,
-              );
-              if (dialogContext.mounted) {
-                setDialogState(() {
-                  busy = false;
-                  probeResult = result;
-                });
-              }
-            }
-
-            Future<void> runConnect() async {
-              final port = int.tryParse(portController.text.trim());
-              if (port == null) {
-                setDialogState(() {
-                  dialogError = 'Puerto inválido.';
-                });
-                return;
-              }
-              setDialogState(() {
-                busy = true;
-                dialogError = null;
-              });
-              final ok = await jam.joinSession(
-                host: hostController.text.trim(),
-                port: port,
-                pin: pinController.text.trim(),
-              );
-              if (!dialogContext.mounted) return;
-              if (ok) {
-                Navigator.of(dialogContext).pop();
-              } else {
-                final reason = jam.lastJoinError ??
-                    'No se pudo conectar. Revisá IP, puerto, PIN y que ambos equipos estén en la misma red.';
-                setDialogState(() {
-                  busy = false;
-                  dialogError = reason;
-                });
-                messenger.showSnackBar(
-                  SnackBar(
-                    content: Text(reason),
-                    backgroundColor: dangerColor,
-                  ),
-                );
-              }
-            }
-
-            return AlertDialog(
-              backgroundColor: context.bgApp,
-              title: Text(
-                'Conectar por IP local',
-                style: TextStyle(color: context.textPrimary, fontSize: 17),
-              ),
-              content: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      'Ingresá la dirección LAN que muestra el anfitrión. La cuenta de Navidrome no conecta: la Jam es directa entre equipos.',
-                      style: TextStyle(color: context.textMuted, fontSize: 12),
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: hostController,
-                      keyboardType: TextInputType.url,
-                      decoration: const InputDecoration(
-                        labelText: 'IP del anfitrión',
-                        hintText: 'Ej. 192.168.1.35',
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    TextField(
-                      controller: portController,
-                      keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(labelText: 'Puerto'),
-                    ),
-                    const SizedBox(height: 8),
-                    TextField(
-                      controller: pinController,
-                      textCapitalization: TextCapitalization.characters,
-                      decoration: const InputDecoration(labelText: 'PIN Jam'),
-                    ),
-                    if (probeResult != null) ...[
-                      const SizedBox(height: 8),
-                      Text(
-                        probeResult!,
-                        style: TextStyle(
-                          color: probeResult!.startsWith('OK')
-                              ? Colors.green
-                              : context.textSecondary,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ],
-                    if (dialogError != null) ...[
-                      const SizedBox(height: 8),
-                      Text(
-                        dialogError!,
-                        style: TextStyle(color: dangerColor, fontSize: 12),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-              actions: [
-                TextButton(
-                  onPressed:
-                      busy ? null : () => Navigator.of(dialogContext).pop(),
-                  child: const Text('Cancelar'),
-                ),
-                TextButton(
-                  onPressed: busy ? null : runProbe,
-                  child: const Text('Probar'),
-                ),
-                FilledButton(
-                  onPressed: busy ? null : runConnect,
-                  child: busy
-                      ? const SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Text('Conectar'),
-                ),
-              ],
-            );
-          },
-        ),
-      );
-    } finally {
-      hostController.dispose();
-      portController.dispose();
-      pinController.dispose();
-    }
-  }
 
   /// Formulario inline (sin popup) para conexión directa. Evita el problema
   /// del diálogo anidado que en Linux/escritorio a veces no se muestra.
@@ -671,8 +506,9 @@ class _JamDialogState extends State<JamDialog>
                     Clipboard.setData(ClipboardData(text: code));
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
-                        content: Text('Código Jam copiado al portapapeles'),
-                        duration: Duration(seconds: 2),
+                        content:
+                            const Text('Código Jam copiado al portapapeles'),
+                        duration: const Duration(seconds: 2),
                         backgroundColor: context.bgElevated,
                       ),
                     );
@@ -736,12 +572,12 @@ class _JamDialogState extends State<JamDialog>
                   style: TextStyle(color: context.textPrimary, fontSize: 12),
                   items: const [
                     DropdownMenuItem(
-                      value: JamMode.partySpeaker,
-                      child: Text('Altavoz'),
-                    ),
-                    DropdownMenuItem(
                       value: JamMode.synchronizedListening,
                       child: Text('Sincronizado'),
+                    ),
+                    DropdownMenuItem(
+                      value: JamMode.partySpeaker,
+                      child: Text('Altavoz'),
                     ),
                   ],
                   onChanged: (newMode) {
@@ -1056,7 +892,7 @@ class _JamDialogState extends State<JamDialog>
                   children: [
                     Icon(Icons.wifi_tethering_rounded,
                         color: context.accent, size: 20),
-                    SizedBox(width: 8),
+                    const SizedBox(width: 8),
                     Text(
                       'Conexión Local y en Servidor',
                       style: TextStyle(
@@ -1099,7 +935,7 @@ class _JamDialogState extends State<JamDialog>
                 ),
                 const SizedBox(height: 10),
                 DropdownButtonFormField<JamMode>(
-                  value: _selectedMode,
+                  initialValue: _selectedMode,
                   dropdownColor: context.bgElevated,
                   style: TextStyle(color: context.textPrimary, fontSize: 13),
                   decoration: InputDecoration(
@@ -1114,12 +950,12 @@ class _JamDialogState extends State<JamDialog>
                   ),
                   items: const [
                     DropdownMenuItem(
-                      value: JamMode.partySpeaker,
-                      child: Text('Altavoz de fiesta (audio sólo en host)'),
-                    ),
-                    DropdownMenuItem(
                       value: JamMode.synchronizedListening,
                       child: Text('Escucha sincronizada'),
+                    ),
+                    DropdownMenuItem(
+                      value: JamMode.partySpeaker,
+                      child: Text('Altavoz de fiesta (audio sólo en host)'),
                     ),
                   ],
                   onChanged: (mode) {
@@ -1166,7 +1002,7 @@ class _JamDialogState extends State<JamDialog>
                       setState(() => _allowGuestQueueManage = value),
                 ),
                 DropdownButtonFormField<int>(
-                  value: _maxParticipants,
+                  initialValue: _maxParticipants,
                   dropdownColor: context.bgElevated,
                   style: TextStyle(color: context.textPrimary, fontSize: 13),
                   decoration: InputDecoration(
@@ -1292,7 +1128,9 @@ class _JamDialogState extends State<JamDialog>
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
                         content: Text(
-                            'No se pudo encontrar la sesión Jam con ese PIN'),
+                          jam.lastJoinError ??
+                              'No se pudo encontrar la sesión Jam con ese PIN',
+                        ),
                         backgroundColor: context.danger,
                       ),
                     );
@@ -1437,8 +1275,10 @@ class _JamDialogState extends State<JamDialog>
                               if (!ok && mounted) {
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   SnackBar(
-                                    content:
-                                        Text('Error al conectarse a la sesión'),
+                                    content: Text(
+                                      jam.lastJoinError ??
+                                          'Error al conectarse a la sesión',
+                                    ),
                                     backgroundColor: context.danger,
                                   ),
                                 );
@@ -1509,8 +1349,10 @@ class _JamDialogState extends State<JamDialog>
                     if (!ok && mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
-                          content:
-                              Text('Código QR inválido o sesión inaccesible'),
+                          content: Text(
+                            jam.lastJoinError ??
+                                'Código QR inválido o sesión inaccesible',
+                          ),
                           backgroundColor: context.danger,
                         ),
                       );

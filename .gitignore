@@ -33,6 +33,15 @@ android/app/src/*
 !android/app/src/main/
 android/app/src/main/*
 !android/app/src/main/AndroidManifest.xml
+!android/app/src/main/kotlin/
+android/app/src/main/kotlin/*
+!android/app/src/main/kotlin/com/
+android/app/src/main/kotlin/com/*
+!android/app/src/main/kotlin/com/example/
+android/app/src/main/kotlin/com/example/*
+!android/app/src/main/kotlin/com/example/navidrome_client/
+android/app/src/main/kotlin/com/example/navidrome_client/*
+!android/app/src/main/kotlin/com/example/navidrome_client/MainActivity.kt
 !android/app/src/main/res/
 android/app/src/main/res/*
 !android/app/src/main/res/mipmap-mdpi/

@@ -5,6 +5,8 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 
+import 'replay_gain.dart';
+
 /// Calidad de streaming. `lossless` transmite el archivo original (sin
 /// transcode, FLAC si el servidor lo tiene); el resto pide a Navidrome que
 /// transcodifique a MP3 con el bitrate indicado (`kbps`).
@@ -61,7 +63,11 @@ class SettingsController extends ChangeNotifier {
   double _initialVolume = 0.7;
   bool _gapless = false;
   Duration _crossfade = Duration.zero;
-  String? _installationId;
+  bool _silenceRemovalEnabled = false;
+  bool _isSmartMixEnabled = true;
+  ReplayGainMode _replayGainMode = ReplayGainMode.off;
+  double _replayGainPreamp = 0.0;
+  bool _replayGainPreventClipping = true;
 
   // Red actual detectada. Si no se puede saber (sin NetworkManager, etc.) se
   // asume "casa" para no degradar la calidad sin motivo.
@@ -85,13 +91,66 @@ class SettingsController extends ChangeNotifier {
   double get initialVolume => _initialVolume;
   bool get gapless => _gapless;
   Duration get crossfade => _crossfade;
-
   bool get isMobileData => _network == ConnectivityResult.mobile;
-  String get networkLabel => isMobileData ? 'Datos móviles' : 'WiFi / conexión fija';
+  String get networkLabel =>
+      isMobileData ? 'Datos móviles' : 'WiFi / conexión fija';
 
   /// Calidad efectiva según el contexto de red.
-  AudioQuality get effectiveQuality =>
-      _autoSwitch ? (isMobileData ? _mobileQuality : _wifiQuality) : _wifiQuality;
+  AudioQuality get effectiveQuality => _autoSwitch
+      ? (isMobileData ? _mobileQuality : _wifiQuality)
+      : _wifiQuality;
+
+  /// Estado de la eliminación de silencios.
+  bool get silenceRemovalEnabled => _silenceRemovalEnabled;
+
+  /// Estado del modo Smart Mix.
+  bool get isSmartMixEnabled => _isSmartMixEnabled;
+
+  /// Modo actual de normalización ReplayGain (off, track, album).
+  ReplayGainMode get replayGainMode => _replayGainMode;
+
+  /// Nivel de preamplificador (preamp) en decibelios [-12.0, +12.0].
+  double get replayGainPreamp => _replayGainPreamp;
+
+  /// Si está activa la prevención de clipping mediante el pico de amplitud.
+  bool get replayGainPreventClipping => _replayGainPreventClipping;
+
+  /// Activa o desactiva la eliminación de silencios.
+  void setSilenceRemovalEnabled(bool enabled) {
+    if (_silenceRemovalEnabled == enabled) return;
+    _silenceRemovalEnabled = enabled;
+    _save();
+    notifyListeners();
+  }
+
+  void setSmartMixEnabled(bool enabled) {
+    if (_isSmartMixEnabled == enabled) return;
+    _isSmartMixEnabled = enabled;
+    _save();
+    notifyListeners();
+  }
+
+  void setReplayGainMode(ReplayGainMode mode) {
+    if (mode == _replayGainMode) return;
+    _replayGainMode = mode;
+    _save();
+    notifyListeners();
+  }
+
+  void setReplayGainPreamp(double preampDb) {
+    final clamped = preampDb.clamp(-12.0, 12.0);
+    if (clamped == _replayGainPreamp) return;
+    _replayGainPreamp = clamped;
+    _save();
+    notifyListeners();
+  }
+
+  void setReplayGainPreventClipping(bool prevent) {
+    if (prevent == _replayGainPreventClipping) return;
+    _replayGainPreventClipping = prevent;
+    _save();
+    notifyListeners();
+  }
 
   // ---------------------------------------------------------------------------
   // Setters (persisten y notifican)
@@ -158,14 +217,19 @@ class SettingsController extends ChangeNotifier {
     final connectivity = Connectivity();
     connectivity.onConnectivityChanged.listen(
       (results) {
-        _updateNetwork(results.isEmpty ? ConnectivityResult.none : results.first);
+        _updateNetwork(
+            results.isEmpty ? ConnectivityResult.none : results.first);
       },
-      onError: (_) {}, // Sin red disponible para consultar; mantener último valor.
+      onError:
+          (_) {}, // Sin red disponible para consultar; mantener último valor.
     );
     // Valor inicial (fire-and-forget; si falla queda "casa").
-    connectivity.checkConnectivity().catchError(
+    connectivity
+        .checkConnectivity()
+        .catchError(
           (_) => const <ConnectivityResult>[],
-        ).then(
+        )
+        .then(
           (results) => _updateNetwork(
               results.isEmpty ? ConnectivityResult.wifi : results.first),
         );
@@ -193,7 +257,8 @@ class SettingsController extends ChangeNotifier {
       final dir = await getApplicationDocumentsDirectory();
       final file = File('${dir.path}/settings.json');
       if (!await file.exists()) return;
-      final data = jsonDecode(await file.readAsString()) as Map<String, dynamic>;
+      final data =
+          jsonDecode(await file.readAsString()) as Map<String, dynamic>;
       _wifiQuality = AudioQuality.fromName(data['wifiQuality'] as String?);
       _mobileQuality = AudioQuality.fromName(data['mobileQuality'] as String?);
       _autoSwitch = data['autoSwitch'] as bool? ?? true;
@@ -202,8 +267,16 @@ class SettingsController extends ChangeNotifier {
       _initialVolume = rawVol == null ? 0.7 : rawVol.clamp(0.0, 1.0).toDouble();
       _gapless = data['gapless'] as bool? ?? false;
       final rawCf = (data['crossfade'] as num?)?.toInt() ?? 0;
-      _crossfade =
-          Duration(milliseconds: rawCf.clamp(0, 10000));
+      _crossfade = Duration(milliseconds: rawCf.clamp(0, 10000));
+      _silenceRemovalEnabled = data['silenceRemovalEnabled'] as bool? ?? false;
+      _isSmartMixEnabled = data['smartMixEnabled'] as bool? ?? true;
+      _replayGainMode =
+          ReplayGainMode.fromString(data['replayGainMode'] as String?);
+      final rawPreamp = (data['replayGainPreamp'] as num?)?.toDouble();
+      _replayGainPreamp =
+          rawPreamp == null ? 0.0 : rawPreamp.clamp(-12.0, 12.0);
+      _replayGainPreventClipping =
+          data['replayGainPreventClipping'] as bool? ?? true;
       notifyListeners();
     } catch (_) {
       // Silently ignore — los ajustes no son críticos.
@@ -222,6 +295,11 @@ class SettingsController extends ChangeNotifier {
         'initialVolume': _initialVolume,
         'gapless': _gapless,
         'crossfade': _crossfade.inMilliseconds,
+        'silenceRemovalEnabled': _silenceRemovalEnabled,
+        'smartMixEnabled': _isSmartMixEnabled,
+        'replayGainMode': _replayGainMode.name,
+        'replayGainPreamp': _replayGainPreamp,
+        'replayGainPreventClipping': _replayGainPreventClipping,
       }));
     } catch (_) {}
   }

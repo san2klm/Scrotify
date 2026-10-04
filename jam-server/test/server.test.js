@@ -180,3 +180,99 @@ test('relays guest actions to host and checks room info', async () => {
   guest.close();
   checkClient.close();
 });
+
+test('supports partial state updates merging with previous state and parses string/number durations', async () => {
+  const server = await startServer();
+  const endpoint = `ws://127.0.0.1:${server.port}`;
+  const host = await connect(endpoint);
+  host.send(JSON.stringify({
+    action: 'create_room',
+    pin: 'DUR123',
+    hostName: 'DurationHost',
+    initialState: {
+      trackId: 'track-d1',
+      position: 1000,
+      isPlaying: true,
+      queue: ['track-d2'],
+      duration: '215',
+    },
+  }));
+  const created = await nextMessage(host);
+  assert.equal(created.status, 'room_created');
+
+  const guest = await connect(endpoint);
+  const joined = nextMessage(guest);
+  guest.send(JSON.stringify({
+    action: 'join_room',
+    pin: 'DUR123',
+    guestName: 'GuestDuration',
+  }));
+  const joinedRes = await joined;
+  assert.equal(joinedRes.status, 'joined');
+  assert.equal(joinedRes.state.duration, 215);
+
+  const synced = nextMessage(guest);
+  // Partial update: only changing allowGuestControls and mode, without re-sending queue or position
+  host.send(JSON.stringify({
+    action: 'update_state',
+    pin: 'DUR123',
+    state: {
+      mode: 'synchronizedListening',
+      allowGuestControls: false,
+    },
+  }));
+
+  const syncRes = await synced;
+  assert.equal(syncRes.event, 'sync_state');
+  assert.equal(syncRes.state.mode, 'synchronizedListening');
+  assert.equal(syncRes.state.allowGuestControls, false);
+  assert.equal(syncRes.state.trackId, 'track-d1');
+  assert.equal(syncRes.state.position, 1000);
+  assert.deepEqual(syncRes.state.queue, ['track-d2']);
+
+  host.close();
+  guest.close();
+});
+
+test('host can kick a guest from the room', async () => {
+  const server = await startServer();
+  const endpoint = `ws://127.0.0.1:${server.port}`;
+  const host = await connect(endpoint);
+
+  host.send(JSON.stringify({
+    action: 'create_room',
+    pin: 'KCK123',
+    hostName: 'HostUser',
+    initialState,
+  }));
+  await nextMessage(host);
+
+  const guest = await connect(endpoint);
+  const hostJoined = nextMessage(host);
+  guest.send(JSON.stringify({
+    action: 'join_room',
+    pin: 'KCK123',
+    guestName: 'UnwantedGuest',
+  }));
+  await nextMessage(guest);
+  await hostJoined;
+
+  const kickedMsgPromise = nextMessage(guest);
+  const hostKickConfirmPromise = nextMessage(host);
+
+  host.send(JSON.stringify({
+    action: 'kick_guest',
+    pin: 'KCK123',
+    guestName: 'UnwantedGuest',
+  }));
+
+  const kickedMsg = await kickedMsgPromise;
+  assert.equal(kickedMsg.event, 'kicked');
+
+  const hostConfirm = await hostKickConfirmPromise;
+  assert.equal(hostConfirm.status, 'guest_kicked');
+  assert.equal(hostConfirm.guestName, 'UnwantedGuest');
+
+  host.close();
+});
+

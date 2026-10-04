@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:provider/provider.dart';
 
+import '../models/jam_models.dart';
 import '../services/jam_controller.dart';
 import '../services/player_controller.dart';
 import '../services/navidrome_service.dart';
@@ -14,7 +15,11 @@ import '../widgets/lyrics_follow_panel.dart';
 import '../widgets/lyrics_overlay.dart';
 import '../widgets/track_context_menu.dart';
 import '../widgets/cover_art.dart';
+import '../widgets/waveform_progress_bar.dart';
+import '../widgets/player_position_builder.dart';
+import '../widgets/rating_stars.dart';
 import '../utils/app_colors.dart';
+import '../utils/playback_time.dart';
 
 /// Pantalla completa del reproductor. Es una vista del estado global de
 /// reproducción ([PlayerController]); al cerrar esta pantalla la música sigue
@@ -27,27 +32,83 @@ class PlayerScreen extends StatefulWidget {
 }
 
 class _PlayerScreenState extends State<PlayerScreen> {
-  double? _dragValue;
   // La letra se muestra de entrada; el usuario puede ocultarla desde el
   // mismo botón si prefiere ver sólo la portada.
   bool _showLyrics = true;
   bool _lyricsEverOpened = true;
-
-  String _format(Duration d) {
-    final minutes = d.inMinutes;
-    final secs = d.inSeconds % 60;
-    return '$minutes:${secs.toString().padLeft(2, '0')}';
-  }
+  bool _showRemainingTime = false;
 
   void _showContextMenu(PlayerController player, Track track) {
     TrackContextMenu.show(context, track);
   }
 
+  VoidCallback? _playbackHandler(
+    JamController jam,
+    PlayerController player,
+    String action,
+    bool canControl,
+  ) {
+    if (jam.isGuest && !canControl) {
+      return null;
+    }
+    if (jam.inJam) {
+      return () {
+        debugPrint(
+            '[JAM] PlayerScreen playback action: route=jam action=$action');
+        jam.playbackAction(action);
+      };
+    }
+    return () {
+      debugPrint(
+          '[JAM] PlayerScreen playback action: route=local action=$action');
+      switch (action) {
+        case 'toggle':
+          player.togglePlay();
+          break;
+        case 'skip_next':
+          player.skipNext();
+          break;
+        case 'skip_previous':
+          player.skipPrevious();
+          break;
+      }
+    };
+  }
+
+  void _seek(
+    JamController jam,
+    PlayerController player,
+    Duration target,
+    bool canControl,
+  ) {
+    if (jam.isGuest && !canControl) {
+      return;
+    }
+    if (jam.inJam) {
+      debugPrint('[JAM] PlayerScreen seek: route=jam target=$target');
+      jam.playbackAction('seek', position: target);
+    } else {
+      debugPrint('[JAM] PlayerScreen seek: route=local target=$target');
+      player.seek(target);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Consumer<PlayerController>(
-      builder: (context, player, _) {
-        final track = player.currentTrack;
+    return Consumer2<PlayerController, JamController>(
+      builder: (context, player, jam, _) {
+        final remoteState = jam.isGuest ? jam.session : null;
+        final track = remoteState?.currentTrack ?? player.currentTrack;
+        final playing = remoteState?.isPlaying ?? player.playing;
+        final canControl =
+            !jam.isGuest || (jam.localParticipant?.canControlPlayback ?? false);
+
+        debugPrint(
+          '[JAM] PlayerScreen.build: id=${identityHashCode(jam)} '
+          'trackId=${track?.id} role=${jam.role.name} mode=${jam.mode.name} '
+          'canCtrl=$canControl',
+        );
+
         if (track == null) {
           return Scaffold(
             backgroundColor: context.bgApp,
@@ -58,7 +119,6 @@ class _PlayerScreenState extends State<PlayerScreen> {
           );
         }
 
-        final playing = player.playing;
         final repeatMode = player.repeatMode;
         final shuffleEnabled = player.shuffleEnabled;
 
@@ -80,59 +140,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                                 color: context.textPrimary, size: 32),
                             onPressed: () => Navigator.of(context).pop(),
                           ),
-                          Consumer<JamController>(
-                            builder: (context, jam, _) {
-                              if (jam.inJam) {
-                                return InkWell(
-                                  onTap: () =>
-                                      JamDialog.showAsBottomSheet(context),
-                                  borderRadius: BorderRadius.circular(20),
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(
-                                        horizontal: 10, vertical: 4),
-                                    decoration: BoxDecoration(
-                                      color: context.accent
-                                          .withValues(alpha: 0.15),
-                                      borderRadius: BorderRadius.circular(20),
-                                      border: Border.all(
-                                        color: context.accent
-                                            .withValues(alpha: 0.4),
-                                      ),
-                                    ),
-                                    child: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Container(
-                                          width: 6,
-                                          height: 6,
-                                          decoration: BoxDecoration(
-                                            shape: BoxShape.circle,
-                                            color: context.accent,
-                                          ),
-                                        ),
-                                        const SizedBox(width: 6),
-                                        Text(
-                                          'Jam · ${jam.participants.length}',
-                                          style: TextStyle(
-                                            color: context.accent,
-                                            fontSize: 11.5,
-                                            fontWeight: FontWeight.bold,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                );
-                              }
-                              return IconButton(
-                                icon: Icon(Icons.speaker_group_outlined,
-                                    color: context.textSecondary, size: 22),
-                                tooltip: 'Jam',
-                                onPressed: () =>
-                                    JamDialog.showAsBottomSheet(context),
-                              );
-                            },
-                          ),
+                          _buildJamBadge(context, jam),
                           IconButton(
                             icon: Icon(Icons.more_horiz,
                                 color: context.textPrimary),
@@ -166,58 +174,19 @@ class _PlayerScreenState extends State<PlayerScreen> {
                           fontSize: 16,
                         ),
                       ),
-                      Consumer<JamController>(
-                        builder: (context, jam, _) {
-                          if (jam.inJam && jam.currentTrackAddedBy != null) {
-                            final p = jam.currentTrackAddedBy!;
-                            return Padding(
-                              padding: const EdgeInsets.only(top: 6),
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 10, vertical: 3),
-                                decoration: BoxDecoration(
-                                  color: Color(p.avatarColorValue)
-                                      .withValues(alpha: 0.18),
-                                  borderRadius: BorderRadius.circular(12),
-                                  border: Border.all(
-                                    color: Color(p.avatarColorValue)
-                                        .withValues(alpha: 0.4),
-                                    width: 0.8,
-                                  ),
-                                ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    CircleAvatar(
-                                      radius: 4,
-                                      backgroundColor:
-                                          Color(p.avatarColorValue),
-                                    ),
-                                    const SizedBox(width: 6),
-                                    Text(
-                                      'Añadido al Jam por ${p.name}',
-                                      style: TextStyle(
-                                        color: Color(p.avatarColorValue),
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            );
-                          }
-                          return const SizedBox.shrink();
-                        },
-                      ),
+                      if (jam.inJam && jam.currentTrackAddedBy != null)
+                        _buildAddedByTag(jam.currentTrackAddedBy!),
                       const SizedBox(height: 16),
-                      _buildProgressBar(player),
+                      _buildProgressBar(
+                          context, player, jam, track, canControl),
                       const SizedBox(height: 8),
                       _buildControls(
                         player,
+                        jam,
                         playing: playing,
                         repeatMode: repeatMode,
                         shuffleEnabled: shuffleEnabled,
+                        canControl: canControl,
                       ),
                       const SizedBox(height: 12),
                       // Barra de utilidades inferior: Favoritos + Volumen + Karaoke + Letra + Cola
@@ -229,17 +198,36 @@ class _PlayerScreenState extends State<PlayerScreen> {
                             Consumer<NavidromeService>(
                               builder: (context, nav, _) {
                                 final isStarred = nav.isStarred(track.id);
-                                return IconButton(
-                                  icon: Icon(
-                                    isStarred
-                                        ? Icons.favorite
-                                        : Icons.favorite_border,
-                                    color: isStarred
-                                        ? context.accent
-                                        : context.textSecondary,
-                                    size: 22,
-                                  ),
-                                  onPressed: () => nav.toggleStar(track),
+                                final trackRating = nav.getTrackRating(track.id) != 0
+                                    ? nav.getTrackRating(track.id)
+                                    : track.userRating;
+                                return Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    IconButton(
+                                      icon: Icon(
+                                        isStarred
+                                            ? Icons.favorite
+                                            : Icons.favorite_border,
+                                        color: isStarred
+                                            ? context.accent
+                                            : context.textSecondary,
+                                        size: 22,
+                                      ),
+                                      onPressed: () => nav.toggleStar(track),
+                                    ),
+                                    RatingStars(
+                                      rating: trackRating,
+                                      interactive: true,
+                                      size: 18,
+                                      color: context.accent,
+                                      onRatingChanged: (newRating) {
+                                        final targetRating =
+                                            trackRating == newRating ? 0 : newRating;
+                                        nav.setRating(track.id, targetRating);
+                                      },
+                                    ),
+                                  ],
                                 );
                               },
                             ),
@@ -249,7 +237,13 @@ class _PlayerScreenState extends State<PlayerScreen> {
                                 // Barra de volumen: solo en pantalla grande.
                                 // En celular se oculta para no saturar.
                                 if (_isWide(context)) ...[
-                                  _PlayerVolumeBar(player: player),
+                                  IgnorePointer(
+                                    ignoring: jam.isGuest,
+                                    child: Opacity(
+                                      opacity: jam.isGuest ? 0.4 : 1.0,
+                                      child: _PlayerVolumeBar(player: player),
+                                    ),
+                                  ),
                                   const SizedBox(width: 4),
                                 ],
                                 IconButton(
@@ -286,6 +280,88 @@ class _PlayerScreenState extends State<PlayerScreen> {
           ),
         );
       },
+    );
+  }
+
+  Widget _buildJamBadge(BuildContext context, JamController jam) {
+    if (jam.inJam) {
+      return InkWell(
+        onTap: () => JamDialog.showAsBottomSheet(context),
+        borderRadius: BorderRadius.circular(20),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+          decoration: BoxDecoration(
+            color: context.accent.withValues(alpha: 0.15),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: context.accent.withValues(alpha: 0.4),
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 6,
+                height: 6,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: context.accent,
+                ),
+              ),
+              const SizedBox(width: 6),
+              Text(
+                'Jam · ${jam.participants.length}',
+                style: TextStyle(
+                  color: context.accent,
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+    return IconButton(
+      icon: Icon(Icons.speaker_group_outlined,
+          color: context.textSecondary, size: 22),
+      tooltip: 'Jam',
+      onPressed: () => JamDialog.showAsBottomSheet(context),
+    );
+  }
+
+  Widget _buildAddedByTag(JamParticipant p) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 6),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+        decoration: BoxDecoration(
+          color: Color(p.avatarColorValue).withValues(alpha: 0.18),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: Color(p.avatarColorValue).withValues(alpha: 0.4),
+            width: 0.8,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            CircleAvatar(
+              radius: 4,
+              backgroundColor: Color(p.avatarColorValue),
+            ),
+            const SizedBox(width: 6),
+            Text(
+              'Añadido al Jam por ${p.name}',
+              style: TextStyle(
+                color: Color(p.avatarColorValue),
+                fontSize: 11,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -434,73 +510,120 @@ class _PlayerScreenState extends State<PlayerScreen> {
     );
   }
 
-  Widget _buildProgressBar(PlayerController player) {
-    return StreamBuilder<Duration>(
-      stream: player.positionStream,
-      builder: (context, snapshot) {
-        final trackTime = Duration(
-            seconds: int.tryParse(player.currentTrack?.duration ?? '') ?? 0);
-        final duration = player.duration ?? trackTime;
-        final position = snapshot.data ?? Duration.zero;
-
-        final maxMs = duration.inMilliseconds == 0
-            ? 1.0
-            : duration.inMilliseconds.toDouble();
-        final currentMs = (_dragValue ?? position.inMilliseconds.toDouble())
-            .clamp(0.0, maxMs);
-
-        return Column(
-          children: [
-            SliderTheme(
-              data: SliderThemeData(
-                trackHeight: 3,
-                activeTrackColor: context.waveformPlayed,
-                inactiveTrackColor: context.waveformUnplayed,
-                thumbColor: context.sliderThumb,
-                thumbShape: RoundSliderThumbShape(enabledThumbRadius: 6),
-                overlayColor: context.accentDim,
-                overlayShape: RoundSliderOverlayShape(overlayRadius: 16),
-              ),
-              child: Slider(
-                min: 0,
-                max: maxMs,
-                value: currentMs,
-                onChanged: (v) => setState(() => _dragValue = v),
-                onChangeEnd: (v) async {
-                  await player.seek(Duration(milliseconds: v.round()));
-                  if (mounted) setState(() => _dragValue = null);
-                },
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 4),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    _format(Duration(milliseconds: currentMs.round())),
-                    style:
-                        TextStyle(color: context.textSecondary, fontSize: 12),
-                  ),
-                  Text(
-                    _format(duration),
-                    style:
-                        TextStyle(color: context.textSecondary, fontSize: 12),
-                  ),
-                ],
-              ),
-            ),
-          ],
+  Widget _buildProgressBar(
+    BuildContext context,
+    PlayerController player,
+    JamController jam,
+    Track track,
+    bool canControl,
+  ) {
+    return Consumer<PlayerController>(
+      builder: (context, playerModel, _) {
+        final trackTime = Duration(seconds: int.tryParse(track.duration) ?? 0);
+        return StreamBuilder<Duration?>(
+          stream: playerModel.durationStream,
+          initialData: playerModel.duration,
+          builder: (context, durSnapshot) {
+            final duration =
+                durSnapshot.data ?? playerModel.duration ?? trackTime;
+            // Posición interpolada a 250 ms: en Android el backend emite
+            // ~1 Hz y el StreamBuilder solo se vería congelado.
+            return PlayerPositionBuilder(
+              player: playerModel,
+              duration: duration,
+              builder: (context, position) {
+                final effectivePosition = (jam.isGuest &&
+                        position == Duration.zero &&
+                        (jam.session?.positionMs ?? 0) > 0)
+                    ? Duration(milliseconds: jam.session!.positionMs)
+                    : position;
+                return Column(
+                  children: [
+                    // Waveform progress bar (audio real, altura visible 56 px)
+                    SizedBox(
+                      height: 56,
+                      child: IgnorePointer(
+                        ignoring: !canControl,
+                        child: WaveformProgressBar(
+                          waveform: playerModel.waveformData,
+                          position: effectivePosition,
+                          duration: duration,
+                          onSeek: (target) =>
+                              _seek(jam, player, target, canControl),
+                        ),
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 4),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            formatPlaybackTime(effectivePosition),
+                            style: TextStyle(
+                                color: context.textSecondary, fontSize: 12),
+                          ),
+                          Tooltip(
+                            message: _showRemainingTime
+                                ? 'Mostrar duración total'
+                                : 'Mostrar tiempo restante',
+                            child: Semantics(
+                              button: true,
+                              label: _showRemainingTime
+                                  ? 'Tiempo restante: ${formatRemainingPlaybackTime(effectivePosition, duration)}'
+                                  : 'Duración total: ${formatPlaybackTime(duration)}',
+                              hint:
+                                  'Alternar entre duración total y tiempo restante',
+                              child: InkWell(
+                                borderRadius: BorderRadius.circular(4),
+                                onTap: () {
+                                  setState(() {
+                                    _showRemainingTime = !_showRemainingTime;
+                                  });
+                                },
+                                child: ConstrainedBox(
+                                  constraints: const BoxConstraints(
+                                    minWidth: 40,
+                                    minHeight: 40,
+                                  ),
+                                  child: Container(
+                                    alignment: Alignment.centerRight,
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 6),
+                                    child: Text(
+                                      _showRemainingTime
+                                          ? formatRemainingPlaybackTime(
+                                              effectivePosition, duration)
+                                          : formatPlaybackTime(duration),
+                                      style: TextStyle(
+                                          color: context.textSecondary,
+                                          fontSize: 12),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                );
+              },
+            );
+          },
         );
       },
     );
   }
 
   Widget _buildControls(
-    PlayerController player, {
+    PlayerController player,
+    JamController jam, {
     required bool playing,
     required LoopMode repeatMode,
     required bool shuffleEnabled,
+    required bool canControl,
   }) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
@@ -511,11 +634,11 @@ class _PlayerScreenState extends State<PlayerScreen> {
             size: 22,
             color: shuffleEnabled ? context.accent : context.textPrimary,
           ),
-          onPressed: player.toggleShuffle,
+          onPressed: jam.isGuest ? null : player.toggleShuffle,
         ),
         IconButton(
           icon: Icon(Icons.skip_previous, color: context.textPrimary, size: 34),
-          onPressed: player.skipPrevious,
+          onPressed: _playbackHandler(jam, player, 'skip_previous', canControl),
         ),
         IconButton(
           iconSize: 60,
@@ -523,11 +646,11 @@ class _PlayerScreenState extends State<PlayerScreen> {
             playing ? Icons.pause_circle_filled : Icons.play_circle_filled,
             color: context.textPrimary,
           ),
-          onPressed: player.togglePlay,
+          onPressed: _playbackHandler(jam, player, 'toggle', canControl),
         ),
         IconButton(
           icon: Icon(Icons.skip_next, color: context.textPrimary, size: 34),
-          onPressed: player.skipNext,
+          onPressed: _playbackHandler(jam, player, 'skip_next', canControl),
         ),
         IconButton(
           icon: Icon(
@@ -537,7 +660,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                 ? context.accent
                 : context.textPrimary,
           ),
-          onPressed: player.toggleRepeat,
+          onPressed: jam.isGuest ? null : player.toggleRepeat,
         ),
       ],
     );

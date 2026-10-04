@@ -32,50 +32,55 @@ class DesktopWindowFrame extends StatelessWidget {
                 await windowManager.maximize();
               }
             },
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                color: colors.surface,
-                border:
-                    Border(bottom: BorderSide(color: colors.outlineVariant)),
-              ),
-              child: Row(
-                children: [
-                  const SizedBox(width: 12),
-                  Icon(Icons.graphic_eq_rounded,
-                      size: 15, color: colors.primary),
-                  const SizedBox(width: 7),
-                  Text(
-                    'Scrotify',
-                    style: TextStyle(
-                      color: colors.onSurface,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
+            child: Material(
+              color: colors.surface,
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  border:
+                      Border(bottom: BorderSide(color: colors.outlineVariant)),
+                ),
+                child: Row(
+                  children: [
+                    const SizedBox(width: 12),
+                    Icon(Icons.graphic_eq_rounded,
+                        size: 15, color: colors.primary),
+                    const SizedBox(width: 7),
+                    Text(
+                      'Scrotify',
+                      maxLines: 1,
+                      softWrap: false,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: colors.onSurface,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
-                  ),
-                  const Spacer(),
-                  _WindowButton(
-                    tooltip: 'Minimizar',
-                    icon: Icons.remove_rounded,
-                    onPressed: windowManager.minimize,
-                  ),
-                  _WindowButton(
-                    tooltip: 'Maximizar',
-                    icon: Icons.crop_square_rounded,
-                    onPressed: () async {
-                      if (await windowManager.isMaximized()) {
-                        await windowManager.unmaximize();
-                      } else {
-                        await windowManager.maximize();
-                      }
-                    },
-                  ),
-                  _WindowButton(
-                    tooltip: 'Cerrar',
-                    icon: Icons.close_rounded,
-                    danger: true,
-                    onPressed: windowManager.close,
-                  ),
-                ],
+                    const Spacer(),
+                    _WindowButton(
+                      tooltip: 'Minimizar',
+                      icon: Icons.remove_rounded,
+                      onPressed: windowManager.minimize,
+                    ),
+                    _WindowButton(
+                      tooltip: 'Maximizar',
+                      icon: Icons.crop_square_rounded,
+                      onPressed: () async {
+                        if (await windowManager.isMaximized()) {
+                          await windowManager.unmaximize();
+                        } else {
+                          await windowManager.maximize();
+                        }
+                      },
+                    ),
+                    _WindowButton(
+                      tooltip: 'Cerrar',
+                      icon: Icons.close_rounded,
+                      danger: true,
+                      onPressed: windowManager.close,
+                    ),
+                  ],
+                ),
               ),
             ),
           ),

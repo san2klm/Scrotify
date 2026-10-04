@@ -63,13 +63,8 @@ class _CoverArtState extends State<CoverArt> {
     super.didChangeDependencies();
     // Primera vez o tras cambio de MediaQuery: lanzar búsqueda pendiente.
     if (!_fetchScheduled && !_hasUrl && _canSearchExternal) {
-      print('[CoverArt] didChangeDependencies: scheduling fetch for artist="${widget.artist}" album="${widget.album}" title="${widget.title}"');
       _fetchScheduled = true;
       _fetchExternal();
-    } else if (!_canSearchExternal) {
-      print('[CoverArt] didChangeDependencies: no metadata to search (artist="${widget.artist}" album="${widget.album}" title="${widget.title}")');
-    } else if (_hasUrl) {
-      print('[CoverArt] didChangeDependencies: has URL, skipping external fetch');
     }
   }
 
@@ -98,7 +93,6 @@ class _CoverArtState extends State<CoverArt> {
 
     final size = (rawSize.clamp(100.0, 1000.0) * dpr).round();
 
-    print('[CoverArt] _fetchExternal: calling findCover artist="${widget.artist}" album="${widget.album}" title="${widget.title}" size=$size');
     CoverFallbackService.instance
         .findCover(
           artist: widget.artist,
@@ -107,7 +101,6 @@ class _CoverArtState extends State<CoverArt> {
           size: size,
         )
         .then((url) {
-      print('[CoverArt] _fetchExternal: got result=$url');
       if (mounted && url != null && url.isNotEmpty) {
         setState(() => _externalUrl = url);
       }
