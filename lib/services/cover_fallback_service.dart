@@ -30,33 +30,25 @@ class CoverFallbackService {
     final cleanArtist = _clean(artist);
     final cleanAlbum = _clean(album);
     final cleanTitle = _clean(title);
-    print('[CoverFallback] findCover called: artist="$artist"->"$cleanArtist" album="$album"->"$cleanAlbum" title="$title"->"$cleanTitle" size=$safeSize');
     if (cleanArtist.isEmpty && cleanAlbum.isEmpty && cleanTitle.isEmpty) {
-      print('[CoverFallback] empty metadata, returning null');
       return Future.value(null);
     }
 
     final key = '$cleanArtist|$cleanAlbum|$cleanTitle|$safeSize';
     if (_cache.containsKey(key)) {
-      print('[CoverFallback] cache hit: $key -> ${_cache[key]}');
       return Future.value(_cache[key]);
     }
     if (_pending.containsKey(key)) {
-      print('[CoverFallback] pending: $key');
       return _pending[key]!;
     }
 
     final future = _search(cleanArtist, cleanAlbum, cleanTitle, safeSize).then((url) {
       if (url != null && url.isNotEmpty) {
         _cache[key] = url;
-        print('[CoverFallback] cached: $key -> $url');
-      } else {
-        print('[CoverFallback] search returned null for $key');
       }
       // No cachear null: permitir reintento si falló la red o no hubo resultados
       return url;
     }).catchError((e) {
-      print('[CoverFallback] error for $key: $e');
       // No cachear error: permitir reintento
       return null;
     }).whenComplete(() => _pending.remove(key));

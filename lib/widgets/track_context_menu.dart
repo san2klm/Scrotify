@@ -6,10 +6,13 @@ import '../screens/artist_screen.dart';
 import '../screens/album_detail_screen.dart';
 import '../services/jam_controller.dart';
 import '../services/navidrome_service.dart';
+import '../services/offline_cache_service.dart';
+import '../services/offline_download_manager.dart';
 import '../services/player_controller.dart';
 import '../services/theme_controller.dart';
 import 'cover_art.dart';
 import 'interactive_artist_text.dart';
+import 'rating_stars.dart';
 import 'server_activity_panel.dart';
 import '../utils/app_colors.dart';
 
@@ -115,75 +118,131 @@ class TrackContextMenu extends StatelessWidget {
                   ),
                 ],
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 12),
+              // Calificación 1 a 5 estrellas (Fase 8)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                child: Row(
+                  children: [
+                    Text(
+                      'Puntuación',
+                      style: TextStyle(
+                        color: context.textSecondary,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    const Spacer(),
+                    RatingStars(
+                      rating: nav.getTrackRating(track.id) != 0
+                          ? nav.getTrackRating(track.id)
+                          : track.userRating,
+                      interactive: true,
+                      size: 24,
+                      color: context.accent,
+                      onRatingChanged: (newRating) {
+                        final current = nav.getTrackRating(track.id) != 0
+                            ? nav.getTrackRating(track.id)
+                            : track.userRating;
+                        final targetRating =
+                            current == newRating ? 0 : newRating;
+                        nav.setRating(track.id, targetRating);
+                      },
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 8),
               Divider(color: context.bgElevated, height: 1),
               const SizedBox(height: 8),
 
               // Acciones Jam (si hay Jam activo)
               if (jam.inJam) ...[
                 if (jam.isHost ||
-                    (jam.localParticipant?.canManageQueue ?? false))
-                  ListTile(
-                  leading: Container(
-                    padding: const EdgeInsets.all(6),
-                    decoration: BoxDecoration(
-                      color: context.accent.withValues(alpha: 0.15),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Icon(Icons.speaker_group_rounded,
-                        color: context.accent, size: 20),
-                  ),
-                  title: Text(
-                    'Añadir a la cola Jam',
-                    style: TextStyle(
-                      color: context.accent,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 14,
-                    ),
-                  ),
-                  subtitle: Text(
-                    'Compartir con los ${jam.participants.length} oyentes de la sesión',
-                    style: TextStyle(color: context.textMuted, fontSize: 11),
-                  ),
-                  onTap: () {
-                    final messenger = ScaffoldMessenger.of(context);
-                    final bg =
-                        context.read<ThemeController>().active.bgElevated;
-                    Navigator.of(context).pop();
-                    jam.addTrackToJam(track);
-                    messenger.showSnackBar(
-                      SnackBar(
-                        content: Text('"${track.title}" añadida a la cola Jam'),
-                        duration: const Duration(seconds: 2),
-                        backgroundColor: bg,
+                    (jam.localParticipant?.canManageQueue ?? false)) ...[
+                  () {
+                    final inJamQueue =
+                        jam.queue.any((qi) => qi.track.id == track.id);
+                    return ListTile(
+                      leading: Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color: (inJamQueue ? context.accent2 : context.accent)
+                              .withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Icon(Icons.speaker_group_rounded,
+                            color: inJamQueue
+                                ? context.accent2
+                                : context.accent,
+                            size: 20),
                       ),
+                      title: Text(
+                        inJamQueue
+                            ? 'Ya está en la cola Jam'
+                            : 'Añadir a la cola Jam',
+                        style: TextStyle(
+                          color: inJamQueue
+                              ? context.accent2
+                              : context.accent,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                        ),
+                      ),
+                      subtitle: Text(
+                        inJamQueue
+                            ? 'Esta pista ya figura en la cola compartida'
+                            : 'Compartir con los ${jam.participants.length} oyentes de la sesión',
+                        style:
+                            TextStyle(color: context.textMuted, fontSize: 11),
+                      ),
+                      onTap: () {
+                        final messenger = ScaffoldMessenger.of(context);
+                        final bg =
+                            context.read<ThemeController>().active.bgElevated;
+                        Navigator.of(context).pop();
+                        jam.addTrackToJam(track);
+                        messenger.showSnackBar(
+                          SnackBar(
+                            content: Text(inJamQueue
+                                ? '"${track.title}" ya figuraba en la cola Jam'
+                                : (jam.isGuest
+                                    ? 'Solicitud enviada para añadir "${track.title}" a la cola Jam'
+                                    : '"${track.title}" añadida a la cola Jam')),
+                            duration: const Duration(seconds: 2),
+                            backgroundColor: bg,
+                          ),
+                        );
+                      },
                     );
-                  },
-                ),
+                  }(),
+                ],
                 if (jam.isHost ||
                     (jam.localParticipant?.canManageQueue ?? false))
                   ListTile(
-                  leading: Icon(Icons.playlist_play_rounded,
-                      color: context.textSecondary),
-                  title: Text(
-                    'Reproducir siguiente en Jam',
-                    style: TextStyle(color: context.textPrimary, fontSize: 14),
-                  ),
-                  onTap: () {
-                    final messenger = ScaffoldMessenger.of(context);
-                    final bg =
-                        context.read<ThemeController>().active.bgElevated;
-                    Navigator.of(context).pop();
-                    jam.addTrackToJam(track, playNext: true);
-                    messenger.showSnackBar(
-                      SnackBar(
-                        content:
-                            Text('"${track.title}" sonará a continuación en el Jam'),
-                        duration: const Duration(seconds: 2),
-                        backgroundColor: bg,
-                      ),
-                    );
-                  },
+                    leading: Icon(Icons.playlist_play_rounded,
+                        color: context.textSecondary),
+                    title: Text(
+                      'Reproducir siguiente en Jam',
+                      style:
+                          TextStyle(color: context.textPrimary, fontSize: 14),
+                    ),
+                    onTap: () {
+                      final messenger = ScaffoldMessenger.of(context);
+                      final bg =
+                          context.read<ThemeController>().active.bgElevated;
+                      Navigator.of(context).pop();
+                      jam.addTrackToJam(track, playNext: true);
+                      messenger.showSnackBar(
+                        SnackBar(
+                          content: Text(jam.isGuest
+                              ? 'Solicitud enviada para reproducir "${track.title}" a continuación'
+                              : '"${track.title}" sonará a continuación en el Jam'),
+                          duration: const Duration(seconds: 2),
+                          backgroundColor: bg,
+                        ),
+                      );
+                    },
                   ),
                 if (jam.isGuest &&
                     !(jam.localParticipant?.canManageQueue ?? false))
@@ -290,10 +349,8 @@ class TrackContextMenu extends StatelessWidget {
                     Navigator.of(context).pop();
                     try {
                       // Obtener las pistas de la playlist y encontrar el índice
-                      final tracks =
-                          await nav.getPlaylistTracks(playlistId!);
-                      final index =
-                          tracks.indexWhere((t) => t.id == track.id);
+                      final tracks = await nav.getPlaylistTracks(playlistId!);
+                      final index = tracks.indexWhere((t) => t.id == track.id);
                       if (index >= 0) {
                         await nav.updatePlaylist(
                           playlistId: playlistId!,
@@ -310,9 +367,8 @@ class TrackContextMenu extends StatelessWidget {
                     } catch (e) {
                       if (messenger.mounted) {
                         messenger.showSnackBar(SnackBar(
-                          content: Text(e
-                              .toString()
-                              .replaceFirst('Exception: ', '')),
+                          content: Text(
+                              e.toString().replaceFirst('Exception: ', '')),
                           backgroundColor: bg,
                         ));
                       }
@@ -348,8 +404,7 @@ class TrackContextMenu extends StatelessWidget {
                       color: context.textSecondary),
                   title: Text(
                     'Añadir a la fila',
-                    style:
-                        TextStyle(color: context.textPrimary, fontSize: 14),
+                    style: TextStyle(color: context.textPrimary, fontSize: 14),
                   ),
                   onTap: () {
                     final messenger = ScaffoldMessenger.of(context);
@@ -359,13 +414,19 @@ class TrackContextMenu extends StatelessWidget {
                     player.addToQueue(track);
                     messenger.showSnackBar(
                       SnackBar(
-                        content:
-                            Text('"${track.title}" añadida a la cola'),
+                        content: Text('"${track.title}" añadida a la cola'),
                         duration: const Duration(seconds: 2),
                         backgroundColor: bg,
                       ),
                     );
                   },
+                ),
+
+              // Acción de descarga sin conexión (solo cuando no está en Jam)
+              if (!jam.inJam)
+                TrackOfflineSection(
+                  track: track,
+                  serverScope: nav.serverScope,
                 ),
 
               Divider(color: context.bgElevated, height: 1),
@@ -405,8 +466,7 @@ class TrackContextMenu extends StatelessWidget {
                   style: TextStyle(color: context.textMuted, fontSize: 11),
                 ),
                 trailing: player.hasSleepTimer
-                    ? Icon(Icons.check_rounded,
-                        color: context.accent, size: 20)
+                    ? Icon(Icons.check_rounded, color: context.accent, size: 20)
                     : Icon(Icons.chevron_right_rounded,
                         color: context.textMuted, size: 20),
                 onTap: () {
@@ -453,8 +513,8 @@ class TrackContextMenu extends StatelessWidget {
 
               // 6. Ir a radio de la canción
               ListTile(
-                leading: Icon(Icons.radio_rounded,
-                    color: context.textSecondary),
+                leading:
+                    Icon(Icons.radio_rounded, color: context.textSecondary),
                 title: Text(
                   'Ir a radio de la canción',
                   style: TextStyle(color: context.textPrimary, fontSize: 14),
@@ -462,8 +522,10 @@ class TrackContextMenu extends StatelessWidget {
                 onTap: () {
                   Navigator.of(context).pop();
                   ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                    content: Text('Ir a radio de la canción (Próximamente)'),
-                    backgroundColor: context.read<ThemeController>().active.bgElevated,
+                    content:
+                        const Text('Ir a radio de la canción (Próximamente)'),
+                    backgroundColor:
+                        context.read<ThemeController>().active.bgElevated,
                   ));
                 },
               ),
@@ -472,8 +534,8 @@ class TrackContextMenu extends StatelessWidget {
 
               // 7. Ir al artista
               ListTile(
-                leading: Icon(Icons.person_rounded,
-                    color: context.textSecondary),
+                leading:
+                    Icon(Icons.person_rounded, color: context.textSecondary),
                 title: Text(
                   'Ir al artista',
                   style: TextStyle(color: context.textPrimary, fontSize: 14),
@@ -492,8 +554,8 @@ class TrackContextMenu extends StatelessWidget {
 
               // 8. Ir al álbum
               ListTile(
-                leading: Icon(Icons.album_rounded,
-                    color: context.textSecondary),
+                leading:
+                    Icon(Icons.album_rounded, color: context.textSecondary),
                 title: Text(
                   'Ir al álbum',
                   style: TextStyle(color: context.textPrimary, fontSize: 14),
@@ -523,8 +585,7 @@ class TrackContextMenu extends StatelessWidget {
                 onTap: () async {
                   final nav = context.read<NavidromeService>();
                   final messenger = ScaffoldMessenger.of(context);
-                  final bg =
-                      context.read<ThemeController>().active.bgElevated;
+                  final bg = context.read<ThemeController>().active.bgElevated;
                   Navigator.of(context).pop();
                   // Enviar link de canción al chat de comunidad
                   final msg =
@@ -561,26 +622,33 @@ class TrackContextMenu extends StatelessWidget {
       builder: (ctx) {
         return Consumer<PlayerController>(
           builder: (context, player, _) {
-            final options = <({String label, Duration? duration})>[
-              (label: 'Desactivado', duration: null),
-              (label: 'En 5 minutos', duration: const Duration(minutes: 5)),
-              (label: 'En 10 minutos', duration: const Duration(minutes: 10)),
-              (label: 'En 15 minutos', duration: const Duration(minutes: 15)),
-              (label: 'En 30 minutos', duration: const Duration(minutes: 30)),
-              (label: 'En 45 minutos', duration: const Duration(minutes: 45)),
-              (label: 'En 1 hora', duration: const Duration(hours: 1)),
+            final options = <({String label, Duration? duration, bool isEndOfTrack})>[
+              (label: 'Desactivado', duration: null, isEndOfTrack: false),
+              (label: 'Fin de la canción', duration: null, isEndOfTrack: true),
+              (label: 'En 5 minutos', duration: const Duration(minutes: 5), isEndOfTrack: false),
+              (label: 'En 15 minutos', duration: const Duration(minutes: 15), isEndOfTrack: false),
+              (label: 'En 30 minutos', duration: const Duration(minutes: 30), isEndOfTrack: false),
+              (label: 'En 45 minutos', duration: const Duration(minutes: 45), isEndOfTrack: false),
+              (label: 'En 1 hora', duration: const Duration(hours: 1), isEndOfTrack: false),
               (
                 label: 'En 1 hora y 30 minutos',
-                duration: const Duration(minutes: 90)
+                duration: const Duration(minutes: 90),
+                isEndOfTrack: false,
               ),
             ];
 
-            bool isSelected(Duration? d) {
-              if (d == null) return !player.hasSleepTimer;
+            bool isSelected(({String label, Duration? duration, bool isEndOfTrack}) opt) {
+              if (opt.isEndOfTrack) {
+                return player.isSleepTimerEndOfTrack;
+              }
+              if (opt.duration == null) {
+                return !player.hasSleepTimer;
+              }
+              if (player.isSleepTimerEndOfTrack) return false;
               final rem = player.sleepRemaining;
               if (rem == null) return false;
               // Tolerancia de 2 min para marcar la opción activa.
-              return (rem - d).abs() < const Duration(minutes: 2);
+              return (rem - opt.duration!).abs() < const Duration(minutes: 2);
             }
 
             return SafeArea(
@@ -619,8 +687,7 @@ class TrackContextMenu extends StatelessWidget {
                         padding: const EdgeInsets.only(top: 4),
                         child: Text(
                           player.sleepLabel,
-                          style: TextStyle(
-                              color: context.accent, fontSize: 12),
+                          style: TextStyle(color: context.accent, fontSize: 12),
                         ),
                       ),
                     const SizedBox(height: 12),
@@ -630,12 +697,14 @@ class TrackContextMenu extends StatelessWidget {
                         itemCount: options.length,
                         itemBuilder: (ctx, i) {
                           final opt = options[i];
-                          final selected = isSelected(opt.duration);
+                          final selected = isSelected(opt);
                           return ListTile(
                             leading: Icon(
-                              opt.duration == null
+                              opt.duration == null && !opt.isEndOfTrack
                                   ? Icons.timer_off_outlined
-                                  : Icons.timer_outlined,
+                                  : (opt.isEndOfTrack
+                                      ? Icons.music_note_rounded
+                                      : Icons.timer_outlined),
                               color: selected
                                   ? context.accent
                                   : context.textSecondary,
@@ -657,14 +726,23 @@ class TrackContextMenu extends StatelessWidget {
                                     color: context.accent, size: 20)
                                 : null,
                             onTap: () {
-                              final messenger =
-                                  ScaffoldMessenger.of(context);
+                              final messenger = ScaffoldMessenger.of(context);
                               final bg = context
                                   .read<ThemeController>()
                                   .active
                                   .bgElevated;
                               Navigator.of(context).pop();
-                              if (opt.duration == null) {
+                              if (opt.isEndOfTrack) {
+                                player.setSleepTimerEndOfTrack();
+                                messenger.showSnackBar(
+                                  SnackBar(
+                                    content: const Text(
+                                        'La música se pausará al terminar la canción actual'),
+                                    duration: const Duration(seconds: 2),
+                                    backgroundColor: bg,
+                                  ),
+                                );
+                              } else if (opt.duration == null) {
                                 player.cancelSleepTimer();
                                 messenger.showSnackBar(
                                   SnackBar(
@@ -690,11 +768,113 @@ class TrackContextMenu extends StatelessWidget {
                         },
                       ),
                     ),
+                    const Divider(height: 1),
+                    ListTile(
+                      leading: Icon(Icons.tune_rounded, color: context.textSecondary),
+                      title: Text(
+                        'Personalizado...',
+                        style: TextStyle(
+                          color: context.textPrimary,
+                          fontSize: 14,
+                        ),
+                      ),
+                      onTap: () {
+                        Navigator.of(context).pop();
+                        _showCustomSleepTimerDialog(parentContext, player);
+                      },
+                    ),
                   ],
                 ),
               ),
             );
           },
+        );
+      },
+    );
+  }
+
+  void _showCustomSleepTimerDialog(BuildContext parentContext, PlayerController player) {
+    final theme = parentContext.read<ThemeController>().active;
+    final controller = TextEditingController(text: '20');
+    showDialog<void>(
+      context: parentContext,
+      builder: (ctx) {
+        return AlertDialog(
+          backgroundColor: theme.bgApp,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+            side: BorderSide(color: theme.bgElevated),
+          ),
+          title: Text(
+            'Temporizador personalizado',
+            style: TextStyle(
+              color: theme.textPrimary,
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Ingresa los minutos tras los cuales se pausará la reproducción:',
+                style: TextStyle(color: theme.textMuted, fontSize: 13),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: controller,
+                autofocus: true,
+                keyboardType: TextInputType.number,
+                style: TextStyle(color: theme.textPrimary, fontSize: 15),
+                decoration: InputDecoration(
+                  labelText: 'Minutos',
+                  labelStyle: TextStyle(color: theme.textMuted),
+                  suffixText: 'min',
+                  suffixStyle: TextStyle(color: theme.accent),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: BorderSide(color: theme.bgElevated),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: BorderSide(color: theme.bgElevated),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: BorderSide(color: theme.accent),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: Text('Cancelar', style: TextStyle(color: theme.textMuted)),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: theme.accent,
+                foregroundColor: Colors.black,
+              ),
+              onPressed: () {
+                final mins = int.tryParse(controller.text.trim());
+                if (mins != null && mins > 0) {
+                  Navigator.of(ctx).pop();
+                  player.setSleepTimer(Duration(minutes: mins));
+                  ScaffoldMessenger.of(parentContext).showSnackBar(
+                    SnackBar(
+                      content: Text('La música se pausará en $mins minutos'),
+                      backgroundColor: theme.bgElevated,
+                      duration: const Duration(seconds: 2),
+                    ),
+                  );
+                }
+              },
+              child: const Text('Programar'),
+            ),
+          ],
         );
       },
     );
@@ -741,7 +921,7 @@ class TrackContextMenu extends StatelessWidget {
                     const SizedBox(height: 12),
                     if (playlists.isEmpty)
                       Padding(
-                        padding: EdgeInsets.all(20),
+                        padding: const EdgeInsets.all(20),
                         child: Text(
                           'No tienes playlists creadas',
                           style: TextStyle(color: context.textMuted),
@@ -763,8 +943,7 @@ class TrackContextMenu extends StatelessWidget {
                                   style: TextStyle(
                                       color: context.textMuted, fontSize: 11)),
                               onTap: () async {
-                                final messenger =
-                                    ScaffoldMessenger.of(context);
+                                final messenger = ScaffoldMessenger.of(context);
                                 final bg = context
                                     .read<ThemeController>()
                                     .active
@@ -821,7 +1000,8 @@ class TrackContextMenu extends StatelessWidget {
     );
   }
 
-  Future<void> _navigateToArtist(BuildContext context, NavidromeService nav, Track track) async {
+  Future<void> _navigateToArtist(
+      BuildContext context, NavidromeService nav, Track track) async {
     final messenger = ScaffoldMessenger.of(context);
     final bg = context.read<ThemeController>().active.bgElevated;
 
@@ -838,8 +1018,10 @@ class TrackContextMenu extends StatelessWidget {
       }
 
       if (targetArtist != null && context.mounted) {
-        Navigator.push(context,
-            MaterialPageRoute(builder: (_) => ArtistScreen(artist: targetArtist!)));
+        Navigator.push(
+            context,
+            MaterialPageRoute(
+                builder: (_) => ArtistScreen(artist: targetArtist!)));
       } else {
         messenger.showSnackBar(SnackBar(
           content: const Text('No se pudo encontrar al artista principal.'),
@@ -854,7 +1036,8 @@ class TrackContextMenu extends StatelessWidget {
     }
   }
 
-  Future<void> _navigateToAlbum(BuildContext context, NavidromeService nav, Track track) async {
+  Future<void> _navigateToAlbum(
+      BuildContext context, NavidromeService nav, Track track) async {
     final messenger = ScaffoldMessenger.of(context);
     final bg = context.read<ThemeController>().active.bgElevated;
 
@@ -877,6 +1060,520 @@ class TrackContextMenu extends StatelessWidget {
         content: const Text('No se pudo encontrar el álbum.'),
         backgroundColor: bg,
       ));
+    }
+  }
+}
+
+/// Estados de UI para la acción de descarga sin conexión de una pista.
+enum TrackOfflineUiState {
+  notDownloaded,
+  queued,
+  downloading,
+  paused,
+  failed,
+  availableOffline,
+}
+
+/// Representación del estado resuelto para la acción de descarga sin conexión.
+class TrackOfflineActionState {
+  final TrackOfflineUiState status;
+  final DownloadTask? task;
+  final double? progress;
+  final String? failureMessage;
+
+  const TrackOfflineActionState({
+    required this.status,
+    this.task,
+    this.progress,
+    this.failureMessage,
+  });
+
+  /// Resuelve el estado de UI considerando tanto el estado del gestor de descargas
+  /// como la verificación real de caché C1.
+  ///
+  /// Un estado completado en el gestor por sí solo NO se considera prueba de
+  /// disponibilidad sin conexión; se requiere [hasVerifiedCache] == true.
+  static TrackOfflineActionState resolve({
+    required DownloadTask? task,
+    required bool hasVerifiedCache,
+  }) {
+    if (task != null && task.isNonTerminal) {
+      switch (task.status) {
+        case DownloadTaskStatus.queued:
+          return TrackOfflineActionState(
+            status: TrackOfflineUiState.queued,
+            task: task,
+            progress: task.progress,
+          );
+        case DownloadTaskStatus.downloading:
+          return TrackOfflineActionState(
+            status: TrackOfflineUiState.downloading,
+            task: task,
+            progress: task.progress,
+          );
+        case DownloadTaskStatus.paused:
+          return TrackOfflineActionState(
+            status: TrackOfflineUiState.paused,
+            task: task,
+            progress: task.progress,
+          );
+        case DownloadTaskStatus.failed:
+          return TrackOfflineActionState(
+            status: TrackOfflineUiState.failed,
+            task: task,
+            progress: task.progress,
+            failureMessage: task.failureMessage,
+          );
+        case DownloadTaskStatus.completed:
+        case DownloadTaskStatus.cancelled:
+          break;
+      }
+    }
+
+    if (hasVerifiedCache) {
+      return TrackOfflineActionState(
+        status: TrackOfflineUiState.availableOffline,
+        task: task,
+      );
+    }
+
+    // Sin tarea, cancelada, o completada pero sin registro verificado en caché
+    return const TrackOfflineActionState(
+      status: TrackOfflineUiState.notDownloaded,
+    );
+  }
+}
+
+/// Sección interactiva de acciones y estado de descarga sin conexión para una pista.
+class TrackOfflineSection extends StatefulWidget {
+  final Track track;
+  final String? serverScope;
+  final OfflineDownloadManager? downloadManager;
+  final OfflineCacheService? cacheService;
+
+  const TrackOfflineSection({
+    super.key,
+    required this.track,
+    this.serverScope,
+    this.downloadManager,
+    this.cacheService,
+  });
+
+  @override
+  State<TrackOfflineSection> createState() => _TrackOfflineSectionState();
+}
+
+class _TrackOfflineSectionState extends State<TrackOfflineSection> {
+  Future<OfflineCacheEntry?>? _lookupFuture;
+  DownloadTaskStatus? _lastTaskStatus;
+  OfflineCacheService? _cachedService;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final service = widget.cacheService ??
+        Provider.of<OfflineCacheService?>(context, listen: false);
+    if (service != _cachedService) {
+      _cachedService = service;
+      _triggerLookup();
+    }
+  }
+
+  @override
+  void didUpdateWidget(TrackOfflineSection oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.track.id != widget.track.id ||
+        oldWidget.serverScope != widget.serverScope ||
+        oldWidget.cacheService != widget.cacheService) {
+      _cachedService = widget.cacheService ?? _cachedService;
+      _triggerLookup();
+    }
+  }
+
+  void _triggerLookup() {
+    final scope = widget.serverScope;
+    final service = widget.cacheService ?? _cachedService;
+    if (scope != null && scope.trim().isNotEmpty && service != null) {
+      _lookupFuture = service.lookup(scope, widget.track.id);
+    } else {
+      _lookupFuture = Future.value(null);
+    }
+  }
+
+  Future<void> _handleQueue(
+    OfflineDownloadManager? manager,
+    String? serverScope,
+    Track track,
+  ) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final theme = Provider.of<ThemeController?>(context, listen: false);
+    final bg = theme?.active.bgElevated ?? const Color(0xFF282828);
+
+    if (manager == null) return;
+    if (serverScope == null || serverScope.trim().isEmpty) {
+      messenger.showSnackBar(
+        SnackBar(
+          content: const Text('No hay un servidor conectado para descargar.'),
+          backgroundColor: bg,
+        ),
+      );
+      return;
+    }
+
+    try {
+      await manager.queueTrack(track, serverScope: serverScope);
+      if (mounted) {
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text('Descarga añadida para "${track.title}"'),
+            duration: const Duration(seconds: 2),
+            backgroundColor: bg,
+          ),
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        messenger.showSnackBar(
+          SnackBar(
+            content: const Text('Error al solicitar la descarga'),
+            duration: const Duration(seconds: 2),
+            backgroundColor: bg,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _handlePause(
+    OfflineDownloadManager? manager,
+    String? serverScope,
+    Track track,
+  ) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final theme = Provider.of<ThemeController?>(context, listen: false);
+    final bg = theme?.active.bgElevated ?? const Color(0xFF282828);
+
+    if (manager == null || serverScope == null || serverScope.trim().isEmpty) {
+      return;
+    }
+
+    try {
+      await manager.pauseTask(serverScope, track.id);
+    } catch (_) {
+      if (mounted) {
+        messenger.showSnackBar(
+          SnackBar(
+            content: const Text('Error al pausar la descarga'),
+            duration: const Duration(seconds: 2),
+            backgroundColor: bg,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _handleResume(
+    OfflineDownloadManager? manager,
+    String? serverScope,
+    Track track,
+  ) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final theme = Provider.of<ThemeController?>(context, listen: false);
+    final bg = theme?.active.bgElevated ?? const Color(0xFF282828);
+
+    if (manager == null || serverScope == null || serverScope.trim().isEmpty) {
+      return;
+    }
+
+    try {
+      await manager.resumeTask(serverScope, track.id);
+    } catch (_) {
+      if (mounted) {
+        messenger.showSnackBar(
+          SnackBar(
+            content: const Text('Error al reanudar la descarga'),
+            duration: const Duration(seconds: 2),
+            backgroundColor: bg,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _handleRetry(
+    OfflineDownloadManager? manager,
+    String? serverScope,
+    Track track,
+  ) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final theme = Provider.of<ThemeController?>(context, listen: false);
+    final bg = theme?.active.bgElevated ?? const Color(0xFF282828);
+
+    if (manager == null || serverScope == null || serverScope.trim().isEmpty) {
+      return;
+    }
+
+    try {
+      await manager.retryTask(serverScope, track.id);
+    } catch (_) {
+      if (mounted) {
+        messenger.showSnackBar(
+          SnackBar(
+            content: const Text('Error al reintentar la descarga'),
+            duration: const Duration(seconds: 2),
+            backgroundColor: bg,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _handleCancel(
+    OfflineDownloadManager? manager,
+    String? serverScope,
+    Track track,
+  ) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final theme = Provider.of<ThemeController?>(context, listen: false);
+    final bg = theme?.active.bgElevated ?? const Color(0xFF282828);
+
+    if (manager == null || serverScope == null || serverScope.trim().isEmpty) {
+      return;
+    }
+
+    try {
+      await manager.cancelTask(serverScope, track.id);
+    } catch (_) {
+      if (mounted) {
+        messenger.showSnackBar(
+          SnackBar(
+            content: const Text('Error al cancelar la descarga'),
+            duration: const Duration(seconds: 2),
+            backgroundColor: bg,
+          ),
+        );
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final manager =
+        widget.downloadManager ?? Provider.of<OfflineDownloadManager?>(context);
+
+    if (manager != null) {
+      return AnimatedBuilder(
+        animation: manager,
+        builder: (context, _) => _buildWithManager(context, manager),
+      );
+    }
+    return _buildWithManager(context, null);
+  }
+
+  Widget _buildWithManager(
+    BuildContext context,
+    OfflineDownloadManager? manager,
+  ) {
+    final scope = widget.serverScope;
+    final task = (scope != null && manager != null)
+        ? manager.getTask(scope, widget.track.id)
+        : null;
+
+    if (task?.status != _lastTaskStatus) {
+      if (task?.status == DownloadTaskStatus.completed) {
+        _triggerLookup();
+      }
+      _lastTaskStatus = task?.status;
+    }
+
+    return FutureBuilder<OfflineCacheEntry?>(
+      future: _lookupFuture,
+      builder: (context, snapshot) {
+        final hasVerifiedCache = snapshot.data != null;
+        final uiState = TrackOfflineActionState.resolve(
+          task: task,
+          hasVerifiedCache: hasVerifiedCache,
+        );
+
+        return _buildActionTiles(context, manager, scope, uiState);
+      },
+    );
+  }
+
+  Widget _buildActionTiles(
+    BuildContext context,
+    OfflineDownloadManager? manager,
+    String? scope,
+    TrackOfflineActionState uiState,
+  ) {
+    final theme = Provider.of<ThemeController?>(context)?.active;
+    final accent = theme?.accent ?? Theme.of(context).colorScheme.primary;
+    final textPrimary =
+        theme?.textPrimary ?? Theme.of(context).colorScheme.onSurface;
+    final textSecondary = theme?.textSecondary ??
+        Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7);
+    final textMuted = theme?.textMuted ??
+        Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.4);
+
+    switch (uiState.status) {
+      case TrackOfflineUiState.notDownloaded:
+        return ListTile(
+          leading: Icon(Icons.download_rounded, color: textSecondary),
+          title: Text(
+            'Descargar sin conexión',
+            style: TextStyle(color: textPrimary, fontSize: 14),
+          ),
+          onTap: () => _handleQueue(manager, scope, widget.track),
+        );
+
+      case TrackOfflineUiState.queued:
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              enabled: false,
+              leading: SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: textMuted,
+                ),
+              ),
+              title: Text(
+                'En cola de descarga',
+                style: TextStyle(color: textMuted, fontSize: 14),
+              ),
+            ),
+            ListTile(
+              leading: Icon(Icons.pause_circle_outline_rounded,
+                  color: textSecondary),
+              title: Text(
+                'Pausar descarga',
+                style: TextStyle(color: textPrimary, fontSize: 14),
+              ),
+              onTap: () => _handlePause(manager, scope, widget.track),
+            ),
+          ],
+        );
+
+      case TrackOfflineUiState.downloading:
+        final progress = uiState.progress;
+        final progressPercent =
+            progress != null ? (progress * 100).toInt() : null;
+        final titleText = progressPercent != null
+            ? 'Descargando ($progressPercent%)'
+            : 'Descargando...';
+
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              enabled: false,
+              leading: SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  value: progress,
+                  strokeWidth: 2,
+                  color: accent,
+                ),
+              ),
+              title: Text(
+                titleText,
+                style: TextStyle(color: textMuted, fontSize: 14),
+              ),
+            ),
+            ListTile(
+              leading: Icon(Icons.pause_circle_outline_rounded,
+                  color: textSecondary),
+              title: Text(
+                'Pausar descarga',
+                style: TextStyle(color: textPrimary, fontSize: 14),
+              ),
+              onTap: () => _handlePause(manager, scope, widget.track),
+            ),
+          ],
+        );
+
+      case TrackOfflineUiState.paused:
+        final progress = uiState.progress;
+        final progressPercent =
+            progress != null ? (progress * 100).toInt() : null;
+        final subtitleText = progressPercent != null
+            ? 'Pausada ($progressPercent%)'
+            : 'Descarga pausada';
+
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: Icon(Icons.play_circle_outline_rounded, color: accent),
+              title: Text(
+                'Reanudar descarga',
+                style: TextStyle(color: textPrimary, fontSize: 14),
+              ),
+              subtitle: Text(
+                subtitleText,
+                style: TextStyle(color: textMuted, fontSize: 11),
+              ),
+              onTap: () => _handleResume(manager, scope, widget.track),
+            ),
+            ListTile(
+              leading: Icon(Icons.cancel_outlined, color: textSecondary),
+              title: Text(
+                'Cancelar descarga',
+                style: TextStyle(color: textPrimary, fontSize: 14),
+              ),
+              onTap: () => _handleCancel(manager, scope, widget.track),
+            ),
+          ],
+        );
+
+      case TrackOfflineUiState.failed:
+        final failureMsg = uiState.failureMessage;
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: Icon(Icons.refresh_rounded, color: accent),
+              title: Text(
+                'Reintentar descarga',
+                style: TextStyle(color: textPrimary, fontSize: 14),
+              ),
+              subtitle: failureMsg != null && failureMsg.isNotEmpty
+                  ? Text(
+                      failureMsg,
+                      style: TextStyle(color: textMuted, fontSize: 11),
+                    )
+                  : null,
+              onTap: () => _handleRetry(manager, scope, widget.track),
+            ),
+            ListTile(
+              leading: Icon(Icons.cancel_outlined, color: textSecondary),
+              title: Text(
+                'Cancelar descarga',
+                style: TextStyle(color: textPrimary, fontSize: 14),
+              ),
+              onTap: () => _handleCancel(manager, scope, widget.track),
+            ),
+          ],
+        );
+
+      case TrackOfflineUiState.availableOffline:
+        return ListTile(
+          enabled: false,
+          leading: Icon(Icons.check_circle_rounded, color: accent),
+          title: Text(
+            'Disponible sin conexión',
+            style: TextStyle(color: textMuted, fontSize: 14),
+          ),
+          subtitle: Text(
+            'Guardada en este dispositivo',
+            style: TextStyle(color: textMuted, fontSize: 11),
+          ),
+          onTap: null,
+        );
     }
   }
 }

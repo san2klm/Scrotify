@@ -5,6 +5,8 @@ import 'package:provider/provider.dart';
 
 import '../services/navidrome_service.dart';
 import '../services/secure_storage.dart';
+import '../services/server_profiles_controller.dart';
+import '../models/server_profile.dart';
 import 'desktop_login_screen.dart';
 import 'home_shell.dart';
 import 'mobile_login_screen.dart';
@@ -35,28 +37,47 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Future<void> _tryAutoLogin() async {
     try {
-      final hasCreds = await SecureStorage.hasCredentials();
-      if (hasCreds) {
-        final creds = await SecureStorage.getAll();
-        _savedUrl = creds.serverUrl;
-        _savedUser = creds.username;
-        _savedPass = creds.password;
+      if (mounted) {
+        final profilesCtrl = context.read<ServerProfilesController>();
+        await profilesCtrl.ensureLoaded();
+        ServerProfile? active;
+        try {
+          active = profilesCtrl.activeProfile;
+        } catch (_) {}
+        if (active == null && profilesCtrl.profiles.isNotEmpty) {
+          active = profilesCtrl.profiles.first;
+        }
+        if (active != null) {
+          _savedUrl = active.url;
+          _savedUser = active.username;
+          _savedPass = active.password;
+        }
+      }
 
-        if (_savedUrl != null && _savedUser != null && _savedPass != null) {
+      if (_savedUrl == null || _savedUser == null || _savedPass == null) {
+        final hasCreds = await SecureStorage.hasCredentials();
+        if (hasCreds) {
+          final creds = await SecureStorage.getAll();
+          _savedUrl = creds.serverUrl;
+          _savedUser = creds.username;
+          _savedPass = creds.password;
+        }
+      }
+
+      if (_savedUrl != null && _savedUser != null && _savedPass != null) {
+        if (mounted) {
+          final nav = context.read<NavidromeService>();
+          await nav.connectByUrl(
+            _savedUrl!,
+            _savedUser!,
+            _savedPass!,
+          );
           if (mounted) {
-            final nav = context.read<NavidromeService>();
-            await nav.connectByUrl(
-              _savedUrl!,
-              _savedUser!,
-              _savedPass!,
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(builder: (_) => const HomeShell()),
             );
-            if (mounted) {
-              Navigator.pushReplacement(
-                context,
-                MaterialPageRoute(builder: (_) => const HomeShell()),
-              );
-              return;
-            }
+            return;
           }
         }
       }
@@ -85,19 +106,22 @@ class _LoginScreenState extends State<LoginScreen> {
     }
 
     final isMobile = _isMobilePlatform(context);
+    final defaultUrl = _savedUrl ?? 'https://navidrome.templo.cloud';
+    final defaultUser = _savedUser ?? 'Proyecto';
+    final defaultPass = _savedPass ?? 'Proyecto123';
 
     if (isMobile) {
       return MobileLoginScreen(
-        initialUrl: _savedUrl ?? '',
-        initialUser: _savedUser ?? '',
-        initialPass: _savedPass ?? '',
+        initialUrl: defaultUrl,
+        initialUser: defaultUser,
+        initialPass: defaultPass,
       );
     }
 
     return DesktopLoginScreen(
-      initialUrl: _savedUrl ?? '',
-      initialUser: _savedUser ?? '',
-      initialPass: _savedPass ?? '',
+      initialUrl: defaultUrl,
+      initialUser: defaultUser,
+      initialPass: defaultPass,
     );
   }
 }

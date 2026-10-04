@@ -20,10 +20,12 @@ class LikedSongsScreen extends StatefulWidget {
 
 class _LikedSongsScreenState extends State<LikedSongsScreen> {
   late Future<List<Track>> _future;
+  String? _lastSessionKey;
 
   @override
   void initState() {
     super.initState();
+    _lastSessionKey = context.read<NavidromeService>().currentSessionKey;
     _future = context.read<NavidromeService>().getStarred();
   }
 
@@ -33,7 +35,9 @@ class _LikedSongsScreenState extends State<LikedSongsScreen> {
 
     if (oldIndex < 0 || oldIndex >= tracks.length ||
         finalNewIndex < 0 || finalNewIndex >= tracks.length ||
-        oldIndex == finalNewIndex) return;
+        oldIndex == finalNewIndex) {
+      return;
+    }
 
     final reordered = List<Track>.of(tracks);
     final moved = reordered.removeAt(oldIndex);
@@ -44,7 +48,12 @@ class _LikedSongsScreenState extends State<LikedSongsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final nav = context.read<NavidromeService>();
+    final nav = context.watch<NavidromeService>();
+    final sessionKey = nav.currentSessionKey;
+    if (sessionKey != _lastSessionKey) {
+      _lastSessionKey = sessionKey;
+      _future = nav.getStarred();
+    }
     // Misma lógica que HomeShell: < 700px es móvil (barra compacta).
     final compact = MediaQuery.sizeOf(context).width < 700;
     return Scaffold(

@@ -23,6 +23,7 @@ class GlobalTopBar extends StatefulWidget implements PreferredSizeWidget {
   final int activeNavIndex;
   final ValueChanged<int>? onNavIndexChanged;
   final VoidCallback? onLogoTap;
+  final ValueChanged<String>? onGenreSelected;
   final bool showBackButton;
 
   const GlobalTopBar({
@@ -31,6 +32,7 @@ class GlobalTopBar extends StatefulWidget implements PreferredSizeWidget {
     this.searchController,
     this.onSearch,
     this.onSearchCleared,
+    this.onGenreSelected,
     this.searching = false,
     this.activeNavIndex = 0,
     this.onNavIndexChanged,
@@ -288,6 +290,23 @@ class _GlobalTopBarState extends State<GlobalTopBar> {
                   controller: _controller,
                   searching: widget.searching,
                   exploring: widget.activeNavIndex == 1,
+                  genreSuggestionsBuilder: (query) {
+                    final genres = nav.cachedGenres;
+                    if (genres.isEmpty) return const [];
+                    final q = query.toLowerCase();
+                    return genres
+                        .where((g) => g.toLowerCase().startsWith(q))
+                        .toList();
+                  },
+                  onGenreSelected: (genre) {
+                    if (widget.onGenreSelected != null) {
+                      widget.onGenreSelected!(genre);
+                    } else if (widget.onSearch != null) {
+                      widget.onSearch!(genre);
+                    } else {
+                      _goHome(query: genre);
+                    }
+                  },
                   onSearch: (value) {
                     widget.onSearch?.call(value);
                     if (value.isEmpty) widget.onSearchCleared?.call();

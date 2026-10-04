@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
@@ -8,7 +9,14 @@ import 'package:crypto/crypto.dart';
 import 'package:path_provider/path_provider.dart';
 
 import '../models/jam_models.dart';
+import '../models/server_profile.dart';
+import 'offline_cache_service.dart';
+import 'offline_download_manager.dart';
+import 'replay_gain.dart';
+import 'server_profiles_controller.dart';
 import 'settings_controller.dart';
+
+export 'replay_gain.dart';
 
 class Track {
   final String id;
@@ -20,6 +28,12 @@ class Track {
   final int playCount;
   final String? artistId;
   final String? albumId;
+  final String? genre;
+  final DateTime? createdAt;
+  final ReplayGainMetadata? replayGain;
+  final int userRating;
+
+  int get rating => userRating;
 
   Track({
     required this.id,
@@ -31,7 +45,43 @@ class Track {
     this.playCount = 0,
     this.artistId,
     this.albumId,
+    this.genre,
+    this.createdAt,
+    this.replayGain,
+    this.userRating = 0,
   });
+
+  Track copyWith({
+    String? id,
+    String? title,
+    String? artist,
+    String? album,
+    String? duration,
+    String? albumArtUrl,
+    int? playCount,
+    String? artistId,
+    String? albumId,
+    String? genre,
+    DateTime? createdAt,
+    ReplayGainMetadata? replayGain,
+    int? userRating,
+  }) {
+    return Track(
+      id: id ?? this.id,
+      title: title ?? this.title,
+      artist: artist ?? this.artist,
+      album: album ?? this.album,
+      duration: duration ?? this.duration,
+      albumArtUrl: albumArtUrl ?? this.albumArtUrl,
+      playCount: playCount ?? this.playCount,
+      artistId: artistId ?? this.artistId,
+      albumId: albumId ?? this.albumId,
+      genre: genre ?? this.genre,
+      createdAt: createdAt ?? this.createdAt,
+      replayGain: replayGain ?? this.replayGain,
+      userRating: userRating ?? this.userRating,
+    );
+  }
 
   factory Track.fromJson(Map<String, dynamic> json, {String? albumArtUrl}) {
     final rawDuration = json['duration'];
@@ -40,6 +90,35 @@ class Track {
         : (rawDuration as String? ?? '');
 
     final coverArt = albumArtUrl ?? json['coverArt'] as String?;
+
+    DateTime? createdAt;
+    final rawCreated = json['created'] ?? json['createdAt'];
+    if (rawCreated != null) {
+      createdAt = DateTime.tryParse(rawCreated.toString());
+    }
+
+    ReplayGainMetadata? replayGain;
+    final rawRg = json['replayGain'];
+    if (rawRg is Map) {
+      final parsed = ReplayGainMetadata.fromJson(rawRg.cast<String, dynamic>());
+      if (!parsed.isEmpty) {
+        replayGain = parsed;
+      }
+    } else if (json.containsKey('trackGain') ||
+        json.containsKey('albumGain') ||
+        json.containsKey('trackPeak') ||
+        json.containsKey('albumPeak') ||
+        json.containsKey('baseGain') ||
+        json.containsKey('fallbackGain')) {
+      final parsed = ReplayGainMetadata.fromJson(json);
+      if (!parsed.isEmpty) {
+        replayGain = parsed;
+      }
+    }
+
+    final rating = (json['userRating'] as num?)?.toInt() ??
+        (json['rating'] as num?)?.toInt() ??
+        0;
 
     return Track(
       id: json['id'] as String,
@@ -51,6 +130,10 @@ class Track {
       playCount: (json['playCount'] as num?)?.toInt() ?? 0,
       artistId: json['artistId'] as String?,
       albumId: json['albumId'] as String?,
+      genre: json['genre'] as String?,
+      createdAt: createdAt,
+      replayGain: replayGain,
+      userRating: rating,
     );
   }
 }
@@ -242,11 +325,61 @@ class StructuredLyricBlock {
 }
 
 class NavidromeService with ChangeNotifier {
-  NavidromeService({SettingsController? settings}) {
+  NavidromeService({SettingsController? settings, http.Client? httpClient, ServerProfilesController? profilesController}) {
+    _injectedClient = httpClient;
+    _client = httpClient ?? http.Client();
     if (settings != null) {
       _settings = settings;
       _coverArtSize = settings.coverArtSize;
       settings.addListener(_syncFromSettings);
+    }
+
+    // Listen to profile changes for automatic reconnection
+    if (profilesController != null) {
+      _profilesController = profilesController;
+      _profilesController!.addListener(_onActiveProfileChanged);
+      // Load initial profile if exists
+      // Wait until end of frame to avoid notifying during build
+      Future.microtask(() => _loadInitialProfile());
+    }
+
+    loadLastSelectedGenre();
+  }
+
+  ServerProfilesController? _profilesController;
+
+  void _onActiveProfileChanged() {
+    // When active profile changes, reconnect with new credentials
+    final activeProfile = _profilesController?.activeProfile;
+    if (activeProfile != null &&
+        (activeProfile.url != _url ||
+         activeProfile.username != _user ||
+         activeProfile.password != _pass)) {
+      debugPrint('Active profile changed, reconnecting to ${activeProfile.url} as ${activeProfile.username}');
+      unawaited(_disconnectAndReconnect(activeProfile));
+    } else if (activeProfile == null && _connected) {
+      // No active profile, disconnect
+      debugPrint('No active profile, disconnecting');
+      disconnect();
+    }
+  }
+
+  void _loadInitialProfile() {
+    final activeProfile = _profilesController?.activeProfile;
+    if (activeProfile != null) {
+      debugPrint('Loading initial profile: ${activeProfile.url}');
+      connectByUrl(activeProfile.url, activeProfile.username, activeProfile.password);
+    }
+  }
+
+  Future<void> _disconnectAndReconnect(ServerProfile profile) async {
+    if (_connected) {
+      disconnect();
+    }
+    try {
+      await connectByUrl(profile.url, profile.username, profile.password);
+    } catch (e) {
+      debugPrint('NavidromeService reconnect error: $e');
     }
   }
 
@@ -254,7 +387,62 @@ class NavidromeService with ChangeNotifier {
   String? _user;
   String? _pass;
   bool _connected = false;
+  http.Client? _injectedClient;
   late http.Client _client;
+
+  int _sessionVersion = 0;
+  int get sessionVersion => _sessionVersion;
+
+  /// Clave única representativa de la sesión y usuario actual conectado.
+  String? get currentSessionKey =>
+      _connected && _url != null && _user != null ? '$_url|$_user#$_sessionVersion' : null;
+
+  /// Opaque cache scope segment identifying the current connected server.
+  /// Never exposes URLs, usernames, passwords, or tokens.
+  String? get serverScope {
+    if (_url == null || _url!.isEmpty) return null;
+    return OfflineCacheService.safeScopeSegment(_url!);
+  }
+
+  /// Retorna un segmento de ámbito seguro específico para el usuario y servidor actual.
+  String? get userScope {
+    if (_url == null || _url!.isEmpty) return null;
+    final u = _user ?? '';
+    if (u.isEmpty) return serverScope;
+    return OfflineCacheService.safeScopeSegment('$_url|$u');
+  }
+
+  String _scopedName(String name) {
+    final scope = userScope ?? serverScope;
+    if (scope == null) return name;
+    final parts = name.split('.');
+    final ext = parts.length > 1 ? '.${parts.last}' : '';
+    final base = parts.length > 1 ? parts.sublist(0, parts.length - 1).join('.') : name;
+    return '${base}_$scope$ext';
+  }
+
+  Future<File?> _resolveScopedFile(String name) async {
+    try {
+      final dir = await getApplicationDocumentsDirectory();
+      final userScopedFile = File('${dir.path}/${_scopedName(name)}');
+      if (await userScopedFile.exists()) {
+        return userScopedFile;
+      }
+      final sScope = serverScope;
+      if (sScope != null) {
+        final parts = name.split('.');
+        final ext = parts.length > 1 ? '.${parts.last}' : '';
+        final base = parts.length > 1 ? parts.sublist(0, parts.length - 1).join('.') : name;
+        final legacyFile = File('${dir.path}/${base}_$sScope$ext');
+        if (await legacyFile.exists()) {
+          return legacyFile;
+        }
+      }
+      return userScopedFile;
+    } catch (_) {
+      return null;
+    }
+  }
 
   SettingsController? _settings;
 
@@ -278,6 +466,34 @@ class NavidromeService with ChangeNotifier {
   String? get serverUrl => _url;
   String? get username => _user;
   bool get connected => _connected;
+
+  /// Sets connected state directly for isolated testing without credentials or network.
+  @visibleForTesting
+  void setConnectedForTesting({
+    required String url,
+    required String username,
+    required String password,
+    http.Client? client,
+  }) {
+    _url = url;
+    _user = username;
+    _pass = password;
+    _connected = true;
+    _sessionVersion++;
+    _starredIds.clear();
+    _starredSongOrder.clear();
+    _pinnedPlaylistIds.clear();
+    _followedArtistIds.clear();
+    _excludedArtistIds.clear();
+    _artistCache.clear();
+    _trackRatings.clear();
+    _cachedGenres = null;
+    if (client != null) {
+      _injectedClient = client;
+      _client = client;
+    }
+    notifyListeners();
+  }
 
   /// Retorna las credenciales actuales si la sesión está conectada,
   /// útil para compartirlas con el teléfono mediante emparejamiento.
@@ -331,7 +547,7 @@ class NavidromeService with ChangeNotifier {
 
     debugPrint('Connecting to $_url with user: $user');
 
-    _client = http.Client();
+    _client = _injectedClient ?? http.Client();
 
     try {
       final salt = _randomSalt();
@@ -362,8 +578,18 @@ class NavidromeService with ChangeNotifier {
 
         if (data['subsonic-response']['status'] == 'ok') {
           _connected = true;
+          _sessionVersion++;
+          _starredIds.clear();
+          _starredSongOrder.clear();
+          _pinnedPlaylistIds.clear();
+          _followedArtistIds.clear();
+          _excludedArtistIds.clear();
+          _artistCache.clear();
+          _trackRatings.clear();
+          _cachedGenres = null;
           await _loadPins();
           await _loadStarredOrder();
+          await loadLastSelectedGenre();
           notifyListeners();
         } else {
           throw Exception(
@@ -441,6 +667,10 @@ class NavidromeService with ChangeNotifier {
         final artist = Map<String, dynamic>.from(rawArtist);
         artist['coverArt'] = _coverArtUrl(artist['coverArt'], salt, token);
         allArtists.add(artist);
+        try {
+          final model = Artist.fromJson(artist, coverArtUrl: artist['coverArt'] as String?);
+          _artistCache[model.id] = model;
+        } catch (_) {}
       }
     }
 
@@ -630,7 +860,8 @@ class NavidromeService with ChangeNotifier {
     }
     final data = jsonDecode(response.body)['subsonic-response'];
     if (data is! Map<String, dynamic>) {
-      throw Exception('El servidor devolvió una respuesta de playlist inválida.');
+      throw Exception(
+          'El servidor devolvió una respuesta de playlist inválida.');
     }
     if (data['status'] != 'ok') {
       throw Exception(data['error']?['message'] ??
@@ -643,7 +874,8 @@ class NavidromeService with ChangeNotifier {
     if (bytes.length > 10 * 1024 * 1024) {
       throw ArgumentError('La portada supera el máximo de 10 MB.');
     }
-    bool startsWith(List<int> signature) => bytes.length >= signature.length &&
+    bool startsWith(List<int> signature) =>
+        bytes.length >= signature.length &&
         List.generate(signature.length, (i) => bytes[i] == signature[i])
             .every((match) => match);
     if (startsWith([137, 80, 78, 71, 13, 10, 26, 10])) {
@@ -677,13 +909,16 @@ class NavidromeService with ChangeNotifier {
     }
     // Mismo endpoint y campo que la interfaz web de Navidrome. Subsonic
     // createPlaylist no admite el antiguo multipart "coverArt".
-    final request = http.MultipartRequest('POST',
-        Uri.parse('$_url/api/playlist/${Uri.encodeComponent(playlistId)}/image'))
+    final request = http.MultipartRequest(
+        'POST',
+        Uri.parse(
+            '$_url/api/playlist/${Uri.encodeComponent(playlistId)}/image'))
       ..headers['X-ND-Authorization'] = 'Bearer $nativeToken'
       ..files.add(http.MultipartFile.fromBytes('image', bytes,
           filename: fileName ?? 'playlist-cover.${type.subtype}',
           contentType: type));
-    final response = await http.Response.fromStream(await _client.send(request));
+    final response =
+        await http.Response.fromStream(await _client.send(request));
     if (response.statusCode == 404 || response.statusCode == 405) {
       throw Exception('Esta versión de Navidrome no admite cargar portadas.');
     }
@@ -926,9 +1161,8 @@ class NavidromeService with ChangeNotifier {
 
   Future<void> _loadStarredOrder() async {
     try {
-      final dir = await getApplicationDocumentsDirectory();
-      final file = File('${dir.path}/starred_track_order.json');
-      if (await file.exists()) {
+      final file = await _resolveScopedFile("starred_track_order.json");
+      if (file != null && await file.exists()) {
         final content = await file.readAsString();
         final list = jsonDecode(content) as List;
         _starredSongOrder
@@ -943,7 +1177,7 @@ class NavidromeService with ChangeNotifier {
   Future<void> _saveStarredOrder() async {
     try {
       final dir = await getApplicationDocumentsDirectory();
-      final file = File('${dir.path}/starred_track_order.json');
+      final file = File('${dir.path}/${_scopedName("starred_track_order.json")}');
       await file.writeAsString(jsonEncode(_starredSongOrder));
     } catch (_) {
       // El cambio ya está aplicado en memoria aunque no pueda persistirse.
@@ -956,6 +1190,13 @@ class NavidromeService with ChangeNotifier {
   final Set<String> _pinnedPlaylistIds = {};
   final Set<String> _followedArtistIds = {};
   final Set<String> _excludedArtistIds = {};
+  final Map<String, Artist> _artistCache = {};
+
+  Artist? getCachedArtist(String id) => _artistCache[id];
+
+  void cacheArtist(Artist artist) {
+    _artistCache[artist.id] = artist;
+  }
 
   bool isPinnedPlaylist(String id) => _pinnedPlaylistIds.contains(id);
   bool isFollowingArtist(String id) => _followedArtistIds.contains(id);
@@ -996,11 +1237,9 @@ class NavidromeService with ChangeNotifier {
 
   Future<void> _loadPins() async {
     try {
-      final dir = await getApplicationDocumentsDirectory();
-
       // Load Pins
-      final pinFile = File('${dir.path}/pinned_playlists.json');
-      if (await pinFile.exists()) {
+      final pinFile = await _resolveScopedFile("pinned_playlists.json");
+      if (pinFile != null && await pinFile.exists()) {
         final content = await pinFile.readAsString();
         final list = jsonDecode(content) as List;
         _pinnedPlaylistIds
@@ -1009,8 +1248,8 @@ class NavidromeService with ChangeNotifier {
       }
 
       // Load Followed
-      final followFile = File('${dir.path}/followed_artists.json');
-      if (await followFile.exists()) {
+      final followFile = await _resolveScopedFile("followed_artists.json");
+      if (followFile != null && await followFile.exists()) {
         final content = await followFile.readAsString();
         final list = jsonDecode(content) as List;
         _followedArtistIds
@@ -1019,21 +1258,24 @@ class NavidromeService with ChangeNotifier {
       }
 
       // Load Excluded
-      final excludeFile = File('${dir.path}/excluded_artists.json');
-      if (await excludeFile.exists()) {
+      final excludeFile = await _resolveScopedFile("excluded_artists.json");
+      if (excludeFile != null && await excludeFile.exists()) {
         final content = await excludeFile.readAsString();
         final list = jsonDecode(content) as List;
         _excludedArtistIds
           ..clear()
           ..addAll(list.cast<String>());
       }
+
+      // Load Ratings
+      await _loadTrackRatings();
     } catch (_) {}
   }
 
   Future<void> _savePins() async {
     try {
       final dir = await getApplicationDocumentsDirectory();
-      final file = File('${dir.path}/pinned_playlists.json');
+      final file = File('${dir.path}/${_scopedName("pinned_playlists.json")}');
       await file.writeAsString(jsonEncode(_pinnedPlaylistIds.toList()));
     } catch (_) {}
   }
@@ -1041,7 +1283,7 @@ class NavidromeService with ChangeNotifier {
   Future<void> _saveFollowedArtists() async {
     try {
       final dir = await getApplicationDocumentsDirectory();
-      final file = File('${dir.path}/followed_artists.json');
+      final file = File('${dir.path}/${_scopedName("followed_artists.json")}');
       await file.writeAsString(jsonEncode(_followedArtistIds.toList()));
     } catch (_) {}
   }
@@ -1049,8 +1291,81 @@ class NavidromeService with ChangeNotifier {
   Future<void> _saveExcludedArtists() async {
     try {
       final dir = await getApplicationDocumentsDirectory();
-      final file = File('${dir.path}/excluded_artists.json');
+      final file = File('${dir.path}/${_scopedName("excluded_artists.json")}');
       await file.writeAsString(jsonEncode(_excludedArtistIds.toList()));
+    } catch (_) {}
+  }
+
+  // ---------------------------------------------------------------------------
+  // Rating 1-5 estrellas (Fase 8)
+  // ---------------------------------------------------------------------------
+  final Map<String, int> _trackRatings = {};
+
+  /// Devuelve la puntuación en estrellas (0 a 5) de una canción.
+  int getTrackRating(String trackId) => _trackRatings[trackId] ?? 0;
+
+  /// Establece o limpia la puntuación de una canción en Subsonic API (setRating.view).
+  /// Si [rating] es 0, quita la puntuación. Los valores se restringen entre 0 y 5.
+  Future<void> setRating(String trackId, int rating) async {
+    final clampedRating = rating.clamp(0, 5);
+    if (clampedRating == 0) {
+      _trackRatings.remove(trackId);
+    } else {
+      _trackRatings[trackId] = clampedRating;
+    }
+    notifyListeners();
+    unawaited(_saveTrackRatings());
+
+    if (!_connected) return;
+    try {
+      final (salt, token) = _auth();
+      final uri =
+          Uri.parse('$_url/rest/setRating.view').replace(queryParameters: {
+        'u': _user!,
+        's': salt,
+        't': token,
+        'v': '1.16.1',
+        'c': 'Psysonic',
+        'f': 'json',
+        'id': trackId,
+        'rating': clampedRating.toString(),
+      });
+      await _client.get(uri);
+    } catch (e) {
+      debugPrint('NavidromeService.setRating error: $e');
+    }
+  }
+
+  /// Ordena una lista de pistas por calificación descendente (5 estrellas primero).
+  List<Track> sortByRating(List<Track> tracks) {
+    final sorted = List<Track>.from(tracks);
+    sorted.sort((a, b) {
+      final ratingA = getTrackRating(a.id) != 0 ? getTrackRating(a.id) : a.userRating;
+      final ratingB = getTrackRating(b.id) != 0 ? getTrackRating(b.id) : b.userRating;
+      return ratingB.compareTo(ratingA);
+    });
+    return sorted;
+  }
+
+  Future<void> _loadTrackRatings() async {
+    try {
+      final file = await _resolveScopedFile("track_ratings.json");
+      if (file != null && await file.exists()) {
+        final content = await file.readAsString();
+        final map = jsonDecode(content) as Map<String, dynamic>;
+        _trackRatings.clear();
+        map.forEach((k, v) {
+          if (v is num) _trackRatings[k] = v.toInt();
+        });
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _saveTrackRatings() async {
+    try {
+      final dir = await getApplicationDocumentsDirectory();
+      final file = File('${dir.path}/${_scopedName("track_ratings.json")}');
+      await file.writeAsString(jsonEncode(_trackRatings));
     } catch (_) {}
   }
 
@@ -1240,6 +1555,41 @@ class NavidromeService with ChangeNotifier {
         .toList();
   }
 
+  /// Devuelve los detalles de un artista (getArtist.view), aprovechando caché en memoria.
+  Future<Artist?> getArtist(String artistId) async {
+    if (_artistCache.containsKey(artistId)) {
+      return _artistCache[artistId];
+    }
+    if (!_connected) return null;
+    try {
+      final (salt, token) = _auth();
+      final uri =
+          Uri.parse('$_url/rest/getArtist.view').replace(queryParameters: {
+        'u': _user!,
+        's': salt,
+        't': token,
+        'v': '1.16.1',
+        'c': 'Psysonic',
+        'f': 'json',
+        'id': artistId,
+      });
+      final response = await _client.get(uri);
+      final data = jsonDecode(response.body);
+      final artistJson =
+          data['subsonic-response']?['artist'] as Map<String, dynamic>?;
+      if (artistJson == null) return null;
+      final artist = Artist.fromJson(
+        artistJson,
+        coverArtUrl: _coverArtUrl(artistJson['coverArt'], salt, token),
+      );
+      _artistCache[artistId] = artist;
+      return artist;
+    } catch (e) {
+      debugPrint('NavidromeService.getArtist error: $e');
+      return null;
+    }
+  }
+
   /// Devuelve los álbumes de un artista (getArtist.view).
   Future<List<Album>> getArtistAlbums(String artistId) async {
     if (!_connected) throw Exception('Not connected');
@@ -1331,6 +1681,155 @@ class NavidromeService with ChangeNotifier {
     return url;
   }
 
+  /// Downloads track audio bytes via authenticated HTTP streaming into [destinationFile].
+  /// Never exposes or logs the authenticated URL or credentials.
+  /// Throws sanitized [DownloadException] on error.
+  Future<void> downloadTrackStream({
+    required String trackId,
+    required File destinationFile,
+    AudioQuality? quality,
+    void Function(int receivedBytes, int? totalBytes)? onProgress,
+    bool Function()? isCancelled,
+    Duration timeout = const Duration(seconds: 30),
+  }) async {
+    if (!_connected || _url == null || _user == null || _pass == null) {
+      throw const DownloadException(
+        'Server not connected',
+        category: DownloadFailureCategory.notConnected,
+      );
+    }
+
+    if (isCancelled != null && isCancelled()) {
+      throw const DownloadException(
+        'Download cancelled',
+        category: DownloadFailureCategory.cancelled,
+      );
+    }
+
+    final streamUrl = getStreamUrl(trackId, quality: quality);
+    final uri = Uri.parse(streamUrl);
+
+    http.StreamedResponse response;
+    try {
+      final request = http.Request('GET', uri);
+      final streamedFuture = _client.send(request);
+      response = await streamedFuture.timeout(timeout);
+    } on TimeoutException {
+      throw const DownloadException(
+        'Connection timed out',
+        category: DownloadFailureCategory.timeout,
+      );
+    } on SocketException {
+      throw const DownloadException(
+        'Network connection failed',
+        category: DownloadFailureCategory.network,
+      );
+    } on HttpException {
+      throw const DownloadException(
+        'HTTP transport error',
+        category: DownloadFailureCategory.network,
+      );
+    } catch (e) {
+      if (e is DownloadException) rethrow;
+      throw const DownloadException(
+        'Network connection failed',
+        category: DownloadFailureCategory.network,
+      );
+    }
+
+    if (response.statusCode != 200) {
+      final category = switch (response.statusCode) {
+        401 || 403 => DownloadFailureCategory.auth,
+        404 => DownloadFailureCategory.notFound,
+        >= 500 => DownloadFailureCategory.serverError,
+        _ => DownloadFailureCategory.unknown,
+      };
+      throw DownloadException(
+        'Server returned HTTP ${response.statusCode}',
+        category: category,
+      );
+    }
+
+    final totalBytes = response.contentLength;
+    int receivedBytes = 0;
+
+    IOSink? sink;
+    StreamSubscription<List<int>>? subscription;
+    try {
+      if (!await destinationFile.parent.exists()) {
+        await destinationFile.parent.create(recursive: true);
+      }
+      sink = destinationFile.openWrite();
+
+      final completer = Completer<void>();
+
+      subscription = response.stream.listen(
+        (chunk) {
+          if (isCancelled != null && isCancelled()) {
+            subscription?.cancel();
+            if (!completer.isCompleted) {
+              completer.completeError(const DownloadException(
+                'Download cancelled',
+                category: DownloadFailureCategory.cancelled,
+              ));
+            }
+            return;
+          }
+          try {
+            sink!.add(chunk);
+            receivedBytes += chunk.length;
+            onProgress?.call(receivedBytes, totalBytes);
+          } catch (_) {
+            subscription?.cancel();
+            if (!completer.isCompleted) {
+              completer.completeError(const DownloadException(
+                'Filesystem write error',
+                category: DownloadFailureCategory.storage,
+              ));
+            }
+          }
+        },
+        onError: (Object error) {
+          if (!completer.isCompleted) {
+            final category = error is TimeoutException
+                ? DownloadFailureCategory.timeout
+                : DownloadFailureCategory.network;
+            completer.completeError(DownloadException(
+              error is TimeoutException
+                  ? 'Download timed out'
+                  : 'Download stream failed',
+              category: category,
+            ));
+          }
+        },
+        onDone: () {
+          if (!completer.isCompleted) {
+            completer.complete();
+          }
+        },
+        cancelOnError: true,
+      );
+
+      await completer.future.timeout(timeout);
+      await sink.flush();
+    } on TimeoutException {
+      throw const DownloadException(
+        'Download transfer timed out',
+        category: DownloadFailureCategory.timeout,
+      );
+    } on FileSystemException {
+      throw const DownloadException(
+        'Filesystem write error',
+        category: DownloadFailureCategory.storage,
+      );
+    } finally {
+      await subscription?.cancel();
+      try {
+        await sink?.close();
+      } catch (_) {}
+    }
+  }
+
   /// Registra una reproducción para el usuario conectado. Navidrome solo
   /// actualiza su contador al recibir este evento, nunca solo por `stream`.
   Future<void> scrobble(String trackId) async {
@@ -1416,7 +1915,200 @@ class NavidromeService with ChangeNotifier {
   }
 
   // ---------------------------------------------------------------------------
-  // Comunidad e Interacciones en el Servidor Navidrome
+  // Descubrimiento y Filtrado (Fase 9)
+  // ---------------------------------------------------------------------------
+
+  List<String>? _cachedGenres;
+  String? _lastSelectedGenreSuggestion;
+
+  /// Sugerencia del último género seleccionado (solo sugerencia; no bloquea al usuario al volver).
+  String? get lastSelectedGenreSuggestion => _lastSelectedGenreSuggestion;
+
+  /// Lista en memoria de los géneros cargados previamente.
+  List<String> get cachedGenres => _cachedGenres ?? const [];
+
+  /// Guarda el último género seleccionado únicamente como sugerencia futura.
+  Future<void> saveLastSelectedGenre(String genre) async {
+    _lastSelectedGenreSuggestion = genre;
+    try {
+      final dir = await getApplicationDocumentsDirectory();
+      final file = File('${dir.path}/${_scopedName("last_genre_suggestion.json")}');
+      await file.writeAsString(jsonEncode({'genre': genre}));
+    } catch (_) {}
+  }
+
+  /// Carga la sugerencia persistida del último género seleccionado.
+  Future<String?> loadLastSelectedGenre() async {
+    try {
+      final file = await _resolveScopedFile("last_genre_suggestion.json");
+      if (file != null && await file.exists()) {
+        final data =
+            jsonDecode(await file.readAsString()) as Map<String, dynamic>;
+        _lastSelectedGenreSuggestion = data['genre'] as String?;
+        return _lastSelectedGenreSuggestion;
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  /// Filtra localmente una lista de pistas por género de forma exacta (insensible a mayúsculas).
+  List<Track> filterByGenre(List<Track> tracks, String genre) {
+    if (genre.isEmpty ||
+        genre.toLowerCase() == 'todos' ||
+        genre.toLowerCase() == 'all') {
+      return List<Track>.from(tracks);
+    }
+    final target = genre.trim().toLowerCase();
+    return tracks.where((t) {
+      final g = t.genre;
+      if (g == null || g.trim().isEmpty) return false;
+      final gl = g.trim().toLowerCase();
+      if (gl == target) return true;
+      final parts = gl.split(RegExp(r'[,;/]')).map((s) => s.trim());
+      return parts.contains(target);
+    }).toList();
+  }
+
+  /// Obtiene pistas de los álbumes más nuevos del servidor.
+  ///
+  /// `getAlbumList2(type=newest)` es el endpoint Subsonic soportado para esta
+  /// consulta. Se expanden álbumes en orden y se detiene al alcanzar [limit].
+  /// Protegido contra desconexiones para mantener seguro el montaje de Home.
+  Future<List<Track>> getRecentlyAddedTracks({int limit = 20}) async {
+    if (!_connected || limit <= 0) return [];
+    try {
+      final albums = await getAlbums(type: 'newest', limit: limit);
+      final tracks = <Track>[];
+      for (final album in albums) {
+        if (tracks.length >= limit) break;
+        final albumTracks = await getAlbumTracks(album.id);
+        tracks.addAll(albumTracks.take(limit - tracks.length));
+      }
+      return tracks;
+    } catch (e) {
+      debugPrint('NavidromeService.getRecentlyAddedTracks error: $e');
+      return [];
+    }
+  }
+
+  /// Busca pistas que pertenezcan exactamente a un género específico.
+  ///
+  /// Recurre a `search3.view` aplicando filtrado local estricto para asegurar que las canciones coincidan.
+  /// Si no hay coincidencias o falla, recurre a pistas de la biblioteca localmente con filtrado exacto.
+  /// Seguro ante desconexiones.
+  Future<List<Track>> searchByGenre(String genre, {int limit = 50}) async {
+    if (!_connected || genre.trim().isEmpty) return const [];
+    final (salt, token) = _auth();
+
+    // 1. Búsqueda con search3 y filtrado exacto
+    try {
+      final uri =
+          Uri.parse('$_url/rest/search3.view').replace(queryParameters: {
+        'query': genre,
+        'u': _user!,
+        's': salt,
+        't': token,
+        'v': '1.16.1',
+        'c': 'Psysonic',
+        'f': 'json',
+        'songCount': (limit * 2).toString(),
+        'albumCount': '0',
+        'artistCount': '0',
+      });
+
+      final response = await _client.get(uri);
+      final data = jsonDecode(response.body);
+      final result =
+          data['subsonic-response']?['searchResult3'] as Map<String, dynamic>?;
+      if (result != null) {
+        final rawTracks = _asList(result['song'])
+            .map((j) => Track.fromJson(
+                  j as Map<String, dynamic>,
+                  albumArtUrl: _coverArtUrl(j['coverArt'], salt, token),
+                ))
+            .toList();
+
+        final exactMatches = filterByGenre(rawTracks, genre);
+        if (exactMatches.isNotEmpty) {
+          return exactMatches.take(limit).toList();
+        }
+      }
+    } catch (_) {}
+
+    // 2. Fallback: comprobar pistas de biblioteca localmente con filtrado exacto
+    try {
+      final libraryTracks = await getTracks(limit: 500);
+      final libraryMatches = filterByGenre(libraryTracks, genre);
+      if (libraryMatches.isNotEmpty) {
+        return libraryMatches.take(limit).toList();
+      }
+    } catch (_) {}
+
+    return const [];
+  }
+
+  /// Obtiene una lista de géneros disponibles en la biblioteca.
+  /// Protegido contra desconexiones y cacheado en memoria para evitar
+  /// peticiones redundantes.
+  Future<List<String>> getGenres() async {
+    if (!_connected) return _cachedGenres ?? [];
+
+    // 1. Intentar endpoint getGenres.view
+    try {
+      final (salt, token) = _auth();
+      final uri =
+          Uri.parse('$_url/rest/getGenres.view').replace(queryParameters: {
+        'u': _user!,
+        's': salt,
+        't': token,
+        'v': '1.16.1',
+        'c': 'Psysonic',
+        'f': 'json',
+      });
+
+      final response = await _client.get(uri);
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final genresList = data['subsonic-response']?['genres']?['genre'];
+        if (genresList != null) {
+          final set = <String>{};
+          for (final item in _asList(genresList)) {
+            if (item is Map<String, dynamic>) {
+              final val = item['value'] ?? item['name'];
+              if (val is String && val.trim().isNotEmpty) {
+                set.add(val.trim());
+              }
+            } else if (item is String && item.trim().isNotEmpty) {
+              set.add(item.trim());
+            }
+          }
+          if (set.isNotEmpty) {
+            final sorted = set.toList()..sort();
+            _cachedGenres = sorted;
+            return sorted;
+          }
+        }
+      }
+    } catch (_) {}
+
+    // 2. Muestra de biblioteca
+    try {
+      final tracks = await getTracks(limit: 500);
+      final genres = tracks
+          .map((track) => track.genre)
+          .whereType<String>()
+          .where((genre) => genre.trim().isNotEmpty)
+          .toSet()
+          .toList();
+
+      genres.sort();
+      _cachedGenres = genres;
+      return genres;
+    } catch (e) {
+      debugPrint('NavidromeService.getGenres error: $e');
+      return _cachedGenres ?? [];
+    }
+  }
   // ---------------------------------------------------------------------------
 
   /// Obtiene lo que otros usuarios están escuchando en este servidor en tiempo real.
@@ -1601,12 +2293,24 @@ class NavidromeService with ChangeNotifier {
     return discovered.values.toList();
   }
 
-  void disconnect() async {
+  void disconnect() {
     _connected = false;
     _url = null;
     _user = null;
     _pass = null;
     _client.close();
+    _client = _injectedClient ?? http.Client();
+
+    // Clear state
+    _starredIds.clear();
+    _starredSongOrder.clear();
+    _pinnedPlaylistIds.clear();
+    _followedArtistIds.clear();
+    _excludedArtistIds.clear();
+    _artistCache.clear();
+    _trackRatings.clear();
+    _cachedGenres = null;
+
     notifyListeners();
   }
 }

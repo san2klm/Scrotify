@@ -36,7 +36,12 @@ dependencies:
   media_kit: ^1.2.0
   window_manager: ^0.5.2
   uuid: ^4.6.0
-
+  local_auth: ^3.0.2
+  sqflite: ^2.4.4
+  path: ^1.9.1
+  basic_utils: ^5.8.2
+  audio_service: ^0.18.19
+  audio_session: ^0.1.25
 dev_dependencies:
   flutter_test:
     sdk: flutter

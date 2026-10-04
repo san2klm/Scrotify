@@ -7,12 +7,14 @@ import '../services/player_controller.dart';
 import '../services/secure_storage.dart';
 import '../widgets/persistent_player_bar.dart';
 import '../widgets/cover_art.dart';
+import '../widgets/genre_selector.dart';
 import '../widgets/create_playlist_dialog.dart';
 import '../widgets/search_explore_field.dart';
 import '../widgets/explore_tracks_view.dart';
 import '../services/home_navigation_controller.dart';
 import '../widgets/pairing_panel.dart';
 import '../widgets/server_activity_panel.dart';
+import '../widgets/interactive_artist_text.dart';
 import '../widgets/track_context_menu.dart';
 import 'liked_songs_screen.dart';
 import 'playlist_detail_screen.dart';
@@ -37,8 +39,10 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
   _HomeFilter _filter = _HomeFilter.todo;
   late Future<List<Track>> _futureTracks;
   late Future<List<Playlist>> _futurePlaylists;
+  late Future<List<Track>> _futureRecentlyAdded;
   int _coverArtVersion = -1;
   int _playlistVersion = -1;
+  String? _currentSessionKey;
 
   final TextEditingController _searchController = TextEditingController();
   SearchResults? _searchResults;
@@ -48,20 +52,38 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
   int _explorePageSize = 25;
   int _explorePage = 0;
   HomeNavigationController? _homeNavigation;
+  String? _selectedGenre;
+  late Future<List<String>> _futureGenres;
   Timer? _serverPlayCountTimer;
+  Timer? _hourlyRefreshTimer;
   bool _refreshingPlayCounts = false;
   final ScrollController _artistsScrollController = ScrollController();
 
   @override
   void initState() {
     super.initState();
+    _currentSessionKey = context.read<NavidromeService>().currentSessionKey;
     _homeNavigation = context.read<HomeNavigationController?>();
     _homeNavigation?.addListener(_openHomeDestination);
     _futureTracks = _loadTracks();
     _futurePlaylists = context.read<NavidromeService>().getPlaylists();
+    _futureGenres = context.read<NavidromeService>().getGenres();
+    _futureRecentlyAdded =
+        context.read<NavidromeService>().getRecentlyAddedTracks();
     _serverPlayCountTimer = Timer.periodic(
       const Duration(seconds: 30),
       (_) => _refreshServerPlayCounts(),
+    );
+    _hourlyRefreshTimer = Timer.periodic(
+      const Duration(hours: 1),
+      (_) {
+        if (mounted) {
+          setState(() {
+            _futureRecentlyAdded =
+                context.read<NavidromeService>().getRecentlyAddedTracks();
+          });
+        }
+      },
     );
   }
 
@@ -157,13 +179,45 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
     }
   }
 
+  Future<void> _runGenreSearch(String genre) async {
+    final version = ++_searchVersion;
+    _showExplore = false;
+    setState(() {
+      _searching = true;
+      _searchController.text = genre;
+      _tabIndex = 1;
+    });
+    try {
+      final nav = context.read<NavidromeService>();
+      unawaited(nav.saveLastSelectedGenre(genre));
+      final tracks = await nav.searchByGenre(genre);
+      if (mounted && version == _searchVersion) {
+        setState(() {
+          _searchResults = SearchResults(
+            songs: tracks,
+            albums: [],
+            artists: [],
+          );
+          _searching = false;
+        });
+      }
+    } catch (_) {
+      if (mounted && version == _searchVersion) {
+        setState(() {
+          _searchResults = SearchResults(songs: [], albums: [], artists: []);
+          _searching = false;
+        });
+      }
+    }
+  }
+
   void _openPairingModal({bool autoOpenScanner = false}) {
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       backgroundColor: context.bgApp,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
         side: BorderSide(color: context.bgElevated, width: 1.2),
       ),
       builder: (ctx) => Padding(
@@ -233,6 +287,7 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
   void dispose() {
     _homeNavigation?.removeListener(_openHomeDestination);
     _serverPlayCountTimer?.cancel();
+    _hourlyRefreshTimer?.cancel();
     _searchController.dispose();
     _artistsScrollController.dispose();
     super.dispose();
@@ -241,6 +296,27 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
   @override
   Widget build(BuildContext context) {
     final nav = context.watch<NavidromeService>();
+    final sessionKey = nav.currentSessionKey;
+    if (sessionKey != _currentSessionKey) {
+      _currentSessionKey = sessionKey;
+      _coverArtVersion = nav.coverArtVersion;
+      _playlistVersion = nav.playlistVersion;
+      _futureTracks = _loadTracks();
+      _futurePlaylists = nav.getPlaylists();
+      _futureGenres = nav.getGenres();
+      _futureRecentlyAdded = nav.getRecentlyAddedTracks();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _searchController.clear();
+        setState(() {
+          _selectedGenre = null;
+          _searchResults = null;
+          _searching = false;
+          _showExplore = false;
+        });
+      });
+    }
+
     final version = nav.coverArtVersion;
     if (version != _coverArtVersion && _coverArtVersion >= 0) {
       _coverArtVersion = version;
@@ -465,6 +541,28 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
     );
   }
 
+  Widget _genreSelector() {
+    return FutureBuilder<List<String>>(
+      future: _futureGenres,
+      builder: (context, snapshot) {
+        final genres = snapshot.data ?? const <String>[];
+        if (genres.isEmpty) return const SizedBox.shrink();
+        return GenreSelector(
+          genres: genres,
+          selectedGenre: _selectedGenre,
+          onGenreChanged: (genre) {
+            setState(() => _selectedGenre = genre);
+            if (genre != null) {
+              unawaited(context
+                  .read<NavidromeService>()
+                  .saveLastSelectedGenre(genre));
+            }
+          },
+        );
+      },
+    );
+  }
+
   // ===========================================================================
   // Pestaña Inicio (Mobile)
   // ===========================================================================
@@ -489,16 +587,33 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
           );
         }
         final tracks = snapshot.data!;
+        final filteredTracks = _selectedGenre == null
+            ? tracks
+            : context
+                .read<NavidromeService>()
+                .filterByGenre(tracks, _selectedGenre!);
         return SingleChildScrollView(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              _genreSelector(),
+              const SizedBox(height: 16),
               _quickAccessGrid(),
+              const SizedBox(height: 24),
+              _sectionHeader(
+                'Recientemente añadidos',
+                onReload: () => setState(() {
+                  _futureRecentlyAdded =
+                      context.read<NavidromeService>().getRecentlyAddedTracks();
+                }),
+              ),
+              const SizedBox(height: 12),
+              _recentlyAddedCarousel(),
               const SizedBox(height: 24),
               _sectionHeader('Recomendados para ti'),
               const SizedBox(height: 12),
-              _carousel(tracks),
+              _carousel(filteredTracks),
               const SizedBox(height: 24),
               _sectionHeader('Álbumes'),
               const SizedBox(height: 12),
@@ -633,14 +748,84 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
     );
   }
 
-  Widget _sectionHeader(String title) {
-    return Text(
-      title,
-      style: TextStyle(
-        color: context.textPrimary,
-        fontSize: 17,
-        fontWeight: FontWeight.bold,
-      ),
+  Widget _sectionHeader(String title, {VoidCallback? onReload}) {
+    if (onReload == null) {
+      return Text(
+        title,
+        style: TextStyle(
+          color: context.textPrimary,
+          fontSize: 17,
+          fontWeight: FontWeight.bold,
+        ),
+      );
+    }
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Expanded(
+          child: Text(
+            title,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: context.textPrimary,
+              fontSize: 17,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ),
+        IconButton(
+          visualDensity: VisualDensity.compact,
+          padding: EdgeInsets.zero,
+          constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+          icon: const Icon(Icons.refresh_rounded, size: 20),
+          tooltip: 'Recargar $title',
+          onPressed: onReload,
+          color: context.textSecondary,
+        ),
+      ],
+    );
+  }
+
+  Widget _recentlyAddedCarousel() {
+    return FutureBuilder<List<Track>>(
+      future: _futureRecentlyAdded,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const SizedBox(
+            height: 180,
+            child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+          );
+        }
+        final tracks = snapshot.data ?? const <Track>[];
+        if (tracks.isEmpty) {
+          final isOffline = !context.read<NavidromeService>().connected;
+          return Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: Row(
+              children: [
+                Icon(
+                  isOffline
+                      ? Icons.cloud_off_rounded
+                      : Icons.info_outline_rounded,
+                  color: context.textMuted,
+                  size: 18,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    isOffline
+                        ? 'Sin conexión para sincronizar novedades del servidor.'
+                        : 'No hay contenido añadido recientemente.',
+                    style: TextStyle(color: context.textMuted, fontSize: 13),
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+        return _carousel(tracks);
+      },
     );
   }
 
@@ -912,7 +1097,7 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
     final items = player.recentlyPlayed.take(5).toList();
     if (items.isEmpty) {
       return Padding(
-        padding: EdgeInsets.symmetric(vertical: 8),
+        padding: const EdgeInsets.symmetric(vertical: 8),
         child: Text(
           'Todavía no has escuchado nada',
           style: TextStyle(color: context.textMuted, fontSize: 12),
@@ -953,12 +1138,10 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
                           fontWeight: FontWeight.w600,
                         ),
                       ),
-                      Text(
-                        track.artist,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style:
-                            TextStyle(color: context.textMuted, fontSize: 11),
+                      InteractiveArtistText(
+                        artistString: track.artist,
+                        fontSize: 11,
+                        color: context.textMuted,
                       ),
                     ],
                   ),
@@ -991,6 +1174,15 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
             controller: _searchController,
             onSearch: _runSearch,
             onExplore: _openExplore,
+            genreSuggestionsBuilder: (query) {
+              final genres = context.read<NavidromeService>().cachedGenres;
+              if (genres.isEmpty) return const [];
+              final q = query.toLowerCase();
+              return genres
+                  .where((g) => g.toLowerCase().startsWith(q))
+                  .toList();
+            },
+            onGenreSelected: _runGenreSearch,
             searching: _searching,
             exploring: _showExplore,
             hintText: 'Canciones, álbumes o artistas',
@@ -1005,7 +1197,8 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
                       return const Center(child: CircularProgressIndicator());
                     }
                     if (snapshot.hasError) {
-                      return const Center(child: Text('Error al cargar contenido'));
+                      return const Center(
+                          child: Text('Error al cargar contenido'));
                     }
                     final tracks = snapshot.data ?? <Track>[];
                     return ExploreTracksView(
@@ -1016,19 +1209,21 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
                         _explorePageSize = size;
                         _explorePage = 0;
                       }),
-                      onPageChanged: (page) => setState(() => _explorePage = page),
+                      onPageChanged: (page) =>
+                          setState(() => _explorePage = page),
                       onPlay: (index) => _openPlayer(tracks, index),
                     );
                   },
                 )
               : _searchResults != null
-              ? _buildSearchResults()
-              : Center(
-                  child: Text(
-                    'Busca tus canciones o artistas favoritos',
-                    style: TextStyle(color: context.textMuted, fontSize: 12.5),
-                  ),
-                ),
+                  ? _buildSearchResults()
+                  : Center(
+                      child: Text(
+                        'Busca tus canciones o artistas favoritos',
+                        style:
+                            TextStyle(color: context.textMuted, fontSize: 12.5),
+                      ),
+                    ),
         ),
       ],
     );
@@ -1103,11 +1298,11 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
               title: Text(album.title,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(color: context.textPrimary, fontSize: 13)),
-              subtitle: Text(album.artist,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(color: context.textMuted, fontSize: 11)),
+                  style: TextStyle(color: context.textPrimary, fontSize: 13.5)),
+              subtitle: InteractiveArtistText(
+                  artistString: album.artist,
+                  fontSize: 11.5,
+                  color: context.textMuted),
               onTap: () => Navigator.push(
                 context,
                 MaterialPageRoute(
@@ -1154,6 +1349,11 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
       future: _futurePlaylists,
       builder: (context, snapshot) {
         final playlists = snapshot.data ?? [];
+        final sorted = [
+          ...playlists.where((p) => nav.isPinnedPlaylist(p.id)),
+          ...playlists.where((p) => !nav.isPinnedPlaylist(p.id)),
+        ];
+        final followedIds = nav.followedArtistIds;
         return ListView(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           children: [
@@ -1196,8 +1396,12 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
                 MaterialPageRoute(builder: (_) => const LikedSongsScreen()),
               ),
             ),
+            if (followedIds.isNotEmpty) ...[
+              for (final artistId in followedIds)
+                _followedArtistTile(artistId, nav),
+            ],
             Divider(color: context.bgCard),
-            for (final playlist in playlists) ...[
+            for (final playlist in sorted) ...[
               ListTile(
                 contentPadding: EdgeInsets.zero,
                 leading: CoverArt(
@@ -1232,6 +1436,84 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
           ],
         );
       },
+    );
+  }
+
+  Widget _followedArtistTile(String artistId, NavidromeService nav) {
+    final cached = nav.getCachedArtist(artistId);
+    if (cached != null) {
+      return _buildFollowedArtistItem(cached);
+    }
+
+    return FutureBuilder<Artist?>(
+      future: nav.getArtist(artistId),
+      builder: (context, snap) {
+        final artist = snap.data;
+        if (artist != null) {
+          return _buildFollowedArtistItem(artist);
+        }
+        return ListTile(
+          contentPadding: EdgeInsets.zero,
+          leading: CoverArt(
+            url: null,
+            width: 44,
+            height: 44,
+            borderRadius: 22,
+            circle: true,
+            fallbackIcon: Icons.person,
+            fallbackIconSize: 20,
+            fallbackColor: context.bgCard,
+          ),
+          title: Text(
+            snap.connectionState == ConnectionState.waiting
+                ? 'Cargando artista...'
+                : 'Artista',
+            style: TextStyle(
+              color: context.textPrimary,
+              fontSize: 13.5,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          subtitle: Text(
+            'Artista · Siguiendo',
+            style: TextStyle(color: context.textMuted, fontSize: 11.5),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildFollowedArtistItem(Artist artist) {
+    return ListTile(
+      contentPadding: EdgeInsets.zero,
+      leading: CoverArt(
+        url: artist.coverArtUrl,
+        width: 44,
+        height: 44,
+        borderRadius: 22,
+        circle: true,
+        fallbackIcon: Icons.person,
+        fallbackIconSize: 20,
+        fallbackColor: context.bgCard,
+      ),
+      title: Text(
+        artist.name,
+        style: TextStyle(
+          color: context.textPrimary,
+          fontSize: 13.5,
+          fontWeight: FontWeight.w500,
+        ),
+      ),
+      subtitle: Text(
+        'Artista · Siguiendo',
+        style: TextStyle(color: context.textMuted, fontSize: 11.5),
+      ),
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => ArtistScreen(artist: artist),
+        ),
+      ),
     );
   }
 

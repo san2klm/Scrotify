@@ -34,6 +34,12 @@ class JamQueuePanel extends StatelessWidget {
   Widget build(BuildContext context) {
     final player = context.watch<PlayerController>();
     final jam = context.watch<JamController>();
+    debugPrint(
+      '[JAM] JamQueuePanel.build: id=${identityHashCode(jam)} role=${jam.role.name} '
+      'qLen=${jam.jamQueue.length} conn=${jam.connectionState.name} '
+      'canCtrl=${jam.localParticipant?.canControlPlayback ?? false} '
+      'canQueue=${jam.localParticipant?.canManageQueue ?? false}',
+    );
     final currentTrack = jam.isGuest
         ? jam.session?.currentTrack ?? player.currentTrack
         : player.currentTrack;
@@ -84,7 +90,7 @@ class JamQueuePanel extends StatelessWidget {
                   inJam
                       ? Icons.speaker_group_rounded
                       : Icons.queue_music_rounded,
-                  color: inJam ? context.accent : context.accent,
+                  color: inJam ? context.accent : context.accent2,
                   size: 20,
                 ),
               ),
@@ -133,6 +139,33 @@ class JamQueuePanel extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 16),
+
+          if (inJam && jam.lastError != null) ...[
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              decoration: BoxDecoration(
+                color: context.danger.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: context.danger.withValues(alpha: 0.35),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.error_outline_rounded,
+                      color: context.danger, size: 16),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      jam.lastError!,
+                      style: TextStyle(color: context.danger, fontSize: 11),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+          ],
 
           // Canción en reproducción actual
           if (currentTrack != null) ...[
@@ -250,12 +283,22 @@ class JamQueuePanel extends StatelessWidget {
                         itemCount: queueItems.length,
                         onReorderItem: canManageJamQueue
                             ? (oldIndex, newIndex) {
-                                jam.reorderJamQueue(oldIndex, newIndex);
+                                final adjustedNew =
+                                    newIndex > oldIndex ? newIndex - 1 : newIndex;
+                                jam.reorderJamQueue(oldIndex, adjustedNew);
                               }
                             : (_, __) {},
                         itemBuilder: (ctx, i) {
                           final item = queueItems[i] as JamQueueItem;
                           final canRemove = canManageJamQueue;
+                          final isDuplicate = queueItems
+                                  .where((qi) =>
+                                      (qi is JamQueueItem
+                                              ? qi.track.id
+                                              : (qi as Track).id) ==
+                                      item.track.id)
+                                  .length >
+                              1;
 
                           return Container(
                             key: ValueKey(item.id),
@@ -309,13 +352,47 @@ class JamQueuePanel extends StatelessWidget {
                                           fontWeight: FontWeight.w600,
                                         ),
                                       ),
-                                      Text(
-                                        item.track.artist,
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: TextStyle(
-                                            color: context.textMuted,
-                                            fontSize: 11),
+                                      Row(
+                                        children: [
+                                          Expanded(
+                                            child: Text(
+                                              item.track.artist,
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: TextStyle(
+                                                  color: context.textMuted,
+                                                  fontSize: 11),
+                                            ),
+                                          ),
+                                          if (isDuplicate) ...[
+                                            const SizedBox(width: 6),
+                                            Container(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                      horizontal: 5,
+                                                      vertical: 1),
+                                              decoration: BoxDecoration(
+                                                color: context.accent2
+                                                    .withValues(alpha: 0.18),
+                                                borderRadius:
+                                                    BorderRadius.circular(4),
+                                                border: Border.all(
+                                                  color: context.accent2
+                                                      .withValues(alpha: 0.4),
+                                                  width: 0.8,
+                                                ),
+                                              ),
+                                              child: Text(
+                                                'Repetida',
+                                                style: TextStyle(
+                                                  color: context.accent2,
+                                                  fontSize: 9.5,
+                                                  fontWeight: FontWeight.bold,
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ],
                                       ),
                                       if (item.addedBy != null) ...[
                                         const SizedBox(height: 3),
@@ -341,12 +418,21 @@ class JamQueuePanel extends StatelessWidget {
                         buildDefaultDragHandles: false,
                         itemCount: queueItems.length,
                         onReorderItem: (oldIndex, newIndex) {
-                          final realOld = player.currentOrderPos + 1 + oldIndex;
-                          final realNew = player.currentOrderPos + 1 + newIndex;
+                          final adjustedNew =
+                              newIndex > oldIndex ? newIndex - 1 : newIndex;
+                          final playerOffset = player.currentOrderPos >= 0
+                              ? player.currentOrderPos + 1
+                              : 0;
+                          final realOld = playerOffset + oldIndex;
+                          final realNew = playerOffset + adjustedNew;
                           player.reorderQueue(realOld, realNew);
                         },
                         itemBuilder: (ctx, i) {
                           final track = queueItems[i] as Track;
+                          final isDuplicate = queueItems
+                                  .where((qi) => (qi as Track).id == track.id)
+                                  .length >
+                              1;
                           return Container(
                             key: ValueKey('${track.id}_$i'),
                             margin: const EdgeInsets.only(bottom: 8),
@@ -362,7 +448,7 @@ class JamQueuePanel extends StatelessWidget {
                                 ReorderableDragStartListener(
                                   index: i,
                                   child: Padding(
-                                    padding: EdgeInsets.only(right: 10),
+                                    padding: const EdgeInsets.only(right: 10),
                                     child: Icon(Icons.drag_handle_rounded,
                                         color: context.textMuted, size: 20),
                                   ),
@@ -392,13 +478,47 @@ class JamQueuePanel extends StatelessWidget {
                                           fontWeight: FontWeight.w600,
                                         ),
                                       ),
-                                      Text(
-                                        track.artist,
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: TextStyle(
-                                            color: context.textMuted,
-                                            fontSize: 11),
+                                      Row(
+                                        children: [
+                                          Expanded(
+                                            child: Text(
+                                              track.artist,
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: TextStyle(
+                                                  color: context.textMuted,
+                                                  fontSize: 11),
+                                            ),
+                                          ),
+                                          if (isDuplicate) ...[
+                                            const SizedBox(width: 6),
+                                            Container(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                      horizontal: 5,
+                                                      vertical: 1),
+                                              decoration: BoxDecoration(
+                                                color: context.accent2
+                                                    .withValues(alpha: 0.18),
+                                                borderRadius:
+                                                    BorderRadius.circular(4),
+                                                border: Border.all(
+                                                  color: context.accent2
+                                                      .withValues(alpha: 0.4),
+                                                  width: 0.8,
+                                                ),
+                                              ),
+                                              child: Text(
+                                                'Repetida',
+                                                style: TextStyle(
+                                                  color: context.accent2,
+                                                  fontSize: 9.5,
+                                                  fontWeight: FontWeight.bold,
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ],
                                       ),
                                     ],
                                   ),

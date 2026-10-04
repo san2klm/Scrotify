@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
 
 import 'package:flutter/foundation.dart';
 import 'package:web_socket_channel/io.dart';
@@ -8,6 +9,7 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 
 import '../models/jam_models.dart';
 import 'jam_network_platform.dart';
+import 'jam_tls_identity.dart';
 import 'navidrome_service.dart';
 
 typedef OnGuestStateSync = void Function(JamSessionState state);
@@ -34,7 +36,28 @@ class JamGuestService {
 
   JamSessionState? _sessionState;
   JamParticipant? _localParticipant;
+  int _queueRevision = 0;
   bool _isConnected = false;
+  JamConnectionState _connectionState = JamConnectionState.disconnected;
+
+  String? _savedHost;
+  int? _savedPort;
+  String? _savedPin;
+  String? _savedName;
+  int? _savedAvatarColorValue;
+  String? _savedParticipantId;
+  String? _savedReconnectToken;
+  String? _savedTlsFingerprint;
+
+  bool _isExplicitDisconnect = false;
+  bool _isReconnecting = false;
+  int _reconnectAttempts = 0;
+  Timer? _reconnectTimer;
+  Timer? _silenceTimer;
+  DateTime _lastHostActivity = DateTime.now();
+
+  Duration hostSilenceTimeout = const Duration(seconds: 30);
+  Duration silenceCheckInterval = const Duration(seconds: 5);
 
   OnGuestStateSync? onStateSync;
   OnGuestPlaybackUpdated? onPlaybackUpdated;
@@ -42,10 +65,20 @@ class JamGuestService {
   OnGuestKicked? onKicked;
   OnGuestSessionClosed? onSessionClosed;
   OnGuestError? onError;
+  void Function(JamConnectionState state)? onConnectionStateChanged;
 
   bool get isConnected => _isConnected;
+  JamConnectionState get connectionState => _connectionState;
   JamSessionState? get sessionState => _sessionState;
   JamParticipant? get localParticipant => _localParticipant;
+  int get queueRevision => _queueRevision;
+
+  void _updateConnectionState(JamConnectionState newState) {
+    if (_connectionState != newState) {
+      _connectionState = newState;
+      onConnectionStateChanged?.call(_connectionState);
+    }
+  }
 
   /// Último motivo de fallo de [connect], en lenguaje legible para mostrar en UI.
   String? lastError;
@@ -287,43 +320,10 @@ class JamGuestService {
   // Diagnóstico HTTP previo al WebSocket
   // ---------------------------------------------------------------------------
 
-  /// Prueba si el puerto TCP del host responde, sin necesidad del PIN.
-  ///
-  /// Devuelve un mensaje legible: distingue "puerto cerrado/firewall" de
-  /// "host inalcanzable" y de "servidor Jam responde".
-  Future<String> testHostReachable(String host, int port) async {
-    final trimmed = host.trim();
-    if (trimmed.isEmpty) return 'Ingresá una IP.';
-    if (port <= 0 || port > 65535) return 'Puerto inválido.';
-    HttpClient? client;
-    try {
-      client = HttpClient()..connectionTimeout = const Duration(seconds: 3);
-      final request = await client
-          .getUrl(Uri(
-              scheme: 'http',
-              host: trimmed,
-              port: port,
-              path: '/jam/status'))
-          .timeout(const Duration(seconds: 4));
-      final response =
-          await request.close().timeout(const Duration(seconds: 4));
-      final body = await response.transform(utf8.decoder).join().timeout(
-            const Duration(seconds: 4),
-          );
-      if (response.statusCode == 200 && body.contains('scrotify-jam')) {
-        return 'OK: el equipo $trimmed:$port responde como Jam.';
-      }
-      return 'El equipo responde HTTP ${response.statusCode}, pero no parece Jam.';
-    } on SocketException catch (e) {
-      return _describeSocketException(e, trimmed, port);
-    } on TimeoutException {
-      return 'Sin respuesta de $trimmed:$port (timeout). Probable firewall o red distinta.';
-    } catch (e) {
-      return 'No se pudo probar $trimmed:$port: $e';
-    } finally {
-      client?.close(force: true);
-    }
-  }
+  /// Direct HTTP probing was intentionally removed: a manually entered host
+  /// has no certificate pin and therefore cannot be authenticated safely.
+  Future<String> testHostReachable(String host, int port) async =>
+      'Jam LAN segura requiere escanear el QR del anfitrión; el sondeo HTTP inseguro está deshabilitado.';
 
   String _describeSocketException(SocketException e, String host, int port) {
     final os = e.osError;
@@ -350,48 +350,152 @@ class JamGuestService {
     required String pin,
     required String name,
     required int avatarColorValue,
+    required String tlsFingerprint,
     String? participantId,
   }) async {
-    await disconnect();
+    _isExplicitDisconnect = false;
+    _reconnectAttempts = 0;
+    _isReconnecting = false;
+    _reconnectTimer?.cancel();
+    _reconnectTimer = null;
+
+    final ok = await _connectInternal(
+      host: host,
+      port: port,
+      pin: pin,
+      name: name,
+      avatarColorValue: avatarColorValue,
+      participantId: participantId,
+      token: null,
+      tlsFingerprint: tlsFingerprint,
+      isReconnect: false,
+    );
+
+    if (ok) {
+      _updateConnectionState(JamConnectionState.connected);
+    } else {
+      _updateConnectionState(JamConnectionState.failed);
+    }
+    return ok;
+  }
+
+  Future<bool> _connectInternal({
+    required String host,
+    required int port,
+    required String pin,
+    required String name,
+    required int avatarColorValue,
+    String? participantId,
+    String? token,
+    required String tlsFingerprint,
+    required bool isReconnect,
+  }) async {
+    if (!isReconnect) {
+      await disconnect();
+      _isExplicitDisconnect = false;
+    } else {
+      await _subscription?.cancel();
+      _subscription = null;
+      await _channel?.sink.close();
+      _channel = null;
+      _isConnected = false;
+    }
     lastError = null;
 
     if (host.trim().isEmpty || port <= 0 || port > 65535) {
       lastError = 'IP o puerto inválido.';
       return false;
     }
+    if (!JamTlsIdentity.isValidFingerprint(tlsFingerprint)) {
+      lastError =
+          'La Jam no anunció un fingerprint TLS válido; se rechaza la conexión insegura.';
+      return false;
+    }
 
     final completer = Completer<bool>();
-    final uri = Uri(
-        scheme: 'ws', host: host.trim(), port: port, path: '/jam/ws');
+    final uri =
+        Uri(scheme: 'wss', host: host.trim(), port: port, path: '/jam/ws');
 
     try {
-      final ws = await WebSocket.connect(uri.toString())
+      final client = HttpClient()
+        ..connectionTimeout = const Duration(seconds: 5)
+        ..badCertificateCallback = (certificate, _, __) =>
+            JamTlsIdentity.fingerprintForDer(certificate.der) == tlsFingerprint;
+      final ws = await WebSocket.connect(uri.toString(), customClient: client)
           .timeout(const Duration(seconds: 5));
       _channel = IOWebSocketChannel(ws);
+      _lastHostActivity = DateTime.now();
       lastError = null;
 
       _subscription = _channel!.stream.listen(
         (data) {
           try {
+            _lastHostActivity = DateTime.now();
             final raw = data is String ? data : utf8.decode(data as List<int>);
             final msg = jsonDecode(raw) as Map<String, dynamic>;
             final op = msg['op'] as String?;
 
             switch (op) {
+              case 'ping':
+                _send({
+                  'op': 'pong',
+                  'timestamp':
+                      msg['timestamp'] ?? DateTime.now().millisecondsSinceEpoch,
+                });
+                break;
+
+              case 'pong':
+                break;
+
               case 'join_response':
                 final accepted = msg['accepted'] as bool? ?? false;
-                if (accepted && msg['state'] != null) {
-                  _sessionState = JamSessionState.fromJson(
-                      msg['state'] as Map<String, dynamic>);
-                  if (msg['assignedParticipant'] != null) {
-                    _localParticipant = JamParticipant.fromJson(
-                        msg['assignedParticipant'] as Map<String, dynamic>);
+                if (accepted) {
+                  final receivedToken = msg['token'] as String?;
+                  if (receivedToken != null) {
+                    _savedReconnectToken = receivedToken;
                   }
+                  _savedHost = host;
+                  _savedPort = port;
+                  _savedPin = pin;
+                  _savedName = name;
+                  _savedAvatarColorValue = avatarColorValue;
+                  _savedTlsFingerprint = tlsFingerprint;
+
+                  JamParticipant? assigned;
+                  if (msg['assignedParticipant'] != null) {
+                    assigned = JamParticipant.fromJson(
+                        msg['assignedParticipant'] as Map<String, dynamic>);
+                    _localParticipant = assigned;
+                    _savedParticipantId = assigned.id;
+                  } else {
+                    _savedParticipantId =
+                        _localParticipant?.id ?? participantId;
+                  }
+
+                  if (msg['state'] != null) {
+                    final snapshot = JamSessionState.fromJson(
+                        msg['state'] as Map<String, dynamic>);
+                    debugPrint(
+                      '[JAM] JamGuestService parsed jam_state_snapshot: '
+                      'rev=${snapshot.queueRevision} qLen=${snapshot.queue.length} '
+                      'trackId=${snapshot.currentTrack?.id}',
+                    );
+                    _applyAuthoritativeSnapshot(snapshot,
+                        assignedParticipant: assigned);
+                    _send({'op': 'guest_ready'});
+                  }
+
                   _isConnected = true;
+                  _reconnectAttempts = 0;
+                  _updateConnectionState(JamConnectionState.connected);
+                  _startSilenceDetection();
+
                   if (!completer.isCompleted) {
                     completer.complete(true);
                   }
-                  onStateSync?.call(_sessionState!);
+                  if (_sessionState != null) {
+                    onStateSync?.call(_sessionState!);
+                  }
                 } else {
                   final reason = msg['reason'] as String? ??
                       'El anfitrión rechazó la conexión.';
@@ -400,14 +504,77 @@ class JamGuestService {
                   if (!completer.isCompleted) {
                     completer.complete(false);
                   }
-                  unawaited(disconnect());
+                  if (isReconnect) {
+                    _updateConnectionState(JamConnectionState.failed);
+                    _teardownSocket();
+                  } else {
+                    unawaited(disconnect());
+                  }
+                }
+                break;
+
+              case 'jam_state_snapshot':
+                final stateJson = msg['state'] as Map<String, dynamic>?;
+                if (stateJson != null) {
+                  final snapshot = JamSessionState.fromJson(stateJson);
+                  debugPrint(
+                    '[JAM] JamGuestService parsed jam_state_snapshot: '
+                    'rev=${snapshot.queueRevision} qLen=${snapshot.queue.length} '
+                    'trackId=${snapshot.currentTrack?.id}',
+                  );
+                  JamParticipant? assigned;
+                  if (msg['assignedParticipant'] != null) {
+                    assigned = JamParticipant.fromJson(
+                        msg['assignedParticipant'] as Map<String, dynamic>);
+                  }
+                  _applyAuthoritativeSnapshot(snapshot,
+                      assignedParticipant: assigned);
+                  _send({'op': 'guest_ready'});
+
+                  _isConnected = true;
+                  _reconnectAttempts = 0;
+                  _updateConnectionState(JamConnectionState.connected);
+                  _startSilenceDetection();
+
+                  if (!completer.isCompleted) {
+                    completer.complete(true);
+                  }
+                  onStateSync?.call(_sessionState!);
                 }
                 break;
 
               case 'state_sync':
                 if (msg['state'] != null) {
-                  _sessionState = JamSessionState.fromJson(
+                  final incoming = JamSessionState.fromJson(
                       msg['state'] as Map<String, dynamic>);
+                  debugPrint(
+                    '[JAM] JamGuestService parsed state_sync: '
+                    'rev=${incoming.queueRevision} qLen=${incoming.queue.length} '
+                    'trackId=${incoming.currentTrack?.id}',
+                  );
+                  if (_sessionState != null &&
+                      incoming.queueRevision < _queueRevision) {
+                    _sessionState = incoming.copyWith(
+                      queue: _sessionState!.queue,
+                      queueRevision: _queueRevision,
+                    );
+                  } else {
+                    _queueRevision = incoming.queueRevision;
+                    _sessionState = incoming;
+                  }
+                  if (_localParticipant != null) {
+                    final fromList = _sessionState!.participants
+                        .where((p) => p.id == _localParticipant!.id)
+                        .firstOrNull;
+                    if (fromList != null) {
+                      _localParticipant = fromList;
+                    } else {
+                      _localParticipant = _localParticipant!.copyWith(
+                        canControlPlayback: _sessionState!.allowGuestControls,
+                        canManageQueue: _sessionState!.allowGuestQueueManage,
+                      );
+                    }
+                  }
                   onStateSync?.call(_sessionState!);
                 }
                 break;
@@ -449,20 +616,41 @@ class JamGuestService {
                   );
                 }
 
+                debugPrint(
+                  '[JAM] JamGuestService parsed playback_updated: '
+                  'rev=${_sessionState?.queueRevision ?? _queueRevision} '
+                  'qLen=${_sessionState?.queue.length ?? 0} '
+                  'trackId=${track?.id}',
+                );
+
                 onPlaybackUpdated?.call(
                     track, addedBy, isPlaying, posMs, serverTs);
                 break;
 
               case 'queue_updated':
                 if (msg['queue'] != null) {
-                  final qList = (msg['queue'] as List<dynamic>)
-                      .map((e) =>
-                          JamQueueItem.fromJson(e as Map<String, dynamic>))
-                      .toList();
-                  if (_sessionState != null) {
-                    _sessionState = _sessionState!.copyWith(queue: qList);
+                  final incomingRev =
+                      (msg['queueRevision'] as num?)?.toInt() ?? _queueRevision;
+                  if (incomingRev >= _queueRevision) {
+                    _queueRevision = incomingRev;
+                    final qList = (msg['queue'] as List<dynamic>)
+                        .map((e) =>
+                            JamQueueItem.fromJson(e as Map<String, dynamic>))
+                        .toList();
+                    debugPrint(
+                      '[JAM] JamGuestService parsed queue_updated: '
+                      'rev=$incomingRev '
+                      'qLen=${qList.length} '
+                      'trackId=${_sessionState?.currentTrack?.id}',
+                    );
+                    if (_sessionState != null) {
+                      _sessionState = _sessionState!.copyWith(
+                        queue: qList,
+                        queueRevision: incomingRev,
+                      );
+                    }
+                    onQueueUpdated?.call(qList);
                   }
-                  onQueueUpdated?.call(qList);
                 }
                 break;
 
@@ -482,19 +670,29 @@ class JamGuestService {
 
               case 'kicked':
                 final reason = msg['reason'] as String? ?? 'Desconectado.';
+                _isExplicitDisconnect = true;
+                _savedParticipantId = null;
+                _savedReconnectToken = null;
+                _updateConnectionState(JamConnectionState.disconnected);
                 onKicked?.call(reason);
                 unawaited(disconnect());
                 break;
 
               case 'session_closed':
                 final reason = msg['reason'] as String? ?? 'Sesión finalizada.';
+                _isExplicitDisconnect = true;
+                _savedParticipantId = null;
+                _savedReconnectToken = null;
+                _updateConnectionState(JamConnectionState.disconnected);
                 onSessionClosed?.call(reason);
                 unawaited(disconnect());
                 break;
 
               case 'error':
-                onError?.call(msg['message'] as String? ??
-                    'El anfitrión no pudo procesar la acción.');
+                final errorMsg = msg['message'] as String? ??
+                    'El anfitrión no pudo procesar la acción.';
+                lastError = errorMsg;
+                onError?.call(errorMsg);
                 break;
             }
           } catch (e) {
@@ -504,12 +702,12 @@ class JamGuestService {
         onDone: () {
           debugPrint('JamGuestService: Connection closed');
           if (!completer.isCompleted) completer.complete(false);
-          unawaited(disconnect());
+          _handleUnexpectedDisconnect();
         },
         onError: (e) {
           debugPrint('JamGuestService: Connection error $e');
           if (!completer.isCompleted) completer.complete(false);
-          unawaited(disconnect());
+          _handleUnexpectedDisconnect();
         },
       );
 
@@ -520,6 +718,7 @@ class JamGuestService {
         'name': name,
         'avatarColorValue': avatarColorValue,
         if (participantId != null) 'participantId': participantId,
+        if (token != null) 'token': token,
       });
 
       final connected = await completer.future.timeout(
@@ -530,7 +729,7 @@ class JamGuestService {
           return false;
         },
       );
-      if (!connected) {
+      if (!connected && !isReconnect) {
         lastError ??= 'Conexión cerrada sin respuesta del host.';
         await disconnect();
       }
@@ -538,18 +737,153 @@ class JamGuestService {
     } on TimeoutException {
       lastError = 'Timeout conectando a $host:$port. Firewall o IP incorrecta.';
       debugPrint('JamGuestService.connect timeout: $host:$port');
-      await disconnect();
+      if (!isReconnect) await disconnect();
       return false;
     } on SocketException catch (e) {
       lastError = _describeSocketException(e, host, port);
       debugPrint('JamGuestService.connect socket error: $e');
-      await disconnect();
+      if (!isReconnect) await disconnect();
       return false;
     } catch (e) {
       lastError = 'No se pudo conectar a $host:$port: $e';
       debugPrint('JamGuestService.connect error: $e');
-      await disconnect();
+      if (!isReconnect) await disconnect();
       return false;
+    }
+  }
+
+  void _applyAuthoritativeSnapshot(
+    JamSessionState snapshot, {
+    JamParticipant? assignedParticipant,
+  }) {
+    _sessionState = snapshot;
+    _queueRevision = snapshot.queueRevision;
+
+    if (assignedParticipant != null) {
+      _localParticipant = assignedParticipant;
+      _savedParticipantId = assignedParticipant.id;
+    }
+
+    if (_localParticipant != null) {
+      final fromList = snapshot.participants
+          .where((p) => p.id == _localParticipant!.id)
+          .firstOrNull;
+      if (fromList != null) {
+        _localParticipant = fromList;
+      } else {
+        _localParticipant = _localParticipant!.copyWith(
+          canControlPlayback: snapshot.allowGuestControls,
+          canManageQueue: snapshot.allowGuestQueueManage,
+        );
+      }
+    }
+  }
+
+  void _startSilenceDetection() {
+    _silenceTimer?.cancel();
+    _lastHostActivity = DateTime.now();
+    _silenceTimer = Timer.periodic(silenceCheckInterval, (_) {
+      checkHostSilence();
+    });
+  }
+
+  void checkHostSilence([DateTime? nowTime]) {
+    if (!_isConnected || _isExplicitDisconnect) return;
+    final now = nowTime ?? DateTime.now();
+    if (now.difference(_lastHostActivity) > hostSilenceTimeout) {
+      debugPrint('JamGuestService: Host silence detected');
+      _handleUnexpectedDisconnect();
+    }
+  }
+
+  void _teardownSocket() {
+    _silenceTimer?.cancel();
+    _silenceTimer = null;
+    unawaited(_subscription?.cancel());
+    _subscription = null;
+    unawaited(_channel?.sink.close());
+    _channel = null;
+    _isConnected = false;
+  }
+
+  void _handleUnexpectedDisconnect() {
+    _teardownSocket();
+
+    if (_isExplicitDisconnect) {
+      _updateConnectionState(JamConnectionState.disconnected);
+      return;
+    }
+
+    if (_savedHost != null && _savedReconnectToken != null) {
+      _updateConnectionState(JamConnectionState.reconnecting);
+      _scheduleReconnect();
+    } else {
+      _updateConnectionState(JamConnectionState.disconnected);
+    }
+  }
+
+  void _scheduleReconnect() {
+    if (_isExplicitDisconnect || _isReconnecting) return;
+    _reconnectTimer?.cancel();
+
+    final int baseSeconds;
+    if (_reconnectAttempts < 5) {
+      baseSeconds = 1 << _reconnectAttempts; // 1, 2, 4, 8, 16
+    } else {
+      baseSeconds = 30;
+    }
+    _reconnectAttempts++;
+
+    final jitterMs = Random.secure().nextInt(1000);
+    final delay = Duration(milliseconds: baseSeconds * 1000 + jitterMs);
+
+    debugPrint(
+        'JamGuestService: Reconnecting in ${delay.inMilliseconds}ms (attempt $_reconnectAttempts)');
+    _reconnectTimer = Timer(delay, () {
+      unawaited(_performReconnect());
+    });
+  }
+
+  @visibleForTesting
+  Future<void> triggerReconnectForTesting() => _performReconnect();
+
+  Future<void> _performReconnect() async {
+    if (_isExplicitDisconnect ||
+        _savedHost == null ||
+        _savedPort == null ||
+        _savedPin == null ||
+        _savedReconnectToken == null ||
+        _savedTlsFingerprint == null) {
+      return;
+    }
+
+    _isReconnecting = true;
+    _updateConnectionState(JamConnectionState.reconnecting);
+
+    final success = await _connectInternal(
+      host: _savedHost!,
+      port: _savedPort!,
+      pin: _savedPin!,
+      name: _savedName ?? 'Invitado',
+      avatarColorValue: _savedAvatarColorValue ?? 0xFF10B981,
+      participantId: _savedParticipantId,
+      token: _savedReconnectToken,
+      tlsFingerprint: _savedTlsFingerprint!,
+      isReconnect: true,
+    );
+
+    _isReconnecting = false;
+    if (success) {
+      _reconnectAttempts = 0;
+      _updateConnectionState(JamConnectionState.connected);
+    } else if (!_isExplicitDisconnect) {
+      if (lastError != null &&
+          (lastError!.contains('inválido') ||
+              lastError!.contains('expirada'))) {
+        _updateConnectionState(JamConnectionState.failed);
+      } else {
+        _scheduleReconnect();
+      }
     }
   }
 
@@ -559,7 +893,9 @@ class JamGuestService {
 
   void addToQueue(Track track, {bool playNext = false}) {
     if (_localParticipant != null && !_localParticipant!.canManageQueue) {
-      onError?.call('El anfitrión ha deshabilitado la gestión de cola.');
+      const msg = 'El anfitrión ha deshabilitado la gestión de cola.';
+      lastError = msg;
+      onError?.call(msg);
       return;
     }
     _send({
@@ -578,7 +914,9 @@ class JamGuestService {
 
   void removeFromQueue(String queueItemId) {
     if (_localParticipant != null && !_localParticipant!.canManageQueue) {
-      onError?.call('El anfitrión ha deshabilitado la gestión de cola.');
+      const msg = 'El anfitrión ha deshabilitado la gestión de cola.';
+      lastError = msg;
+      onError?.call(msg);
       return;
     }
     _send({
@@ -589,7 +927,9 @@ class JamGuestService {
 
   void reorderQueue(int oldIndex, int newIndex) {
     if (_localParticipant != null && !_localParticipant!.canManageQueue) {
-      onError?.call('El anfitrión ha deshabilitado la gestión de cola.');
+      const msg = 'El anfitrión ha deshabilitado la gestión de cola.';
+      lastError = msg;
+      onError?.call(msg);
       return;
     }
     _send({
@@ -601,8 +941,9 @@ class JamGuestService {
 
   void sendPlaybackControl(String action, {int? positionMs}) {
     if (_localParticipant != null && !_localParticipant!.canControlPlayback) {
-      onError
-          ?.call('El anfitrión ha deshabilitado el control de reproducción.');
+      const msg = 'El anfitrión ha deshabilitado el control de reproducción.';
+      lastError = msg;
+      onError?.call(msg);
       return;
     }
     _send({
@@ -620,7 +961,17 @@ class JamGuestService {
     }
   }
 
-  Future<void> disconnect() async {
+  Future<void> disconnect({bool isExplicit = true}) async {
+    if (isExplicit) {
+      _isExplicitDisconnect = true;
+    }
+    _reconnectTimer?.cancel();
+    _reconnectTimer = null;
+    _silenceTimer?.cancel();
+    _silenceTimer = null;
+    _isReconnecting = false;
+    _reconnectAttempts = 0;
+
     if (_isConnected) {
       try {
         _send({'op': 'leave'});
@@ -633,5 +984,17 @@ class JamGuestService {
     _isConnected = false;
     _sessionState = null;
     _localParticipant = null;
+    _queueRevision = 0;
+    if (isExplicit) {
+      _savedHost = null;
+      _savedPort = null;
+      _savedPin = null;
+      _savedName = null;
+      _savedAvatarColorValue = null;
+      _savedParticipantId = null;
+      _savedReconnectToken = null;
+      _savedTlsFingerprint = null;
+      _updateConnectionState(JamConnectionState.disconnected);
+    }
   }
 }

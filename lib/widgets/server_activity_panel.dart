@@ -36,7 +36,7 @@ class ServerActivityPanel extends StatefulWidget {
         isScrollControlled: true,
         backgroundColor: context.bgApp,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
           side: BorderSide(color: context.bgElevated, width: 1.2),
         ),
         builder: (ctx) => Padding(
@@ -137,7 +137,7 @@ class _ServerActivityPanelState extends State<ServerActivityPanel>
     if (curTrack == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('No hay ninguna canción en reproducción'),
+          content: const Text('No hay ninguna canción en reproducción'),
           backgroundColor: context.bgElevated,
         ),
       );

@@ -145,12 +145,12 @@ class _PairingSharePanelState extends State<PairingSharePanel> {
     if (_starting) {
       return Center(
         child: Padding(
-          padding: EdgeInsets.all(32),
+          padding: const EdgeInsets.all(32),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               CircularProgressIndicator(strokeWidth: 2, color: context.accent),
-              SizedBox(height: 14),
+              const SizedBox(height: 14),
               Text(
                 'Iniciando sesión segura...',
                 style: TextStyle(color: context.textSecondary, fontSize: 12.5),
@@ -322,7 +322,7 @@ class _PairingSharePanelState extends State<PairingSharePanel> {
                 children: [
                   _AmoledCodeGroupChip(code: code.substring(0, 3)),
                   Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 6),
+                    padding: const EdgeInsets.symmetric(horizontal: 6),
                     child: Text('-',
                         style: TextStyle(
                             color: context.textMuted,
@@ -1549,7 +1549,7 @@ class _QrScannerSheetState extends State<QrScannerSheet>
       height: MediaQuery.of(context).size.height * 0.78,
       decoration: BoxDecoration(
         color: context.bgApp,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
         border: Border(top: BorderSide(color: context.bgElevated, width: 1.2)),
       ),
       child: Column(
@@ -1602,7 +1602,7 @@ class _QrScannerSheetState extends State<QrScannerSheet>
             ),
           ),
           Padding(
-            padding: EdgeInsets.symmetric(horizontal: 20),
+            padding: const EdgeInsets.symmetric(horizontal: 20),
             child: Text(
               'Apunta con la cámara al código QR que aparece en la pantalla de tu PC.',
               style: TextStyle(color: context.textMuted, fontSize: 12.5),

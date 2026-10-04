@@ -2,11 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../models/pairing_models.dart';
-import '../services/navidrome_service.dart';
+import '../models/server_profile.dart';
+import '../services/server_profiles_controller.dart';
 import '../services/secure_storage.dart';
 import '../widgets/pairing_panel.dart';
 import 'home_shell.dart';
 import '../utils/app_colors.dart';
+import '../services/biometric_auth_service.dart';
 
 /// Pantalla de inicio de sesión optimizada exclusivamente para Teléfonos móviles (Android, iOS).
 /// - Layout vertical centrado en la ergonomía táctil (Touch-first).
@@ -15,12 +17,14 @@ class MobileLoginScreen extends StatefulWidget {
   final String initialUrl;
   final String initialUser;
   final String initialPass;
+  final BiometricAuthService? biometricService;
 
   const MobileLoginScreen({
     super.key,
     this.initialUrl = '',
     this.initialUser = '',
     this.initialPass = '',
+    this.biometricService,
   });
 
   @override
@@ -37,12 +41,80 @@ class _MobileLoginScreenState extends State<MobileLoginScreen> {
   bool _loading = false;
   int _selectedTab = 0; // 0 = Cuenta (Servidor), 1 = Vincular con PC
 
+  late final BiometricAuthService _biometricAuth;
+  bool _canUseBiometrics = false;
+  ({String? serverUrl, String? username, String? password})? _savedCredentials;
+
   @override
   void initState() {
     super.initState();
+    _biometricAuth = widget.biometricService ?? BiometricAuthService();
     _urlController = TextEditingController(text: widget.initialUrl);
     _userController = TextEditingController(text: widget.initialUser);
     _passController = TextEditingController(text: widget.initialPass);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _initAndCheckBiometrics(autoTrigger: true);
+    });
+  }
+
+  Future<void> _initAndCheckBiometrics({bool autoTrigger = false}) async {
+    final credentials = await SecureStorage.getAll();
+    final hasCreds = credentials.serverUrl != null &&
+        credentials.username != null &&
+        credentials.password != null;
+
+    final isAvailable = await _biometricAuth.isBiometricsAvailable();
+
+    if (!mounted) return;
+    setState(() {
+      _savedCredentials = credentials;
+      _canUseBiometrics = isAvailable && hasCreds;
+    });
+
+    if (autoTrigger && _canUseBiometrics) {
+      await _authenticateWithBiometrics();
+    }
+  }
+
+  Future<void> _authenticateWithBiometrics() async {
+    final creds = _savedCredentials;
+    if (creds == null ||
+        creds.serverUrl == null ||
+        creds.username == null ||
+        creds.password == null) {
+      return;
+    }
+
+    final result = await _biometricAuth.authenticate();
+    if (!mounted) return;
+
+    if (result.isSuccess) {
+      _urlController.text = creds.serverUrl!;
+      _userController.text = creds.username!;
+      _passController.text = creds.password!;
+      await _loginWithForm();
+    } else if (result.status == BiometricAuthStatus.lockedOut) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            result.errorMessage ??
+                'Biometría bloqueada temporalmente. Ingresa tu contraseña.',
+          ),
+          backgroundColor: context.bgElevated,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } else if (result.status == BiometricAuthStatus.error) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            result.errorMessage ?? 'Error de autenticación biométrica.',
+          ),
+          backgroundColor: context.bgElevated,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
   }
 
   @override
@@ -67,13 +139,25 @@ class _MobileLoginScreenState extends State<MobileLoginScreen> {
 
     setState(() => _loading = true);
     try {
-      final nav = context.read<NavidromeService>();
-      await nav.connectByUrl(url, user, pass);
-      await SecureStorage.saveCredentials(
-        serverUrl: url,
-        username: user,
-        password: pass,
-      );
+      final profilesCtrl = context.read<ServerProfilesController>();
+
+      final existingProfiles = profilesCtrl.profiles.where((p) => p.url == url);
+      final existingProfile = existingProfiles.isNotEmpty ? existingProfiles.first : null;
+
+      ServerProfile profileToUse;
+      if (existingProfile != null) {
+        profileToUse = existingProfile.copyWith(username: user, password: pass);
+        await profilesCtrl.updateProfile(profileToUse);
+      } else {
+        profileToUse = ServerProfile(
+          url: url,
+          username: user,
+          password: pass,
+          nickname: 'Servidor Móvil',
+        );
+        await profilesCtrl.addProfile(profileToUse);
+      }
+      await profilesCtrl.setActiveProfile(profileToUse.id);
 
       if (mounted) {
         Navigator.pushReplacement(
@@ -111,13 +195,26 @@ class _MobileLoginScreenState extends State<MobileLoginScreen> {
   }
 
   Future<void> _onPairCredentialsReceived(PairCredentials creds) async {
-    final nav = context.read<NavidromeService>();
-    await nav.connectByUrl(creds.url, creds.username, creds.password);
-    await SecureStorage.saveCredentials(
-      serverUrl: creds.url,
-      username: creds.username,
-      password: creds.password,
-    );
+    final profilesCtrl = context.read<ServerProfilesController>();
+
+    // Buscar si ya existe perfil
+    final existingProfiles = profilesCtrl.profiles.where((p) => p.url == creds.url);
+    final existingProfile = existingProfiles.isNotEmpty ? existingProfiles.first : null;
+
+      ServerProfile profileToUse;
+      if (existingProfile != null) {
+        profileToUse = existingProfile.copyWith(username: creds.username, password: creds.password);
+        await profilesCtrl.updateProfile(profileToUse);
+      } else {
+        profileToUse = ServerProfile(
+          url: creds.url,
+          username: creds.username,
+          password: creds.password,
+          nickname: 'Servidor Emparejado',
+        );
+        await profilesCtrl.addProfile(profileToUse);
+      }
+      await profilesCtrl.setActiveProfile(profileToUse.id);
 
     if (mounted) {
       Navigator.pushReplacement(
@@ -416,13 +513,36 @@ class _MobileLoginScreenState extends State<MobileLoginScreen> {
                             fontWeight: FontWeight.bold,
                           ),
                         ),
-                        SizedBox(width: 8),
+                        const SizedBox(width: 8),
                         Icon(Icons.arrow_forward_rounded,
                             size: 17, color: context.textPrimary),
                       ],
                     ),
             ),
           ),
+
+          if (_canUseBiometrics) ...[
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              onPressed: _loading ? null : _authenticateWithBiometrics,
+              icon: Icon(Icons.fingerprint_rounded, color: context.accent, size: 22),
+              label: Text(
+                'Ingresar con huella digital',
+                style: TextStyle(
+                  color: context.textPrimary,
+                  fontSize: 13.5,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              style: OutlinedButton.styleFrom(
+                minimumSize: const Size.fromHeight(46),
+                side: BorderSide(color: context.accent.withValues(alpha: 0.5)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+            ),
+          ],
         ],
       ),
     );

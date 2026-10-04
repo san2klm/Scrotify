@@ -1,11 +1,13 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
 
 import 'package:flutter/foundation.dart';
 
 import '../models/jam_models.dart';
 import 'jam_network_platform.dart';
+import 'jam_tls_identity.dart';
 import 'navidrome_service.dart';
 
 typedef OnJamJoinRequested = Future<bool> Function(
@@ -20,6 +22,45 @@ typedef OnJamPlaybackControlRequested = void Function(
     String action, int? positionMs, JamParticipant participant);
 typedef OnJamParticipantLeft = void Function(JamParticipant participant);
 
+/// Limitador de tasa con ventana deslizante y memoria acotada.
+class JamRateLimiter {
+  final int maxEvents;
+  final Duration window;
+  final List<int> _timestampsMs = [];
+
+  JamRateLimiter({required this.maxEvents, required this.window});
+
+  List<int> get timestamps => List.unmodifiable(_timestampsMs);
+
+  bool tryAcquire([int? nowMs]) {
+    final now = nowMs ?? DateTime.now().millisecondsSinceEpoch;
+    final windowMs = window.inMilliseconds;
+    _timestampsMs.removeWhere((ts) => now - ts >= windowMs);
+    if (_timestampsMs.length >= maxEvents) {
+      return false;
+    }
+    _timestampsMs.add(now);
+    return true;
+  }
+
+  void reset() {
+    _timestampsMs.clear();
+  }
+}
+
+class _ParticipantThrottles {
+  final JamRateLimiter playbackLimiter;
+  final JamRateLimiter queueLimiter;
+
+  _ParticipantThrottles({
+    JamRateLimiter? playback,
+    JamRateLimiter? queue,
+  })  : playbackLimiter = playback ??
+            JamRateLimiter(maxEvents: 4, window: const Duration(seconds: 2)),
+        queueLimiter = queue ??
+            JamRateLimiter(maxEvents: 10, window: const Duration(seconds: 10));
+}
+
 /// Servidor de sesión Jam que corre en el dispositivo Anfitrión (Host).
 ///
 /// Gestiona:
@@ -28,12 +69,47 @@ typedef OnJamParticipantLeft = void Function(JamParticipant participant);
 /// 3. Registro de participantes, control de permisos y difusión de estado.
 class JamHostService {
   HttpServer? _server;
+  JamTlsIdentity? _tlsIdentity;
   RawDatagramSocket? _discoverySocket;
   Timer? _presenceTimer;
   bool _holdsMulticastReception = false;
 
   final Map<String, WebSocket> _clientSockets = {};
   final Map<String, JamParticipant> _participants = {};
+  final Map<String, String> _participantTokens = {};
+  final Map<String, DateTime> _lastInboundActivity = {};
+  final Map<String, _ParticipantThrottles> _rateLimiters = {};
+  final Map<String, Timer> _graceTimers = {};
+  JamSessionState? _lastSessionState;
+  JamParticipant? hostParticipant;
+  Duration disconnectGracePeriod = const Duration(seconds: 30);
+  JamSessionState Function()? getCurrentSessionState;
+
+  /// Genera un token CSPRNG opaco de 128 bits (32 caracteres hexadecimales).
+  static String generateReconnectToken([Random? random]) {
+    final rnd = random ?? Random.secure();
+    final bytes = List<int>.generate(16, (_) => rnd.nextInt(256));
+    return bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
+  }
+
+  String? getTokenForParticipant(String participantId) =>
+      _participantTokens[participantId];
+
+  Map<String, dynamic> attachToken(
+      String participantId, Map<String, dynamic> response) {
+    final token = _participantTokens[participantId];
+    if (token != null) {
+      response['token'] = token;
+    }
+    return response;
+  }
+
+  Duration pingInterval = const Duration(seconds: 15);
+  Duration pongTimeout = const Duration(seconds: 10);
+  Timer? _heartbeatTimer;
+
+  List<InternetAddress> _cachedBroadcastAddresses = [];
+  final List<Timer> _discoveryBurstTimers = [];
 
   String? _sessionId;
   JamCode? _pinCode;
@@ -41,7 +117,9 @@ class JamHostService {
   String? _hostIp;
   List<String> _allLocalIps = [];
   int _port = 0;
-  JamMode _mode = JamMode.partySpeaker;
+  JamMode _mode = JamMode.synchronizedListening;
+  final Set<String> _kickedNames = {};
+  final Set<String> _kickedParticipantIds = {};
   bool _allowGuestControls = true;
   bool _allowGuestQueueManage = true;
   bool _isPublic = true;
@@ -73,6 +151,7 @@ class JamHostService {
   bool get isPublic => _isPublic;
   int get maxParticipants => _maxParticipants;
   String? get initialPlaylistId => _initialPlaylistId;
+  String? get tlsFingerprint => _tlsIdentity?.fingerprintSha256;
   List<JamParticipant> get participants => _participants.values.toList();
 
   String? get qrDataUri => _pinCode != null && _hostIp != null
@@ -87,6 +166,7 @@ class JamHostService {
               ? _allLocalIps.firstWhere((address) => address != _hostIp)
               : null,
           remotePort: _allLocalIps.length > 1 ? _port : null,
+          tlsFingerprint: _tlsIdentity?.fingerprintSha256,
         ).toUri()
       : null;
 
@@ -95,7 +175,7 @@ class JamHostService {
     required String sessionId,
     required JamCode pinCode,
     required String hostName,
-    JamMode mode = JamMode.partySpeaker,
+    JamMode mode = JamMode.synchronizedListening,
     bool allowGuestControls = true,
     bool allowGuestQueueManage = true,
     bool isPublic = true,
@@ -114,13 +194,37 @@ class JamHostService {
     _maxParticipants = maxParticipants < 0 ? 0 : maxParticipants;
     _initialPlaylistId = initialPlaylistId;
 
+    hostParticipant = JamParticipant(
+      id: 'host_local',
+      name: hostName,
+      avatarColorValue: 0xFFA855F7,
+      isHost: true,
+      joinedAt: DateTime.now(),
+      canControlPlayback: true,
+      canManageQueue: true,
+    );
+
+    _tlsIdentity =
+        JamTlsIdentity.generate(commonName: 'Scrotify Jam $sessionId');
+    final securityContext = SecurityContext(withTrustedRoots: false)
+      ..useCertificateChainBytes(_tlsIdentity!.certificatePem)
+      ..usePrivateKeyBytes(_tlsIdentity!.privateKeyPem);
+
     // El puerto conocido evita que un código QR o una regla de firewall cambie
     // en cada sesión. Si está ocupado, la sesión sigue funcionando con uno
     // dinámico que se anuncia en el QR y el radar.
     try {
-      _server = await HttpServer.bind(InternetAddress.anyIPv4, kJamHostPort);
+      _server = await HttpServer.bindSecure(
+        InternetAddress.anyIPv4,
+        kJamHostPort,
+        securityContext,
+      );
     } on SocketException {
-      _server = await HttpServer.bind(InternetAddress.anyIPv4, 0);
+      _server = await HttpServer.bindSecure(
+        InternetAddress.anyIPv4,
+        0,
+        securityContext,
+      );
     }
     _port = _server!.port;
     _allLocalIps = await _getAllLocalIps();
@@ -138,6 +242,9 @@ class JamHostService {
 
     // Iniciar beacon de radar UDP
     await _startDiscoveryBeacon();
+
+    // Iniciar monitoreo de heartbeat y pings periódicos
+    _startHeartbeatTimer();
   }
 
   void updateTrackMetadata({
@@ -227,18 +334,102 @@ class JamHostService {
           final msg = jsonDecode(raw) as Map<String, dynamic>;
           final op = msg['op'] as String?;
 
-          switch (op) {
-            case 'join_request':
-              if (participantId != null) {
-                _rejectJoin(socket, 'Esta conexión ya está unida a la sesión.');
-                return;
-              }
+          if (participantId != null) {
+            _lastInboundActivity[participantId!] = DateTime.now();
+          }
 
+          if (participantId != null &&
+              _clientSockets[participantId] != socket) {
+            // Socket was superseded by a reconnect or replaced. Close and ignore.
+            try {
+              socket.close();
+            } catch (_) {}
+            return;
+          }
+
+          switch (op) {
+            case 'ping':
+              socket.add(jsonEncode({
+                'op': 'pong',
+                'timestamp':
+                    msg['timestamp'] ?? DateTime.now().millisecondsSinceEpoch,
+              }));
+              break;
+
+            case 'pong':
+              // Inbound liveness ya actualizada
+              break;
+
+            case 'guest_ready':
+              if (participantId != null) {
+                _lastInboundActivity[participantId!] = DateTime.now();
+              }
+              break;
+
+            case 'join_request':
               final rawPin = msg['pin'] as String?;
               final pin =
                   rawPin?.toUpperCase().replaceAll(RegExp(r'[^A-Z0-9]'), '');
               if (pin == null || pin != _pinCode?.value) {
                 _rejectJoin(socket, 'PIN incorrecto.');
+                return;
+              }
+
+              final token = msg['token'] as String?;
+              final reconnectParticipantId = msg['participantId'] as String?;
+
+              // Ruta de reconexión de participante existente
+              if (token != null || reconnectParticipantId != null) {
+                final storedToken = reconnectParticipantId != null
+                    ? _participantTokens[reconnectParticipantId]
+                    : null;
+                if (reconnectParticipantId != null &&
+                    _participants.containsKey(reconnectParticipantId) &&
+                    token != null &&
+                    storedToken != null &&
+                    token == storedToken) {
+                  _graceTimers[reconnectParticipantId]?.cancel();
+                  _graceTimers.remove(reconnectParticipantId);
+
+                  final oldSocket = _clientSockets[reconnectParticipantId];
+                  if (oldSocket != null && oldSocket != socket) {
+                    try {
+                      oldSocket.close();
+                    } catch (_) {}
+                  }
+                  _clientSockets[reconnectParticipantId] = socket;
+                  participantId = reconnectParticipantId;
+                  _lastInboundActivity[reconnectParticipantId] = DateTime.now();
+
+                  final existingParticipant =
+                      _participants[reconnectParticipantId]!;
+                  final currentSessionState =
+                      getCurrentSessionState?.call() ?? _lastSessionState;
+                  final stateMap = currentSessionState?.toJson() ??
+                      _defaultSessionStateJson();
+                  socket.add(jsonEncode({
+                    'op': 'join_response',
+                    'accepted': true,
+                    'token': token,
+                    'assignedParticipant': existingParticipant.toJson(),
+                  }));
+                  socket.add(jsonEncode({
+                    'op': 'jam_state_snapshot',
+                    'sessionId': _sessionId,
+                    'state': stateMap,
+                    'assignedParticipant': existingParticipant.toJson(),
+                    'queueRevision': currentSessionState?.queueRevision ?? 0,
+                  }));
+                  return;
+                } else {
+                  _rejectJoin(socket,
+                      'Token de reconexión inválido o sesión expirada.');
+                  return;
+                }
+              }
+
+              if (participantId != null) {
+                _rejectJoin(socket, 'Esta conexión ya está unida a la sesión.');
                 return;
               }
 
@@ -258,10 +449,12 @@ class JamHostService {
                   : requestedName.length > 48
                       ? requestedName.substring(0, 48)
                       : requestedName;
+              if (_kickedNames.contains(name.toLowerCase())) {
+                _rejectJoin(socket, 'Has sido expulsado de esta sesión.');
+                return;
+              }
               final color =
                   (msg['avatarColorValue'] as num?)?.toInt() ?? 0xFF10B981;
-              // No se acepta un ID aportado por el cliente: de ese modo un
-              // invitado no puede suplantar al host ni a otro participante.
               final id =
                   'guest_${DateTime.now().microsecondsSinceEpoch}_${socket.hashCode}';
 
@@ -275,41 +468,54 @@ class JamHostService {
                 canManageQueue: _allowGuestQueueManage,
               );
 
+              final assignedToken = generateReconnectToken();
               participantId = id;
               _clientSockets[id] = socket;
               _participants[id] = participant;
+              _participantTokens[id] = assignedToken;
+              _lastInboundActivity[id] = DateTime.now();
 
               if (onJoinRequested != null) {
                 final accepted = await onJoinRequested!(participant, socket);
                 if (!accepted) {
                   _removeParticipant(id);
                   _rejectJoin(socket, 'El anfitrión rechazó la solicitud.');
+                } else {
+                  final currentSessionState =
+                      getCurrentSessionState?.call() ?? _lastSessionState;
+                  final stateMap = currentSessionState?.toJson() ??
+                      _defaultSessionStateJson();
+                  socket.add(jsonEncode({
+                    'op': 'join_response',
+                    'accepted': true,
+                    'token': assignedToken,
+                    'assignedParticipant': participant.toJson(),
+                  }));
+                  socket.add(jsonEncode({
+                    'op': 'jam_state_snapshot',
+                    'sessionId': _sessionId,
+                    'state': stateMap,
+                    'assignedParticipant': participant.toJson(),
+                    'queueRevision': currentSessionState?.queueRevision ?? 0,
+                  }));
                 }
               } else {
-                // Respuesta por defecto con el estado actual
+                final currentSessionState =
+                    getCurrentSessionState?.call() ?? _lastSessionState;
+                final stateMap =
+                    currentSessionState?.toJson() ?? _defaultSessionStateJson();
                 socket.add(jsonEncode({
                   'op': 'join_response',
                   'accepted': true,
+                  'token': assignedToken,
                   'assignedParticipant': participant.toJson(),
-                  'state': {
-                    'sessionId': _sessionId,
-                    'pinCode': _pinCode?.value,
-                    'hostName': _hostName,
-                    'hostIp': _hostIp,
-                    'port': _port,
-                    'mode': _mode.name,
-                    'isPlaying': false,
-                    'positionMs': 0,
-                    'updatedAtMs': DateTime.now().millisecondsSinceEpoch,
-                    'queue': [],
-                    'participants':
-                        _participants.values.map((e) => e.toJson()).toList(),
-                    'allowGuestControls': _allowGuestControls,
-                    'allowGuestQueueManage': _allowGuestQueueManage,
-                    'isPublic': _isPublic,
-                    'initialPlaylistId': _initialPlaylistId,
-                    'maxParticipants': _maxParticipants,
-                  },
+                }));
+                socket.add(jsonEncode({
+                  'op': 'jam_state_snapshot',
+                  'sessionId': _sessionId,
+                  'state': stateMap,
+                  'assignedParticipant': participant.toJson(),
+                  'queueRevision': currentSessionState?.queueRevision ?? 0,
                 }));
               }
               break;
@@ -321,6 +527,13 @@ class JamHostService {
                 if (!participant.canManageQueue) {
                   _sendError(socket,
                       'El anfitrión ha deshabilitado la gestión de cola.');
+                  return;
+                }
+                final throttles = _rateLimiters.putIfAbsent(
+                    participantId!, () => _ParticipantThrottles());
+                if (!throttles.queueLimiter.tryAcquire()) {
+                  _sendError(socket,
+                      'Límite de tasa excedido: máximo 10 modificaciones a la cola cada 10 segundos.');
                   return;
                 }
                 final rawTrack = msg['track'];
@@ -357,9 +570,18 @@ class JamHostService {
                       'El anfitrión ha deshabilitado la gestión de cola.');
                   return;
                 }
+                final throttles = _rateLimiters.putIfAbsent(
+                    participantId!, () => _ParticipantThrottles());
+                if (!throttles.queueLimiter.tryAcquire()) {
+                  _sendError(socket,
+                      'Límite de tasa excedido: máximo 10 modificaciones a la cola cada 10 segundos.');
+                  return;
+                }
                 final queueItemId = msg['queueItemId'] as String?;
-                if (queueItemId != null) {
+                if (queueItemId != null && queueItemId.trim().isNotEmpty) {
                   onTrackRemoveRequested?.call(queueItemId, participant);
+                } else {
+                  _sendError(socket, 'Identificador de cola inválido.');
                 }
               }
               break;
@@ -373,10 +595,22 @@ class JamHostService {
                       'El anfitrión ha deshabilitado la gestión de cola.');
                   return;
                 }
+                final throttles = _rateLimiters.putIfAbsent(
+                    participantId!, () => _ParticipantThrottles());
+                if (!throttles.queueLimiter.tryAcquire()) {
+                  _sendError(socket,
+                      'Límite de tasa excedido: máximo 10 modificaciones a la cola cada 10 segundos.');
+                  return;
+                }
                 final oldIdx = (msg['oldIndex'] as num?)?.toInt();
                 final newIdx = (msg['newIndex'] as num?)?.toInt();
-                if (oldIdx != null && newIdx != null) {
+                if (oldIdx != null &&
+                    newIdx != null &&
+                    oldIdx >= 0 &&
+                    newIdx >= 0) {
                   onQueueReorderRequested?.call(oldIdx, newIdx, participant);
+                } else {
+                  _sendError(socket, 'Índices de reordenamiento inválidos.');
                 }
               }
               break;
@@ -390,6 +624,13 @@ class JamHostService {
                       'El anfitrión ha deshabilitado el control de reproducción.');
                   return;
                 }
+                final throttles = _rateLimiters.putIfAbsent(
+                    participantId!, () => _ParticipantThrottles());
+                if (!throttles.playbackLimiter.tryAcquire()) {
+                  _sendError(socket,
+                      'Límite de tasa excedido: máximo 4 controles de reproducción cada 2 segundos.');
+                  return;
+                }
                 final action = msg['action'] as String?;
                 final posMs = (msg['positionMs'] as num?)?.toInt();
                 const validActions = {
@@ -401,6 +642,10 @@ class JamHostService {
                   'seek',
                 };
                 if (action != null && validActions.contains(action)) {
+                  if (action == 'seek' && (posMs == null || posMs < 0)) {
+                    _sendError(socket, 'Posición de reproducción inválida.');
+                    return;
+                  }
                   onPlaybackControlRequested?.call(action, posMs, participant);
                 } else {
                   _sendError(socket, 'La acción de reproducción no es válida.');
@@ -409,6 +654,8 @@ class JamHostService {
               break;
 
             case 'leave':
+              _graceTimers[participantId]?.cancel();
+              _graceTimers.remove(participantId);
               _removeParticipant(participantId);
               break;
           }
@@ -416,10 +663,79 @@ class JamHostService {
           debugPrint('JamHostService WebSocket error parsing msg: $e');
         }
       },
-      onDone: () => _removeParticipant(participantId),
-      onError: (_) => _removeParticipant(participantId),
+      onDone: () => _handleSocketDisconnect(participantId, socket),
+      onError: (_) => _handleSocketDisconnect(participantId, socket),
     );
   }
+
+  void _handleSocketDisconnect(String? id, WebSocket socket) {
+    if (id == null) return;
+    if (_clientSockets[id] == socket) {
+      _clientSockets.remove(id);
+      if (_participants.containsKey(id) && !_graceTimers.containsKey(id)) {
+        _graceTimers[id] = Timer(disconnectGracePeriod, () {
+          _graceTimers.remove(id);
+          _removeParticipant(id);
+        });
+      }
+    }
+  }
+
+  void _startHeartbeatTimer() {
+    _heartbeatTimer?.cancel();
+    _heartbeatTimer = Timer.periodic(pingInterval, (_) {
+      checkHeartbeatAndPing();
+    });
+  }
+
+  void checkHeartbeatAndPing([DateTime? nowTime]) {
+    final now = nowTime ?? DateTime.now();
+    final timeoutThreshold = pingInterval + pongTimeout;
+
+    for (final id in _participants.keys.toList()) {
+      final lastSeen = _lastInboundActivity[id] ?? now;
+      if (now.difference(lastSeen) > timeoutThreshold) {
+        debugPrint(
+            'JamHostService: Desalojando participante $id por inactividad de heartbeat');
+        _removeParticipant(id);
+      }
+    }
+
+    final pingMsg = jsonEncode({
+      'op': 'ping',
+      'timestamp': now.millisecondsSinceEpoch,
+    });
+    for (final socket in _clientSockets.values) {
+      try {
+        if (socket.readyState == WebSocket.open) {
+          socket.add(pingMsg);
+        }
+      } catch (_) {}
+    }
+  }
+
+  Map<String, dynamic> _defaultSessionStateJson() => {
+        'sessionId': _sessionId,
+        'pinCode': _pinCode?.value,
+        'hostName': _hostName,
+        'hostIp': _hostIp,
+        'port': _port,
+        'mode': _mode.name,
+        'isPlaying': false,
+        'positionMs': 0,
+        'updatedAtMs': DateTime.now().millisecondsSinceEpoch,
+        'queue': [],
+        'participants': [
+          if (hostParticipant != null) hostParticipant!.toJson(),
+          ..._participants.values.map((e) => e.toJson()),
+        ],
+        'allowGuestControls': _allowGuestControls,
+        'allowGuestQueueManage': _allowGuestQueueManage,
+        'isPublic': _isPublic,
+        'initialPlaylistId': _initialPlaylistId,
+        'maxParticipants': _maxParticipants,
+        'queueRevision': _lastSessionState?.queueRevision ?? 0,
+      };
 
   void _rejectJoin(WebSocket socket, String reason) {
     socket.add(jsonEncode({
@@ -438,8 +754,16 @@ class JamHostService {
 
   void _removeParticipant(String? id) {
     if (id == null) return;
+    _graceTimers[id]?.cancel();
+    _graceTimers.remove(id);
+    _lastInboundActivity.remove(id);
+    _participantTokens.remove(id);
+    _rateLimiters.remove(id);
     final participant = _participants.remove(id);
-    _clientSockets.remove(id);
+    final socket = _clientSockets.remove(id);
+    try {
+      socket?.close();
+    } catch (_) {}
     if (participant != null) {
       onParticipantLeft?.call(participant);
       broadcastMessage({
@@ -463,11 +787,23 @@ class JamHostService {
     }
   }
 
-  void broadcastSessionState(JamSessionState state) {
-    broadcastMessage({
+  void broadcastSessionState(
+    JamSessionState state, {
+    String? excludeParticipantId,
+  }) {
+    _lastSessionState = state;
+    final encoded = jsonEncode({
       'op': 'state_sync',
       'state': state.toJson(),
     });
+    for (final entry in _clientSockets.entries) {
+      if (entry.key == excludeParticipantId) continue;
+      try {
+        if (entry.value.readyState == WebSocket.open) {
+          entry.value.add(encoded);
+        }
+      } catch (_) {}
+    }
   }
 
   void broadcastPlaybackUpdate({
@@ -495,14 +831,22 @@ class JamHostService {
     });
   }
 
-  void broadcastQueueUpdate(List<JamQueueItem> queue) {
+  void broadcastQueueUpdate(List<JamQueueItem> queue, {int? queueRevision}) {
+    final rev = queueRevision ?? _lastSessionState?.queueRevision ?? 0;
     broadcastMessage({
       'op': 'queue_updated',
       'queue': queue.map((e) => e.toJson()).toList(),
+      'queueRevision': rev,
     });
   }
 
   void sendToClient(String participantId, Map<String, dynamic> message) {
+    if (message['op'] == 'join_response' && !message.containsKey('token')) {
+      final token = _participantTokens[participantId];
+      if (token != null) {
+        message['token'] = token;
+      }
+    }
     final socket = _clientSockets[participantId];
     if (socket != null && socket.readyState == WebSocket.open) {
       socket.add(jsonEncode(message));
@@ -510,6 +854,13 @@ class JamHostService {
   }
 
   void kickParticipant(String participantId) {
+    _graceTimers[participantId]?.cancel();
+    _graceTimers.remove(participantId);
+    final p = _participants[participantId];
+    if (p != null) {
+      _kickedNames.add(p.name.trim().toLowerCase());
+    }
+    _kickedParticipantIds.add(participantId);
     final socket = _clientSockets[participantId];
     if (socket != null) {
       socket.add(jsonEncode({
@@ -559,18 +910,56 @@ class JamHostService {
           }
         }
       });
-      // Anuncio periódico: el invitado escucha durante el escaneo aunque su
-      // propia consulta UDP no llegue al host (routers que filtran broadcast
-      // en un sentido). Solo sesiones públicas para no filtrar el PIN.
+
+      // Cachear direcciones de difusión para no llamar NetworkInterface.list en cada ciclo
+      await _updateCachedBroadcastAddresses();
+
+      // Ráfaga inmediata de tres pulsos al inicio
+      _broadcastPresence();
+      _discoveryBurstTimers.add(Timer(const Duration(milliseconds: 250), () {
+        _broadcastPresence();
+      }));
+      _discoveryBurstTimers.add(Timer(const Duration(milliseconds: 500), () {
+        _broadcastPresence();
+      }));
+
+      // Anuncio periódico a ritmo constante de 8 segundos sin NetworkInterface.list
       _presenceTimer?.cancel();
-      _presenceTimer = Timer.periodic(const Duration(seconds: 1), (_) {
-        unawaited(_broadcastPresence());
+      _presenceTimer = Timer.periodic(const Duration(seconds: 8), (_) {
+        _broadcastPresence();
       });
       debugPrint(
           'JamHostService: Discovery beacon bound on port $kJamDiscoveryPort');
     } catch (e) {
       debugPrint('JamHostService: Discovery beacon failed to bind: $e');
     }
+  }
+
+  Future<void> _updateCachedBroadcastAddresses() async {
+    final targets = <InternetAddress>[
+      InternetAddress.loopbackIPv4,
+      InternetAddress('255.255.255.255'),
+      InternetAddress(kJamDiscoveryMulticastGroup),
+    ];
+    try {
+      final interfaces = await NetworkInterface.list(
+        type: InternetAddressType.IPv4,
+        includeLoopback: false,
+      );
+      for (final iface in interfaces) {
+        for (final addr in iface.addresses) {
+          final parts = addr.address.split('.');
+          if (parts.length == 4) {
+            try {
+              targets.add(
+                InternetAddress('${parts[0]}.${parts[1]}.${parts[2]}.255'),
+              );
+            } catch (_) {}
+          }
+        }
+      }
+    } catch (_) {}
+    _cachedBroadcastAddresses = targets;
   }
 
   /// Payload de presencia con IP principal y respaldo (segunda interfaz).
@@ -581,6 +970,8 @@ class JamHostService {
       'op': 'jam_presence',
       'host': _hostIp,
       'port': _port,
+      'transport': 'wss',
+      'tlsFingerprint': _tlsIdentity?.fingerprintSha256,
       'pin': _pinCode!.value,
       'sessionTitle': 'Jam de $_hostName',
       'hostName': _hostName,
@@ -596,42 +987,22 @@ class JamHostService {
     };
   }
 
-  /// Envía presencia a loopback, broadcast global, multicast y broadcasts
-  /// por subred para atravesar routers que filtran alguna de esas vías.
-  Future<void> _broadcastPresence() async {
-    if (_server == null || _pinCode == null || !_isPublic) return;
+  /// Envía presencia a las direcciones de destino cacheadas (loopback, broadcast, multicast, subred).
+  void _broadcastPresence() {
+    if (_server == null ||
+        _pinCode == null ||
+        _tlsIdentity == null ||
+        !_isPublic) {
+      return;
+    }
     final socket = _discoverySocket;
     if (socket == null) return;
     try {
       final bytes = utf8.encode(jsonEncode(_presencePayload()));
-      try {
-        socket.send(bytes, InternetAddress.loopbackIPv4, kJamDiscoveryPort);
-      } catch (_) {}
-      try {
-        socket.send(
-            bytes, InternetAddress('255.255.255.255'), kJamDiscoveryPort);
-      } catch (_) {}
-      try {
-        socket.send(bytes, InternetAddress(kJamDiscoveryMulticastGroup),
-            kJamDiscoveryPort);
-      } catch (_) {}
-
-      final interfaces = await NetworkInterface.list(
-        type: InternetAddressType.IPv4,
-        includeLoopback: false,
-      );
-      for (final iface in interfaces) {
-        for (final addr in iface.addresses) {
-          final parts = addr.address.split('.');
-          if (parts.length == 4) {
-            try {
-              socket.send(
-                  bytes,
-                  InternetAddress('${parts[0]}.${parts[1]}.${parts[2]}.255'),
-                  kJamDiscoveryPort);
-            } catch (_) {}
-          }
-        }
+      for (final target in _cachedBroadcastAddresses) {
+        try {
+          socket.send(bytes, target, kJamDiscoveryPort);
+        } catch (_) {}
       }
     } catch (_) {}
   }
@@ -730,6 +1101,20 @@ class JamHostService {
       'reason': 'El anfitrión ha finalizado la sesión Jam.',
     });
 
+    _heartbeatTimer?.cancel();
+    _heartbeatTimer = null;
+    for (final timer in _graceTimers.values) {
+      timer.cancel();
+    }
+    _graceTimers.clear();
+    _kickedNames.clear();
+    _kickedParticipantIds.clear();
+    hostParticipant = null;
+    _lastInboundActivity.clear();
+    _participantTokens.clear();
+    _rateLimiters.clear();
+    _lastSessionState = null;
+
     for (final socket in List.of(_clientSockets.values)) {
       try {
         await socket.close();
@@ -741,6 +1126,12 @@ class JamHostService {
     _discoverySocket?.close();
     _discoverySocket = null;
 
+    for (final timer in _discoveryBurstTimers) {
+      timer.cancel();
+    }
+    _discoveryBurstTimers.clear();
+    _cachedBroadcastAddresses.clear();
+
     _presenceTimer?.cancel();
     _presenceTimer = null;
 
@@ -751,6 +1142,7 @@ class JamHostService {
 
     await _server?.close(force: true);
     _server = null;
+    _tlsIdentity = null;
 
     _sessionId = null;
     _pinCode = null;

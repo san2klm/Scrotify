@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../services/navidrome_service.dart';
+import '../services/server_profiles_controller.dart';
+import '../models/server_profile.dart';
 import '../services/pairing_server.dart';
-import '../services/secure_storage.dart';
 import '../widgets/pairing_panel.dart';
 import 'home_shell.dart';
 import '../utils/app_colors.dart';
@@ -74,13 +74,35 @@ class _DesktopLoginScreenState extends State<DesktopLoginScreen> {
 
     setState(() => _loading = true);
     try {
-      final nav = context.read<NavidromeService>();
-      await nav.connectByUrl(url, user, pass);
-      await SecureStorage.saveCredentials(
-        serverUrl: url,
-        username: user,
-        password: pass,
-      );
+      // Use profiles system instead of direct credential storage
+      final profilesCtrl = context.read<ServerProfilesController>();
+
+      // Check if we already have a profile with this URL
+      final existingProfiles = profilesCtrl.profiles.where((p) => p.url == url);
+      final existingProfile = existingProfiles.isNotEmpty ? existingProfiles.first : null;
+
+      ServerProfile profileToUse;
+      if (existingProfile != null) {
+        // Update existing profile
+        profileToUse = existingProfile.copyWith(
+          username: user,
+          password: pass,
+          nickname: existingProfile.nickname.isEmpty ? 'Servidor' : existingProfile.nickname,
+        );
+        await profilesCtrl.updateProfile(profileToUse);
+      } else {
+        // Create new profile
+        profileToUse = ServerProfile(
+          url: url,
+          username: user,
+          password: pass,
+          nickname: 'Servidor',
+        );
+        await profilesCtrl.addProfile(profileToUse);
+      }
+
+      // Set as active profile (this will trigger reconnection in NavidromeService via listener)
+      await profilesCtrl.setActiveProfile(profileToUse.id);
 
       if (mounted) {
         Navigator.pushReplacement(
@@ -132,14 +154,29 @@ class _DesktopLoginScreenState extends State<DesktopLoginScreen> {
       return null;
     }
 
-    final nav = context.read<NavidromeService>();
-    if (!nav.connected) {
-      await nav.connectByUrl(url, user, pass);
-      await SecureStorage.saveCredentials(
-        serverUrl: url,
-        username: user,
-        password: pass,
+    final profilesCtrl = context.read<ServerProfilesController>();
+    if (profilesCtrl.activeProfile == null) {
+      // Intentamos usar como perfil, pero sin navegar a la Home Shell
+      final existingProfile = profilesCtrl.profiles.firstWhere(
+        (p) => p.url == url,
+        orElse: () => ServerProfile(
+          url: url,
+          username: user,
+          password: pass,
+          nickname: 'Servidor',
+        ),
       );
+
+      final profileToUse = existingProfile.id.isNotEmpty
+          ? existingProfile.copyWith(username: user, password: pass)
+          : existingProfile;
+
+      if (!profilesCtrl.profiles.any((p) => p.id == profileToUse.id)) {
+        await profilesCtrl.addProfile(profileToUse);
+      } else {
+        await profilesCtrl.updateProfile(profileToUse);
+      }
+      await profilesCtrl.setActiveProfile(profileToUse.id);
     }
 
     return (url: url, username: user, password: pass);
@@ -291,7 +328,7 @@ class _DesktopLoginScreenState extends State<DesktopLoginScreen> {
                                   padding: const EdgeInsets.all(32),
                                   decoration: BoxDecoration(
                                     color: context.bgApp,
-                                    borderRadius: BorderRadius.horizontal(
+                                    borderRadius: const BorderRadius.horizontal(
                                       right: Radius.circular(20),
                                     ),
                                   ),
@@ -507,7 +544,7 @@ class _DesktopLoginScreenState extends State<DesktopLoginScreen> {
                       fontWeight: FontWeight.bold,
                     ),
                   ),
-                  SizedBox(width: 8),
+                  const SizedBox(width: 8),
                   Icon(Icons.arrow_forward_rounded,
                       size: 17, color: context.textPrimary),
                 ],

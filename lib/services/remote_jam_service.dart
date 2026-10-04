@@ -24,6 +24,7 @@ class RemoteJamService {
   bool _isHost = false;
   String? _pin;
   String _endpoint = kDefaultRemoteJamEndpoint;
+  String? _lastError;
 
   OnRemoteStateSync? onStateSync;
   OnRemoteGuestJoined? onGuestJoined;
@@ -35,6 +36,7 @@ class RemoteJamService {
   bool get isHost => _isHost;
   String? get pin => _pin;
   String get endpoint => _endpoint;
+  String? get lastError => _lastError;
 
   void setEndpoint(String endpoint) {
     if (endpoint.trim().isNotEmpty) {
@@ -54,6 +56,7 @@ class RemoteJamService {
     String? customEndpoint,
   }) async {
     await disconnect();
+    _lastError = null;
     final targetEndpoint = customEndpoint ?? _endpoint;
     final normalizedPin = pin.toUpperCase().replaceAll(RegExp(r'[^A-Z0-9]'), '');
 
@@ -81,7 +84,8 @@ class RemoteJamService {
 
             if (json['status'] == 'error') {
               debugPrint('RemoteJamService error: ${json['message']}');
-              onError?.call(json['message']?.toString() ?? 'Error desconocido');
+              _lastError = json['message']?.toString() ?? 'Error al crear la sala';
+              onError?.call(_lastError!);
               timeoutTimer?.cancel();
               if (!completer.isCompleted) completer.complete(false);
               return;
@@ -106,6 +110,7 @@ class RemoteJamService {
         onError: (err) {
           debugPrint('RemoteJamService host WS error: $err');
           _isConnected = false;
+          _lastError ??= 'Error de conexión con el servidor Jam central.';
           timeoutTimer?.cancel();
           if (!completer.isCompleted) completer.complete(false);
         },
@@ -129,6 +134,7 @@ class RemoteJamService {
       timeoutTimer = Timer(const Duration(seconds: 6), () {
         if (!completer.isCompleted) {
           debugPrint('RemoteJamService: timeout al crear sala');
+          _lastError ??= 'Tiempo de espera agotado al conectar con el servidor Jam central.';
           completer.complete(false);
         }
       });
@@ -137,6 +143,7 @@ class RemoteJamService {
     } catch (e) {
       debugPrint('RemoteJamService.createRoom exception: $e');
       _isConnected = false;
+      _lastError = 'Excepción al conectar con el servidor central: $e';
       return false;
     }
   }
@@ -155,6 +162,20 @@ class RemoteJamService {
     }
   }
 
+  /// Expulsa a un invitado de la sala remota (sólo Host).
+  void kickGuest(String guestName) {
+    if (!_isConnected || !_isHost || _channel == null || _pin == null) return;
+    try {
+      _channel!.sink.add(jsonEncode({
+        'action': 'kick_guest',
+        'pin': _pin,
+        'guestName': guestName,
+      }));
+    } catch (e) {
+      debugPrint('RemoteJamService.kickGuest error: $e');
+    }
+  }
+
   // ---------------------------------------------------------------------------
   // Guest: Unirse a una sala remota
   // ---------------------------------------------------------------------------
@@ -166,6 +187,7 @@ class RemoteJamService {
     String? customEndpoint,
   }) async {
     await disconnect();
+    _lastError = null;
     final targetEndpoint = customEndpoint ?? _endpoint;
     final normalizedPin = pin.toUpperCase().replaceAll(RegExp(r'[^A-Z0-9]'), '');
 
@@ -194,7 +216,8 @@ class RemoteJamService {
 
             if (json['status'] == 'error') {
               debugPrint('RemoteJamService join error: ${json['message']}');
-              onError?.call(json['message']?.toString() ?? 'Error al unirse');
+              _lastError = json['message']?.toString() ?? 'Error al unirse';
+              onError?.call(_lastError!);
               timeoutTimer?.cancel();
               if (!completer.isCompleted) completer.complete(null);
               return;
@@ -204,8 +227,11 @@ class RemoteJamService {
             if (event == 'sync_state') {
               final state = json['state'] as Map<String, dynamic>? ?? {};
               onStateSync?.call(state);
-            } else if (event == 'room_closed') {
-              final reason = json['message']?.toString() ?? 'La sala Jam fue cerrada';
+            } else if (event == 'room_closed' || event == 'kicked') {
+              final reason = json['message']?.toString() ??
+                  (event == 'kicked'
+                      ? 'Has sido expulsado de la sala por el anfitrión.'
+                      : 'La sala Jam fue cerrada.');
               onRoomClosed?.call(reason);
               disconnect();
             }
@@ -216,6 +242,7 @@ class RemoteJamService {
         onError: (err) {
           debugPrint('RemoteJamService guest WS error: $err');
           _isConnected = false;
+          _lastError ??= 'Error de conexión con el servidor Jam central.';
           timeoutTimer?.cancel();
           if (!completer.isCompleted) completer.complete(null);
         },
@@ -238,6 +265,7 @@ class RemoteJamService {
       timeoutTimer = Timer(const Duration(seconds: 6), () {
         if (!completer.isCompleted) {
           debugPrint('RemoteJamService: timeout al unirse a la sala');
+          _lastError ??= 'Tiempo de espera agotado al conectar a la sala remota.';
           completer.complete(null);
         }
       });
@@ -246,6 +274,7 @@ class RemoteJamService {
     } catch (e) {
       debugPrint('RemoteJamService.joinRoom exception: $e');
       _isConnected = false;
+      _lastError = 'Excepción al unirse a la sala remota: $e';
       return null;
     }
   }

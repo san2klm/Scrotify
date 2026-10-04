@@ -82,7 +82,14 @@ class SecureStorage {
     }
   }
 
-  static Future<String?> _secureRead(String key) async {
+  /// Almacén en memoria exclusivo para pruebas unitarias e instrumentadas.
+  @visibleForTesting
+  static Map<String, String>? inMemoryTestStore;
+
+  static Future<String?> secureRead(String key) async {
+    if (inMemoryTestStore != null) {
+      return inMemoryTestStore![key];
+    }
     try {
       final value = await _storage.read(key: key);
       // Si el keyring responde, úsalo. Si está vacío, mira también
@@ -97,7 +104,11 @@ class SecureStorage {
     }
   }
 
-  static Future<void> _secureWrite(String key, String value) async {
+  static Future<void> secureWrite(String key, String value) async {
+    if (inMemoryTestStore != null) {
+      inMemoryTestStore![key] = value;
+      return;
+    }
     try {
       await _storage.write(key: key, value: value);
     } catch (e) {
@@ -108,7 +119,11 @@ class SecureStorage {
     }
   }
 
-  static Future<void> _secureDelete(String key) async {
+  static Future<void> secureDelete(String key) async {
+    if (inMemoryTestStore != null) {
+      inMemoryTestStore!.remove(key);
+      return;
+    }
     try {
       await _storage.delete(key: key);
     } catch (e) {
@@ -131,24 +146,24 @@ class SecureStorage {
   }) async {
     // Secuencial a propósito: con Future.wait un fallo de libsecret
     // cancelaba las otras escrituras y dejaba estado parcial.
-    await _secureWrite(_kServerUrl, serverUrl);
-    await _secureWrite(_kUsername, username);
-    await _secureWrite(_kPassword, password);
-    await _secureWrite(_kHasCredentials, 'true');
+    await secureWrite(_kServerUrl, serverUrl);
+    await secureWrite(_kUsername, username);
+    await secureWrite(_kPassword, password);
+    await secureWrite(_kHasCredentials, 'true');
   }
 
   /// Lee la URL del servidor guardada.
-  static Future<String?> getServerUrl() => _secureRead(_kServerUrl);
+  static Future<String?> getServerUrl() => secureRead(_kServerUrl);
 
   /// Lee el usuario guardado.
-  static Future<String?> getUsername() => _secureRead(_kUsername);
+  static Future<String?> getUsername() => secureRead(_kUsername);
 
   /// Lee la contraseña guardada.
-  static Future<String?> getPassword() => _secureRead(_kPassword);
+  static Future<String?> getPassword() => secureRead(_kPassword);
 
   /// Devuelve `true` si hay credenciales guardadas.
   static Future<bool> hasCredentials() async {
-    final v = await _secureRead(_kHasCredentials);
+    final v = await secureRead(_kHasCredentials);
     if (v == 'true') return true;
     // Compatibilidad: si existen las 3 piezas, hay sesión aunque
     // falte el flag (p. ej. guardado parcial anterior).
@@ -160,10 +175,10 @@ class SecureStorage {
 
   /// Borra todas las credenciales (logout).
   static Future<void> clearCredentials() async {
-    await _secureDelete(_kServerUrl);
-    await _secureDelete(_kUsername);
-    await _secureDelete(_kPassword);
-    await _secureDelete(_kHasCredentials);
+    await secureDelete(_kServerUrl);
+    await secureDelete(_kUsername);
+    await secureDelete(_kPassword);
+    await secureDelete(_kHasCredentials);
   }
 
   /// Lee todas las credenciales de una vez (para auto-login).
@@ -172,9 +187,9 @@ class SecureStorage {
     String? username,
     String? password,
   })> getAll() async {
-    final serverUrl = await _secureRead(_kServerUrl);
-    final username = await _secureRead(_kUsername);
-    final password = await _secureRead(_kPassword);
+    final serverUrl = await secureRead(_kServerUrl);
+    final username = await secureRead(_kUsername);
+    final password = await secureRead(_kPassword);
     return (
       serverUrl: serverUrl,
       username: username,

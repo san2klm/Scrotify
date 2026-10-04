@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:just_audio/just_audio.dart';
+import 'package:navidrome_client/models/jam_models.dart';
 import 'package:navidrome_client/services/jam_controller.dart';
 import 'package:navidrome_client/services/navidrome_service.dart';
 import 'package:navidrome_client/services/player_controller.dart';
+import 'package:navidrome_client/services/waveform_service.dart';
 
 class FakeNavidrome extends NavidromeService {
   final queries = <String>[];
@@ -48,7 +50,15 @@ class IdlePlayer extends ChangeNotifier implements PlayerController {
   @override
   Stream<Duration> get positionStream => const Stream.empty();
   @override
+  Stream<Duration?> get durationStream => const Stream.empty();
+  @override
   Stream<double> get volumeStream => const Stream.empty();
+  @override
+  Duration get position => Duration.zero;
+  @override
+  bool get karaokeMode => false;
+  @override
+  WaveformData? get waveformData => null;
   @override
   double get volume => 0.7;
   @override
@@ -57,10 +67,24 @@ class IdlePlayer extends ChangeNotifier implements PlayerController {
   List<Track> get recentlyPlayed => [];
 
   @override
+  bool get hasSleepTimer => false;
+  @override
+  bool get vocalReduction => false;
+  @override
+  bool get hasTrack => false;
+  @override
+  bool get isWaveformLoading => false;
+  @override
+  bool get gapless => false;
+
+  @override
   dynamic noSuchMethod(Invocation invocation) => Future<void>.value();
 }
 
 class IdleJam extends ChangeNotifier implements JamController {
+  @override
+  JamRole get role => JamRole.none;
+
   @override
   bool get inJam => false;
 
@@ -69,6 +93,18 @@ class IdleJam extends ChangeNotifier implements JamController {
 
   @override
   bool get isGuest => false;
+
+  @override
+  JamParticipant? get localParticipant => null;
+
+  @override
+  List<JamQueueItem> get jamQueue => const [];
+
+  @override
+  List<JamQueueItem> get queue => const [];
+
+  @override
+  bool isTrackInJamQueue(String trackId) => false;
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);

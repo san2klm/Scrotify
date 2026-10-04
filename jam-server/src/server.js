@@ -26,8 +26,9 @@ function normalizeName(value, maxLength) {
   return name.length > 0 && name.length <= maxLength ? name : null;
 }
 
-function normalizeState(value, limits) {
+function normalizeState(value, limits, existingState = null) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const merged = existingState ? { ...existingState, ...value } : value;
   const {
     trackId,
     position,
@@ -41,7 +42,7 @@ function normalizeState(value, limits) {
     mode,
     allowGuestControls,
     allowGuestQueueManage,
-  } = value;
+  } = merged;
 
   if (trackId !== null && trackId !== undefined &&
       (typeof trackId !== 'string' || trackId.trim().length === 0)) {
@@ -70,7 +71,16 @@ function normalizeState(value, limits) {
   if (typeof artist === 'string') res.artist = artist.slice(0, 256);
   if (typeof album === 'string') res.album = album.slice(0, 256);
   if (typeof albumArtUrl === 'string') res.albumArtUrl = albumArtUrl.slice(0, 1024);
-  if (typeof duration === 'number') res.duration = duration;
+  if (typeof duration === 'number' && Number.isFinite(duration)) {
+    res.duration = Math.max(0, Math.floor(duration));
+  } else if (typeof duration === 'string' && duration.trim().length > 0) {
+    const parsed = Number(duration);
+    if (!Number.isNaN(parsed) && Number.isFinite(parsed)) {
+      res.duration = Math.max(0, Math.floor(parsed));
+    } else {
+      res.duration = duration.trim().slice(0, 32);
+    }
+  }
   if (typeof mode === 'string') res.mode = mode;
   if (typeof allowGuestControls === 'boolean') res.allowGuestControls = allowGuestControls;
   if (typeof allowGuestQueueManage === 'boolean') res.allowGuestQueueManage = allowGuestQueueManage;
@@ -199,7 +209,7 @@ export function createJamServer({ port, host = '0.0.0.0', ...overrides } = {}) {
     if (!membership || !room || membership.pin !== pin || membership.role !== 'host' || room.host !== socket) {
       return serverError(socket, 'Sólo el anfitrión puede actualizar el estado.');
     }
-    const state = normalizeState(message.state, limits);
+    const state = normalizeState(message.state, limits, room.state);
     if (!state) return serverError(socket, 'Estado de reproducción inválido.');
     room.state = state;
     room.updatedAt = Date.now();
@@ -221,6 +231,31 @@ export function createJamServer({ port, host = '0.0.0.0', ...overrides } = {}) {
       actionType: message.actionType,
       payload: message.payload,
     });
+  }
+
+  function kickGuest(socket, message) {
+    const membership = socketRooms.get(socket);
+    const pin = normalizePin(message.pin);
+    const room = pin ? rooms.get(pin) : null;
+    if (!membership || !room || membership.pin !== pin || membership.role !== 'host' || room.host !== socket) {
+      return serverError(socket, 'Sólo el anfitrión puede expulsar invitados.');
+    }
+    const guestName = normalizeName(message.guestName, limits.maxNameLength);
+    if (!guestName) return serverError(socket, 'Nombre de invitado inválido.');
+    let found = false;
+    for (const guest of room.guests) {
+      if (guest.name === guestName) {
+        found = true;
+        send(guest.socket, { event: 'kicked', message: 'Has sido expulsado de la sala por el anfitrión.' });
+        guest.socket.close(1000, 'Kicked by host');
+        room.guests.delete(guest);
+        room.updatedAt = Date.now();
+        break;
+      }
+    }
+    if (found) {
+      send(socket, { status: 'guest_kicked', guestName, totalParticipants: room.guests.size + 1 });
+    }
   }
 
   function checkRoom(socket, message) {
@@ -255,6 +290,7 @@ export function createJamServer({ port, host = '0.0.0.0', ...overrides } = {}) {
         case 'join_room': return joinRoom(socket, message);
         case 'update_state': return updateState(socket, message);
         case 'guest_action': return relayGuestAction(socket, message);
+        case 'kick_guest': return kickGuest(socket, message);
         case 'check_room': return checkRoom(socket, message);
         default: return serverError(socket, 'Acción no permitida.');
       }
