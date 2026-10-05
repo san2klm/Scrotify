@@ -95,11 +95,11 @@ class _CoverArtState extends State<CoverArt> {
 
     CoverFallbackService.instance
         .findCover(
-          artist: widget.artist,
-          album: widget.album,
-          title: widget.title,
-          size: size,
-        )
+      artist: widget.artist,
+      album: widget.album,
+      title: widget.title,
+      size: size,
+    )
         .then((url) {
       if (mounted && url != null && url.isNotEmpty) {
         setState(() => _externalUrl = url);
@@ -120,11 +120,19 @@ class _CoverArtState extends State<CoverArt> {
     String? effectiveUrl = (_hasUrl && !_loadingFailed) ? widget.url : null;
     effectiveUrl ??= _externalUrl;
 
+    // Decodificar al tamaño real en pantalla evita mantener en memoria
+    // bitmaps de 600px para miniaturas de 48px.
+    final w = widget.width;
+    final cacheWidth = (w != null && w.isFinite && w > 0)
+        ? (w * MediaQuery.devicePixelRatioOf(context)).ceil()
+        : null;
+
     final Widget image = effectiveUrl != null && effectiveUrl.isNotEmpty
         ? Image.network(
             effectiveUrl,
             width: widget.width,
             height: widget.height,
+            cacheWidth: cacheWidth,
             fit: BoxFit.cover,
             gaplessPlayback: true,
             errorBuilder: (_, __, ___) {
@@ -151,7 +159,11 @@ class _CoverArtState extends State<CoverArt> {
             child: image,
           );
 
-    return SizedBox(width: widget.width, height: widget.height, child: clipped);
+    // Cada carátula en su propia capa: al hacer scroll no se repinta el resto.
+    return RepaintBoundary(
+      child:
+          SizedBox(width: widget.width, height: widget.height, child: clipped),
+    );
   }
 
   Widget _placeholder(BuildContext context) {

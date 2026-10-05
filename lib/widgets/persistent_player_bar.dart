@@ -45,13 +45,6 @@ class PersistentPlayerBar extends StatelessWidget {
         final remoteState = jam.isGuest ? jam.session : null;
         final track = remoteState?.currentTrack ?? player.currentTrack;
         final playing = remoteState?.isPlaying ?? player.playing;
-        final canCtrl = jam.isGuest
-            ? (jam.localParticipant?.canControlPlayback ?? false)
-            : true;
-        debugPrint(
-          '[JAM] PersistentPlayerBar.build: id=${identityHashCode(jam)} role=${jam.role.name} '
-          'trackId=${track?.id} canCtrl=$canCtrl',
-        );
 
         if (compact) {
           return _buildMobileBar(context, player, jam, track, playing);

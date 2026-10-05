@@ -122,10 +122,13 @@ class _KaraokeScreenState extends State<KaraokeScreen> {
               Positioned.fill(
                 child: FutureBuilder<String?>(
                   future: () async {
-                    if (track.albumArtUrl != null && track.albumArtUrl!.isNotEmpty) {
+                    if (track.albumArtUrl != null &&
+                        track.albumArtUrl!.isNotEmpty) {
                       return track.albumArtUrl;
                     }
-                    if (track.artist.isNotEmpty || track.album.isNotEmpty || track.title.isNotEmpty) {
+                    if (track.artist.isNotEmpty ||
+                        track.album.isNotEmpty ||
+                        track.title.isNotEmpty) {
                       return CoverFallbackService.instance.findCover(
                         artist: track.artist,
                         album: track.album,
@@ -140,13 +143,17 @@ class _KaraokeScreenState extends State<KaraokeScreen> {
                     if (url == null || url.isEmpty) {
                       return const SizedBox.shrink();
                     }
-                    return ImageFiltered(
-                      imageFilter: ImageFilter.blur(sigmaX: 70, sigmaY: 70),
-                      child: Image.network(
-                        url,
-                        fit: BoxFit.cover,
-                        color: context.textPrimary.withValues(alpha: 0.18),
-                        colorBlendMode: BlendMode.modulate,
+                    return RepaintBoundary(
+                      child: ImageFiltered(
+                        imageFilter: ImageFilter.blur(sigmaX: 70, sigmaY: 70),
+                        child: Image.network(
+                          url,
+                          fit: BoxFit.cover,
+                          cacheWidth: 128,
+                          filterQuality: FilterQuality.low,
+                          color: context.textPrimary.withValues(alpha: 0.18),
+                          colorBlendMode: BlendMode.modulate,
+                        ),
                       ),
                     );
                   },
@@ -296,8 +303,8 @@ class _KaraokeScreenState extends State<KaraokeScreen> {
                                   return Padding(
                                     key: _itemKeys.putIfAbsent(
                                         i, () => GlobalKey()),
-                                    padding:
-                                        const EdgeInsets.symmetric(vertical: 12),
+                                    padding: const EdgeInsets.symmetric(
+                                        vertical: 12),
                                     child: AnimatedDefaultTextStyle(
                                       duration:
                                           const Duration(milliseconds: 250),
@@ -354,7 +361,8 @@ class _KaraokeScreenState extends State<KaraokeScreen> {
                             builder: (context, snapshot) {
                               final trackTime = Duration(
                                   seconds: int.tryParse(
-                                          player.currentTrack?.duration ?? '') ??
+                                          player.currentTrack?.duration ??
+                                              '') ??
                                       0);
                               final duration = player.duration ?? trackTime;
                               final position = snapshot.data ?? Duration.zero;
@@ -377,8 +385,9 @@ class _KaraokeScreenState extends State<KaraokeScreen> {
                                       thumbShape: const RoundSliderThumbShape(
                                           enabledThumbRadius: 5),
                                       overlayColor: context.accentDim,
-                                      overlayShape: const RoundSliderOverlayShape(
-                                          overlayRadius: 12),
+                                      overlayShape:
+                                          const RoundSliderOverlayShape(
+                                              overlayRadius: 12),
                                     ),
                                     child: Slider(
                                       min: 0,
@@ -387,8 +396,8 @@ class _KaraokeScreenState extends State<KaraokeScreen> {
                                       onChanged: (v) =>
                                           setState(() => _dragValue = v),
                                       onChangeEnd: (v) async {
-                                        await player.seek(Duration(
-                                            milliseconds: v.round()));
+                                        await player.seek(
+                                            Duration(milliseconds: v.round()));
                                         if (mounted) {
                                           setState(() => _dragValue = null);
                                         }
@@ -396,16 +405,15 @@ class _KaraokeScreenState extends State<KaraokeScreen> {
                                     ),
                                   ),
                                   Padding(
-                                    padding:
-                                        const EdgeInsets.symmetric(horizontal: 4),
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 4),
                                     child: Row(
                                       mainAxisAlignment:
                                           MainAxisAlignment.spaceBetween,
                                       children: [
                                         Text(
                                           _format(Duration(
-                                              milliseconds:
-                                                  currentMs.round())),
+                                              milliseconds: currentMs.round())),
                                           style: TextStyle(
                                               color: context.textSecondary,
                                               fontSize: 11),

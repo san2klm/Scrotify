@@ -103,12 +103,6 @@ class _PlayerScreenState extends State<PlayerScreen> {
         final canControl =
             !jam.isGuest || (jam.localParticipant?.canControlPlayback ?? false);
 
-        debugPrint(
-          '[JAM] PlayerScreen.build: id=${identityHashCode(jam)} '
-          'trackId=${track?.id} role=${jam.role.name} mode=${jam.mode.name} '
-          'canCtrl=$canControl',
-        );
-
         if (track == null) {
           return Scaffold(
             backgroundColor: context.bgApp,
@@ -204,9 +198,10 @@ class _PlayerScreenState extends State<PlayerScreen> {
                             Consumer<NavidromeService>(
                               builder: (context, nav, _) {
                                 final isStarred = nav.isStarred(track.id);
-                                final trackRating = nav.getTrackRating(track.id) != 0
-                                    ? nav.getTrackRating(track.id)
-                                    : track.userRating;
+                                final trackRating =
+                                    nav.getTrackRating(track.id) != 0
+                                        ? nav.getTrackRating(track.id)
+                                        : track.userRating;
                                 return Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
@@ -229,7 +224,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
                                       color: context.accent,
                                       onRatingChanged: (newRating) {
                                         final targetRating =
-                                            trackRating == newRating ? 0 : newRating;
+                                            trackRating == newRating
+                                                ? 0
+                                                : newRating;
                                         nav.setRating(track.id, targetRating);
                                       },
                                     ),
@@ -510,13 +507,19 @@ class _PlayerScreenState extends State<PlayerScreen> {
           if (url == null || url.isEmpty) {
             return const SizedBox.shrink();
           }
-          return ImageFiltered(
-            imageFilter: ImageFilter.blur(sigmaX: 60, sigmaY: 60),
-            child: Image.network(
-              url,
-              fit: BoxFit.cover,
-              color: context.textPrimary.withAlpha(70),
-              colorBlendMode: BlendMode.modulate,
+          // Con la imagen decodificada a baja resolución y aislada en su propia
+          // capa, el desenfoque (caro) se rasteriza una sola vez.
+          return RepaintBoundary(
+            child: ImageFiltered(
+              imageFilter: ImageFilter.blur(sigmaX: 60, sigmaY: 60),
+              child: Image.network(
+                url,
+                fit: BoxFit.cover,
+                cacheWidth: 128,
+                filterQuality: FilterQuality.low,
+                color: context.textPrimary.withAlpha(70),
+                colorBlendMode: BlendMode.modulate,
+              ),
             ),
           );
         },

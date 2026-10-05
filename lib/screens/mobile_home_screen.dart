@@ -528,11 +528,16 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
           genres: genres,
           selectedGenre: _selectedGenre,
           onGenreChanged: (genre) {
-            setState(() => _selectedGenre = genre);
+            setState(() {
+              _selectedGenre = genre;
+              _explorePage = 0;
+            });
             if (genre != null) {
               unawaited(context
                   .read<NavidromeService>()
                   .saveLastSelectedGenre(genre));
+              // En una búsqueda activa, el género lanza la búsqueda por género.
+              if (_searchResults != null) unawaited(_runGenreSearch(genre));
             }
           },
         );
@@ -569,18 +574,13 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
           );
         }
         final tracks = snapshot.data!;
-        final filteredTracks = _selectedGenre == null
-            ? tracks
-            : context
-                .read<NavidromeService>()
-                .filterByGenre(tracks, _selectedGenre!);
+        // Los géneros solo se muestran al buscar o explorar, no en Inicio.
+        final filteredTracks = tracks;
         return SingleChildScrollView(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _genreSelector(),
-              const SizedBox(height: 12),
               QuickActionsRow(tracks: filteredTracks),
               const SizedBox(height: 16),
               _quickAccessGrid(),
@@ -1157,6 +1157,11 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
             hintText: 'Canciones, álbumes o artistas',
           ),
         ),
+        if (_showExplore || _searchResults != null)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+            child: _genreSelector(),
+          ),
         Expanded(
           child: _showExplore
               ? FutureBuilder<List<Track>>(
@@ -1169,7 +1174,12 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
                       return const Center(
                           child: Text('Error al cargar contenido'));
                     }
-                    final tracks = snapshot.data ?? <Track>[];
+                    final allTracks = snapshot.data ?? <Track>[];
+                    final tracks = _selectedGenre == null
+                        ? allTracks
+                        : context
+                            .read<NavidromeService>()
+                            .filterByGenre(allTracks, _selectedGenre!);
                     return ExploreTracksView(
                       tracks: tracks,
                       pageSize: _explorePageSize,

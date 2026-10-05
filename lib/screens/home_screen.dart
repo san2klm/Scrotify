@@ -934,33 +934,46 @@ class _HomeScreenState extends State<HomeScreen> {
   // Panel Central: Descubrimiento y Contenido AMOLED
   // ===========================================================================
   Widget _buildMainPanel() {
+    // Los chips de género solo aparecen al buscar o explorar.
+    final showGenres = _searchResults != null || _activeNavIndex == 1;
+    final body = _searchResults != null
+        ? _buildSearchResultsPanel()
+        : FutureBuilder<List<Track>>(
+            future: _futureTracks,
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return Center(
+                  child: CircularProgressIndicator(
+                    color: context.accent,
+                    strokeWidth: 2,
+                  ),
+                );
+              }
+              if (snapshot.hasError || !snapshot.hasData) {
+                return Center(
+                  child: Text('Error al cargar contenido',
+                      style: TextStyle(color: context.textMuted)),
+                );
+              }
+              final tracks = snapshot.data!;
+              return _activeNavIndex == 1
+                  ? _buildExploreContent(tracks)
+                  : _mainContent(tracks);
+            },
+          );
     return Container(
       color: context.bgApp, // AMOLED
-      child: _searchResults != null
-          ? _buildSearchResultsPanel()
-          : FutureBuilder<List<Track>>(
-              future: _futureTracks,
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return Center(
-                    child: CircularProgressIndicator(
-                      color: context.accent,
-                      strokeWidth: 2,
-                    ),
-                  );
-                }
-                if (snapshot.hasError || !snapshot.hasData) {
-                  return Center(
-                    child: Text('Error al cargar contenido',
-                        style: TextStyle(color: context.textMuted)),
-                  );
-                }
-                final tracks = snapshot.data!;
-                return _activeNavIndex == 1
-                    ? _buildExploreContent(tracks)
-                    : _mainContent(tracks);
-              },
-            ),
+      child: showGenres
+          ? Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
+                  child: _genreSelector(),
+                ),
+                Expanded(child: body),
+              ],
+            )
+          : body,
     );
   }
 
@@ -1096,20 +1109,13 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _mainContent(List<Track> tracks) {
-    final filteredTracks = _selectedGenre == null
-        ? tracks
-        : context
-            .read<NavidromeService>()
-            .filterByGenre(tracks, _selectedGenre!);
+    // Los géneros solo se muestran al buscar o explorar, no en Inicio.
+    final filteredTracks = tracks;
     return SingleChildScrollView(
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Selector de géneros (Fase 9)
-          _genreSelector(),
-          const SizedBox(height: 20),
-
           _quickAccessGrid(),
           const SizedBox(height: 32),
           _sectionHeader(
@@ -1143,17 +1149,24 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildExploreContent(List<Track> tracks) => ExploreTracksView(
-        tracks: tracks,
-        pageSize: _explorePageSize,
-        page: _explorePage,
-        onPageSizeChanged: (size) => setState(() {
-          _explorePageSize = size;
-          _explorePage = 0;
-        }),
-        onPageChanged: (page) => setState(() => _explorePage = page),
-        onPlay: (index) => _openPlayer(tracks, index),
-      );
+  Widget _buildExploreContent(List<Track> allTracks) {
+    final tracks = _selectedGenre == null
+        ? allTracks
+        : context
+            .read<NavidromeService>()
+            .filterByGenre(allTracks, _selectedGenre!);
+    return ExploreTracksView(
+      tracks: tracks,
+      pageSize: _explorePageSize,
+      page: _explorePage,
+      onPageSizeChanged: (size) => setState(() {
+        _explorePageSize = size;
+        _explorePage = 0;
+      }),
+      onPageChanged: (page) => setState(() => _explorePage = page),
+      onPlay: (index) => _openPlayer(tracks, index),
+    );
+  }
 
   void _openPlayer(List<Track> tracks, int index) {
     context.read<PlayerController>().playQueue(tracks, startIndex: index);
@@ -1294,11 +1307,16 @@ class _HomeScreenState extends State<HomeScreen> {
           genres: genres,
           selectedGenre: _selectedGenre,
           onGenreChanged: (genre) {
-            setState(() => _selectedGenre = genre);
+            setState(() {
+              _selectedGenre = genre;
+              _explorePage = 0;
+            });
             if (genre != null) {
               unawaited(context
                   .read<NavidromeService>()
                   .saveLastSelectedGenre(genre));
+              // En una búsqueda activa, el género lanza la búsqueda por género.
+              if (_searchResults != null) unawaited(_runGenreSearch(genre));
             }
           },
         );
@@ -1509,6 +1527,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                   ? Image.network(
                                       album.coverArtUrl!,
                                       fit: BoxFit.cover,
+                                      cacheWidth: 400,
                                       errorBuilder: (_, __, ___) => Center(
                                         child: Icon(Icons.album,
                                             color: context.textSecondary,
@@ -1615,8 +1634,10 @@ class _HomeScreenState extends State<HomeScreen> {
                                 ),
                                 image: artist.coverArtUrl != null
                                     ? DecorationImage(
-                                        image:
-                                            NetworkImage(artist.coverArtUrl!),
+                                        image: ResizeImage(
+                                          NetworkImage(artist.coverArtUrl!),
+                                          width: 400,
+                                        ),
                                         fit: BoxFit.cover,
                                       )
                                     : null,

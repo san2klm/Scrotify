@@ -34,12 +34,6 @@ class JamQueuePanel extends StatelessWidget {
   Widget build(BuildContext context) {
     final player = context.watch<PlayerController>();
     final jam = context.watch<JamController>();
-    debugPrint(
-      '[JAM] JamQueuePanel.build: id=${identityHashCode(jam)} role=${jam.role.name} '
-      'qLen=${jam.jamQueue.length} conn=${jam.connectionState.name} '
-      'canCtrl=${jam.localParticipant?.canControlPlayback ?? false} '
-      'canQueue=${jam.localParticipant?.canManageQueue ?? false}',
-    );
     final currentTrack = jam.isGuest
         ? jam.session?.currentTrack ?? player.currentTrack
         : player.currentTrack;
