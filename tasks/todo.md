@@ -96,3 +96,47 @@
 - [x] **Jam.14** Verificación E2E en emulador Android (`mobile-mcp`) — Validación en vivo de inicio de sesión automático, reproducción de audio, apertura del diálogo Jam, selección por defecto de "Escucha sincronizada", unión de invitado y expulsión en tiempo real con remoción inmediata de la lista de participantes.
 
 
+
+## Auditoría 2026-10-04 — Correcciones de seguridad y robustez
+
+- [x] **Aud.1** `jam_models.dart` + `jam_controller.dart` + `jam_host_service.dart` + `jam-server/src/server.js` — Las URLs de carátula ya no viajan con `u/s/t` (token Subsonic reutilizable): `sanitizeArtUrl` en cliente y saneado de defensa en el servidor (estado y cola).
+- [x] **Aud.2** `jam-server/src/server.js` — `/rooms` solo lista salas con `isPublic: true`; `host` público configurable (`PUBLIC_HOST`); allowlist y validación de `guest_action`; nombres duplicados rechazados; límite de intentos fallidos de PIN; ping/pong para limpiar sockets muertos; `check_room` sin cola; log de cierre corregido. 9 tests Node.
+- [x] **Aud.3** `pairing_server.dart` — `/pair/status` ya no devuelve el código; 5 códigos erróneos invalidan la sesión (HTTP y relay); body de claim limitado a 4 KB; el código no se escribe en logs.
+- [x] **Aud.4** `secure_storage.dart` — El archivo de respaldo se crea con `chmod 600` antes de escribir secretos.
+- [x] **Aud.5** `navidrome_service.dart` — Salt/token de carátula estables por sesión (caché de imágenes efectiva); se eliminan logs de cuerpos de respuesta y del usuario.
+- [x] **Aud.6** `player_controller.dart` — El watchdog de 200 ms se detiene en pausa/idle y se rearma al reproducir.
+- [x] **Aud.7** `listening_stats_service.dart` — Guardado atómico y fusionado de escrituras concurrentes.
+- [x] **Aud.8** `main.dart` + varios — Manejo global de errores; `catch (_) {}` clave ahora registran; `print` → `debugPrint`.
+- [x] **Aud.9** `.gitignore` + `build.gradle.kts` — `pubspec.lock` versionable; firma de release vía `android/key.properties` (fallback debug); secretos de firma ignorados.
+- Verificación: `flutter analyze` 0 issues, `flutter test` 267 OK, `node --test` 9 OK.
+
+## Importar playlists — fix del cuelgue y mejoras (2026-10-04)
+
+- [x] **Imp.1** `settings_screen.dart` — Causa del "se queda cargando": `_ImportingDialog` nunca esperaba el `Future` ni se cerraba. Reemplazado por `_ImportProgressDialog` (ejecuta la importación, muestra % real + contador encontradas/no encontradas, botón Cancelar y se cierra solo). Los errores ya no se pierden (`StateError` no lo captaba `on Exception`).
+- [x] **Imp.2** `playlist_importer.dart` — Cada canción se busca con try/catch + timeout (15 s): si no aparece, falla o se cuelga, se salta y se sigue. Si ninguna coincide no se crea la playlist (antes lanzaba). Si TODAS fallan por red, error claro.
+- [x] **Imp.3** Destino: playlist nueva o **existente** (sin duplicar canciones que ya tiene).
+- [x] **Imp.4** Resultado final: cuántas importadas / cuántas no encontradas + CSV (`Titulo,Artista,Album`, con BOM, reimportable). En móvil (sin "Guardar como") se guarda en la carpeta de la app y se copia al portapapeles.
+- [x] **Imp.5** Matching: lectura UTF-8 real (antes `String.fromCharCodes` rompía acentos/ñ), limpia "(feat…)/Remastered", varios artistas, cabeceras de Exportify (`Artist Name(s)`).
+- Verificación: `flutter analyze` 0 issues; `test/playlist_importer_test.dart` 10 tests.
+
+## UI adaptativa, widgets y espectro (2026-10-04)
+
+- [x] **UI.1** `waveform_progress_bar.dart` — Espectro optimizado: barras rasterizadas una vez en `Picture` cacheadas y recortadas por progreso (2 draw calls/frame), progreso interpolado con `Ticker` (sin reconstruir el árbol), hover/arrastre/revelado/pulso solo repintan el `CustomPaint`. Animación de revelado y pulso del cabezal (respeta "reducir animaciones"), tiempo en hover (PC), arrastre solo horizontal (móvil), teclado ←/→, semántica de slider, alto adaptable y barras más gruesas en anchos grandes. Integrado en `player_screen.dart` y en la barra persistente de escritorio.
+- [x] **UI.2** `utils/responsive.dart` + `home_shell.dart` — Breakpoints, histéresis al cruzar móvil↔escritorio (evita parpadeo y pérdida de estado al redimensionar).
+- [x] **UI.3** `home_screen.dart` — Biblioteca auto-colapsable (<900 px, se abre como cajón), ancho proporcional, contenido centrado y limitado en monitores enormes.
+- [x] **UI.4** `persistent_player_bar.dart` — Barra de escritorio adaptativa por tramos (antes desbordaba entre 700 y ~1000 px): oculta volumen/Jam/pantalla completa progresivamente, bloque de título acotado, progreso flexible.
+- [x] **UI.5** `mobile_home_screen.dart` — Etiqueta de la barra inferior sin salto de línea (overflow a 320 px).
+- [x] **W.1** `now_playing_panel.dart` — Panel lateral "Escuchando ahora" (≥1240 px): carátula, controles, cola y letra.
+- [x] **W.2** `quick_actions_row.dart` — Acciones rápidas en el inicio del teléfono (Mezclar, Me gusta, Jam, Estadísticas).
+- [x] **W.3** `mini_player_controller.dart` + `mini_player_view.dart` + `desktop_window_frame.dart` — Modo mini reproductor en PC (ventana pequeña siempre visible, con espectro); la UI normal conserva su estado.
+- [x] **W.4** Android App Widget (`ScrotifyWidgetProvider.kt`, layout/xml/drawables, `home_widget_service.dart`) — carátula, título, artista y prev/play/siguiente en la pantalla de inicio. Verificado en emulador: aparece en el selector y se dibuja al añadirlo.
+- Verificación: `flutter analyze` 0 issues; tests de espectro, responsive (anchos 320–2560) y widget.
+
+## Ventana de escritorio: redimensionar, maximizar y pantalla completa (2026-10-04)
+
+- [x] **Win.1** `desktop_window_frame.dart` — Bordes/esquinas arrastrables (`DragToResizeArea`) para redimensionar la ventana sin decoración nativa; `setResizable(true)` en `main.dart`.
+- [x] **Win.2** Botón maximizar/restaurar con flecha arriba/abajo; pantalla completa real (botón, `F11`, `Esc` para salir); iconos sincronizados con el estado real vía `WindowListener`.
+- [x] **Win.3** `persistent_player_bar.dart` — el botón de pantalla completa abre el reproductor grande y pone la ventana en pantalla completa real.
+- [x] **Win.4** `services/window_controls.dart` — helpers compartidos.
+- Verificación: analyze 0 issues, 309 tests, `flutter build linux --debug` OK. No se probó el arrastre en una ventana real (sesión Wayland sin herramienta para simular ratón).
+- [x] **Win.5** Aclaración de diseño: la flecha ↑ de la barra inferior abre la **ventana completa** (reproductor con portada y letra dentro de la ventana, sin tocar el escritorio); dentro del reproductor, el botón de **pantalla completa** (o F11) ocupa toda la pantalla y Esc sale; al cerrar el reproductor se restaura si fue él quien la activó. La barra de título vuelve al icono clásico de maximizar/restaurar.

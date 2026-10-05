@@ -1,10 +1,8 @@
 # Dart/Pub related
-**/pubspec.lock
 **/.pkgconfig
 **/*.dill
 **/*.gen.dart
 *.log
-pubspec.lock
 
 # Flutter related
 **/android
@@ -42,8 +40,19 @@ android/app/src/main/kotlin/com/example/*
 !android/app/src/main/kotlin/com/example/navidrome_client/
 android/app/src/main/kotlin/com/example/navidrome_client/*
 !android/app/src/main/kotlin/com/example/navidrome_client/MainActivity.kt
+!android/app/src/main/kotlin/com/example/navidrome_client/ScrotifyWidgetProvider.kt
 !android/app/src/main/res/
 android/app/src/main/res/*
+# Widget de pantalla de inicio
+!android/app/src/main/res/layout/
+!android/app/src/main/res/xml/
+!android/app/src/main/res/drawable/
+android/app/src/main/res/drawable/*
+!android/app/src/main/res/drawable/widget_*.xml
+!android/app/src/main/res/drawable/ic_widget_*.xml
+!android/app/src/main/res/values/
+android/app/src/main/res/values/*
+!android/app/src/main/res/values/widget_strings.xml
 !android/app/src/main/res/mipmap-mdpi/
 !android/app/src/main/res/mipmap-mdpi/ic_launcher.png
 !android/app/src/main/res/mipmap-hdpi/
@@ -72,3 +81,8 @@ build/
 *.swp
 *.swo
 *~
+
+# Secretos de firma Android
+**/key.properties
+*.jks
+*.keystore

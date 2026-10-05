@@ -111,7 +111,7 @@ class ServerProfilesController extends ChangeNotifier {
 
     } catch (e) {
       if (kDebugMode) {
-        print('Failed to load server profiles: $e');
+        debugPrint('Failed to load server profiles: $e');
       }
     }
     notifyListeners();
@@ -129,7 +129,7 @@ class ServerProfilesController extends ChangeNotifier {
       }
     } catch (e) {
       if (kDebugMode) {
-        print('Failed to save server profiles: $e');
+        debugPrint('Failed to save server profiles: $e');
       }
     }
   }

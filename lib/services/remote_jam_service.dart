@@ -53,6 +53,7 @@ class RemoteJamService {
     required String pin,
     required String hostName,
     required Map<String, dynamic> initialState,
+    bool isPublic = true,
     String? customEndpoint,
   }) async {
     await disconnect();
@@ -129,6 +130,7 @@ class RemoteJamService {
         'pin': normalizedPin,
         'hostName': hostName,
         'initialState': initialState,
+        'isPublic': isPublic,
       }));
 
       timeoutTimer = Timer(const Duration(seconds: 6), () {

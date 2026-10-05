@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="widget_description">Controla Scrotify desde la pantalla de inicio</string>
+    <string name="widget_cover_description">Carátula</string>
+    <string name="widget_previous">Anterior</string>
+    <string name="widget_play_pause">Reproducir o pausar</string>
+    <string name="widget_next">Siguiente</string>
+    <string name="widget_nothing_playing">Nada en reproducción</string>
+    <string name="widget_open_app">Abrí Scrotify para empezar</string>
+</resources>

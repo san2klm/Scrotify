@@ -16,6 +16,8 @@ import 'playlist_detail_screen.dart';
 import 'album_detail_screen.dart';
 import 'artist_screen.dart';
 import '../utils/app_colors.dart';
+import '../utils/responsive.dart';
+import '../widgets/now_playing_panel.dart';
 import '../widgets/interactive_artist_text.dart';
 import '../widgets/genre_selector.dart';
 
@@ -27,6 +29,10 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  /// Por debajo de este ancho la biblioteca se colapsa sola.
+  static const double _autoCollapseWidth = 900;
+
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   late Future<List<Track>> _futureTracks;
   late Future<List<Playlist>> _futurePlaylists;
   bool _libraryCollapsed = false;
@@ -227,8 +233,24 @@ class _HomeScreenState extends State<HomeScreen> {
     }
     _playlistVersion = pVersion;
 
+    // Layout adaptativo: en ventanas estrechas la biblioteca se colapsa a una
+    // barra de iconos (y se abre como cajón); en anchas aparece el panel
+    // lateral "Escuchando ahora".
+    final width = MediaQuery.sizeOf(context).width;
+    final narrow = width < _autoCollapseWidth;
+    final showSidePanel = width >= Responsive.sidePanelBreakpoint;
+    final libraryWidth = (width * 0.22).clamp(230.0, 320.0).toDouble();
+
     return Scaffold(
+      key: _scaffoldKey,
       backgroundColor: context.bgApp, // Pure AMOLED Black
+      drawer: narrow
+          ? Drawer(
+              width: 300,
+              backgroundColor: context.bgSidebar,
+              child: SafeArea(child: _buildLibraryPanel(width: 300)),
+            )
+          : null,
       body: Column(
         children: [
           // -----------------------------------------------------------------
@@ -242,10 +264,11 @@ class _HomeScreenState extends State<HomeScreen> {
           Expanded(
             child: Row(
               children: [
-                _libraryCollapsed
-                    ? _buildCollapsedLibraryPanel()
-                    : _buildLibraryPanel(),
-                Expanded(child: _buildMainPanel()),
+                (_libraryCollapsed || narrow)
+                    ? _buildCollapsedLibraryPanel(openAsDrawer: narrow)
+                    : _buildLibraryPanel(width: libraryWidth),
+                Expanded(child: ConstrainedContent(child: _buildMainPanel())),
+                if (showSidePanel) const NowPlayingSidePanel(),
               ],
             ),
           ),
@@ -297,7 +320,7 @@ class _HomeScreenState extends State<HomeScreen> {
   // ===========================================================================
   // Panel Izquierdo: Tu Biblioteca
   // ===========================================================================
-  Widget _buildCollapsedLibraryPanel() {
+  Widget _buildCollapsedLibraryPanel({bool openAsDrawer = false}) {
     return Container(
       width: 68,
       color: context.bgSidebar,
@@ -309,7 +332,13 @@ class _HomeScreenState extends State<HomeScreen> {
               icon: Icon(Icons.library_music_rounded,
                   color: context.accent, size: 21),
               tooltip: 'Expandir biblioteca',
-              onPressed: () => setState(() => _libraryCollapsed = false),
+              onPressed: () {
+                if (openAsDrawer) {
+                  _scaffoldKey.currentState?.openDrawer();
+                } else {
+                  setState(() => _libraryCollapsed = false);
+                }
+              },
             ),
           ),
           Divider(height: 1, color: context.bgCard),
@@ -399,9 +428,9 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildLibraryPanel() {
+  Widget _buildLibraryPanel({double width = 270}) {
     return Container(
-      width: 270,
+      width: width,
       color: context.bgSidebar,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

@@ -478,6 +478,7 @@ class NavidromeService with ChangeNotifier {
     _url = url;
     _user = username;
     _pass = password;
+    _resetCoverAuth();
     _connected = true;
     _sessionVersion++;
     _starredIds.clear();
@@ -522,12 +523,27 @@ class NavidromeService with ChangeNotifier {
     return md5.convert(utf8.encode(input)).toString();
   }
 
+  // Salt/token fijos durante la sesión: con un salt aleatorio por petición, la
+  // misma carátula tenía una URL distinta cada vez y la caché de imágenes
+  // (indexada por URL) nunca acertaba.
+  String? _coverSalt;
+  String? _coverToken;
+
+  void _resetCoverAuth() {
+    _coverSalt = null;
+    _coverToken = null;
+  }
+
+  /// Los parámetros `salt`/`token` se mantienen por compatibilidad de firma;
+  /// la URL usa credenciales estables de sesión.
   String? _coverArtUrl(Object? coverArtId, String salt, String token,
       {int? size}) {
     if (coverArtId == null) return null;
+    _coverSalt ??= _randomSalt();
+    _coverToken ??= _md5('$_pass$_coverSalt');
     return '$_url/rest/getCoverArt.view'
         '?u=${Uri.encodeQueryComponent(_user!)}'
-        '&s=$salt&t=$token&v=1.16.1&c=Psysonic'
+        '&s=$_coverSalt&t=$_coverToken&v=1.16.1&c=Psysonic'
         '&id=${Uri.encodeQueryComponent(coverArtId.toString())}'
         '&size=${size ?? _coverArtSize}';
   }
@@ -544,8 +560,9 @@ class NavidromeService with ChangeNotifier {
     _url = processedUrl;
     _user = user;
     _pass = pass;
+    _resetCoverAuth();
 
-    debugPrint('Connecting to $_url with user: $user');
+    debugPrint('Connecting to $_url');
 
     _client = _injectedClient ?? http.Client();
 
@@ -565,7 +582,6 @@ class NavidromeService with ChangeNotifier {
       final response = await _client.get(uri);
 
       debugPrint('Auth response status: ${response.statusCode}');
-      debugPrint('Auth response body: ${response.body}');
 
       if (response.statusCode != 200) {
         throw Exception('Server error: Status ${response.statusCode}. '
@@ -645,7 +661,6 @@ class NavidromeService with ChangeNotifier {
     });
 
     final response = await _client.get(uri);
-    debugPrint('getArtists response: ${response.body}');
     final data = jsonDecode(response.body);
 
     dynamic indexes = data['subsonic-response']['artists']?['index'];
@@ -670,7 +685,9 @@ class NavidromeService with ChangeNotifier {
         try {
           final model = Artist.fromJson(artist, coverArtUrl: artist['coverArt'] as String?);
           _artistCache[model.id] = model;
-        } catch (_) {}
+        } catch (err) {
+          debugPrint('navidrome_service:688 ignorado: $err');
+        }
       }
     }
 
@@ -694,7 +711,6 @@ class NavidromeService with ChangeNotifier {
     });
 
     final response = await _client.get(uri);
-    debugPrint('getIndexes response: ${response.body}');
     final data = jsonDecode(response.body);
 
     dynamic indexes = data['subsonic-response']['indexes'];
@@ -705,12 +721,10 @@ class NavidromeService with ChangeNotifier {
 
     if (indexes is Map && indexes.containsKey('index')) {
       final list = indexes['index'] as List?;
-      debugPrint('getIndexes result (from index): $list');
       return list ?? [];
     }
 
     if (indexes is List) {
-      debugPrint('getIndexes result: $indexes');
       return indexes;
     }
 
@@ -1269,7 +1283,9 @@ class NavidromeService with ChangeNotifier {
 
       // Load Ratings
       await _loadTrackRatings();
-    } catch (_) {}
+    } catch (err) {
+      debugPrint('navidrome_service:1284 ignorado: $err');
+    }
   }
 
   Future<void> _savePins() async {
@@ -1277,7 +1293,9 @@ class NavidromeService with ChangeNotifier {
       final dir = await getApplicationDocumentsDirectory();
       final file = File('${dir.path}/${_scopedName("pinned_playlists.json")}');
       await file.writeAsString(jsonEncode(_pinnedPlaylistIds.toList()));
-    } catch (_) {}
+    } catch (err) {
+      debugPrint('navidrome_service:1292 ignorado: $err');
+    }
   }
 
   Future<void> _saveFollowedArtists() async {
@@ -1285,7 +1303,9 @@ class NavidromeService with ChangeNotifier {
       final dir = await getApplicationDocumentsDirectory();
       final file = File('${dir.path}/${_scopedName("followed_artists.json")}');
       await file.writeAsString(jsonEncode(_followedArtistIds.toList()));
-    } catch (_) {}
+    } catch (err) {
+      debugPrint('navidrome_service:1300 ignorado: $err');
+    }
   }
 
   Future<void> _saveExcludedArtists() async {
@@ -1293,7 +1313,9 @@ class NavidromeService with ChangeNotifier {
       final dir = await getApplicationDocumentsDirectory();
       final file = File('${dir.path}/${_scopedName("excluded_artists.json")}');
       await file.writeAsString(jsonEncode(_excludedArtistIds.toList()));
-    } catch (_) {}
+    } catch (err) {
+      debugPrint('navidrome_service:1308 ignorado: $err');
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -1358,7 +1380,9 @@ class NavidromeService with ChangeNotifier {
           if (v is num) _trackRatings[k] = v.toInt();
         });
       }
-    } catch (_) {}
+    } catch (err) {
+      debugPrint('navidrome_service:1373 ignorado: $err');
+    }
   }
 
   Future<void> _saveTrackRatings() async {
@@ -1366,7 +1390,9 @@ class NavidromeService with ChangeNotifier {
       final dir = await getApplicationDocumentsDirectory();
       final file = File('${dir.path}/${_scopedName("track_ratings.json")}');
       await file.writeAsString(jsonEncode(_trackRatings));
-    } catch (_) {}
+    } catch (err) {
+      debugPrint('navidrome_service:1381 ignorado: $err');
+    }
   }
 
   Future<void> toggleStar(Track track) async {
@@ -1432,7 +1458,6 @@ class NavidromeService with ChangeNotifier {
 
     final response = await _client.get(uri);
     debugPrint('getTracks search3 status: ${response.statusCode}');
-    debugPrint('getTracks search3 body: ${response.body}');
 
     final String raw = response.body;
     dynamic data;
@@ -1826,7 +1851,9 @@ class NavidromeService with ChangeNotifier {
       await subscription?.cancel();
       try {
         await sink?.close();
-      } catch (_) {}
+      } catch (err) {
+        debugPrint('navidrome_service:1840 ignorado: $err');
+      }
     }
   }
 
@@ -1934,7 +1961,9 @@ class NavidromeService with ChangeNotifier {
       final dir = await getApplicationDocumentsDirectory();
       final file = File('${dir.path}/${_scopedName("last_genre_suggestion.json")}');
       await file.writeAsString(jsonEncode({'genre': genre}));
-    } catch (_) {}
+    } catch (err) {
+      debugPrint('navidrome_service:1948 ignorado: $err');
+    }
   }
 
   /// Carga la sugerencia persistida del último género seleccionado.
@@ -1947,7 +1976,9 @@ class NavidromeService with ChangeNotifier {
         _lastSelectedGenreSuggestion = data['genre'] as String?;
         return _lastSelectedGenreSuggestion;
       }
-    } catch (_) {}
+    } catch (err) {
+      debugPrint('navidrome_service:1961 ignorado: $err');
+    }
     return null;
   }
 
@@ -2033,7 +2064,9 @@ class NavidromeService with ChangeNotifier {
           return exactMatches.take(limit).toList();
         }
       }
-    } catch (_) {}
+    } catch (err) {
+      debugPrint('navidrome_service:2047 ignorado: $err');
+    }
 
     // 2. Fallback: comprobar pistas de biblioteca localmente con filtrado exacto
     try {
@@ -2042,7 +2075,9 @@ class NavidromeService with ChangeNotifier {
       if (libraryMatches.isNotEmpty) {
         return libraryMatches.take(limit).toList();
       }
-    } catch (_) {}
+    } catch (err) {
+      debugPrint('navidrome_service:2056 ignorado: $err');
+    }
 
     return const [];
   }
@@ -2089,7 +2124,9 @@ class NavidromeService with ChangeNotifier {
           }
         }
       }
-    } catch (_) {}
+    } catch (err) {
+      debugPrint('navidrome_service:2103 ignorado: $err');
+    }
 
     // 2. Muestra de biblioteca
     try {
@@ -2283,7 +2320,9 @@ class NavidromeService with ChangeNotifier {
                 );
               }
             }
-          } catch (_) {}
+          } catch (err) {
+            debugPrint('navidrome_service:2297 ignorado: $err');
+          }
         }
       }
     } catch (e) {
@@ -2298,6 +2337,7 @@ class NavidromeService with ChangeNotifier {
     _url = null;
     _user = null;
     _pass = null;
+    _resetCoverAuth();
     _client.close();
     _client = _injectedClient ?? http.Client();
 

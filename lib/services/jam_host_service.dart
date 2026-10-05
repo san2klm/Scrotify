@@ -254,7 +254,7 @@ class JamHostService {
   }) {
     _currentTrackTitle = title;
     _currentTrackArtist = artist;
-    _albumArtUrl = albumArtUrl;
+    _albumArtUrl = sanitizeArtUrl(albumArtUrl);
   }
 
   void updateSettings({
@@ -822,7 +822,7 @@ class JamHostService {
               'artist': track.artist,
               'album': track.album,
               'duration': track.duration,
-              'albumArtUrl': track.albumArtUrl,
+              'albumArtUrl': sanitizeArtUrl(track.albumArtUrl),
             },
       'addedBy': addedBy?.toJson(),
       'isPlaying': isPlaying,

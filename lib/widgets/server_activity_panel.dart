@@ -769,7 +769,9 @@ class _ServerActivityPanelState extends State<ServerActivityPanel>
                         player.playQueue([track], startIndex: 0);
                         if (mounted) Navigator.of(context).pop();
                       }
-                    } catch (_) {}
+                    } catch (err) {
+                      debugPrint('server_activity_panel:772 ignorado: $err');
+                    }
                   },
                 ),
               ],
@@ -876,7 +878,9 @@ class _ServerActivityPanelState extends State<ServerActivityPanel>
                           ),
                         );
                       }
-                    } catch (_) {}
+                    } catch (err) {
+                      debugPrint('server_activity_panel:879 ignorado: $err');
+                    }
                   },
                   child: const Text('Ver', style: TextStyle(fontSize: 12)),
                 ),

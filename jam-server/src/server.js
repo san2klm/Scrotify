@@ -7,7 +7,43 @@ const defaultLimits = {
   maxQueueLength: 500,
   maxParticipants: 50,
   roomIdleMs: 60 * 60 * 1000,
+  maxFailedAttempts: 10,
+  heartbeatMs: 30 * 1000,
+  publicHost: null,
 };
+
+const allowedGuestActions = new Set([
+  'playback_control',
+  'queue_add',
+  'queue_remove',
+  'queue_reorder',
+]);
+
+// Parámetros Subsonic que equivalen a credenciales (el token `t` no caduca).
+const secretQueryParams = ['u', 's', 't', 'p', 'apiKey'];
+
+function sanitizeUrl(value) {
+  if (typeof value !== 'string' || value.length === 0) return value;
+  try {
+    const url = new URL(value);
+    for (const key of secretQueryParams) url.searchParams.delete(key);
+    return url.toString();
+  } catch {
+    return value;
+  }
+}
+
+function sanitizeQueueItem(item) {
+  if (!item || typeof item !== 'object' || Array.isArray(item)) return null;
+  const clone = structuredClone(item);
+  if (clone.track && typeof clone.track === 'object') {
+    clone.track.albumArtUrl = sanitizeUrl(clone.track.albumArtUrl);
+  }
+  if (typeof clone.albumArtUrl === 'string') {
+    clone.albumArtUrl = sanitizeUrl(clone.albumArtUrl);
+  }
+  return clone;
+}
 
 function readPositiveInteger(value, fallback) {
   const parsed = Number.parseInt(value ?? '', 10);
@@ -57,8 +93,9 @@ function normalizeState(value, limits, existingState = null) {
   for (const item of queue) {
     if (typeof item === 'string' && item.trim().length > 0 && item.length <= 512) {
       normalizedQueue.push(item.trim());
-    } else if (item && typeof item === 'object') {
-      normalizedQueue.push(item);
+    } else {
+      const safe = sanitizeQueueItem(item);
+      if (safe) normalizedQueue.push(safe);
     }
   }
   const res = {
@@ -70,7 +107,7 @@ function normalizeState(value, limits, existingState = null) {
   if (typeof title === 'string') res.title = title.slice(0, 256);
   if (typeof artist === 'string') res.artist = artist.slice(0, 256);
   if (typeof album === 'string') res.album = album.slice(0, 256);
-  if (typeof albumArtUrl === 'string') res.albumArtUrl = albumArtUrl.slice(0, 1024);
+  if (typeof albumArtUrl === 'string') res.albumArtUrl = sanitizeUrl(albumArtUrl.slice(0, 1024));
   if (typeof duration === 'number' && Number.isFinite(duration)) {
     res.duration = Math.max(0, Math.floor(duration));
   } else if (typeof duration === 'string' && duration.trim().length > 0) {
@@ -81,7 +118,7 @@ function normalizeState(value, limits, existingState = null) {
       res.duration = duration.trim().slice(0, 32);
     }
   }
-  if (typeof mode === 'string') res.mode = mode;
+  if (typeof mode === 'string') res.mode = mode.slice(0, 32);
   if (typeof allowGuestControls === 'boolean') res.allowGuestControls = allowGuestControls;
   if (typeof allowGuestQueueManage === 'boolean') res.allowGuestQueueManage = allowGuestQueueManage;
 
@@ -100,6 +137,7 @@ function serverError(socket, message) {
 
 export function createJamServer({ port, host = '0.0.0.0', ...overrides } = {}) {
   const limits = { ...defaultLimits, ...overrides };
+  const publicHost = limits.publicHost ?? 'localhost';
   const rooms = new Map();
   const socketRooms = new WeakMap();
   const httpServer = http.createServer((request, response) => {
@@ -114,6 +152,7 @@ export function createJamServer({ port, host = '0.0.0.0', ...overrides } = {}) {
     if (request.method === 'GET' && (request.url === '/rooms' || request.url === '/api/rooms')) {
       const publicRooms = [];
       for (const room of rooms.values()) {
+        if (!room.isPublic) continue;
         publicRooms.push({
           pin: room.pin,
           hostName: room.hostName,
@@ -123,9 +162,9 @@ export function createJamServer({ port, host = '0.0.0.0', ...overrides } = {}) {
           currentTrackArtist: room.state?.artist ?? null,
           albumArtUrl: room.state?.albumArtUrl ?? null,
           mode: room.state?.mode ?? 'partySpeaker',
-          host: 'jam.templo.cloud',
+          host: publicHost,
           port: 443,
-          remoteHost: 'jam.templo.cloud',
+          remoteHost: publicHost,
           remotePort: 443,
           isPublic: true,
           updatedAt: room.updatedAt,
@@ -146,6 +185,17 @@ export function createJamServer({ port, host = '0.0.0.0', ...overrides } = {}) {
     maxPayload: limits.maxMessageBytes,
   });
 
+  const failedAttempts = new WeakMap();
+
+  // Frena la enumeración de PINs: tras N fallos se cierra la conexión.
+  function failedAttempt(socket, message, reply) {
+    const count = (failedAttempts.get(socket) ?? 0) + 1;
+    failedAttempts.set(socket, count);
+    if (message) serverError(socket, message);
+    else send(socket, reply);
+    if (count >= limits.maxFailedAttempts) socket.close(1008, 'Too many attempts');
+  }
+
   function closeRoom(room, reason = 'El anfitrión ha finalizado la sesión Jam') {
     if (rooms.get(room.pin) !== room) return;
     rooms.delete(room.pin);
@@ -153,8 +203,9 @@ export function createJamServer({ port, host = '0.0.0.0', ...overrides } = {}) {
       send(guest.socket, { event: 'room_closed', message: reason });
       guest.socket.close(1000, 'Room closed');
     }
+    const guestCount = room.guests.size;
     room.guests.clear();
-    console.info(`Jam room closed (${room.guests.size} guests)`);
+    console.info(`Jam room closed (${guestCount} guests)`);
   }
 
   function removeSocket(socket) {
@@ -180,7 +231,10 @@ export function createJamServer({ port, host = '0.0.0.0', ...overrides } = {}) {
     const state = normalizeState(message.initialState, limits);
     if (!pin || !hostName || !state) return serverError(socket, 'Datos de sala inválidos.');
     if (rooms.has(pin)) return serverError(socket, 'Ese PIN ya está en uso.');
-    const room = { pin, host: socket, hostName, state, guests: new Set(), updatedAt: Date.now() };
+    const room = {
+      pin, host: socket, hostName, state, guests: new Set(), updatedAt: Date.now(),
+      isPublic: message.isPublic === true,
+    };
     rooms.set(pin, room);
     socketRooms.set(socket, { pin, role: 'host' });
     send(socket, { status: 'room_created', pin });
@@ -192,7 +246,10 @@ export function createJamServer({ port, host = '0.0.0.0', ...overrides } = {}) {
     const pin = normalizePin(message.pin);
     const guestName = normalizeName(message.guestName, limits.maxNameLength);
     const room = pin ? rooms.get(pin) : null;
-    if (!room || !guestName) return serverError(socket, 'Sala no encontrada o PIN inválido.');
+    if (!room || !guestName) return failedAttempt(socket, 'Sala no encontrada o PIN inválido.');
+    if (guestName === room.hostName || [...room.guests].some((g) => g.name === guestName)) {
+      return serverError(socket, 'Ya hay un participante con ese nombre en la sala.');
+    }
     if (room.guests.size + 1 >= limits.maxParticipants) return serverError(socket, 'La sala alcanzó el límite de participantes.');
     const guest = { socket, name: guestName };
     room.guests.add(guest);
@@ -224,6 +281,13 @@ export function createJamServer({ port, host = '0.0.0.0', ...overrides } = {}) {
     const room = rooms.get(membership.pin);
     if (!room || !room.host) {
       return serverError(socket, 'Sala no encontrada.');
+    }
+    if (typeof message.actionType !== 'string' || !allowedGuestActions.has(message.actionType)) {
+      return serverError(socket, 'Acción de invitado no permitida.');
+    }
+    if (message.payload !== undefined && message.payload !== null &&
+        (typeof message.payload !== 'object' || Array.isArray(message.payload))) {
+      return serverError(socket, 'Payload inválido.');
     }
     send(room.host, {
       event: 'guest_action',
@@ -262,18 +326,21 @@ export function createJamServer({ port, host = '0.0.0.0', ...overrides } = {}) {
     const pin = normalizePin(message.pin);
     const room = pin ? rooms.get(pin) : null;
     if (!room) {
-      return send(socket, { status: 'not_found', pin });
+      return failedAttempt(socket, null, { status: 'not_found', pin });
     }
+    const { queue: _queue, ...stateWithoutQueue } = room.state;
     return send(socket, {
       status: 'room_found',
       pin: room.pin,
       hostName: room.hostName,
-      state: room.state,
+      state: stateWithoutQueue,
       participantCount: room.guests.size + 1,
     });
   }
 
   websocketServer.on('connection', (socket) => {
+    socket.isAlive = true;
+    socket.on('pong', () => { socket.isAlive = true; });
     socket.on('message', (raw, isBinary) => {
       if (isBinary) return serverError(socket, 'Sólo se aceptan mensajes JSON.');
       let message;
@@ -298,6 +365,18 @@ export function createJamServer({ port, host = '0.0.0.0', ...overrides } = {}) {
     socket.on('close', () => removeSocket(socket));
     socket.on('error', () => removeSocket(socket));
   });
+
+  const heartbeatTimer = setInterval(() => {
+    for (const socket of websocketServer.clients) {
+      if (!socket.isAlive) {
+        socket.terminate();
+        continue;
+      }
+      socket.isAlive = false;
+      socket.ping();
+    }
+  }, limits.heartbeatMs);
+  heartbeatTimer.unref();
 
   const expiryTimer = setInterval(() => {
     const threshold = Date.now() - limits.roomIdleMs;
@@ -324,6 +403,7 @@ export function createJamServer({ port, host = '0.0.0.0', ...overrides } = {}) {
     },
     async stop() {
       clearInterval(expiryTimer);
+      clearInterval(heartbeatTimer);
       for (const room of [...rooms.values()]) closeRoom(room, 'El servidor Jam se está apagando.');
       await new Promise((resolve) => websocketServer.close(() => resolve()));
       await new Promise((resolve) => httpServer.close(() => resolve()));
@@ -337,6 +417,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     maxMessageBytes: readPositiveInteger(process.env.MAX_MESSAGE_BYTES, defaultLimits.maxMessageBytes),
     maxParticipants: readPositiveInteger(process.env.MAX_PARTICIPANTS, defaultLimits.maxParticipants),
     roomIdleMs: readPositiveInteger(process.env.ROOM_IDLE_MS, defaultLimits.roomIdleMs),
+    publicHost: process.env.PUBLIC_HOST || undefined,
   });
   await server.start();
   const shutdown = async () => {

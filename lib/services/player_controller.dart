@@ -170,6 +170,7 @@ class PlayerController extends ChangeNotifier {
   // --- Estado del crossfade ---
   final Random _rand = Random();
   Timer? _watchdog;
+  int _watchdogIdleTicks = 0;
   int _fadeGen = 0; // token: cada cancelación/cambio de objetivo lo invalida
   bool _preloaded = false;
   bool _fading = false;
@@ -1272,6 +1273,7 @@ class PlayerController extends ChangeNotifier {
       } else {
         unawaited(_lead.seek(Duration.zero));
         unawaited(_lead.play());
+        _ensureWatchdog();
       }
       // Reload waveform for the same track (since it's repeating)
       _loadCurrentTrackWaveform();
@@ -1443,6 +1445,17 @@ class PlayerController extends ChangeNotifier {
   }
 
   void _watchdogTick() {
+    // En pausa/idle no hace falta despertar la CPU cada 200 ms: tras ~5 s sin
+    // reproducir ni fundido en curso el timer se detiene (se rearma al reproducir).
+    if (!_lead.playing && !_fading && !_preloaded) {
+      if (++_watchdogIdleTicks >= 25) {
+        _watchdog?.cancel();
+        _watchdog = null;
+        _watchdogIdleTicks = 0;
+      }
+      return;
+    }
+    _watchdogIdleTicks = 0;
     if (_lead.playing && _pos >= 0) {
       _checkPlayQualification(_lead.position, _lead.duration);
     }
@@ -1672,6 +1685,7 @@ class PlayerController extends ChangeNotifier {
         await _lead.seek(pos);
         if (wasPlaying) {
           unawaited(_lead.play().catchError((_) {}));
+          _ensureWatchdog();
         }
       }
     }
@@ -1732,6 +1746,7 @@ class PlayerController extends ChangeNotifier {
         await _lead.seek(Duration.zero);
       }
       unawaited(_lead.play());
+      _ensureWatchdog();
     }
     notifyListeners();
   }

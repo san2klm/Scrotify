@@ -167,7 +167,9 @@ class ThemeController extends ChangeNotifier {
         'themesDir': _themesDir,
         'selectedId': _selectedId,
       }));
-    } catch (_) {}
+    } catch (err) {
+      debugPrint('theme_controller:170 ignorado: $err');
+    }
   }
 
   void clearMigrationNotice() {
@@ -273,7 +275,9 @@ class ThemeController extends ChangeNotifier {
           return out.path;
         }
       }
-    } catch (_) {}
+    } catch (err) {
+      debugPrint('theme_controller:276 ignorado: $err');
+    }
     return null;
   }
 

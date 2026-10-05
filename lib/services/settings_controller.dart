@@ -301,6 +301,8 @@ class SettingsController extends ChangeNotifier {
         'replayGainPreamp': _replayGainPreamp,
         'replayGainPreventClipping': _replayGainPreventClipping,
       }));
-    } catch (_) {}
+    } catch (err) {
+      debugPrint('settings_controller:304 ignorado: $err');
+    }
   }
 }

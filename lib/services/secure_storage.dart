@@ -70,13 +70,17 @@ class SecureStorage {
     try {
       final file = await _fallbackFile();
       await file.parent.create(recursive: true);
-      await file.writeAsString(jsonEncode(data), flush: true);
-      // Solo el usuario puede leerlo (mejor que nada si no hay keyring).
-      try {
-        await Process.run('chmod', ['600', file.path]);
-      } catch (_) {
-        // Windows / plataformas sin chmod: ignorar.
+      // Crear vacío y restringir permisos ANTES de escribir secretos, para no
+      // dejar una ventana con los permisos por defecto del umask.
+      if (!await file.exists()) {
+        await file.create();
+        if (!Platform.isWindows) {
+          try {
+            await Process.run('chmod', ['600', file.path]);
+          } catch (_) {}
+        }
       }
+      await file.writeAsString(jsonEncode(data), flush: true);
     } catch (e) {
       debugPrint('SecureStorage: no se pudo escribir fallback: $e');
     }

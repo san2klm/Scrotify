@@ -2,6 +2,21 @@ import 'dart:math';
 
 import '../services/navidrome_service.dart';
 
+/// Elimina las credenciales Subsonic (`u`, `s`, `t`, `p`) de una URL de
+/// carátula antes de compartirla con invitados o servidores Jam.
+///
+/// El token `t` no caduca: filtrarlo equivale a filtrar la sesión del host.
+String? sanitizeArtUrl(String? url) {
+  if (url == null || url.isEmpty) return url;
+  final uri = Uri.tryParse(url);
+  if (uri == null || !uri.hasQuery) return url;
+  const secret = {'u', 's', 't', 'p', 'apiKey'};
+  final kept = Map<String, String>.fromEntries(
+    uri.queryParameters.entries.where((e) => !secret.contains(e.key)),
+  );
+  return uri.replace(queryParameters: kept.isEmpty ? null : kept).toString();
+}
+
 /// Puerto TCP preferido para el servidor WebSocket del anfitrión.
 ///
 /// Se usa un puerto dinámico únicamente si éste ya está ocupado.
@@ -245,7 +260,7 @@ class JamQueueItem {
           'artist': track.artist,
           'album': track.album,
           'duration': track.duration,
-          'albumArtUrl': track.albumArtUrl,
+          'albumArtUrl': sanitizeArtUrl(track.albumArtUrl),
         },
         if (addedBy != null) 'addedBy': addedBy!.toJson(),
         'addedAt': addedAt.toIso8601String(),
@@ -336,7 +351,7 @@ class JamSessionState {
             'artist': currentTrack!.artist,
             'album': currentTrack!.album,
             'duration': currentTrack!.duration,
-            'albumArtUrl': currentTrack!.albumArtUrl,
+            'albumArtUrl': sanitizeArtUrl(currentTrack!.albumArtUrl),
           },
         if (currentTrackAddedBy != null)
           'currentTrackAddedBy': currentTrackAddedBy!.toJson(),
@@ -551,7 +566,7 @@ class DiscoveredJamSession {
         if (currentTrackTitle != null) 'currentTrackTitle': currentTrackTitle,
         if (currentTrackArtist != null)
           'currentTrackArtist': currentTrackArtist,
-        if (albumArtUrl != null) 'albumArtUrl': albumArtUrl,
+        if (albumArtUrl != null) 'albumArtUrl': sanitizeArtUrl(albumArtUrl),
         'mode': mode.name,
         if (remoteHost != null) 'remoteHost': remoteHost,
         if (remotePort != null) 'remotePort': remotePort,

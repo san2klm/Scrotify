@@ -22,6 +22,7 @@ import 'album_detail_screen.dart';
 import 'artist_screen.dart';
 import 'settings_screen.dart';
 import '../utils/app_colors.dart';
+import '../widgets/quick_actions_row.dart';
 
 /// Interfaz móvil de Scrotify (estilo Spotify AMOLED).
 /// Diseñada exclusivamente para pantallas táctiles de teléfonos.
@@ -598,6 +599,8 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               _genreSelector(),
+              const SizedBox(height: 12),
+              QuickActionsRow(tracks: filteredTracks),
               const SizedBox(height: 16),
               _quickAccessGrid(),
               const SizedBox(height: 24),
@@ -1560,6 +1563,9 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
             const SizedBox(height: 2),
             Text(
               label,
+              maxLines: 1,
+              softWrap: false,
+              overflow: TextOverflow.ellipsis,
               style: TextStyle(
                 color: selected ? context.sidebarActiveText : context.textMuted,
                 fontSize: 10.5,

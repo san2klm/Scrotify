@@ -8,6 +8,7 @@ import '../services/player_controller.dart';
 import '../screens/player_screen.dart';
 import 'cover_art.dart';
 import 'player_position_builder.dart';
+import 'waveform_progress_bar.dart';
 import 'jam_dialog.dart';
 import 'jam_queue_panel.dart';
 import 'track_context_menu.dart';
@@ -61,6 +62,15 @@ class PersistentPlayerBar extends StatelessWidget {
 
   Widget _buildDesktopBar(BuildContext context, PlayerController player,
       JamController jam, Track? track, bool playing) {
+    // Tramos adaptativos: a medida que la ventana se estrecha se ocultan
+    // primero el volumen, luego Jam y pantalla completa, y se acorta el
+    // bloque de título. Así la barra nunca desborda.
+    final w = MediaQuery.sizeOf(context).width;
+    final showVolume = w >= 1050;
+    final showJam = w >= 880;
+    final showFull = w >= 800;
+    final infoWidth = w < 900 ? 130.0 : (w < 1100 ? 180.0 : 240.0);
+
     return Container(
       height: 90,
       color: context.bgPlayer,
@@ -71,7 +81,7 @@ class PersistentPlayerBar extends StatelessWidget {
             // ── Left: artwork + track info (title, artist, favorite) ──
             _artwork(context, track),
             const SizedBox(width: 12),
-            _trackInfo(context, track),
+            SizedBox(width: infoWidth, child: _trackInfo(context, track)),
             const SizedBox(width: 8),
 
             // ── Center: playback controls on top, progress bar below ──
@@ -124,8 +134,8 @@ class PersistentPlayerBar extends StatelessWidget {
                     ],
                   ),
                   // Progress bar with time labels
-                  SizedBox(
-                    width: 500,
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 560),
                     child: _DesktopProgressBar(
                       player,
                       onSeek: (target) => _seek(jam, player, target),
@@ -136,13 +146,19 @@ class PersistentPlayerBar extends StatelessWidget {
             ),
 
             // ── Right: Jam + Queue + volume + fullscreen + three dots ──
-            _jamButton(context),
-            const SizedBox(width: 6),
+            if (showJam) ...[
+              _jamButton(context),
+              const SizedBox(width: 6),
+            ],
             _queueButton(context),
-            const SizedBox(width: 8),
-            _VolumeBar(player),
-            const SizedBox(width: 8),
-            _openFullButton(context),
+            if (showVolume) ...[
+              const SizedBox(width: 8),
+              _VolumeBar(player),
+            ],
+            if (showFull) ...[
+              const SizedBox(width: 8),
+              _openFullButton(context),
+            ],
             const SizedBox(width: 4),
             _threeDotsMenu(context, track),
           ],
@@ -440,11 +456,14 @@ class PersistentPlayerBar extends StatelessWidget {
 
   Widget _openFullButton(BuildContext context) {
     return IconButton(
+      tooltip: 'Ventana completa',
       visualDensity: VisualDensity.compact,
+      // Flecha hacia arriba: expande el reproductor (portada, letra…) a toda
+      // la ventana. Desde ahí hay un botón para pasar a pantalla completa.
       icon: Icon(
-        Icons.fullscreen,
+        Icons.keyboard_arrow_up_rounded,
         color: context.textSecondary,
-        size: 18,
+        size: 24,
       ),
       onPressed: () => _openPlayerScreen(context),
     );
@@ -525,7 +544,29 @@ class _DesktopProgressBarState extends State<_DesktopProgressBar> {
                     ),
                     // Slider
                     Expanded(
-                      child: SizedBox(
+                      // Con espectro real disponible se muestra la onda; si no
+                      // (cargando / offline sin análisis) queda el slider fino.
+                      child: ListenableBuilder(
+                        listenable: widget.player,
+                        builder: (context, _) {
+                          final waveform = widget.player.waveformData;
+                          if (waveform != null && duration > Duration.zero) {
+                            return WaveformProgressBar(
+                              waveform: waveform,
+                              height: 28,
+                              playing: widget.player.playing,
+                              position: currentPosition,
+                              duration: duration,
+                              onSeek: (target) async {
+                                if (widget.onSeek != null) {
+                                  widget.onSeek!(target);
+                                } else {
+                                  await widget.player.seek(target);
+                                }
+                              },
+                            );
+                          }
+                          return SizedBox(
                         height: 14,
                         child: SliderTheme(
                           data: SliderThemeData(
@@ -556,6 +597,8 @@ class _DesktopProgressBarState extends State<_DesktopProgressBar> {
                             },
                           ),
                         ),
+                      );
+                        },
                       ),
                     ),
                     // Total or remaining time

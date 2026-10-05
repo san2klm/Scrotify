@@ -459,13 +459,35 @@ class ListeningStatsService extends ChangeNotifier {
     }
   }
 
+  bool _saving = false;
+  bool _saveAgain = false;
+
+  /// Guarda el historial. Las llamadas concurrentes se fusionan en una sola
+  /// escritura pendiente y el archivo se reemplaza de forma atómica, para no
+  /// corromperlo si la app se cierra a mitad de escritura.
   Future<void> _save() async {
+    if (_saving) {
+      _saveAgain = true;
+      return;
+    }
+    _saving = true;
     try {
-      final dir = await getApplicationDocumentsDirectory();
-      final file = File('${dir.path}/listening_stats.json');
-      final data = jsonEncode(_events.map((e) => e.toJson()).toList());
-      await file.writeAsString(data);
-    } catch (_) {}
+      do {
+        _saveAgain = false;
+        try {
+          final dir = await getApplicationDocumentsDirectory();
+          final file = File('${dir.path}/listening_stats.json');
+          final tmp = File('${file.path}.tmp');
+          final data = jsonEncode(_events.map((e) => e.toJson()).toList());
+          await tmp.writeAsString(data, flush: true);
+          await tmp.rename(file.path);
+        } catch (e) {
+          debugPrint('ListeningStatsService: no se pudo guardar: $e');
+        }
+      } while (_saveAgain);
+    } finally {
+      _saving = false;
+    }
   }
 }
 

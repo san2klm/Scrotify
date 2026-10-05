@@ -20,6 +20,10 @@ import '../utils/crypto_helper.dart';
 class PairingServer {
   static const int _defaultTtlSeconds = 300; // 5 min
 
+  /// Intentos de código erróneos tolerados antes de invalidar la sesión.
+  static const int _maxFailedClaims = 5;
+  int _failedClaims = 0;
+
   /// Sólo se desactiva en tests de la antigua vía LAN. En la app, todo QR usa
   /// el relay temporal gratuito de ntfy.sh.
   PairingServer({this.useRelay = true});
@@ -90,6 +94,7 @@ class PairingServer {
     _deviceName = customDeviceName ?? _getDefaultDeviceName();
 
     // Generar código y clave efímera
+    _failedClaims = 0;
     _currentCode = PairCode.generate();
     _ephemeralKeyPair = await generateKeyPair();
     _relayTopic = useRelay ? _newRelayTopic() : null;
@@ -103,7 +108,7 @@ class PairingServer {
     _allLocalIps = await _getAllLocalIps();
     _hostIp = _allLocalIps.isNotEmpty ? _allLocalIps.first : '127.0.0.1';
     debugPrint(
-        'PairingServer listening on $_hostIp:$_port (device: $_deviceName, code: ${_currentCode?.value})');
+        'PairingServer listening on $_hostIp:$_port (device: $_deviceName)');
 
     // Rutas HTTP
     _server!.listen(_handleRequest);
@@ -213,8 +218,15 @@ class PairingServer {
     final code = message['code'] as String?;
     final publicKey = message['publicKey'] as String?;
     final requestId = message['requestId'] as String?;
-    if (code?.toUpperCase() != _currentCode!.value ||
-        publicKey == null ||
+    if (code?.toUpperCase() != _currentCode!.value) {
+      if (++_failedClaims >= _maxFailedClaims) {
+        _status = PairingStatus.expired;
+        _statusController.add(_status);
+        unawaited(stop());
+      }
+      return;
+    }
+    if (publicKey == null ||
         publicKey.length < 40 ||
         requestId == null ||
         requestId.length < 16) {
@@ -296,7 +308,6 @@ class PairingServer {
       'deviceName': _deviceName,
       'serverUrl': _serverUrl,
       'status': _status.name,
-      'code': _currentCode?.value,
       'expiresIn': remainingSeconds,
     });
     req.response.headers.contentType = ContentType.json;
@@ -308,6 +319,12 @@ class PairingServer {
     if (_status != PairingStatus.waiting || _currentCode == null) {
       req.response.statusCode = HttpStatus.gone;
       req.response.write('{"error": "No active pairing session"}');
+      await req.response.close();
+      return;
+    }
+
+    if (req.contentLength > 4096) {
+      req.response.statusCode = HttpStatus.requestEntityTooLarge;
       await req.response.close();
       return;
     }
@@ -328,6 +345,16 @@ class PairingServer {
 
     // Validar código
     if (request.code.toUpperCase() != _currentCode!.value) {
+      if (++_failedClaims >= _maxFailedClaims) {
+        // Anti fuerza bruta: se cierra la sesión y hay que generar otro código.
+        req.response.statusCode = HttpStatus.tooManyRequests;
+        req.response.write('{"error": "Too many attempts"}');
+        await req.response.close();
+        _status = PairingStatus.expired;
+        _statusController.add(_status);
+        unawaited(stop());
+        return;
+      }
       req.response.statusCode = HttpStatus.unauthorized;
       req.response.write('{"error": "Invalid code"}');
       await req.response.close();

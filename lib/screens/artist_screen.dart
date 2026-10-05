@@ -68,7 +68,9 @@ class _ArtistScreenState extends State<ArtistScreen> {
           }
         }
       }
-    } catch (_) {}
+    } catch (err) {
+      debugPrint('artist_screen:71 ignorado: $err');
+    }
 
     try {
       // 2. Fallback a Deezer (picture_xl es una foto real del artista, no portada cuadrada de disco)
@@ -86,7 +88,9 @@ class _ArtistScreenState extends State<ArtistScreen> {
           }
         }
       }
-    } catch (_) {}
+    } catch (err) {
+      debugPrint('artist_screen:89 ignorado: $err');
+    }
 
     // 3. Fallback original Navidrome
     if (mounted && widget.artist.coverArtUrl != null) {

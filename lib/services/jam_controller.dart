@@ -697,6 +697,7 @@ class JamController extends ChangeNotifier {
     final createSuccess = await _remoteService.createRoom(
       pin: pinCode.value,
       hostName: hostName,
+      isPublic: isPublic,
       initialState: {
         'trackId': _player.currentTrack?.id,
         'position': _player.position.inMilliseconds,
@@ -705,7 +706,7 @@ class JamController extends ChangeNotifier {
         'title': _player.currentTrack?.title,
         'artist': _player.currentTrack?.artist,
         'album': _player.currentTrack?.album,
-        'albumArtUrl': _player.currentTrack?.albumArtUrl,
+        'albumArtUrl': sanitizeArtUrl(_player.currentTrack?.albumArtUrl),
         'duration': _player.currentTrack?.duration != null
             ? int.tryParse(_player.currentTrack!.duration) ?? 0
             : 0,
@@ -743,7 +744,7 @@ class JamController extends ChangeNotifier {
     _hostService.updateTrackMetadata(
       title: curTrack?.title,
       artist: curTrack?.artist,
-      albumArtUrl: curTrack?.albumArtUrl,
+      albumArtUrl: sanitizeArtUrl(curTrack?.albumArtUrl),
     );
 
     _rebuildHostQueueFromPlayer();
@@ -811,7 +812,7 @@ class JamController extends ChangeNotifier {
         'title': curTrack?.title,
         'artist': curTrack?.artist,
         'album': curTrack?.album,
-        'albumArtUrl': curTrack?.albumArtUrl,
+        'albumArtUrl': sanitizeArtUrl(curTrack?.albumArtUrl),
         'duration': curTrack?.duration != null
             ? int.tryParse(curTrack!.duration) ?? 0
             : 0,
@@ -844,7 +845,7 @@ class JamController extends ChangeNotifier {
         'title': curTrack?.title,
         'artist': curTrack?.artist,
         'album': curTrack?.album,
-        'albumArtUrl': curTrack?.albumArtUrl,
+        'albumArtUrl': sanitizeArtUrl(curTrack?.albumArtUrl),
         'duration': curTrack?.duration != null
             ? int.tryParse(curTrack!.duration) ?? 0
             : 0,
@@ -1248,7 +1249,7 @@ class JamController extends ChangeNotifier {
             'title': track.title,
             'artist': track.artist,
             'album': track.album,
-            'albumArtUrl': track.albumArtUrl,
+            'albumArtUrl': sanitizeArtUrl(track.albumArtUrl),
             'duration': track.duration,
           },
           'playNext': playNext,

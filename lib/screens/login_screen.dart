@@ -43,7 +43,9 @@ class _LoginScreenState extends State<LoginScreen> {
         ServerProfile? active;
         try {
           active = profilesCtrl.activeProfile;
-        } catch (_) {}
+        } catch (err) {
+          debugPrint('login_screen:46 ignorado: $err');
+        }
         if (active == null && profilesCtrl.profiles.isNotEmpty) {
           active = profilesCtrl.profiles.first;
         }

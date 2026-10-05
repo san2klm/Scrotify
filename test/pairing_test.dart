@@ -111,6 +111,50 @@ void main() {
       }
     });
 
+    test('/pair/status no revela el código de emparejamiento', () async {
+      final server = PairingServer(useRelay: false);
+      final http = HttpClient();
+      try {
+        await server.start(
+            serverUrl: 'https://nd.example', username: 'u', password: 'p');
+        final req = await http
+            .getUrl(Uri.parse('http://127.0.0.1:${server.port}/pair/status'));
+        final body = await (await req.close()).transform(utf8.decoder).join();
+        expect(body.contains(server.currentCode!), isFalse);
+        expect(jsonDecode(body).containsKey('code'), isFalse);
+      } finally {
+        http.close(force: true);
+        await server.stop();
+      }
+    });
+
+    test('tras 5 códigos erróneos la sesión de pairing se invalida', () async {
+      final server = PairingServer(useRelay: false);
+      final http = HttpClient();
+      try {
+        await server.start(
+            serverUrl: 'https://nd.example', username: 'u', password: 'p');
+        final port = server.port;
+        final key = base64Url.encode(List<int>.filled(32, 7));
+        var lastStatus = 0;
+        for (var i = 0; i < 5; i++) {
+          final req = await http
+              .postUrl(Uri.parse('http://127.0.0.1:$port/pair/claim'));
+          req.headers.contentType = ContentType.json;
+          req.write(jsonEncode({'code': 'AAAAAA', 'publicKey': key}));
+          final res = await req.close();
+          lastStatus = res.statusCode;
+          await res.drain();
+        }
+        expect(lastStatus, HttpStatus.tooManyRequests);
+        await Future<void>.delayed(const Duration(milliseconds: 100));
+        expect(server.isActive, isFalse);
+      } finally {
+        http.close(force: true);
+        await server.stop();
+      }
+    });
+
     test('UDP discovery beacon finds PC by code on local loopback', () async {
       final server = PairingServer(useRelay: false);
 

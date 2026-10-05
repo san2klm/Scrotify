@@ -1,6 +1,7 @@
 import 'dart:io' show Platform;
 
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart'
+    show FlutterError, PlatformDispatcher, debugPrint, kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:audio_service/audio_service.dart';
 import 'package:audio_session/audio_session.dart';
@@ -8,6 +9,8 @@ import 'package:just_audio_media_kit/just_audio_media_kit.dart';
 import 'package:provider/provider.dart';
 import 'package:window_manager/window_manager.dart';
 
+import 'services/home_widget_service.dart';
+import 'services/mini_player_controller.dart';
 import 'services/scrotify_audio_handler.dart';
 
 import 'services/cover_fallback_service.dart';
@@ -30,6 +33,18 @@ import 'widgets/desktop_window_frame.dart';
 /// Psysonic): el primer frame ya usa el tema correcto, sin flash.
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Un error no capturado no debe dejar la app en un estado inconsistente en
+  // silencio: se registra y se mantiene la ejecución.
+  FlutterError.onError = (details) {
+    FlutterError.presentError(details);
+    debugPrint('FlutterError no controlado: ${details.exceptionAsString()}');
+  };
+  PlatformDispatcher.instance.onError = (error, stack) {
+    debugPrint('Error asíncrono no controlado: $error\n$stack');
+    return true;
+  };
+
   if (!kIsWeb && (Platform.isLinux || Platform.isWindows || Platform.isMacOS)) {
     await windowManager.ensureInitialized();
     windowManager.waitUntilReadyToShow(
@@ -39,6 +54,9 @@ Future<void> main() async {
       ),
       () async {
         await windowManager.setAsFrameless();
+        // Sin decoración nativa hay que pedir explícitamente que se pueda
+        // redimensionar (los bordes arrastrables los aporta DesktopWindowFrame).
+        await windowManager.setResizable(true);
         await windowManager.show();
         await windowManager.focus();
       },
@@ -91,6 +109,7 @@ class MyApp extends StatelessWidget {
     return MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => HomeNavigationController()),
+        ChangeNotifierProvider(create: (_) => MiniPlayerController()),
         ChangeNotifierProvider(create: (_) => SettingsController()),
         ChangeNotifierProvider(create: (_) => ServerProfilesController()),
         ChangeNotifierProvider(create: (_) => EqualizerService()),
@@ -120,12 +139,19 @@ class MyApp extends StatelessWidget {
           )..initialize(),
         ),
         ChangeNotifierProvider<PlayerController>(
-          create: (ctx) => PlayerController(
-            ctx.read<NavidromeService>(),
-            ctx.read<SettingsController>(),
-            statsService: ctx.read<ListeningStatsService>(),
-            audioHandler: audioHandler,
-          ),
+          create: (ctx) {
+            final player = PlayerController(
+              ctx.read<NavidromeService>(),
+              ctx.read<SettingsController>(),
+              statsService: ctx.read<ListeningStatsService>(),
+              audioHandler: audioHandler,
+            );
+            // Widget de pantalla de inicio (solo Android).
+            if (HomeWidgetService.isSupported) {
+              HomeWidgetService(player).start();
+            }
+            return player;
+          },
         ),
         ChangeNotifierProvider<JamController>(
           create: (ctx) => JamController(

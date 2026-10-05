@@ -33,9 +33,19 @@ class ParsedPlaylist {
 }
 
 class PlaylistImportResult {
+  /// Id de la playlist usada; vacío si no se encontró ninguna canción y por
+  /// tanto no se creó ni modificó nada.
   final String playlistId;
   final String name;
+
+  /// Canciones de la lista encontradas en la biblioteca.
   final int matched;
+
+  /// De las encontradas, las que ya estaban en la playlist existente.
+  final int alreadyInPlaylist;
+
+  /// `true` si se añadió a una playlist que ya existía.
+  final bool toExisting;
   final List<ImportTrack> unmatched;
 
   const PlaylistImportResult({
@@ -43,9 +53,38 @@ class PlaylistImportResult {
     required this.name,
     required this.matched,
     required this.unmatched,
+    this.alreadyInPlaylist = 0,
+    this.toExisting = false,
   });
 
   bool get hasUnmatched => unmatched.isNotEmpty;
+  bool get playlistTouched => playlistId.isNotEmpty;
+  int get added => matched - alreadyInPlaylist;
+}
+
+/// Avance de una importación en curso.
+class PlaylistImportProgress {
+  final int done;
+  final int total;
+  final int matched;
+  final int notFound;
+
+  const PlaylistImportProgress({
+    required this.done,
+    required this.total,
+    required this.matched,
+    required this.notFound,
+  });
+
+  double get fraction => total == 0 ? 1 : done / total;
+  int get percent => (fraction * 100).floor();
+}
+
+/// Se lanza cuando el usuario cancela la importación.
+class PlaylistImportCancelled implements Exception {
+  const PlaylistImportCancelled();
+  @override
+  String toString() => 'Importación cancelada';
 }
 
 /// Importa playlists desde archivos CSV, M3U/M3U8, PLS o TXT.
@@ -84,7 +123,8 @@ class PlaylistImporter {
       'titulo', 'título', 'cancion', 'canción',
     };
     const artistWords = {
-      'artist', 'artist name', 'artista', 'interpret',
+      'artist', 'artist name', 'artist name(s)', 'artist(s)', 'artists',
+      'artista', 'artistas', 'interpret',
     };
 
     var titleIdx = 0;
@@ -303,46 +343,97 @@ class PlaylistImporter {
         .trim();
   }
 
+  /// Quita sufijos que suelen no coincidir entre servicios: "(feat. X)",
+  /// "[Remastered]", "- Remastered 2011", "- Live"…
+  static String _cleanTitle(String title) {
+    var t = title
+        .replaceAll(RegExp(r'\s*[\(\[][^\)\]]*[\)\]]'), ' ')
+        .replaceAll(
+            RegExp(
+                r'\s+-\s+(remaster(ed)?|live|version|mono|stereo|single|radio|deluxe|bonus)\b.*$',
+                caseSensitive: false),
+            '')
+        .replaceAll(RegExp(r'\s+(feat|ft)\.?\s.*$', caseSensitive: false), '')
+        .trim();
+    if (t.isEmpty) t = title.trim();
+    return t;
+  }
+
+  /// "A; B", "A, B", "A & B", "A feat. B" → ["a", "b"] (plegado).
+  static List<String> _artistTokens(String artist) {
+    return artist
+        .split(RegExp(r'\s*(?:;|,|&|\bfeat\.?|\bft\.?)\s*',
+            caseSensitive: false))
+        .map(_fold)
+        .where((a) => a.isNotEmpty)
+        .toList();
+  }
+
+  static bool _artistMatches(String candidate, List<String> wanted) {
+    final c = _fold(candidate);
+    if (c.isEmpty || wanted.isEmpty) return false;
+    final candTokens = _artistTokens(candidate);
+    for (final w in wanted) {
+      if (c == w || c.contains(w) || w.contains(c)) return true;
+      if (candTokens.any((t) => t == w)) return true;
+    }
+    return false;
+  }
+
   /// Busca una canción en Navidrome por título (+ artista opcional).
   /// Usa `search3.view` del servidor, que está optimizado e indexado.
   static Future<Track?> _searchTrack(
-      NavidromeService nav,
-      String title, {
-        String? artist,
-      }) async {
-    // Consulta: "title artist" si hay artista, si no solo título.
-    final query = artist != null ? '$title $artist' : title;
-    final results = await nav.search(query);
-    final tracks = results.songs;
-    if (tracks.isEmpty) return null;
-
-    // Filtrado local ligero sobre los resultados del servidor (máx ~50).
+    NavidromeService nav,
+    String title, {
+    String? artist,
+  }) async {
+    final cleanTitle = _cleanTitle(title);
     final titleF = _fold(title);
-    final artistF = artist == null ? null : _fold(artist);
+    final cleanF = _fold(cleanTitle);
+    final artists = (artist == null || artist.trim().isEmpty)
+        ? const <String>[]
+        : _artistTokens(artist);
 
-    Track? exact;
-    Track? fallback;
+    // Primero título+artista; si no hay resultados, solo el título limpio.
+    final queries = <String>{
+      if (artists.isNotEmpty) '$cleanTitle ${artists.first}',
+      cleanTitle,
+    };
 
-    for (final t in tracks) {
-      final lt = _fold(t.title);
-      final la = _fold(t.artist);
-      if (lt == titleF && (artistF == null || la == artistF)) {
-        return t; // match exacto título+artista
+    for (final query in queries) {
+      final tracks = (await nav.search(query)).songs;
+      if (tracks.isEmpty) continue;
+
+      Track? loose;
+      var exactTitleCount = 0;
+      Track? onlyExactTitle;
+      for (final t in tracks) {
+        final lt = _fold(t.title);
+        final titleOk = lt == titleF || lt == cleanF;
+        if (titleOk) {
+          exactTitleCount++;
+          onlyExactTitle ??= t;
+        }
+        final artistOk = artists.isEmpty || _artistMatches(t.artist, artists);
+        if (titleOk && artistOk) return t; // título + artista
+        if (loose == null &&
+            artists.isNotEmpty &&
+            artistOk &&
+            (lt.contains(cleanF) || cleanF.contains(lt)) &&
+            lt.length >= 3) {
+          loose = t; // mismo artista, título parecido
+        }
       }
-      if (exact == null && lt == titleF) {
-        exact = t; // match exacto solo título
-      }
-      if (fallback == null && artistF != null && la == artistF && lt.contains(titleF)) {
-        fallback = t; // mismo artista, título contenido
-      }
+      if (loose != null) return loose;
+      // Título exacto con otro artista: solo si es la única candidata, para no
+      // meter una canción homónima equivocada.
+      if (exactTitleCount == 1) return onlyExactTitle;
     }
-    return exact ?? fallback;
+    return null;
   }
 
   /// Match principal: intenta la canción y su alternativa invertida.
-  static Future<Track?> _match(
-      NavidromeService nav,
-      ImportTrack t) async {
+  static Future<Track?> _match(NavidromeService nav, ImportTrack t) async {
     for (final cand in [t, if (t.alternate != null) t.alternate!]) {
       final hit = await _searchTrack(nav, cand.title, artist: cand.artist);
       if (hit != null) return hit;
@@ -354,21 +445,57 @@ class PlaylistImporter {
   // Importación
   // ---------------------------------------------------------------------------
 
+  /// Importa [tracks] a una playlist nueva ([name]) o a una existente
+  /// ([existingPlaylistId]).
+  ///
+  /// Una canción que no se encuentra —o cuya búsqueda falla o tarda más de
+  /// [searchTimeout]— se omite y se sigue con la siguiente; al final quedan en
+  /// [PlaylistImportResult.unmatched]. Si no se encontró ninguna no se crea
+  /// ni modifica ninguna playlist.
   static Future<PlaylistImportResult> import({
-    required String name,
     required List<ImportTrack> tracks,
     required NavidromeService nav,
+    String? name,
+    String? existingPlaylistId,
+    String? existingPlaylistName,
+    void Function(PlaylistImportProgress progress)? onProgress,
+    bool Function()? isCancelled,
+    Duration searchTimeout = const Duration(seconds: 15),
   }) async {
+    final toExisting = existingPlaylistId != null;
+    final targetName = (toExisting ? existingPlaylistName : name)?.trim() ?? '';
+    if (!toExisting && targetName.isEmpty) {
+      throw ArgumentError('Falta el nombre de la playlist.');
+    }
+
     final matched = <Track>[];
     final unmatched = <ImportTrack>[];
     final seen = <String>{};
+    var errors = 0;
+    var done = 0;
 
-    // Buscar canción por canción en el servidor (paralelismo limitado para no saturar).
+    void report() => onProgress?.call(PlaylistImportProgress(
+          done: done,
+          total: tracks.length,
+          matched: matched.length,
+          notFound: unmatched.length,
+        ));
+
+    Future<Track?> safeMatch(ImportTrack t) async {
+      try {
+        return await _match(nav, t).timeout(searchTimeout);
+      } catch (_) {
+        errors++;
+        return null; // se salta y se continúa con la siguiente
+      }
+    }
+
+    report();
     const concurrency = 4;
     for (var i = 0; i < tracks.length; i += concurrency) {
+      if (isCancelled?.call() ?? false) throw const PlaylistImportCancelled();
       final batch = tracks.sublist(i, min(i + concurrency, tracks.length));
-      final futures = batch.map((t) => _match(nav, t));
-      final results = await Future.wait(futures);
+      final results = await Future.wait(batch.map(safeMatch));
 
       for (var j = 0; j < batch.length; j++) {
         final hit = results[j];
@@ -377,24 +504,52 @@ class PlaylistImporter {
         } else {
           unmatched.add(batch[j]);
         }
+        done++;
       }
+      report();
+    }
+    if (isCancelled?.call() ?? false) throw const PlaylistImportCancelled();
+
+    if (tracks.isNotEmpty && errors == tracks.length) {
+      throw Exception(
+          'No se pudo consultar el servidor. Revisá la conexión e intentá de nuevo.');
     }
 
     if (matched.isEmpty) {
-      throw StateError(
-          'Ninguna de las ${tracks.length} canciones coincide con tu biblioteca.');
+      return PlaylistImportResult(
+        playlistId: '',
+        name: targetName,
+        matched: 0,
+        unmatched: unmatched,
+        toExisting: toExisting,
+      );
     }
 
-    final playlist = await nav.createPlaylist(name);
-    final playlistId = playlist?.id ?? '';
-    if (playlistId.isEmpty) {
-      throw Exception('No se pudo crear la playlist en el servidor.');
+    String playlistId;
+    var toAdd = matched;
+    var alreadyInPlaylist = 0;
+    if (toExisting) {
+      playlistId = existingPlaylistId;
+      try {
+        final present =
+            (await nav.getPlaylistTracks(playlistId)).map((t) => t.id).toSet();
+        toAdd = matched.where((t) => !present.contains(t.id)).toList();
+        alreadyInPlaylist = matched.length - toAdd.length;
+      } catch (_) {
+        // Si no se puede leer la playlist, se agrega todo.
+      }
+    } else {
+      final playlist = await nav.createPlaylist(targetName);
+      playlistId = playlist?.id ?? '';
+      if (playlistId.isEmpty) {
+        throw Exception('No se pudo crear la playlist en el servidor.');
+      }
     }
 
     // Agregar de a lotes para no construir una URL gigantesca.
-    for (var i = 0; i < matched.length; i += batchSize) {
-      final ids = matched
-          .sublist(i, min(i + batchSize, matched.length))
+    for (var i = 0; i < toAdd.length; i += batchSize) {
+      final ids = toAdd
+          .sublist(i, min(i + batchSize, toAdd.length))
           .map((t) => t.id)
           .toList();
       await nav.updatePlaylist(playlistId: playlistId, songIdsToAdd: ids);
@@ -403,9 +558,11 @@ class PlaylistImporter {
     nav.bumpPlaylists();
     return PlaylistImportResult(
       playlistId: playlistId,
-      name: name,
+      name: targetName,
       matched: matched.length,
       unmatched: unmatched,
+      alreadyInPlaylist: alreadyInPlaylist,
+      toExisting: toExisting,
     );
   }
 
