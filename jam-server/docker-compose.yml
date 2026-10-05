@@ -7,7 +7,6 @@ services:
       PORT: 8080
       MAX_MESSAGE_BYTES: 16384
       MAX_PARTICIPANTS: 50
-      PUBLIC_HOST: jam.templo.cloud
       ROOM_IDLE_MS: 3600000
     ports:
       - "8080:8080"

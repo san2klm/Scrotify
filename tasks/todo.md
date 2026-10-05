@@ -140,3 +140,14 @@
 - [x] **Win.4** `services/window_controls.dart` — helpers compartidos.
 - Verificación: analyze 0 issues, 309 tests, `flutter build linux --debug` OK. No se probó el arrastre en una ventana real (sesión Wayland sin herramienta para simular ratón).
 - [x] **Win.5** Aclaración de diseño: la flecha ↑ de la barra inferior abre la **ventana completa** (reproductor con portada y letra dentro de la ventana, sin tocar el escritorio); dentro del reproductor, el botón de **pantalla completa** (o F11) ocupa toda la pantalla y Esc sale; al cerrar el reproductor se restaura si fue él quien la activó. La barra de título vuelve al icono clásico de maximizar/restaurar.
+
+## Pendiente — Jam: el invitado no encuentra al host (2026-10-04, prioridad alta)
+
+- [ ] **Jam.P1** Confirmar la causa real: escenario (lista/PIN/QR, LAN o remoto) y mensaje exacto en el teléfono.
+- [ ] **Jam.P2** Revisar descubrimiento UDP 47623 con PC en Wi-Fi + cable (misma subred), firewall y aislamiento del AP; probar por QR.
+- [x] `jam-server` revertido a `ae8dde3` (pedido del usuario); el cliente conserva `sanitizeArtUrl`.
+- Referencia: versión anterior `ae8dde3` (descubrimiento LAN idéntico; solo difiere el servidor remoto).
+
+- Nota: el commit `fc94ddc` (ya en el remoto) aún contiene el servidor Jam nuevo; el revert está sin commit.
+
+- [x] **Jam.P3** (2026-10-04) Causa confirmada contra `jam.templo.cloud`: el servidor cierra el socket del anfitrión (1009) cuando un mensaje supera `MAX_MESSAGE_BYTES` (16 KB), o sea con colas de más de ~35 canciones; la sala remota desaparece y el invitado no la encuentra. Arreglo en el cliente: `RemoteJamService.fitStateToMessageLimit` recorta la cola al prefijo que cabe, y el anfitrión vuelve a registrar la sala con retroceso exponencial si pierde la conexión. Verificación: analyze 0 issues, 310 tests. Falta probar en dispositivos reales (hay que reinstalar la app en el anfitrión). Con colas largas el invitado remoto ve sólo las primeras ~34 canciones siguientes.

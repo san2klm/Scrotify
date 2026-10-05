@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:math';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -6,6 +7,7 @@ import 'package:navidrome_client/models/jam_models.dart';
 import 'package:navidrome_client/services/jam_guest_service.dart';
 import 'package:navidrome_client/services/jam_host_service.dart';
 import 'package:navidrome_client/services/navidrome_service.dart';
+import 'package:navidrome_client/services/remote_jam_service.dart';
 
 import 'support/app_fakes.dart';
 
@@ -635,6 +637,52 @@ void main() {
       expect(canControl(sessionAllowed: true, participantAllowed: false), isFalse);
       expect(canControl(sessionAllowed: false, participantAllowed: false), isFalse);
       expect(canControl(sessionAllowed: true, participantAllowed: true), isTrue);
+    });
+
+    test('Remote state is trimmed to the central server message limit', () {
+      Map<String, dynamic> item(int i) => JamQueueItem(
+            id: 'item_$i',
+            track: Track(
+              id: 'trk_$i',
+              title: 'Canción número $i con un título bastante largo',
+              artist: 'Artista de prueba',
+              album: 'Álbum de prueba',
+              duration: '215',
+              albumArtUrl:
+                  'https://nd.example/rest/getCoverArt.view?id=al-$i&size=300',
+            ),
+            addedBy: JamParticipant(
+              id: 'host_local',
+              name: 'Host',
+              avatarColorValue: 0xFFA855F7,
+              isHost: true,
+              joinedAt: DateTime.parse('2026-10-04T12:00:00Z'),
+            ),
+            addedAt: DateTime.parse('2026-10-04T12:00:00Z'),
+          ).toJson();
+      final state = <String, dynamic>{
+        'trackId': 'trk_now',
+        'position': 0,
+        'isPlaying': true,
+        'queue': List.generate(300, item),
+      };
+
+      final fitted = RemoteJamService.fitStateToMessageLimit(state);
+      final message = jsonEncode({
+        'action': 'update_state',
+        'pin': 'ABC123',
+        'state': fitted,
+      });
+      final queue = fitted['queue'] as List;
+
+      expect(utf8.encode(message).length,
+          lessThanOrEqualTo(kRemoteJamMaxMessageBytes));
+      expect(queue.length, inInclusiveRange(1, 299));
+      expect((queue.first as Map)['id'], 'item_0');
+      expect((state['queue'] as List).length, 300);
+
+      final small = <String, dynamic>{...state, 'queue': [item(0)]};
+      expect(RemoteJamService.fitStateToMessageLimit(small), same(small));
     });
   });
 }

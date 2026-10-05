@@ -46,6 +46,10 @@ class JamController extends ChangeNotifier {
   int _lastSyncServerTimestamp = 0;
   int _syncGeneration = 0;
 
+  bool _remoteCreating = false;
+  int _remoteCreateFailures = 0;
+  DateTime? _nextRemoteCreateAt;
+
   Timer? _hostSyncHeartbeat;
   Timer? _hostPublishTimer;
 
@@ -694,28 +698,7 @@ class JamController extends ChangeNotifier {
     _syncHostState();
 
     // Publicar sala en el servidor WebSocket central (jam.templo.cloud)
-    final createSuccess = await _remoteService.createRoom(
-      pin: pinCode.value,
-      hostName: hostName,
-      isPublic: isPublic,
-      initialState: {
-        'trackId': _player.currentTrack?.id,
-        'position': _player.position.inMilliseconds,
-        'isPlaying': _player.playing,
-        'queue': _hostJamQueue.map((item) => item.toJson()).toList(),
-        'title': _player.currentTrack?.title,
-        'artist': _player.currentTrack?.artist,
-        'album': _player.currentTrack?.album,
-        'albumArtUrl': sanitizeArtUrl(_player.currentTrack?.albumArtUrl),
-        'duration': _player.currentTrack?.duration != null
-            ? int.tryParse(_player.currentTrack!.duration) ?? 0
-            : 0,
-        'mode': mode.name,
-        'allowGuestControls': allowGuestControls,
-        'allowGuestQueueManage': allowGuestQueueManage,
-      },
-    );
-    debugPrint('JamController: Creación en servidor remoto: $createSuccess');
+    await _createRemoteRoom();
 
     _publishToNavidromeIfPublic();
 
@@ -726,6 +709,7 @@ class JamController extends ChangeNotifier {
     _hostSyncHeartbeat = Timer.periodic(const Duration(seconds: 3), (_) {
       if (_role == JamRole.host && _hostService.isRunning) {
         _syncHostPlayback();
+        unawaited(_createRemoteRoom(retry: true));
       }
     });
 
@@ -735,6 +719,56 @@ class JamController extends ChangeNotifier {
     });
 
     notifyListeners();
+  }
+
+  Map<String, dynamic> _remoteStatePayload() {
+    final curTrack = _player.currentTrack;
+    return {
+      'trackId': curTrack?.id,
+      'position': _player.position.inMilliseconds,
+      'isPlaying': _player.playing,
+      'queue': _hostJamQueue.map((item) => item.toJson()).toList(),
+      'title': curTrack?.title,
+      'artist': curTrack?.artist,
+      'album': curTrack?.album,
+      'albumArtUrl': sanitizeArtUrl(curTrack?.albumArtUrl),
+      'duration': int.tryParse(curTrack?.duration ?? '') ?? 0,
+      'mode': _hostService.mode.name,
+      'allowGuestControls': _hostService.allowGuestControls,
+      'allowGuestQueueManage': _hostService.allowGuestQueueManage,
+    };
+  }
+
+  /// Registra la sala en el servidor central. Con [retry] sólo actúa si la
+  /// conexión se perdió, espaciando los intentos con retroceso exponencial.
+  Future<void> _createRemoteRoom({bool retry = false}) async {
+    final pin = _hostService.pinCode?.value;
+    if (!isHost || pin == null || _remoteCreating) return;
+    if (retry) {
+      if (_remoteService.isConnected) return;
+      final next = _nextRemoteCreateAt;
+      if (next != null && DateTime.now().isBefore(next)) return;
+    }
+
+    _remoteCreating = true;
+    try {
+      final ok = await _remoteService.createRoom(
+        pin: pin,
+        hostName: _localParticipant?.name ?? 'Host',
+        initialState: _remoteStatePayload(),
+      );
+      debugPrint('JamController: Creación en servidor remoto: $ok');
+      if (!isHost || _hostService.pinCode?.value != pin) {
+        // La sesión terminó mientras se conectaba: no dejar la sala huérfana.
+        await _remoteService.disconnect();
+        return;
+      }
+      _remoteCreateFailures = ok ? 0 : _remoteCreateFailures + 1;
+      final delaySeconds = 5 * (1 << _remoteCreateFailures.clamp(0, 5));
+      _nextRemoteCreateAt = DateTime.now().add(Duration(seconds: delaySeconds));
+    } finally {
+      _remoteCreating = false;
+    }
   }
 
   void _onPlayerChangedAsHost() {
@@ -804,22 +838,7 @@ class JamController extends ChangeNotifier {
     );
 
     if (_remoteService.isConnected) {
-      _remoteService.updateState({
-        'trackId': curTrack?.id,
-        'position': pos,
-        'isPlaying': playing,
-        'queue': _hostJamQueue.map((item) => item.toJson()).toList(),
-        'title': curTrack?.title,
-        'artist': curTrack?.artist,
-        'album': curTrack?.album,
-        'albumArtUrl': sanitizeArtUrl(curTrack?.albumArtUrl),
-        'duration': curTrack?.duration != null
-            ? int.tryParse(curTrack!.duration) ?? 0
-            : 0,
-        'mode': _session?.mode.name ?? JamMode.partySpeaker.name,
-        'allowGuestControls': _session?.allowGuestControls ?? true,
-        'allowGuestQueueManage': _session?.allowGuestQueueManage ?? true,
-      });
+      _remoteService.updateState(_remoteStatePayload());
     }
   }
 
@@ -836,23 +855,7 @@ class JamController extends ChangeNotifier {
     _publishToNavidromeIfPublic();
 
     if (_remoteService.isConnected) {
-      final curTrack = _player.currentTrack;
-      _remoteService.updateState({
-        'trackId': curTrack?.id,
-        'position': _player.position.inMilliseconds,
-        'isPlaying': _player.playing,
-        'queue': _hostJamQueue.map((item) => item.toJson()).toList(),
-        'title': curTrack?.title,
-        'artist': curTrack?.artist,
-        'album': curTrack?.album,
-        'albumArtUrl': sanitizeArtUrl(curTrack?.albumArtUrl),
-        'duration': curTrack?.duration != null
-            ? int.tryParse(curTrack!.duration) ?? 0
-            : 0,
-        'mode': _session!.mode.name,
-        'allowGuestControls': _session!.allowGuestControls,
-        'allowGuestQueueManage': _session!.allowGuestQueueManage,
-      });
+      _remoteService.updateState(_remoteStatePayload());
     }
 
     notifyListeners();
@@ -1408,6 +1411,8 @@ class JamController extends ChangeNotifier {
     _hostPublishTimer = null;
 
     _player.removeListener(_onPlayerChangedAsHost);
+    _remoteCreateFailures = 0;
+    _nextRemoteCreateAt = null;
 
     if (_role == JamRole.host) {
       await _hostService.stop();

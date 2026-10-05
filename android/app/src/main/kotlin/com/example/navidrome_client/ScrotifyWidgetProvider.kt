@@ -8,6 +8,7 @@ import android.content.Intent
 import android.content.SharedPreferences
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.util.Log
 import android.view.KeyEvent
 import android.widget.RemoteViews
 import es.antonborri.home_widget.HomeWidgetProvider
@@ -33,39 +34,69 @@ class ScrotifyWidgetProvider : HomeWidgetProvider() {
         val artist = widgetData.getString(KEY_ARTIST, null)
         val playing = widgetData.getBoolean(KEY_PLAYING, false)
         val coverPath = widgetData.getString(KEY_COVER_PATH, null)
-        val cover = loadCover(coverPath)
+        // La carátula es opcional: si falla la decodificación (archivo corrupto,
+        // sin memoria…) el widget se dibuja igual, sin imagen.
+        val cover = try {
+            loadCover(coverPath)
+        } catch (e: Throwable) {
+            Log.w(TAG, "No se pudo cargar la carátula del widget", e)
+            null
+        }
 
         for (id in appWidgetIds) {
-            val views = RemoteViews(context.packageName, R.layout.scrotify_widget)
-
-            views.setTextViewText(
-                R.id.widget_title,
-                title ?: context.getString(R.string.widget_nothing_playing),
-            )
-            views.setTextViewText(
-                R.id.widget_artist,
-                artist ?: context.getString(R.string.widget_open_app),
-            )
-            views.setImageViewResource(
-                R.id.widget_play,
-                if (playing) R.drawable.ic_widget_pause else R.drawable.ic_widget_play,
-            )
-            if (cover != null) {
-                views.setImageViewBitmap(R.id.widget_cover, cover)
-            } else {
-                views.setImageViewResource(R.id.widget_cover, android.R.color.transparent)
+            try {
+                appWidgetManager.updateAppWidget(
+                    id, buildViews(context, title, artist, playing, cover))
+            } catch (e: Throwable) {
+                // Un RemoteViews inválido deja el widget en negro: se reintenta
+                // sin carátula, que es lo único que puede exceder los límites.
+                Log.e(TAG, "Fallo al dibujar el widget; reintentando sin carátula", e)
+                try {
+                    appWidgetManager.updateAppWidget(
+                        id, buildViews(context, title, artist, playing, null))
+                } catch (e2: Throwable) {
+                    Log.e(TAG, "Fallo definitivo al dibujar el widget", e2)
+                }
             }
-
-            views.setOnClickPendingIntent(R.id.widget_root, openAppIntent(context))
-            views.setOnClickPendingIntent(
-                R.id.widget_prev, mediaButton(context, KeyEvent.KEYCODE_MEDIA_PREVIOUS))
-            views.setOnClickPendingIntent(
-                R.id.widget_play, mediaButton(context, KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE))
-            views.setOnClickPendingIntent(
-                R.id.widget_next, mediaButton(context, KeyEvent.KEYCODE_MEDIA_NEXT))
-
-            appWidgetManager.updateAppWidget(id, views)
         }
+    }
+
+    private fun buildViews(
+        context: Context,
+        title: String?,
+        artist: String?,
+        playing: Boolean,
+        cover: Bitmap?,
+    ): RemoteViews {
+        val views = RemoteViews(context.packageName, R.layout.scrotify_widget)
+
+        views.setTextViewText(
+            R.id.widget_title,
+            title ?: context.getString(R.string.widget_nothing_playing),
+        )
+        views.setTextViewText(
+            R.id.widget_artist,
+            artist ?: context.getString(R.string.widget_open_app),
+        )
+        views.setImageViewResource(
+            R.id.widget_play,
+            if (playing) R.drawable.ic_widget_pause else R.drawable.ic_widget_play,
+        )
+        if (cover != null) {
+            views.setImageViewBitmap(R.id.widget_cover, cover)
+        } else {
+            views.setImageViewResource(R.id.widget_cover, android.R.color.transparent)
+        }
+
+        views.setOnClickPendingIntent(R.id.widget_root, openAppIntent(context))
+        views.setOnClickPendingIntent(
+            R.id.widget_prev, mediaButton(context, KeyEvent.KEYCODE_MEDIA_PREVIOUS))
+        views.setOnClickPendingIntent(
+            R.id.widget_play, mediaButton(context, KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE))
+        views.setOnClickPendingIntent(
+            R.id.widget_next, mediaButton(context, KeyEvent.KEYCODE_MEDIA_NEXT))
+
+        return views
     }
 
     private fun openAppIntent(context: Context): PendingIntent {
@@ -107,5 +138,6 @@ class ScrotifyWidgetProvider : HomeWidgetProvider() {
         const val KEY_PLAYING = "widget_playing"
         const val KEY_COVER_PATH = "widget_cover_path"
         private const val MAX_COVER_PX = 256
+        private const val TAG = "ScrotifyWidget"
     }
 }

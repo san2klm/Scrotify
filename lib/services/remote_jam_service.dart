@@ -12,6 +12,11 @@ typedef OnRemoteGuestAction = void Function(String fromGuest, String actionType,
 typedef OnRemoteRoomClosed = void Function(String reason);
 typedef OnRemoteError = void Function(String error);
 
+/// Tamaño máximo de mensaje que acepta el servidor central (`MAX_MESSAGE_BYTES`).
+/// Superarlo hace que el servidor cierre el socket (1009) y, si era el del
+/// anfitrión, que la sala desaparezca.
+const int kRemoteJamMaxMessageBytes = 16384;
+
 /// Servicio cliente WebSocket para conectar con el servidor central de Scrotify Jam en la nube
 /// (por defecto `wss://jam.templo.cloud/`).
 ///
@@ -38,6 +43,31 @@ class RemoteJamService {
   String get endpoint => _endpoint;
   String? get lastError => _lastError;
 
+  /// Devuelve [state] con `queue` recortada al prefijo que cabe en un mensaje.
+  /// Se recorta por el final para que los índices que usa el invitado al
+  /// reordenar o quitar sigan coincidiendo con los del anfitrión.
+  static Map<String, dynamic> fitStateToMessageLimit(
+    Map<String, dynamic> state, {
+    int maxBytes = kRemoteJamMaxMessageBytes - 512,
+  }) {
+    final queue = state['queue'];
+    if (queue is! List) return state;
+    int sizeOf(Object? value) => utf8.encode(jsonEncode(value)).length;
+
+    final fitted = <dynamic>[];
+    var used = sizeOf({...state, 'queue': const []});
+    for (final item in queue) {
+      final itemBytes = sizeOf(item) + 1; // coma separadora
+      if (used + itemBytes > maxBytes) break;
+      used += itemBytes;
+      fitted.add(item);
+    }
+    if (fitted.length == queue.length) return state;
+    debugPrint(
+        'RemoteJamService: cola recortada a ${fitted.length}/${queue.length} para el servidor central');
+    return {...state, 'queue': fitted};
+  }
+
   void setEndpoint(String endpoint) {
     if (endpoint.trim().isNotEmpty) {
       _endpoint = endpoint.trim();
@@ -53,7 +83,6 @@ class RemoteJamService {
     required String pin,
     required String hostName,
     required Map<String, dynamic> initialState,
-    bool isPublic = true,
     String? customEndpoint,
   }) async {
     await disconnect();
@@ -129,8 +158,7 @@ class RemoteJamService {
         'action': 'create_room',
         'pin': normalizedPin,
         'hostName': hostName,
-        'initialState': initialState,
-        'isPublic': isPublic,
+        'initialState': fitStateToMessageLimit(initialState),
       }));
 
       timeoutTimer = Timer(const Duration(seconds: 6), () {
@@ -157,7 +185,7 @@ class RemoteJamService {
       _channel!.sink.add(jsonEncode({
         'action': 'update_state',
         'pin': _pin,
-        'state': state,
+        'state': fitStateToMessageLimit(state),
       }));
     } catch (e) {
       debugPrint('RemoteJamService.updateState error: $e');

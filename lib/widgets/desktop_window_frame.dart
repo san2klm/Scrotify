@@ -13,7 +13,8 @@ import 'mini_player_view.dart';
 /// La ventana no tiene decoración nativa, así que este marco aporta:
 /// * bordes y esquinas arrastrables para **redimensionar**;
 /// * botón de **maximizar / restaurar** la ventana;
-/// * **pantalla completa** real (botón, `F11`; `Esc` para salir);
+/// * atajos de **pantalla completa** (`F11`; `Esc` para salir). El botón de
+///   pantalla completa vive en el reproductor grande, no en esta barra;
 /// * botón del modo mini reproductor.
 class DesktopWindowFrame extends StatefulWidget {
   final Widget child;
@@ -197,14 +198,12 @@ class _WindowButton extends StatelessWidget {
   final IconData icon;
   final Future<void> Function() onPressed;
   final bool danger;
-  final double iconSize;
 
   const _WindowButton({
     required this.tooltip,
     required this.icon,
     required this.onPressed,
     this.danger = false,
-    this.iconSize = 17,
   });
 
   @override
@@ -221,7 +220,7 @@ class _WindowButton extends StatelessWidget {
         height: 34,
         child: IconButton(
           splashRadius: 18,
-          iconSize: iconSize,
+          iconSize: 17,
           color: danger ? colors.error : colors.onSurfaceVariant,
           icon: Icon(icon),
           onPressed: () => onPressed(),
