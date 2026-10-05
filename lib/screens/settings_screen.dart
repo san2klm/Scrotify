@@ -9,9 +9,10 @@ import '../widgets/pairing_panel.dart';
 import '../widgets/theme_grid.dart';
 import 'equalizer_screen.dart';
 import 'login_screen.dart';
-import 'server_profiles_screen.dart';
 import 'stats_screen.dart';
 import '../utils/app_colors.dart';
+import '../utils/responsive.dart';
+import '../widgets/material_surface.dart';
 
 /// Pantalla de ajustes. Centraliza las preferencias del usuario: calidad de
 /// audio según la red, portadas, volumen y cuenta.
@@ -37,351 +38,333 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ),
       body: Consumer<SettingsController>(
         builder: (context, settings, _) {
-          return ListView(
-            padding: const EdgeInsets.all(16),
-            children: [
-              // ---------------------------------------------------------------
-              // Calidad de audio
-              // ---------------------------------------------------------------
-              _sectionTitle('Calidad de audio'),
-              _card(
+          return ConstrainedContent(
+              maxWidth: 1000,
+              child: ListView(
+                padding: const EdgeInsets.all(16),
                 children: [
-                  _switchTile(
-                    title: 'Detectar red automáticamente',
-                    subtitle:
-                        'Usa una calidad distinta según estés en casa o en datos móviles',
-                    value: settings.autoSwitch,
-                    onChanged: settings.setAutoSwitch,
+                  // ---------------------------------------------------------------
+                  // Calidad de audio
+                  // ---------------------------------------------------------------
+                  _sectionTitle('Calidad de audio'),
+                  _card(
+                    children: [
+                      _switchTile(
+                        title: 'Detectar red automáticamente',
+                        subtitle:
+                            'Usa una calidad distinta según estés en casa o en datos móviles',
+                        value: settings.autoSwitch,
+                        onChanged: settings.setAutoSwitch,
+                      ),
+                      if (settings.autoSwitch) ...[
+                        _networkBadge(
+                            settings.networkLabel, settings.isMobileData),
+                        const SizedBox(height: 12),
+                        _qualitySelector(
+                          title: 'En casa (WiFi / conexión fija)',
+                          current: settings.wifiQuality,
+                          onChanged: settings.setWifiQuality,
+                        ),
+                        const SizedBox(height: 12),
+                        _qualitySelector(
+                          title: 'En datos móviles',
+                          current: settings.mobileQuality,
+                          onChanged: settings.setMobileQuality,
+                        ),
+                      ] else
+                        const SizedBox(height: 8),
+                      if (!settings.autoSwitch) ...[
+                        _qualitySelector(
+                          title: 'Calidad de audio',
+                          current: settings.wifiQuality,
+                          onChanged: settings.setWifiQuality,
+                        ),
+                      ],
+                      const SizedBox(height: 12),
+                      const _InfoText(
+                        'Sin pérdida transmite el archivo original (FLAC). '
+                        'Las demás opciones se transcodifican a MP3 en el servidor, '
+                        'ahorrando datos móviles.',
+                      ),
+                    ],
                   ),
-                  if (settings.autoSwitch) ...[
-                    _networkBadge(settings.networkLabel, settings.isMobileData),
-                    const SizedBox(height: 12),
-                    _qualitySelector(
-                      title: 'En casa (WiFi / conexión fija)',
-                      current: settings.wifiQuality,
-                      onChanged: settings.setWifiQuality,
-                    ),
-                    const SizedBox(height: 12),
-                    _qualitySelector(
-                      title: 'En datos móviles',
-                      current: settings.mobileQuality,
-                      onChanged: settings.setMobileQuality,
-                    ),
-                  ] else
-                    const SizedBox(height: 8),
-                  if (!settings.autoSwitch) ...[
-                    _qualitySelector(
-                      title: 'Calidad de audio',
-                      current: settings.wifiQuality,
-                      onChanged: settings.setWifiQuality,
-                    ),
-                  ],
-                  const SizedBox(height: 12),
-                  const _InfoText(
-                    'Sin pérdida transmite el archivo original (FLAC). '
-                    'Las demás opciones se transcodifican a MP3 en el servidor, '
-                    'ahorrando datos móviles.',
-                  ),
-                ],
-              ),
 
-              // ---------------------------------------------------------------
-              // Reproducción
-              // ---------------------------------------------------------------
-              _sectionTitle('Reproducción'),
-              _card(
-                children: [
-                  ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    title: Text('Volumen inicial',
-                        style: TextStyle(
-                            color: context.textPrimary, fontSize: 14)),
-                    subtitle: Slider(
-                      value: settings.initialVolume,
-                      activeColor: context.accent,
-                      inactiveColor: context.themeBorder,
-                      onChanged: settings.setInitialVolume,
-                    ),
-                    trailing: Text(
-                      '${(settings.initialVolume * 100).round()}%',
-                      style:
-                          TextStyle(color: context.textSecondary, fontSize: 13),
-                    ),
-                  ),
-                  _switchTile(
-                    title: 'Reproducción sin cortes',
-                    subtitle:
-                        'Evita silencios entre canciones (depende del backend)',
-                    value: settings.gapless,
-                    onChanged: settings.setGapless,
-                  ),
-                  const SizedBox(height: 8),
-                  _switchTile(
-                    title: 'Crossfade',
-                    subtitle:
-                        'Funde el final de una canción con el inicio de la siguiente',
-                    value: settings.crossfade > Duration.zero,
-                    onChanged: (enabled) => settings.setCrossfade(
-                      enabled ? const Duration(seconds: 5) : Duration.zero,
-                    ),
-                  ),
-                  if (settings.crossfade > Duration.zero) ...[
-                    const SizedBox(height: 4),
-                    ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      title: Text('Duración del fundido',
+                  // ---------------------------------------------------------------
+                  // Reproducción
+                  // ---------------------------------------------------------------
+                  _sectionTitle('Reproducción'),
+                  _card(
+                    children: [
+                      ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: Text('Volumen inicial',
+                            style: TextStyle(
+                                color: context.textPrimary, fontSize: 14)),
+                        subtitle: Slider(
+                          value: settings.initialVolume,
+                          activeColor: context.accent,
+                          inactiveColor: context.themeBorder,
+                          onChanged: settings.setInitialVolume,
+                        ),
+                        trailing: Text(
+                          '${(settings.initialVolume * 100).round()}%',
                           style: TextStyle(
-                              color: context.textPrimary, fontSize: 14)),
-                      subtitle: Slider(
-                        value: settings.crossfade.inSeconds
-                            .clamp(1, 10)
-                            .toDouble(),
-                        min: 1,
-                        max: 10,
-                        activeColor: context.accent,
-                        inactiveColor: context.themeBorder,
-                        onChanged: (v) =>
-                            settings.setCrossfade(Duration(seconds: v.round())),
+                              color: context.textSecondary, fontSize: 13),
+                        ),
                       ),
-                      trailing: Text(
-                        '${settings.crossfade.inSeconds} s',
-                        style: TextStyle(
-                            color: context.textSecondary, fontSize: 13),
+                      _switchTile(
+                        title: 'Reproducción sin cortes',
+                        subtitle:
+                            'Evita silencios entre canciones (depende del backend)',
+                        value: settings.gapless,
+                        onChanged: settings.setGapless,
                       ),
-                    ),
-                  ],
-                  const SizedBox(height: 8),
-                  _choiceTiles<ReplayGainMode>(
-                    title: 'Normalización de volumen (ReplayGain)',
-                    value: settings.replayGainMode,
-                    options: const [
-                      (
-                        value: ReplayGainMode.off,
-                        label: 'Desactivado',
-                        subtitle: 'Sin normalización de volumen',
+                      const SizedBox(height: 8),
+                      _switchTile(
+                        title: 'Crossfade',
+                        subtitle:
+                            'Funde el final de una canción con el inicio de la siguiente',
+                        value: settings.crossfade > Duration.zero,
+                        onChanged: (enabled) => settings.setCrossfade(
+                          enabled ? const Duration(seconds: 5) : Duration.zero,
+                        ),
                       ),
-                      (
-                        value: ReplayGainMode.track,
-                        label: 'Pista (Track)',
-                        subtitle: 'Normaliza cada pista individualmente',
+                      if (settings.crossfade > Duration.zero) ...[
+                        const SizedBox(height: 4),
+                        ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          title: Text('Duración del fundido',
+                              style: TextStyle(
+                                  color: context.textPrimary, fontSize: 14)),
+                          subtitle: Slider(
+                            value: settings.crossfade.inSeconds
+                                .clamp(1, 10)
+                                .toDouble(),
+                            min: 1,
+                            max: 10,
+                            activeColor: context.accent,
+                            inactiveColor: context.themeBorder,
+                            onChanged: (v) => settings
+                                .setCrossfade(Duration(seconds: v.round())),
+                          ),
+                          trailing: Text(
+                            '${settings.crossfade.inSeconds} s',
+                            style: TextStyle(
+                                color: context.textSecondary, fontSize: 13),
+                          ),
+                        ),
+                      ],
+                      const SizedBox(height: 8),
+                      _choiceTiles<ReplayGainMode>(
+                        title: 'Normalización de volumen (ReplayGain)',
+                        value: settings.replayGainMode,
+                        options: const [
+                          (
+                            value: ReplayGainMode.off,
+                            label: 'Desactivado',
+                            subtitle: 'Sin normalización de volumen',
+                          ),
+                          (
+                            value: ReplayGainMode.track,
+                            label: 'Pista (Track)',
+                            subtitle: 'Normaliza cada pista individualmente',
+                          ),
+                          (
+                            value: ReplayGainMode.album,
+                            label: 'Álbum (Album)',
+                            subtitle: 'Preserva la dinámica del álbum completo',
+                          ),
+                        ],
+                        onChanged: settings.setReplayGainMode,
                       ),
-                      (
-                        value: ReplayGainMode.album,
-                        label: 'Álbum (Album)',
-                        subtitle: 'Preserva la dinámica del álbum completo',
+                      if (settings.replayGainMode != ReplayGainMode.off) ...[
+                        const SizedBox(height: 8),
+                        ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          title: Text(
+                            'Preamplificador (Preamp)',
+                            style: TextStyle(
+                                color: context.textPrimary, fontSize: 14),
+                          ),
+                          subtitle: Slider(
+                            value: settings.replayGainPreamp.clamp(-12.0, 12.0),
+                            min: -12.0,
+                            max: 12.0,
+                            divisions: 48,
+                            activeColor: context.accent,
+                            inactiveColor: context.themeBorder,
+                            onChanged: settings.setReplayGainPreamp,
+                          ),
+                          trailing: Text(
+                            '${settings.replayGainPreamp > 0 ? '+' : ''}${settings.replayGainPreamp.toStringAsFixed(1)} dB',
+                            style: TextStyle(
+                                color: context.textSecondary, fontSize: 13),
+                          ),
+                        ),
+                        _switchTile(
+                          title: 'Evitar distorsión (Prevent clipping)',
+                          subtitle:
+                              'Atenúa la ganancia si el pico de la pista superaría 0 dBFS',
+                          value: settings.replayGainPreventClipping,
+                          onChanged: settings.setReplayGainPreventClipping,
+                        ),
+                        const SizedBox(height: 4),
+                        const _InfoText(
+                          'ReplayGain opera únicamente por atenuación (≤ 0 dB) en este '
+                          'reproductor para evitar distorsión digital.',
+                        ),
+                      ],
+                      const SizedBox(height: 8),
+                      _switchTile(
+                        title: 'Eliminar silencios',
+                        subtitle:
+                            'Recorta silencios al inicio y final de las canciones usando análisis de waveform',
+                        value: settings.silenceRemovalEnabled,
+                        onChanged: settings.setSilenceRemovalEnabled,
+                      ),
+                      _switchTile(
+                        title: 'Mezcla inteligente',
+                        subtitle:
+                            'Evita repetir el mismo artista seguido en modo aleatorio',
+                        value: settings.isSmartMixEnabled,
+                        onChanged: settings.setSmartMixEnabled,
+                      ),
+                      const Divider(height: 24),
+                      ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading: Icon(Icons.equalizer_rounded,
+                            color: context.textSecondary),
+                        title: Text('Ecualizador',
+                            style: TextStyle(
+                                color: context.textPrimary, fontSize: 14)),
+                        subtitle: Text(
+                          'Ajustes de 10 bandas y presets',
+                          style: TextStyle(
+                              color: context.textSecondary, fontSize: 13),
+                        ),
+                        trailing:
+                            Icon(Icons.chevron_right, color: context.textMuted),
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                                builder: (_) => const EqualizerScreen()),
+                          );
+                        },
+                      ),
+                      ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading: Icon(Icons.insights_rounded,
+                            color: context.textSecondary),
+                        title: Text('Estadísticas de escucha',
+                            style: TextStyle(
+                                color: context.textPrimary, fontSize: 14)),
+                        subtitle: Text(
+                          'Tiempo reproducido, canciones y artistas más escuchados',
+                          style: TextStyle(
+                              color: context.textSecondary, fontSize: 13),
+                        ),
+                        trailing:
+                            Icon(Icons.chevron_right, color: context.textMuted),
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                                builder: (_) => const StatsScreen()),
+                          );
+                        },
                       ),
                     ],
-                    onChanged: settings.setReplayGainMode,
                   ),
-                  if (settings.replayGainMode != ReplayGainMode.off) ...[
-                    const SizedBox(height: 8),
-                    ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      title: Text(
-                        'Preamplificador (Preamp)',
-                        style:
-                            TextStyle(color: context.textPrimary, fontSize: 14),
-                      ),
-                      subtitle: Slider(
-                        value: settings.replayGainPreamp.clamp(-12.0, 12.0),
-                        min: -12.0,
-                        max: 12.0,
-                        divisions: 48,
-                        activeColor: context.accent,
-                        inactiveColor: context.themeBorder,
-                        onChanged: settings.setReplayGainPreamp,
-                      ),
-                      trailing: Text(
-                        '${settings.replayGainPreamp > 0 ? '+' : ''}${settings.replayGainPreamp.toStringAsFixed(1)} dB',
-                        style: TextStyle(
-                            color: context.textSecondary, fontSize: 13),
-                      ),
-                    ),
-                    _switchTile(
-                      title: 'Evitar distorsión (Prevent clipping)',
-                      subtitle:
-                          'Atenúa la ganancia si el pico de la pista superaría 0 dBFS',
-                      value: settings.replayGainPreventClipping,
-                      onChanged: settings.setReplayGainPreventClipping,
-                    ),
-                    const SizedBox(height: 4),
-                    const _InfoText(
-                      'ReplayGain opera únicamente por atenuación (≤ 0 dB) en este '
-                      'reproductor para evitar distorsión digital.',
-                    ),
-                  ],
-                  const SizedBox(height: 8),
-                  _switchTile(
-                    title: 'Eliminar silencios',
-                    subtitle:
-                        'Recorta silencios al inicio y final de las canciones usando análisis de waveform',
-                    value: settings.silenceRemovalEnabled,
-                    onChanged: settings.setSilenceRemovalEnabled,
-                  ),
-                  _switchTile(
-                    title: 'Mezcla inteligente',
-                    subtitle:
-                        'Evita repetir el mismo artista seguido en modo aleatorio',
-                    value: settings.isSmartMixEnabled,
-                    onChanged: settings.setSmartMixEnabled,
-                  ),
-                  const Divider(height: 24),
-                  ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    leading: Icon(Icons.equalizer_rounded,
-                        color: context.textSecondary),
-                    title: Text('Ecualizador',
-                        style: TextStyle(
-                            color: context.textPrimary, fontSize: 14)),
-                    subtitle: Text(
-                      'Ajustes de 10 bandas y presets',
-                      style: TextStyle(color: context.textMuted, fontSize: 12),
-                    ),
-                    trailing:
-                        Icon(Icons.chevron_right, color: context.textMuted),
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                            builder: (_) => const EqualizerScreen()),
-                      );
-                    },
-                  ),
-                  ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    leading: Icon(Icons.insights_rounded,
-                        color: context.textSecondary),
-                    title: Text('Estadísticas de escucha',
-                        style: TextStyle(
-                            color: context.textPrimary, fontSize: 14)),
-                    subtitle: Text(
-                      'Tiempo reproducido, canciones y artistas más escuchados',
-                      style: TextStyle(color: context.textMuted, fontSize: 12),
-                    ),
-                    trailing:
-                        Icon(Icons.chevron_right, color: context.textMuted),
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (_) => const StatsScreen()),
-                      );
-                    },
-                  ),
-                ],
-              ),
 
-              // ---------------------------------------------------------------
-              // Interfaz
-              // ---------------------------------------------------------------
-              _sectionTitle('Interfaz'),
-              _card(
-                children: [
-                  _choiceTiles<int>(
-                    title: 'Resolución de portadas',
-                    value: settings.coverArtSize,
-                    options: const [
-                      (
-                        value: 600,
-                        label: 'Alta',
-                        subtitle: 'Portadas nítidas · más datos'
+                  // ---------------------------------------------------------------
+                  // Interfaz
+                  // ---------------------------------------------------------------
+                  _sectionTitle('Interfaz'),
+                  _card(
+                    children: [
+                      _choiceTiles<int>(
+                        title: 'Resolución de portadas',
+                        value: settings.coverArtSize,
+                        options: const [
+                          (
+                            value: 600,
+                            label: 'Alta',
+                            subtitle: 'Portadas nítidas · más datos'
+                          ),
+                          (value: 300, label: 'Baja', subtitle: 'Ahorra datos'),
+                        ],
+                        onChanged: settings.setCoverArtSize,
                       ),
-                      (value: 300, label: 'Baja', subtitle: 'Ahorra datos'),
+                      const SizedBox(height: 8),
+                      const _InfoText(
+                        'La nueva resolución se aplica al volver a cargar el contenido.',
+                      ),
                     ],
-                    onChanged: settings.setCoverArtSize,
                   ),
-                  const SizedBox(height: 8),
-                  const _InfoText(
-                    'La nueva resolución se aplica al volver a cargar el contenido.',
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              // Temas (.zip estilo Psysonic, carpeta configurable).
-              const ThemesSection(),
+                  const SizedBox(height: 12),
+                  // Temas (.zip estilo Psysonic, carpeta configurable).
+                  const ThemesSection(),
 
-              // ---------------------------------------------------------------
-              // Playlists (gestionar/borrar)
-              // ---------------------------------------------------------------
-              _sectionTitle('Mis playlists'),
-              const _PlaylistsManager(),
+                  // ---------------------------------------------------------------
+                  // Playlists (gestionar/borrar)
+                  // ---------------------------------------------------------------
+                  _sectionTitle('Mis playlists'),
+                  const _PlaylistsManager(),
 
-              // ---------------------------------------------------------------
-              // Cuenta y Perfiles
-              // ---------------------------------------------------------------
-              _sectionTitle('Cuenta y Perfiles'),
-              _card(
-                children: [
-                  ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    leading: Icon(Icons.switch_account_outlined,
-                        color: context.textSecondary),
-                    title: Text('Gestionar perfiles de servidor',
-                        style: TextStyle(
-                            color: context.textPrimary, fontSize: 14)),
-                    subtitle: Text(
-                      nav.connected
-                          ? '${nav.username} en ${nav.serverUrl}'
-                          : 'Sin conexión',
-                      style: TextStyle(color: context.textMuted, fontSize: 12),
-                    ),
-                    trailing:
-                        Icon(Icons.chevron_right, color: context.textMuted),
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                            builder: (_) => const ServerProfilesScreen()),
-                      );
-                    },
-                  ),
-                  const SizedBox(height: 8),
-                  SizedBox(
-                    width: double.infinity,
-                    child: OutlinedButton.icon(
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: context.danger,
-                        side: BorderSide(color: context.danger),
-                        padding: const EdgeInsets.symmetric(vertical: 12),
+                  // ---------------------------------------------------------------
+                  // Cierre de sesión; las cuentas se gestionan desde el avatar.
+                  // ---------------------------------------------------------------
+                  _sectionTitle('Sesión'),
+                  _card(
+                    children: [
+                      SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton.icon(
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: context.danger,
+                            side: BorderSide(color: context.danger),
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                          ),
+                          icon: const Icon(Icons.logout, size: 18),
+                          label: const Text('Cerrar sesión plana'),
+                          onPressed: () => _confirmLogout(context),
+                        ),
                       ),
-                      icon: const Icon(Icons.logout, size: 18),
-                      label: const Text('Cerrar sesión plana'),
-                      onPressed: () => _confirmLogout(context),
-                    ),
+                    ],
                   ),
-                ],
-              ),
 
-              // ---------------------------------------------------------------
-              // Vincular con el teléfono
-              // ---------------------------------------------------------------
-              if (nav.connected) ...[
-                _sectionTitle('Vincular teléfono'),
-                _card(
-                  children: [
-                    PairingSharePanel(
-                      compact: true,
-                      server: context.read<PairingServer>(),
-                      onGetCredentials: () async => nav.currentCredentials,
+                  // ---------------------------------------------------------------
+                  // Vincular con el teléfono
+                  // ---------------------------------------------------------------
+                  if (nav.connected) ...[
+                    _sectionTitle('Vincular teléfono'),
+                    _card(
+                      children: [
+                        PairingSharePanel(
+                          compact: true,
+                          server: context.read<PairingServer>(),
+                          onGetCredentials: () async => nav.currentCredentials,
+                        ),
+                      ],
                     ),
                   ],
-                ),
-              ],
 
-              // ---------------------------------------------------------------
-              // Acerca de
-              // ---------------------------------------------------------------
-              _sectionTitle('Acerca de'),
-              _card(
-                children: const [
-                  _InfoText(
-                    'Scrotify — cliente de Navidrome (Subsonic API)\n'
-                    'v1.0.0',
+                  // ---------------------------------------------------------------
+                  // Acerca de
+                  // ---------------------------------------------------------------
+                  _sectionTitle('Acerca de'),
+                  _card(
+                    children: const [
+                      _InfoText(
+                        'Scrotify — cliente de Navidrome (Subsonic API)\n'
+                        'v1.0.0',
+                      ),
+                    ],
                   ),
+                  const SizedBox(height: 24),
                 ],
-              ),
-              const SizedBox(height: 24),
-            ],
-          );
+              ));
         },
       ),
     );
@@ -432,12 +415,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Widget _sectionTitle(String title) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(4, 20, 4, 8),
+      padding: const EdgeInsets.fromLTRB(4, 24, 4, 12),
       child: Text(
         title,
         style: TextStyle(
           color: context.textPrimary,
-          fontSize: 16,
+          fontSize: 18,
           fontWeight: FontWeight.bold,
         ),
       ),
@@ -445,12 +428,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Widget _card({required List<Widget> children}) {
-    return Container(
+    return MaterialSurface(
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: context.bgCard,
-        borderRadius: BorderRadius.circular(12),
-      ),
+      color: context.bgCard,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: children,
@@ -469,7 +449,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       title: Text(title,
           style: TextStyle(color: context.textPrimary, fontSize: 14)),
       subtitle: Text(subtitle,
-          style: TextStyle(color: context.textMuted, fontSize: 12)),
+          style: TextStyle(color: context.textSecondary, fontSize: 13)),
       activeTrackColor: context.accent,
       activeThumbColor: context.textPrimary,
       value: value,
@@ -478,12 +458,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Widget _networkBadge(String label, bool mobile) {
-    return Container(
+    return MaterialSurface(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: context.bgElevated,
-        borderRadius: BorderRadius.circular(8),
-      ),
+      color: context.bgElevated,
       child: Row(
         children: [
           Container(
@@ -495,10 +472,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
           ),
           const SizedBox(width: 8),
-          Text(
+          Expanded(
+              child: Text(
             'Red actual: $label',
-            style: TextStyle(color: context.textSecondary, fontSize: 12),
-          ),
+            style: TextStyle(color: context.textSecondary, fontSize: 13),
+          )),
         ],
       ),
     );
@@ -515,11 +493,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
         Text(title,
             style: TextStyle(color: context.textSecondary, fontSize: 12)),
         const SizedBox(height: 6),
-        Container(
-          decoration: BoxDecoration(
-            color: context.bgElevated,
-            borderRadius: BorderRadius.circular(8),
-          ),
+        MaterialSurface(
+          color: context.bgElevated,
           child: Column(
             children: [
               for (final q in AudioQuality.values)
@@ -550,7 +525,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                       fontSize: 14)),
                               Text(q.subtitle,
                                   style: TextStyle(
-                                      color: context.textMuted, fontSize: 12)),
+                                      color: context.textSecondary,
+                                      fontSize: 13)),
                             ],
                           ),
                         ),
@@ -589,11 +565,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
         Text(title,
             style: TextStyle(color: context.textSecondary, fontSize: 12)),
         const SizedBox(height: 6),
-        Container(
-          decoration: BoxDecoration(
-            color: context.bgElevated,
-            borderRadius: BorderRadius.circular(8),
-          ),
+        MaterialSurface(
+          color: context.bgElevated,
           child: Column(
             children: [
               for (final opt in options)
@@ -624,7 +597,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                       fontSize: 14)),
                               Text(opt.subtitle,
                                   style: TextStyle(
-                                      color: context.textMuted, fontSize: 12)),
+                                      color: context.textSecondary,
+                                      fontSize: 13)),
                             ],
                           ),
                         ),
@@ -731,7 +705,7 @@ class _PlaylistTile extends StatelessWidget {
                 ),
                 Text(
                   '${playlist.songCount} canciones',
-                  style: TextStyle(color: context.textMuted, fontSize: 12),
+                  style: TextStyle(color: context.textSecondary, fontSize: 13),
                 ),
               ],
             ),
@@ -806,7 +780,7 @@ class _InfoText extends StatelessWidget {
   Widget build(BuildContext context) {
     return Text(
       text,
-      style: TextStyle(color: context.textMuted, fontSize: 12, height: 1.4),
+      style: TextStyle(color: context.textSecondary, fontSize: 13, height: 1.4),
     );
   }
 }

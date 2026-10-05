@@ -9,6 +9,7 @@ import '../services/jam_controller.dart';
 import '../services/theme_controller.dart';
 import 'cover_art.dart';
 import '../utils/app_colors.dart';
+import 'material_surface.dart';
 
 /// Modal / Diálogo interactivo para gestionar o unirse a una sesión Jam.
 class JamDialog extends StatefulWidget {
@@ -186,8 +187,6 @@ class _JamDialogState extends State<JamDialog>
       },
     );
   }
-
-
 
   /// Formulario inline (sin popup) para conexión directa. Evita el problema
   /// del diálogo anidado que en Linux/escritorio a veces no se muestra.
@@ -415,13 +414,10 @@ class _JamDialogState extends State<JamDialog>
         const SizedBox(height: 16),
 
         // Tarjeta de Código PIN y QR
-        Container(
+        MaterialSurface(
           padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: context.bgElevated,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: context.bgElevated),
-          ),
+          color: context.bgElevated,
+          borderColor: context.bgElevated,
           child: Row(
             children: [
               // Botón QR
@@ -523,13 +519,10 @@ class _JamDialogState extends State<JamDialog>
 
         // Selector de Modo (Solo configurable por el Host)
         if (isHost) ...[
-          Container(
+          MaterialSurface(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            decoration: BoxDecoration(
-              color: context.bgElevated,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: context.bgElevated),
-            ),
+            color: context.bgElevated,
+            borderColor: context.bgElevated,
             child: Row(
               children: [
                 Icon(
@@ -878,13 +871,10 @@ class _JamDialogState extends State<JamDialog>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Container(
+          MaterialSurface(
             padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: context.bgElevated,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: context.bgElevated),
-            ),
+            color: context.bgElevated,
+            borderColor: context.bgElevated,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [

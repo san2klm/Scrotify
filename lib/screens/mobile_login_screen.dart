@@ -142,7 +142,8 @@ class _MobileLoginScreenState extends State<MobileLoginScreen> {
       final profilesCtrl = context.read<ServerProfilesController>();
 
       final existingProfiles = profilesCtrl.profiles.where((p) => p.url == url);
-      final existingProfile = existingProfiles.isNotEmpty ? existingProfiles.first : null;
+      final existingProfile =
+          existingProfiles.isNotEmpty ? existingProfiles.first : null;
 
       ServerProfile profileToUse;
       if (existingProfile != null) {
@@ -175,8 +176,7 @@ class _MobileLoginScreenState extends State<MobileLoginScreen> {
                 RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
             content: Row(
               children: [
-                Icon(Icons.error_outline,
-                    color: context.danger, size: 20),
+                Icon(Icons.error_outline, color: context.danger, size: 20),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
@@ -198,23 +198,26 @@ class _MobileLoginScreenState extends State<MobileLoginScreen> {
     final profilesCtrl = context.read<ServerProfilesController>();
 
     // Buscar si ya existe perfil
-    final existingProfiles = profilesCtrl.profiles.where((p) => p.url == creds.url);
-    final existingProfile = existingProfiles.isNotEmpty ? existingProfiles.first : null;
+    final existingProfiles =
+        profilesCtrl.profiles.where((p) => p.url == creds.url);
+    final existingProfile =
+        existingProfiles.isNotEmpty ? existingProfiles.first : null;
 
-      ServerProfile profileToUse;
-      if (existingProfile != null) {
-        profileToUse = existingProfile.copyWith(username: creds.username, password: creds.password);
-        await profilesCtrl.updateProfile(profileToUse);
-      } else {
-        profileToUse = ServerProfile(
-          url: creds.url,
-          username: creds.username,
-          password: creds.password,
-          nickname: 'Servidor Emparejado',
-        );
-        await profilesCtrl.addProfile(profileToUse);
-      }
-      await profilesCtrl.setActiveProfile(profileToUse.id);
+    ServerProfile profileToUse;
+    if (existingProfile != null) {
+      profileToUse = existingProfile.copyWith(
+          username: creds.username, password: creds.password);
+      await profilesCtrl.updateProfile(profileToUse);
+    } else {
+      profileToUse = ServerProfile(
+        url: creds.url,
+        username: creds.username,
+        password: creds.password,
+        nickname: 'Servidor Emparejado',
+      );
+      await profilesCtrl.addProfile(profileToUse);
+    }
+    await profilesCtrl.setActiveProfile(profileToUse.id);
 
     if (mounted) {
       Navigator.pushReplacement(
@@ -245,15 +248,15 @@ class _MobileLoginScreenState extends State<MobileLoginScreen> {
                   Container(
                     padding: const EdgeInsets.all(18),
                     decoration: BoxDecoration(
-                      color: context.bgApp,
-                      borderRadius: BorderRadius.circular(18),
+                      color: context.bgCard,
+                      borderRadius: BorderRadius.circular(20),
                       border: Border.all(
                         color: context.bgElevated,
                         width: 1.2,
                       ),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.8),
+                          color: context.bgDeep.withValues(alpha: 0.12),
                           blurRadius: 28,
                           offset: const Offset(0, 8),
                         ),
@@ -312,28 +315,11 @@ class _MobileLoginScreenState extends State<MobileLoginScreen> {
   Widget _buildMobileHeader() {
     return Column(
       children: [
-        Container(
+        Image.asset(
+          'assets/icons/scrotify_app_icon.png',
           width: 52,
           height: 52,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: context.bgApp,
-            border: Border.all(
-              color: context.accent.withValues(alpha: 0.45),
-              width: 1.5,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: context.accent.withValues(alpha: 0.3),
-                blurRadius: 16,
-              ),
-            ],
-          ),
-          child: Icon(
-            Icons.graphic_eq_rounded,
-            size: 28,
-            color: context.accent,
-          ),
+          semanticLabel: 'Logo de Scrotify',
         ),
         const SizedBox(height: 10),
         Text(
@@ -387,8 +373,7 @@ class _MobileLoginScreenState extends State<MobileLoginScreen> {
             borderRadius: BorderRadius.circular(10),
             border: isSelected
                 ? Border.all(
-                    color: context.accent.withValues(alpha: 0.4),
-                    width: 1)
+                    color: context.accent.withValues(alpha: 0.4), width: 1)
                 : null,
           ),
           child: Row(
@@ -405,8 +390,7 @@ class _MobileLoginScreenState extends State<MobileLoginScreen> {
                 style: TextStyle(
                   color: isSelected ? context.textPrimary : context.textMuted,
                   fontSize: 12.5,
-                  fontWeight:
-                      isSelected ? FontWeight.bold : FontWeight.normal,
+                  fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
                 ),
               ),
             ],
@@ -525,7 +509,8 @@ class _MobileLoginScreenState extends State<MobileLoginScreen> {
             const SizedBox(height: 12),
             OutlinedButton.icon(
               onPressed: _loading ? null : _authenticateWithBiometrics,
-              icon: Icon(Icons.fingerprint_rounded, color: context.accent, size: 22),
+              icon: Icon(Icons.fingerprint_rounded,
+                  color: context.accent, size: 22),
               label: Text(
                 'Ingresar con huella digital',
                 style: TextStyle(

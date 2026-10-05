@@ -7,6 +7,7 @@ import '../models/pairing_models.dart';
 import '../services/pairing_client.dart';
 import '../services/pairing_server.dart';
 import '../utils/app_colors.dart';
+import 'material_surface.dart';
 import 'pairing_qr_code.dart';
 
 // =============================================================================
@@ -252,13 +253,10 @@ class _PairingSharePanelState extends State<PairingSharePanel> {
                     ),
                   ),
                 ),
-                Container(
+                MaterialSurface(
                   padding:
                       const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: context.bgCard,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
+                  color: context.bgCard,
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [

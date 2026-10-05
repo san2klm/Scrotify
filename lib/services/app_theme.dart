@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'package:archive/archive.dart';
 import 'package:flutter/material.dart';
 
+import 'material_presentation.dart';
+
 /// Tema de la app importado desde un `.zip` estilo Psysonic.
 ///
 /// Cada zip contiene (al menos):
@@ -479,53 +481,57 @@ class AppTheme {
 
   ThemeData toThemeData() {
     final brightness = isDark ? Brightness.dark : Brightness.light;
-    final scheme = ColorScheme.fromSeed(
-      seedColor: accent,
-      brightness: brightness,
-    ).copyWith(
-      surface: bgApp,
-      primary: accent,
-      onPrimary: _onColor(accent),
-      secondary: accent2,
-      error: danger,
-    );
-    return ThemeData(
-      colorScheme: scheme,
-      scaffoldBackgroundColor: bgApp,
-      cardColor: bgCard,
-      dialogTheme: DialogThemeData(backgroundColor: modalBg),
-      dividerColor: rowDivider,
-      progressIndicatorTheme: ProgressIndicatorThemeData(color: accent),
-      textSelectionTheme: TextSelectionThemeData(
-        cursorColor: accent,
-        selectionColor: accentDim,
-        selectionHandleColor: accent,
-      ),
-      sliderTheme: SliderThemeData(
-        activeTrackColor: accent,
-        inactiveTrackColor: sliderTrack,
-        thumbColor: sliderThumb,
-        overlayColor: accentDim,
-      ),
-      scrollbarTheme: ScrollbarThemeData(
-        thumbColor: WidgetStatePropertyAll(scrollbarThumb),
-        thickness: const WidgetStatePropertyAll(6),
-        radius: const Radius.circular(3),
-      ),
-      inputDecorationTheme: InputDecorationTheme(
-        filled: true,
-        fillColor: inputBg,
-        hintStyle: TextStyle(color: textMuted),
-        enabledBorder: OutlineInputBorder(
-          borderSide: BorderSide(color: inputBorder),
-          borderRadius: BorderRadius.circular(8),
+    final scheme =
+        ColorScheme.fromSeed(
+          seedColor: accent,
+          brightness: brightness,
+        ).copyWith(
+          surface: bgApp,
+          primary: accent,
+          onPrimary: _onColor(accent),
+          secondary: accent2,
+          error: danger,
+        );
+    return materialPresentation(
+      this,
+      ThemeData(
+        colorScheme: scheme,
+        scaffoldBackgroundColor: bgApp,
+        cardColor: bgCard,
+        dialogTheme: DialogThemeData(backgroundColor: modalBg),
+        dividerColor: rowDivider,
+        progressIndicatorTheme: ProgressIndicatorThemeData(color: accent),
+        textSelectionTheme: TextSelectionThemeData(
+          cursorColor: accent,
+          selectionColor: accentDim,
+          selectionHandleColor: accent,
         ),
-        focusedBorder: OutlineInputBorder(
-          borderSide: BorderSide(color: inputFocusBorder, width: 1.5),
-          borderRadius: BorderRadius.circular(8),
+        sliderTheme: SliderThemeData(
+          activeTrackColor: accent,
+          inactiveTrackColor: sliderTrack,
+          thumbColor: sliderThumb,
+          overlayColor: accentDim,
         ),
+        scrollbarTheme: ScrollbarThemeData(
+          thumbColor: WidgetStatePropertyAll(scrollbarThumb),
+          thickness: const WidgetStatePropertyAll(6),
+          radius: const Radius.circular(3),
+        ),
+        inputDecorationTheme: InputDecorationTheme(
+          filled: true,
+          fillColor: inputBg,
+          hintStyle: TextStyle(color: textMuted),
+          enabledBorder: OutlineInputBorder(
+            borderSide: BorderSide(color: inputBorder),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderSide: BorderSide(color: inputFocusBorder, width: 1.5),
+            borderRadius: BorderRadius.circular(8),
+          ),
+        ),
+        useMaterial3: true,
       ),
-      useMaterial3: true,
     );
   }
 

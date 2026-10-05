@@ -10,6 +10,7 @@ import '../widgets/persistent_player_bar.dart';
 import '../widgets/global_top_bar.dart';
 import '../widgets/track_context_menu.dart';
 import '../utils/app_colors.dart';
+import '../widgets/material_surface.dart';
 
 /// Pantalla que muestra las canciones de una playlist específica.
 /// Se abre desde la barra lateral (Tu Biblioteca) del escritorio.
@@ -218,115 +219,98 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
                 final pinned = nav.isPinnedPlaylist(_playlist.id);
                 return Column(
                   children: [
-                    Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Row(
+                    CollectionHeader(
+                      artwork: Container(
+                        width: compact ? 80 : 120,
+                        height: compact ? 80 : 120,
+                        decoration: BoxDecoration(
+                          color: context.accent2,
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: _playlist.coverArtUrl != null
+                            ? Image.network(
+                                _playlist.coverArtUrl!,
+                                fit: BoxFit.cover,
+                              )
+                            : Icon(Icons.queue_music,
+                                color: context.textPrimary, size: 48),
+                      ),
+                      content: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Container(
-                            width: compact ? 80 : 120,
-                            height: compact ? 80 : 120,
-                            decoration: BoxDecoration(
-                              color: context.accent2,
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: _playlist.coverArtUrl != null
-                                ? Image.network(
-                                    _playlist.coverArtUrl!,
-                                    fit: BoxFit.cover,
-                                  )
-                                : Icon(Icons.queue_music,
-                                    color: context.textPrimary, size: 48),
+                          Text(
+                            _playlist.name,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                                color: context.textPrimary,
+                                fontSize: 22,
+                                fontWeight: FontWeight.bold),
                           ),
-                          const SizedBox(width: 16),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  _playlist.name,
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(
-                                      color: context.textPrimary,
-                                      fontSize: 22,
-                                      fontWeight: FontWeight.bold),
-                                ),
-                                const SizedBox(height: 8),
-                                Text('${tracks.length} canciones',
-                                    style: TextStyle(
-                                        color: context.textMuted,
-                                        fontSize: 14)),
-                                const SizedBox(height: 8),
-                                Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    InkWell(
-                                      onTap: () =>
-                                          nav.togglePinPlaylist(_playlist.id),
-                                      child: Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          Icon(
-                                            pinned
-                                                ? Icons.push_pin
-                                                : Icons.push_pin_outlined,
-                                            color: pinned
-                                                ? context.accent
-                                                : context.textMuted,
-                                            size: 18,
-                                          ),
-                                          const SizedBox(width: 6),
-                                          Text(
-                                            pinned ? 'Fijada' : 'Fijar',
-                                            style: TextStyle(
-                                              color: pinned
-                                                  ? context.accent
-                                                  : context.textMuted,
-                                              fontSize: 13,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                    IconButton(
-                                      visualDensity: VisualDensity.compact,
-                                      tooltip: 'Acciones de playlist',
-                                      icon: Icon(Icons.more_vert_rounded,
-                                          color: context.textMuted, size: 20),
-                                      onPressed: () =>
-                                          _showActionsPanel(tracks),
-                                    ),
-                                  ],
-                                ),
-                              ],
-                            ),
-                          ),
-                          Row(
-                            mainAxisSize: MainAxisSize.min,
+                          const SizedBox(height: 8),
+                          Text('${tracks.length} canciones',
+                              style: TextStyle(
+                                  color: context.textSecondary, fontSize: 14)),
+                          const SizedBox(height: 8),
+                          Wrap(
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            spacing: 8,
+                            runSpacing: 4,
                             children: [
-                              IconButton(
-                                icon: Icon(Icons.shuffle,
-                                    color: context.accent, size: 24),
-                                tooltip: 'Reproducir al azar',
-                                onPressed: () => _playShuffled(tracks),
-                              ),
-                              IconButton(
-                                icon: Icon(Icons.play_circle_filled,
-                                    color: context.accent, size: 48),
+                              TextButton.icon(
                                 onPressed: () =>
-                                    context.read<PlayerController>().playQueue(
-                                          tracks,
-                                          startIndex: 0,
-                                          sourcePlaylist: _playlist,
-                                        ),
+                                    nav.togglePinPlaylist(_playlist.id),
+                                style: TextButton.styleFrom(
+                                  padding:
+                                      const EdgeInsets.symmetric(horizontal: 8),
+                                  foregroundColor: pinned
+                                      ? context.accent
+                                      : context.textSecondary,
+                                ),
+                                icon: Icon(
+                                    pinned
+                                        ? Icons.push_pin
+                                        : Icons.push_pin_outlined,
+                                    size: 18),
+                                label: Text(pinned ? 'Fijada' : 'Fijar',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis),
                               ),
                               IconButton(
-                                icon: Icon(Icons.delete_outline,
-                                    color: context.danger, size: 24),
-                                tooltip: 'Eliminar playlist',
-                                onPressed: _confirmDelete,
+                                visualDensity: VisualDensity.compact,
+                                tooltip: 'Acciones de playlist',
+                                icon: Icon(Icons.more_vert_rounded,
+                                    color: context.textMuted, size: 20),
+                                onPressed: () => _showActionsPanel(tracks),
                               ),
                             ],
+                          ),
+                        ],
+                      ),
+                      actions: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(
+                            icon: Icon(Icons.shuffle,
+                                color: context.accent, size: 24),
+                            tooltip: 'Reproducir al azar',
+                            onPressed: () => _playShuffled(tracks),
+                          ),
+                          IconButton(
+                            icon: Icon(Icons.play_circle_filled,
+                                color: context.accent, size: 48),
+                            onPressed: () =>
+                                context.read<PlayerController>().playQueue(
+                                      tracks,
+                                      startIndex: 0,
+                                      sourcePlaylist: _playlist,
+                                    ),
+                          ),
+                          IconButton(
+                            icon: Icon(Icons.delete_outline,
+                                color: context.danger, size: 24),
+                            tooltip: 'Eliminar playlist',
+                            onPressed: _confirmDelete,
                           ),
                         ],
                       ),
@@ -359,7 +343,7 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
                                       ),
                               child: Padding(
                                 padding: const EdgeInsets.symmetric(
-                                    horizontal: 8, vertical: 4),
+                                    horizontal: 16, vertical: 8),
                                 child: Row(
                                   crossAxisAlignment: CrossAxisAlignment.center,
                                   children: [
@@ -402,7 +386,7 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
                                       index: index,
                                       child: Padding(
                                         padding: const EdgeInsets.symmetric(
-                                            horizontal: 8, vertical: 4),
+                                            horizontal: 16, vertical: 8),
                                         child: Icon(
                                           Icons.drag_handle_rounded,
                                           color: context.textMuted,
@@ -410,7 +394,6 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
                                         ),
                                       ),
                                     ),
-                                    const Spacer(),
                                     // Botón de me gusta
                                     IconButton(
                                       visualDensity: VisualDensity.compact,
@@ -431,6 +414,7 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
                                     // Tres puntitos → menú contextual
                                     IconButton(
                                       visualDensity: VisualDensity.compact,
+                                      tooltip: 'Acciones de la canción',
                                       icon: Icon(Icons.more_vert_rounded,
                                           color: context.textMuted, size: 20),
                                       onPressed: () => TrackContextMenu.show(

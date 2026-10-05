@@ -79,7 +79,8 @@ class _DesktopLoginScreenState extends State<DesktopLoginScreen> {
 
       // Check if we already have a profile with this URL
       final existingProfiles = profilesCtrl.profiles.where((p) => p.url == url);
-      final existingProfile = existingProfiles.isNotEmpty ? existingProfiles.first : null;
+      final existingProfile =
+          existingProfiles.isNotEmpty ? existingProfiles.first : null;
 
       ServerProfile profileToUse;
       if (existingProfile != null) {
@@ -87,7 +88,9 @@ class _DesktopLoginScreenState extends State<DesktopLoginScreen> {
         profileToUse = existingProfile.copyWith(
           username: user,
           password: pass,
-          nickname: existingProfile.nickname.isEmpty ? 'Servidor' : existingProfile.nickname,
+          nickname: existingProfile.nickname.isEmpty
+              ? 'Servidor'
+              : existingProfile.nickname,
         );
         await profilesCtrl.updateProfile(profileToUse);
       } else {
@@ -120,8 +123,7 @@ class _DesktopLoginScreenState extends State<DesktopLoginScreen> {
                 RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
             content: Row(
               children: [
-                Icon(Icons.error_outline,
-                    color: context.danger, size: 20),
+                Icon(Icons.error_outline, color: context.danger, size: 20),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
@@ -215,7 +217,8 @@ class _DesktopLoginScreenState extends State<DesktopLoginScreen> {
           SafeArea(
             child: Center(
               child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: 960),
                   child: Column(
@@ -228,7 +231,7 @@ class _DesktopLoginScreenState extends State<DesktopLoginScreen> {
                       // Tarjeta principal AMOLED de dos paneles
                       Container(
                         decoration: BoxDecoration(
-                          color: context.bgApp,
+                          color: context.bgCard,
                           borderRadius: BorderRadius.circular(20),
                           border: Border.all(
                             color: context.bgElevated,
@@ -236,7 +239,7 @@ class _DesktopLoginScreenState extends State<DesktopLoginScreen> {
                           ),
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.8),
+                              color: context.bgDeep.withValues(alpha: 0.12),
                               blurRadius: 36,
                               offset: const Offset(0, 12),
                             ),
@@ -304,10 +307,8 @@ class _DesktopLoginScreenState extends State<DesktopLoginScreen> {
                                           ],
                                         ),
                                         const SizedBox(height: 26),
-
                                         _buildDesktopFields(),
                                         const SizedBox(height: 24),
-
                                         _buildSubmitButton(),
                                       ],
                                     ),
@@ -335,12 +336,14 @@ class _DesktopLoginScreenState extends State<DesktopLoginScreen> {
                                   child: Center(
                                     child: PairingSharePanel(
                                       server: server,
-                                      onGetCredentials: _getCredentialsForPairing,
+                                      onGetCredentials:
+                                          _getCredentialsForPairing,
                                       onPaired: () {
                                         Navigator.pushReplacement(
                                           context,
                                           MaterialPageRoute(
-                                              builder: (_) => const HomeShell()),
+                                              builder: (_) =>
+                                                  const HomeShell()),
                                         );
                                       },
                                     ),
@@ -368,7 +371,8 @@ class _DesktopLoginScreenState extends State<DesktopLoginScreen> {
                           Text(
                             'Scrotify Desktop · Cifrado E2E X25519 + XChaCha20',
                             style: TextStyle(
-                              color: context.textPrimary.withValues(alpha: 0.35),
+                              color:
+                                  context.textPrimary.withValues(alpha: 0.35),
                               fontSize: 12,
                               fontFamily: 'monospace',
                             ),
@@ -390,28 +394,11 @@ class _DesktopLoginScreenState extends State<DesktopLoginScreen> {
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        Container(
+        Image.asset(
+          'assets/icons/scrotify_app_icon.png',
           width: 48,
           height: 48,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: context.bgApp,
-            border: Border.all(
-              color: context.accent.withValues(alpha: 0.4),
-              width: 1.5,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: context.accent.withValues(alpha: 0.3),
-                blurRadius: 18,
-              ),
-            ],
-          ),
-          child: Icon(
-            Icons.graphic_eq_rounded,
-            size: 26,
-            color: context.accent,
-          ),
+          semanticLabel: 'Logo de Scrotify',
         ),
         const SizedBox(width: 14),
         Column(

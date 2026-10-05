@@ -10,6 +10,7 @@ import '../widgets/global_top_bar.dart';
 import '../widgets/playlist_actions_panel.dart';
 import '../widgets/track_context_menu.dart';
 import '../utils/app_colors.dart';
+import '../widgets/material_surface.dart';
 
 /// Pantalla que muestra las canciones marcadas como favoritas (me gusta).
 class LikedSongsScreen extends StatefulWidget {
@@ -96,97 +97,82 @@ class _LikedSongsScreenState extends State<LikedSongsScreen> {
                 final pinned = nav.isPinnedPlaylist('__likes__');
                 return Column(
                   children: [
-                    Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Row(
+                    CollectionHeader(
+                      artwork: Container(
+                        width: compact ? 80 : 120,
+                        height: compact ? 80 : 120,
+                        decoration: BoxDecoration(
+                          color: context.accent2,
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: Icon(Icons.favorite,
+                            color: context.textPrimary, size: 48),
+                      ),
+                      content: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Container(
-                            width: compact ? 80 : 120,
-                            height: compact ? 80 : 120,
-                            decoration: BoxDecoration(
-                              color: context.accent2,
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Icon(Icons.favorite,
-                                color: context.textPrimary, size: 48),
-                          ),
-                          const SizedBox(width: 16),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text('Liked Songs',
-                                    style: TextStyle(
-                                        color: context.textPrimary,
-                                        fontSize: 22,
-                                        fontWeight: FontWeight.bold)),
-                                const SizedBox(height: 8),
-                                Text('${tracks.length} canciones',
-                                    style: TextStyle(
-                                        color: context.textMuted,
-                                        fontSize: 14)),
-                                const SizedBox(height: 8),
-                                Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    InkWell(
-                                      onTap: () =>
-                                          nav.togglePinPlaylist('__likes__'),
-                                      child: Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          Icon(
-                                            pinned
-                                                ? Icons.push_pin
-                                                : Icons.push_pin_outlined,
-                                            color: pinned
-                                                ? context.accent
-                                                : context.textMuted,
-                                            size: 18,
-                                          ),
-                                          const SizedBox(width: 6),
-                                          Text(
-                                            pinned ? 'Fijada' : 'Fijar',
-                                            style: TextStyle(
-                                              color: pinned
-                                                  ? context.accent
-                                                  : context.textMuted,
-                                              fontSize: 13,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                    IconButton(
-                                      visualDensity: VisualDensity.compact,
-                                      tooltip: 'Acciones de favoritos',
-                                      icon: Icon(Icons.more_vert_rounded,
-                                          color: context.textMuted, size: 20),
-                                      onPressed: () =>
-                                          _showActionsPanel(tracks),
-                                    ),
-                                  ],
+                          Text('Liked Songs',
+                              style: TextStyle(
+                                  color: context.textPrimary,
+                                  fontSize: 22,
+                                  fontWeight: FontWeight.bold)),
+                          const SizedBox(height: 8),
+                          Text('${tracks.length} canciones',
+                              style: TextStyle(
+                                  color: context.textSecondary, fontSize: 14)),
+                          const SizedBox(height: 8),
+                          Wrap(
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            spacing: 8,
+                            runSpacing: 4,
+                            children: [
+                              TextButton.icon(
+                                onPressed: () =>
+                                    nav.togglePinPlaylist('__likes__'),
+                                style: TextButton.styleFrom(
+                                  padding:
+                                      const EdgeInsets.symmetric(horizontal: 8),
+                                  foregroundColor: pinned
+                                      ? context.accent
+                                      : context.textSecondary,
                                 ),
-                              ],
-                            ),
-                          ),
-                          IconButton(
-                            icon: Icon(Icons.shuffle,
-                                color: context.accent, size: 28),
-                            tooltip: 'Reproducir al azar',
-                            onPressed: () => context
-                                .read<PlayerController>()
-                                .playShuffledQueue(tracks),
-                          ),
-                          IconButton(
-                            icon: Icon(Icons.play_circle_filled,
-                                color: context.accent, size: 48),
-                            onPressed: () => context
-                                .read<PlayerController>()
-                                .playQueue(tracks, startIndex: 0),
+                                icon: Icon(
+                                    pinned
+                                        ? Icons.push_pin
+                                        : Icons.push_pin_outlined,
+                                    size: 18),
+                                label: Text(pinned ? 'Fijada' : 'Fijar',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis),
+                              ),
+                              IconButton(
+                                visualDensity: VisualDensity.compact,
+                                tooltip: 'Acciones de favoritos',
+                                icon: Icon(Icons.more_vert_rounded,
+                                    color: context.textMuted, size: 20),
+                                onPressed: () => _showActionsPanel(tracks),
+                              ),
+                            ],
                           ),
                         ],
                       ),
+                      actions: Row(mainAxisSize: MainAxisSize.min, children: [
+                        IconButton(
+                          icon: Icon(Icons.shuffle,
+                              color: context.accent, size: 28),
+                          tooltip: 'Reproducir al azar',
+                          onPressed: () => context
+                              .read<PlayerController>()
+                              .playShuffledQueue(tracks),
+                        ),
+                        IconButton(
+                          icon: Icon(Icons.play_circle_filled,
+                              color: context.accent, size: 48),
+                          onPressed: () => context
+                              .read<PlayerController>()
+                              .playQueue(tracks, startIndex: 0),
+                        )
+                      ]),
                     ),
                     Divider(color: context.themeBorder),
                     if (tracks.isEmpty)
@@ -213,7 +199,7 @@ class _LikedSongsScreenState extends State<LikedSongsScreen> {
                                   .playQueue(tracks, startIndex: index),
                               child: Padding(
                                 padding: const EdgeInsets.symmetric(
-                                    horizontal: 8, vertical: 4),
+                                    horizontal: 16, vertical: 8),
                                 child: Row(
                                   crossAxisAlignment: CrossAxisAlignment.center,
                                   children: [
@@ -256,7 +242,7 @@ class _LikedSongsScreenState extends State<LikedSongsScreen> {
                                       index: index,
                                       child: Padding(
                                         padding: const EdgeInsets.symmetric(
-                                            horizontal: 8, vertical: 4),
+                                            horizontal: 16, vertical: 8),
                                         child: Icon(
                                           Icons.drag_handle_rounded,
                                           color: context.textMuted,
@@ -264,7 +250,6 @@ class _LikedSongsScreenState extends State<LikedSongsScreen> {
                                         ),
                                       ),
                                     ),
-                                    const Spacer(),
                                     // Botón de me gusta
                                     IconButton(
                                       visualDensity: VisualDensity.compact,
@@ -289,6 +274,7 @@ class _LikedSongsScreenState extends State<LikedSongsScreen> {
                                     // Menú contextual ⋮
                                     IconButton(
                                       visualDensity: VisualDensity.compact,
+                                      tooltip: 'Acciones de la canción',
                                       icon: Icon(Icons.more_vert_rounded,
                                           color: context.textMuted, size: 20),
                                       onPressed: () =>

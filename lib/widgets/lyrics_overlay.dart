@@ -115,8 +115,7 @@ class _LyricsOverlayState extends State<LyricsOverlay> {
       const lineHeight = 40.0;
       final max = _scroll.position.maxScrollExtent;
       final target =
-          (index * lineHeight - viewport / 2 + lineHeight / 2)
-              .clamp(0.0, max);
+          (index * lineHeight - viewport / 2 + lineHeight / 2).clamp(0.0, max);
       _programmatic = true;
       _scroll
           .animateTo(
@@ -213,8 +212,7 @@ class _LyricsOverlayState extends State<LyricsOverlay> {
           return _frame(
             source: result.source,
             child: SingleChildScrollView(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 16, vertical: 32),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 32),
               child: Text(
                 result.plainText,
                 textAlign: TextAlign.center,
@@ -222,9 +220,7 @@ class _LyricsOverlayState extends State<LyricsOverlay> {
                   color: Colors.white,
                   fontSize: 14,
                   height: 1.7,
-                  shadows: [
-                    Shadow(color: Colors.black54, blurRadius: 6)
-                  ],
+                  shadows: [Shadow(color: Colors.black54, blurRadius: 6)],
                 ),
               ),
             ),
@@ -257,8 +253,7 @@ class _LyricsOverlayState extends State<LyricsOverlay> {
                         final active = i == index;
                         final past = i < index;
                         return Padding(
-                          key: _itemKeys.putIfAbsent(
-                              i, () => GlobalKey()),
+                          key: _itemKeys.putIfAbsent(i, () => GlobalKey()),
                           padding: const EdgeInsets.symmetric(vertical: 6),
                           child: Text(
                             result.lines[i].text,
@@ -270,20 +265,18 @@ class _LyricsOverlayState extends State<LyricsOverlay> {
                                       ? Colors.white.withValues(alpha: 0.55)
                                       : Colors.white.withValues(alpha: 0.85),
                               fontSize: active ? 21 : 15,
-                              fontWeight: active
-                                  ? FontWeight.bold
-                                  : FontWeight.normal,
+                              fontWeight:
+                                  active ? FontWeight.bold : FontWeight.normal,
                               height: 1.45,
                               shadows: const [
-                                Shadow(
-                                    color: Colors.black54, blurRadius: 6)
+                                Shadow(color: Colors.black54, blurRadius: 6)
                               ],
                             ),
                           ),
                         );
                       },
                     ),
-                    ),
+                  ),
                 );
               },
             );
@@ -308,17 +301,16 @@ class _LyricsOverlayState extends State<LyricsOverlay> {
           right: 0,
           child: Center(
             child: Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
               decoration: BoxDecoration(
-                color: Colors.black.withValues(alpha: 0.45),
+                color: context.bgCard,
                 borderRadius: BorderRadius.circular(10),
               ),
               child: Text(
                 source,
-                style: const TextStyle(
-                  color: Colors.white70,
-                  fontSize: 10,
+                style: TextStyle(
+                  color: context.textPrimary,
+                  fontSize: 12,
                   fontWeight: FontWeight.bold,
                 ),
               ),
@@ -334,25 +326,24 @@ class _LyricsOverlayState extends State<LyricsOverlay> {
               child: GestureDetector(
                 onTap: onResume,
                 child: Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 12, vertical: 6),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                   decoration: BoxDecoration(
-                    color: Colors.black.withValues(alpha: 0.65),
+                    color: context.bgElevated,
                     borderRadius: BorderRadius.circular(16),
                     border: Border.all(
-                      color: Colors.white.withValues(alpha: 0.25),
+                      color: context.borderSubtle,
                     ),
                   ),
-                  child: const Row(
+                  child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.sync,
-                          color: Colors.white70, size: 14),
-                      SizedBox(width: 6),
+                      Icon(Icons.sync, color: context.textPrimary, size: 14),
+                      const SizedBox(width: 6),
                       Text(
                         'Toca para sincronizar',
                         style: TextStyle(
-                          color: Colors.white70,
+                          color: context.textPrimary,
                           fontSize: 11,
                           fontWeight: FontWeight.bold,
                         ),
@@ -383,8 +374,7 @@ class _LyricsOverlayState extends State<LyricsOverlay> {
             right: 0,
             child: Center(
               child: Text(source,
-                  style:
-                      const TextStyle(color: Colors.white38, fontSize: 10)),
+                  style: const TextStyle(color: Colors.white38, fontSize: 10)),
             ),
           ),
       ],

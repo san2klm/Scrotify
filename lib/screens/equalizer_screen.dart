@@ -3,6 +3,8 @@ import 'package:provider/provider.dart';
 
 import '../services/equalizer_service.dart';
 import '../utils/app_colors.dart';
+import '../utils/responsive.dart';
+import '../widgets/material_surface.dart';
 
 /// Pantalla del ecualizador de 10 bandas (Fase 10).
 ///
@@ -40,37 +42,39 @@ class EqualizerScreen extends StatelessWidget {
           const SizedBox(width: 8),
         ],
       ),
-      body: ListView(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        children: [
-          // -------------------------------------------------------------------
-          // Advertencia honesta sobre el backend de audio
-          // -------------------------------------------------------------------
-          _buildBackendNoticeCard(context, eq),
-          const SizedBox(height: 16),
+      body: ConstrainedContent(
+          maxWidth: 1000,
+          child: ListView(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            children: [
+              // -------------------------------------------------------------------
+              // Advertencia honesta sobre el backend de audio
+              // -------------------------------------------------------------------
+              _buildBackendNoticeCard(context, eq),
+              const SizedBox(height: 16),
 
-          // -------------------------------------------------------------------
-          // Switch Activar/Bypass y Presets
-          // -------------------------------------------------------------------
-          _buildControlsCard(context, eq),
-          const SizedBox(height: 20),
+              // -------------------------------------------------------------------
+              // Switch Activar/Bypass y Presets
+              // -------------------------------------------------------------------
+              _buildControlsCard(context, eq),
+              const SizedBox(height: 20),
 
-          // -------------------------------------------------------------------
-          // Sliders de 10 bandas (verticales en diseño ancho o deslizable en estrecho)
-          // -------------------------------------------------------------------
-          Text(
-            'Bandas de frecuencia',
-            style: TextStyle(
-              color: context.textPrimary,
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          const SizedBox(height: 10),
-          _buildBandsContainer(context, eq, isWide),
-          const SizedBox(height: 30),
-        ],
-      ),
+              // -------------------------------------------------------------------
+              // Sliders de 10 bandas (verticales en diseño ancho o deslizable en estrecho)
+              // -------------------------------------------------------------------
+              Text(
+                'Bandas de frecuencia',
+                style: TextStyle(
+                  color: context.textPrimary,
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 10),
+              _buildBandsContainer(context, eq, isWide),
+              const SizedBox(height: 30),
+            ],
+          )),
     );
   }
 
@@ -124,12 +128,9 @@ class EqualizerScreen extends StatelessWidget {
   }
 
   Widget _buildControlsCard(BuildContext context, EqualizerService eq) {
-    return Container(
+    return MaterialSurface(
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: context.bgElevated,
-        borderRadius: BorderRadius.circular(16),
-      ),
+      color: context.bgElevated,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -137,7 +138,8 @@ class EqualizerScreen extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Column(
+              Expanded(
+                  child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
@@ -158,7 +160,7 @@ class EqualizerScreen extends StatelessWidget {
                     ),
                   ),
                 ],
-              ),
+              )),
               Semantics(
                 label: 'Interruptor del ecualizador',
                 value: eq.enabled ? 'Activado' : 'Desactivado',
@@ -221,18 +223,15 @@ class EqualizerScreen extends StatelessWidget {
 
   Widget _buildBandsContainer(
       BuildContext context, EqualizerService eq, bool isWide) {
-    return Container(
+    return MaterialSurface(
       padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 12),
-      decoration: BoxDecoration(
-        color: context.bgElevated,
-        borderRadius: BorderRadius.circular(16),
-      ),
+      color: context.bgElevated,
       child: isWide
           ? Row(
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
                 for (int i = 0; i < EqualizerService.bandCount; i++)
-                  _buildBandSliderColumn(context, eq, i),
+                  Expanded(child: _buildBandSliderColumn(context, eq, i)),
               ],
             )
           : SingleChildScrollView(

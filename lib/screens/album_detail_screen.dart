@@ -7,6 +7,7 @@ import '../widgets/interactive_artist_text.dart';
 import '../widgets/persistent_player_bar.dart';
 import '../widgets/global_top_bar.dart';
 import '../utils/app_colors.dart';
+import '../widgets/material_surface.dart';
 
 /// Pantalla que muestra las canciones de un álbum.
 /// Se abre al tocar un álbum en el inicio o en un artista.
@@ -60,58 +61,48 @@ class _AlbumDetailScreenState extends State<AlbumDetailScreen> {
                 }
                 return Column(
                   children: [
-                    Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Row(
+                    CollectionHeader(
+                      artwork: Container(
+                        width: compact ? 80 : 120,
+                        height: compact ? 80 : 120,
+                        decoration: BoxDecoration(
+                          color: context.bgElevated,
+                          borderRadius: BorderRadius.circular(16),
+                          image: widget.album.coverArtUrl != null
+                              ? DecorationImage(
+                                  image:
+                                      NetworkImage(widget.album.coverArtUrl!),
+                                  fit: BoxFit.cover,
+                                )
+                              : null,
+                        ),
+                        child: widget.album.coverArtUrl == null
+                            ? Icon(Icons.album,
+                                color: context.textMuted, size: 44)
+                            : null,
+                      ),
+                      content: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Container(
-                            width: 120,
-                            height: 120,
-                            decoration: BoxDecoration(
-                              color: context.bgElevated,
-                              borderRadius: BorderRadius.circular(8),
-                              image: widget.album.coverArtUrl != null
-                                  ? DecorationImage(
-                                      image: NetworkImage(
-                                          widget.album.coverArtUrl!),
-                                      fit: BoxFit.cover,
-                                    )
-                                  : null,
-                            ),
-                            child: widget.album.coverArtUrl == null
-                                ? Icon(Icons.album,
-                                    color: context.textMuted, size: 44)
-                                : null,
+                          Text(
+                            widget.album.title,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                                color: context.textPrimary,
+                                fontSize: 22,
+                                fontWeight: FontWeight.bold),
                           ),
-                          const SizedBox(width: 16),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  widget.album.title,
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(
-                                      color: context.textPrimary,
-                                      fontSize: 22,
-                                      fontWeight: FontWeight.bold),
-                                ),
-                                const SizedBox(height: 8),
-                                Text(widget.album.artist,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: TextStyle(
-                                        color: context.textMuted,
-                                        fontSize: 14)),
-                                const SizedBox(height: 4),
-                                Text('${tracks.length} canciones',
-                                    style: TextStyle(
-                                        color: context.textMuted,
-                                        fontSize: 13)),
-                              ],
-                            ),
-                          ),
+                          const SizedBox(height: 8),
+                          Text(widget.album.artist,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                  color: context.textSecondary, fontSize: 14)),
+                          const SizedBox(height: 4),
+                          Text('${tracks.length} canciones',
+                              style: TextStyle(
+                                  color: context.textMuted, fontSize: 13)),
                         ],
                       ),
                     ),
@@ -133,7 +124,8 @@ class _AlbumDetailScreenState extends State<AlbumDetailScreen> {
                                 overflow: TextOverflow.ellipsis,
                                 style: TextStyle(
                                     color: context.textPrimary, fontSize: 14)),
-                            subtitle: InteractiveArtistText(artistString: track.artist),
+                            subtitle: InteractiveArtistText(
+                                artistString: track.artist),
                             trailing: IconButton(
                               icon: Icon(
                                 starred

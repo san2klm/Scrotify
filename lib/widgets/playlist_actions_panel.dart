@@ -5,6 +5,7 @@ import '../services/navidrome_service.dart';
 import '../services/playlist_export_service.dart';
 import '../services/theme_controller.dart';
 import '../utils/app_colors.dart';
+import 'material_surface.dart';
 import 'add_playlist_tracks_dialog.dart';
 import 'edit_playlist_details_dialog.dart';
 
@@ -261,13 +262,18 @@ class _PlaylistActionsPanelState extends State<PlaylistActionsPanel> {
 
   Widget _action(IconData icon, String title, String subtitle,
           Future<void> Function() action) =>
-      ListTile(
-        enabled: !_busy,
-        leading: Icon(icon, color: context.accent),
-        title: Text(title, style: TextStyle(color: context.textPrimary)),
-        subtitle: Text(subtitle, style: TextStyle(color: context.textMuted)),
-        trailing: const Icon(Icons.chevron_right_rounded),
-        onTap: _busy ? null : () => _run(action),
+      Padding(
+        padding: const EdgeInsets.only(bottom: 8),
+        child: MaterialSurface(
+            child: ListTile(
+          enabled: !_busy,
+          leading: Icon(icon, color: context.accent),
+          title: Text(title, style: TextStyle(color: context.textPrimary)),
+          subtitle:
+              Text(subtitle, style: TextStyle(color: context.textSecondary)),
+          trailing: const Icon(Icons.chevron_right_rounded),
+          onTap: _busy ? null : () => _run(action),
+        )),
       );
 
   @override
@@ -300,6 +306,7 @@ class _PlaylistActionsPanelState extends State<PlaylistActionsPanel> {
                               fontSize: 18,
                               fontWeight: FontWeight.bold))),
                   IconButton(
+                      tooltip: 'Cerrar acciones',
                       icon: const Icon(Icons.close_rounded),
                       onPressed:
                           _busy ? null : () => Navigator.of(context).pop()),

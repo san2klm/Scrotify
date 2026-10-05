@@ -8,8 +8,9 @@ import 'package:provider/provider.dart';
 import '../services/app_theme.dart';
 import '../services/theme_controller.dart';
 import '../utils/app_colors.dart';
+import 'material_surface.dart';
 
-/// Apartado "TUS TEMAS" estilo Psysonic para Ajustes → Interfaz.
+/// Selector Material de temas para Ajustes → Interfaz.
 ///
 /// Muestra los `.zip` de la carpeta de temas como tarjetas con vista previa
 /// bicolor, nombre, versión y distintivo CVD-safe. Permite cambiar la carpeta,
@@ -44,7 +45,7 @@ class _ThemesSectionState extends State<ThemesSection> {
     _scrolledFor = themes.activeId;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!_scroll.hasClients) return;
-      const cardW = 104.0;
+      const cardW = 152.0;
       const gap = 12.0;
       final x = i * (cardW + gap) - 60.0;
       final max = _scroll.position.maxScrollExtent;
@@ -58,160 +59,127 @@ class _ThemesSectionState extends State<ThemesSection> {
     return Consumer<ThemeController>(
       builder: (context, themes, _) {
         _centerOnSelected(themes);
-        return Container(
+        final scaler = MediaQuery.textScalerOf(context);
+        final extraHeight =
+            (scaler.scale(13) - 13).clamp(0.0, double.infinity) * 5;
+        return MaterialSurface(
           padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: context.bgApp,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: context.borderSubtle),
-          ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Cabecera
-              Row(
-                children: [
-                  Icon(Icons.palette_outlined,
-                      color: context.textSecondary, size: 18),
-                  const SizedBox(width: 8),
-                  Text(
-                    'TUS TEMAS',
-                    style: TextStyle(
-                      color: context.textPrimary,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 1.5,
-                    ),
+              Row(children: [
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: context.accentDim,
+                    borderRadius: BorderRadius.circular(16),
                   ),
-                  const Spacer(),
-                  if (themes.loading)
-                    SizedBox(
-                      width: 16,
-                      height: 16,
+                  child: Icon(Icons.palette_outlined, color: context.accent),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                    child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Tus temas',
+                        style: TextStyle(
+                            color: context.textPrimary,
+                            fontSize: 20,
+                            fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 4),
+                    Text('Personaliza los colores de Scrotify',
+                        style: TextStyle(
+                            color: context.textSecondary, fontSize: 13)),
+                  ],
+                )),
+                if (themes.loading)
+                  SizedBox.square(
+                      dimension: 20,
                       child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: context.textMuted,
-                      ),
-                    ),
-                ],
-              ),
-              const SizedBox(height: 12),
-
-              // Aviso de migración (one-time)
+                          strokeWidth: 2, color: context.accent)),
+              ]),
+              const SizedBox(height: 16),
               if (themes.migrationNotice != null) ...[
                 _NoticeBanner(
-                  text: themes.migrationNotice!,
-                  onClose: themes.clearMigrationNotice,
-                ),
-                const SizedBox(height: 12),
+                    text: themes.migrationNotice!,
+                    onClose: themes.clearMigrationNotice),
+                const SizedBox(height: 16),
               ],
-
-              _ListLabel(context, 'TEMAS'),
-              const SizedBox(height: 8),
-
-              // Lista horizontal: fijos primero, luego instalados.
-              // (centrada + scrollbar)
+              Text('Tema activo: ${themes.active.name}',
+                  style: TextStyle(color: context.textSecondary, fontSize: 13)),
+              const SizedBox(height: 12),
               SizedBox(
-                height: 180,
+                height: 244 + extraHeight,
                 child: Scrollbar(
                   controller: _scroll,
                   thumbVisibility: true,
-                  thickness: 6,
-                  radius: const Radius.circular(3),
-                  child: Padding(
-                    padding: const EdgeInsets.only(bottom: 10),
-                    child: Center(
-                      child: ListView.separated(
-                        controller: _scroll,
-                        shrinkWrap: true,
-                        scrollDirection: Axis.horizontal,
-                        // Margen superior interno: baja las tarjetas 15px
-                        // y evita que la ✕ (que sobresale por arriba)
-                        // se corte con el recorte del scroll.
-                        padding:
-                            const EdgeInsets.only(top: 15, left: 4, right: 4),
-                        itemCount: themes.themes.length,
-                        separatorBuilder: (_, __) => const SizedBox(width: 12),
-                        itemBuilder: (context, i) {
-                          final t = themes.themes[i];
-                          return _ThemeCard(
-                            theme: t,
-                            selected: t.id == themes.activeId,
-                            onTap: () => themes.selectTheme(t.id),
-                            onDelete: t.sourceZipPath.isEmpty
-                                ? null
-                                : () => _confirmDelete(context, themes, t),
-                          );
-                        },
-                      ),
-                    ),
+                  scrollbarOrientation: ScrollbarOrientation.bottom,
+                  child: ListView.separated(
+                    controller: _scroll,
+                    scrollDirection: Axis.horizontal,
+                    padding: const EdgeInsets.only(bottom: 16),
+                    itemCount: themes.themes.length,
+                    separatorBuilder: (_, __) => const SizedBox(width: 12),
+                    itemBuilder: (context, i) {
+                      final t = themes.themes[i];
+                      return _ThemeCard(
+                        theme: t,
+                        selected: t.id == themes.activeId,
+                        onTap: () => themes.selectTheme(t.id),
+                        onDelete: t.sourceZipPath.isEmpty
+                            ? null
+                            : () => _confirmDelete(context, themes, t),
+                      );
+                    },
                   ),
                 ),
               ),
-
               if (themes.skippedInvalid > 0) ...[
-                const SizedBox(height: 8),
-                Text(
-                  '${themes.skippedInvalid} archivo(s) inválidos ignorados.',
-                  style: TextStyle(color: context.textMuted, fontSize: 11),
-                ),
+                const SizedBox(height: 12),
+                Text('${themes.skippedInvalid} archivo(s) inválidos ignorados.',
+                    style:
+                        TextStyle(color: context.textSecondary, fontSize: 13)),
               ],
-
               if (themes.error != null) ...[
-                const SizedBox(height: 10),
-                Text(
-                  themes.error!,
-                  style: TextStyle(color: context.warning, fontSize: 12),
-                ),
+                const SizedBox(height: 12),
+                Text(themes.error!,
+                    style: TextStyle(color: context.warning, fontSize: 13)),
               ],
-
-              const SizedBox(height: 14),
+              const SizedBox(height: 16),
               Divider(color: context.borderSubtle, height: 1),
-              const SizedBox(height: 10),
-
-              // Carpeta de temas
-              Row(
-                children: [
-                  Icon(Icons.folder_outlined,
-                      color: context.textMuted, size: 16),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      themes.themesDir,
-                      maxLines: 1,
+              const SizedBox(height: 16),
+              Row(children: [
+                Icon(Icons.folder_outlined,
+                    color: context.textSecondary, size: 20),
+                const SizedBox(width: 12),
+                Expanded(
+                    child: Tooltip(
+                  message: themes.themesDir,
+                  child: Text(themes.themesDir,
+                      maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: TextStyle(color: context.textMuted, fontSize: 12),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 10),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  _FolderButton(
-                    icon: Icons.folder_open,
-                    // Android usa el Storage Access Framework: una ruta de
-                    // carpeta normal no concede permiso para recorrerla.
-                    // Allí se importan los .zip de la carpeta elegida.
+                      style: TextStyle(
+                          color: context.textSecondary, fontSize: 13)),
+                )),
+              ]),
+              const SizedBox(height: 16),
+              Wrap(spacing: 8, runSpacing: 8, children: [
+                _FolderButton(
+                    icon: Icons.folder_open_rounded,
                     label: Platform.isAndroid
                         ? 'Importar carpeta'
                         : 'Cambiar carpeta',
-                    onTap: () => _pickDirectory(context, themes),
-                  ),
-                  _FolderButton(
-                    icon: Icons.refresh,
+                    onTap: () => _pickDirectory(context, themes)),
+                _FolderButton(
+                    icon: Icons.refresh_rounded,
                     label: 'Reescanear',
-                    onTap: themes.loading ? null : themes.rescan,
-                  ),
-                  _FolderButton(
-                    icon: Icons.add,
+                    onTap: themes.loading ? null : themes.rescan),
+                _FolderButton(
+                    icon: Icons.add_rounded,
                     label: 'Añadir .zip',
-                    onTap: () => _pickZip(context, themes),
-                  ),
-                ],
-              ),
+                    primary: true,
+                    onTap: () => _pickZip(context, themes)),
+              ]),
             ],
           ),
         );
@@ -370,26 +338,6 @@ class _ThemesSectionState extends State<ThemesSection> {
   }
 }
 
-class _ListLabel extends StatelessWidget {
-  final BuildContext context;
-  final String text;
-
-  const _ListLabel(this.context, this.text);
-
-  @override
-  Widget build(BuildContext _) {
-    return Text(
-      text,
-      style: TextStyle(
-        color: context.textMuted,
-        fontSize: 11,
-        fontWeight: FontWeight.w700,
-        letterSpacing: 1.2,
-      ),
-    );
-  }
-}
-
 class _NoticeBanner extends StatelessWidget {
   final String text;
   final VoidCallback onClose;
@@ -413,9 +361,11 @@ class _NoticeBanner extends StatelessWidget {
             child: Text(text,
                 style: TextStyle(color: context.textSecondary, fontSize: 12)),
           ),
-          GestureDetector(
-            onTap: onClose,
-            child: Icon(Icons.close, size: 16, color: context.textMuted),
+          IconButton(
+            tooltip: 'Cerrar aviso',
+            onPressed: onClose,
+            icon: Icon(Icons.close_rounded,
+                size: 20, color: context.textSecondary),
           ),
         ],
       ),
@@ -441,87 +391,72 @@ class _ThemeCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: SizedBox(
-        width: 104,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Stack(
-              clipBehavior: Clip.none,
-              children: [
-                Container(
-                  height: 72,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color:
-                          selected ? context.textPrimary : context.themeBorder,
-                      width: selected ? 2.5 : 1,
-                    ),
-                  ),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(11),
-                    child: _preview(),
-                  ),
+    return SizedBox(
+      width: 152,
+      child: Semantics(
+        selected: selected,
+        child: AppContentCard(
+          selected: selected,
+          onTap: onTap,
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SizedBox(
+                height: 96,
+                width: double.infinity,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: Stack(fit: StackFit.expand, children: [
+                    _preview(),
+                    if (selected)
+                      Positioned(
+                          top: 8,
+                          right: 8,
+                          child: Container(
+                            padding: const EdgeInsets.all(4),
+                            decoration: BoxDecoration(
+                                color: context.accent, shape: BoxShape.circle),
+                            child: Icon(Icons.check_rounded,
+                                size: 16, color: context.onAccent),
+                          )),
+                  ]),
                 ),
-                if (onDelete != null)
-                  Positioned(
-                    top: -8,
-                    right: -8,
-                    child: GestureDetector(
-                      onTap: onDelete,
-                      child: Container(
-                        width: 20,
-                        height: 20,
-                        decoration: BoxDecoration(
-                          color: context.bgCard,
-                          shape: BoxShape.circle,
-                          border: Border.all(color: context.themeBorder),
-                        ),
-                        child: Icon(Icons.close,
-                            size: 12, color: context.textSecondary),
-                      ),
-                    ),
-                  ),
-                if (selected)
-                  Positioned(
-                    top: 6,
-                    right: 6,
-                    child: Icon(Icons.check_circle,
-                        size: 16, color: context.textPrimary),
-                  ),
-              ],
-            ),
-            const SizedBox(height: 6),
-            Text(
-              theme.name,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                  color: context.textPrimary, fontSize: 11, height: 1.2),
-            ),
-            const SizedBox(height: 3),
-            if (theme.isCvdSafe)
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                decoration: BoxDecoration(
-                  color: context.textPrimary.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: Text(
-                  'CVD-safe',
-                  style: TextStyle(color: context.textSecondary, fontSize: 9),
-                ),
-              )
-            else if (theme.version.isNotEmpty)
-              Text(
-                'v${theme.version}',
-                style: TextStyle(color: context.textMuted, fontSize: 10),
               ),
-          ],
+              const SizedBox(height: 12),
+              Expanded(
+                  child: Tooltip(
+                message: theme.name,
+                child: Text(theme.name,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                        color: context.textPrimary,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600)),
+              )),
+              Row(children: [
+                Expanded(
+                    child: Text(
+                  theme.isCvdSafe
+                      ? 'CVD-safe'
+                      : theme.version.isNotEmpty
+                          ? 'v${theme.version}'
+                          : '',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(color: context.textSecondary, fontSize: 12),
+                )),
+                if (onDelete != null)
+                  IconButton(
+                    tooltip: 'Borrar ${theme.name}',
+                    onPressed: onDelete,
+                    icon: Icon(Icons.delete_outline_rounded,
+                        size: 20, color: context.textSecondary),
+                  ),
+              ]),
+            ],
+          ),
         ),
       ),
     );
@@ -562,27 +497,39 @@ class _FolderButton extends StatelessWidget {
   final IconData icon;
   final String label;
   final VoidCallback? onTap;
+  final bool primary;
 
-  const _FolderButton({
-    required this.icon,
-    required this.label,
-    this.onTap,
-  });
+  const _FolderButton(
+      {required this.icon,
+      required this.label,
+      this.onTap,
+      this.primary = false});
 
   @override
   Widget build(BuildContext context) {
+    final shape =
+        RoundedRectangleBorder(borderRadius: BorderRadius.circular(12));
+    if (primary) {
+      return FilledButton.icon(
+        onPressed: onTap,
+        icon: Icon(icon, size: 20),
+        label: Text(label),
+        style: FilledButton.styleFrom(
+            backgroundColor: context.accent,
+            foregroundColor: context.onAccent,
+            minimumSize: const Size(64, 48),
+            shape: shape),
+      );
+    }
     return OutlinedButton.icon(
       onPressed: onTap,
-      icon: Icon(icon, size: 15),
-      label: Text(label, style: const TextStyle(fontSize: 12)),
+      icon: Icon(icon, size: 20),
+      label: Text(label),
       style: OutlinedButton.styleFrom(
-        foregroundColor: context.textSecondary,
-        side: BorderSide(color: context.themeBorder),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(9),
-        ),
-      ),
+          foregroundColor: context.textSecondary,
+          side: BorderSide(color: context.themeBorder),
+          minimumSize: const Size(64, 48),
+          shape: shape),
     );
   }
 }

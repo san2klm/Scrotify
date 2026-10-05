@@ -7,6 +7,8 @@ import '../services/player_controller.dart';
 import '../services/secure_storage.dart';
 import '../widgets/persistent_player_bar.dart';
 import '../widgets/cover_art.dart';
+import '../widgets/home_content_card.dart';
+import '../widgets/account_menu_button.dart';
 import '../widgets/genre_selector.dart';
 import '../widgets/create_playlist_dialog.dart';
 import '../widgets/search_explore_field.dart';
@@ -390,9 +392,6 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
   // BARRA SUPERIOR PERSISTENTE MÓVIL (HEADER FIJO)
   // ===========================================================================
   Widget _buildPersistentMobileHeader(NavidromeService nav) {
-    final username = nav.username ?? 'U';
-    final initial = username.isNotEmpty ? username[0].toUpperCase() : 'U';
-
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 8, 12, 8),
       decoration: BoxDecoration(
@@ -406,25 +405,7 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
         children: [
           Row(
             children: [
-              // Avatar
-              Container(
-                width: 32,
-                height: 32,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: context.accent2,
-                ),
-                child: Center(
-                  child: Text(
-                    initial,
-                    style: TextStyle(
-                      color: context.textPrimary,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 13,
-                    ),
-                  ),
-                ),
-              ),
+              const AccountMenuButton(),
               const SizedBox(width: 10),
 
               // Título según pestaña
@@ -500,7 +481,9 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
 
   Widget _filterPills() {
     return SizedBox(
-      height: 34,
+      height: 48 +
+          (MediaQuery.textScalerOf(context).scale(13) - 13)
+              .clamp(0.0, double.infinity),
       child: ListView(
         scrollDirection: Axis.horizontal,
         children: [
@@ -516,28 +499,21 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
     final selected = _filter == value;
     return Padding(
       padding: const EdgeInsets.only(right: 8),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(16),
-        onTap: () => setState(() => _filter = value),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 150),
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-          decoration: BoxDecoration(
-            color: selected ? context.accent2 : context.bgApp,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: selected ? context.accent : context.bgElevated,
-            ),
-          ),
-          child: Text(
-            label,
-            style: TextStyle(
-              color: selected ? context.textPrimary : context.textSecondary,
-              fontSize: 12,
-              fontWeight: selected ? FontWeight.bold : FontWeight.w500,
-            ),
-          ),
+      child: ChoiceChip(
+        label: Text(label),
+        selected: selected,
+        showCheckmark: false,
+        onSelected: (_) => setState(() => _filter = value),
+        selectedColor: context.sidebarActiveBg,
+        backgroundColor: context.bgCard,
+        labelStyle: TextStyle(
+          color: selected ? context.sidebarActiveText : context.textSecondary,
+          fontSize: 13,
+          fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
         ),
+        side:
+            BorderSide(color: selected ? context.accent : context.borderSubtle),
+        shape: const StadiumBorder(),
       ),
     );
   }
@@ -567,6 +543,11 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
   // ===========================================================================
   // Pestaña Inicio (Mobile)
   // ===========================================================================
+  double _metadataExtraHeight() {
+    final scaler = MediaQuery.textScalerOf(context);
+    return (scaler.scale(14) - 14).clamp(0.0, double.infinity) * 3;
+  }
+
   Widget _buildHomeTab() {
     return FutureBuilder<List<Track>>(
       future: _futureTracks,
@@ -583,7 +564,7 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
           return Center(
             child: Text(
               'Sin contenido disponible',
-              style: TextStyle(color: context.textMuted),
+              style: TextStyle(color: context.textSecondary),
             ),
           );
         }
@@ -594,7 +575,7 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
                 .read<NavidromeService>()
                 .filterByGenre(tracks, _selectedGenre!);
         return SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -657,9 +638,9 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       crossAxisCount: 2,
-      childAspectRatio: 2.8,
-      crossAxisSpacing: 10,
-      mainAxisSpacing: 10,
+      mainAxisExtent: 64 + _metadataExtraHeight(),
+      crossAxisSpacing: 12,
+      mainAxisSpacing: 8,
       children: [
         _quickAccessCard(
           label: 'Tus Me Gusta',
@@ -706,47 +687,42 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
     String? title,
     VoidCallback? onTap,
   }) {
-    return InkWell(
+    return HomeContentCard(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(8),
-      child: Container(
-        decoration: BoxDecoration(
-          color: context.bgApp,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: context.inputBorder),
-        ),
-        child: Row(
-          children: [
-            SizedBox(
+      child: Row(
+        children: [
+          SizedBox(
+            width: 44,
+            height: double.infinity,
+            child: CoverArt(
+              url: albumArtUrl,
+              artist: artist,
+              album: album,
+              title: title,
               width: 44,
-              height: double.infinity,
-              child: CoverArt(
-                url: albumArtUrl,
-                artist: artist,
-                album: album,
-                title: title,
-                width: 44,
-                borderRadius: 7,
-                fallbackIcon: icon ?? Icons.music_note,
-                fallbackIconSize: 20,
-                fallbackColor: color,
-              ),
+              borderRadius: 7,
+              fallbackIcon: icon ?? Icons.music_note,
+              fallbackIconSize: 20,
+              fallbackColor: color,
             ),
-            const SizedBox(width: 8),
-            Expanded(
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.only(right: 12),
               child: Text(
                 label,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   color: context.textPrimary,
-                  fontSize: 12,
+                  fontSize: 14,
                   fontWeight: FontWeight.w600,
                 ),
               ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -757,7 +733,7 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
         title,
         style: TextStyle(
           color: context.textPrimary,
-          fontSize: 17,
+          fontSize: 18,
           fontWeight: FontWeight.bold,
         ),
       );
@@ -768,19 +744,15 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
         Expanded(
           child: Text(
             title,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
             style: TextStyle(
               color: context.textPrimary,
-              fontSize: 17,
+              fontSize: 18,
               fontWeight: FontWeight.bold,
             ),
           ),
         ),
         IconButton(
-          visualDensity: VisualDensity.compact,
-          padding: EdgeInsets.zero,
-          constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+          constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
           icon: const Icon(Icons.refresh_rounded, size: 20),
           tooltip: 'Recargar $title',
           onPressed: onReload,
@@ -795,9 +767,12 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
       future: _futureRecentlyAdded,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const SizedBox(
-            height: 180,
-            child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+          return SizedBox(
+            height: 196 + _metadataExtraHeight(),
+            child: Center(
+              child: CircularProgressIndicator(
+                  strokeWidth: 2, color: context.accent),
+            ),
           );
         }
         final tracks = snapshot.data ?? const <Track>[];
@@ -811,7 +786,7 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
                   isOffline
                       ? Icons.cloud_off_rounded
                       : Icons.info_outline_rounded,
-                  color: context.textMuted,
+                  color: context.textSecondary,
                   size: 18,
                 ),
                 const SizedBox(width: 8),
@@ -820,7 +795,8 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
                     isOffline
                         ? 'Sin conexión para sincronizar novedades del servidor.'
                         : 'No hay contenido añadido recientemente.',
-                    style: TextStyle(color: context.textMuted, fontSize: 13),
+                    style:
+                        TextStyle(color: context.textSecondary, fontSize: 13),
                   ),
                 ),
               ],
@@ -835,7 +811,7 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
   Widget _carousel(List<Track> tracks) {
     final items = tracks.take(8).toList();
     return SizedBox(
-      height: 180,
+      height: 196 + _metadataExtraHeight(),
       child: ListView.builder(
         scrollDirection: Axis.horizontal,
         itemCount: items.length,
@@ -843,18 +819,12 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
           final track = items[index];
           return Padding(
             padding: const EdgeInsets.only(right: 12),
-            child: InkWell(
+            child: HomeContentCard(
               onTap: () => _openPlayer(tracks, tracks.indexOf(track)),
               onLongPress: () => TrackContextMenu.show(context, track),
-              borderRadius: BorderRadius.circular(8),
               child: Container(
                 width: 145,
-                padding: const EdgeInsets.all(6),
-                decoration: BoxDecoration(
-                  color: context.bgApp,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: context.bgCard),
-                ),
+                padding: const EdgeInsets.all(8),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -872,14 +842,14 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
                         ),
                       ),
                     ),
-                    const SizedBox(height: 6),
+                    const SizedBox(height: 8),
                     Text(
                       track.title,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         color: context.textPrimary,
-                        fontSize: 12,
+                        fontSize: 14,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
@@ -888,7 +858,7 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style:
-                          TextStyle(color: context.textMuted, fontSize: 10.5),
+                          TextStyle(color: context.textSecondary, fontSize: 12),
                     ),
                   ],
                 ),
@@ -918,10 +888,10 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
         }
         if (albums.isEmpty) {
           return Text('Sin álbumes',
-              style: TextStyle(color: context.textMuted));
+              style: TextStyle(color: context.textSecondary));
         }
         return SizedBox(
-          height: 175,
+          height: 180 + _metadataExtraHeight(),
           child: ListView.builder(
             scrollDirection: Axis.horizontal,
             itemCount: albums.length,
@@ -929,21 +899,15 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
               final album = albums[index];
               return Padding(
                 padding: const EdgeInsets.only(right: 12),
-                child: InkWell(
+                child: HomeContentCard(
                   onTap: () => Navigator.push(
                     context,
                     MaterialPageRoute(
                         builder: (_) => AlbumDetailScreen(album: album)),
                   ),
-                  borderRadius: BorderRadius.circular(8),
                   child: Container(
                     width: 120,
-                    padding: const EdgeInsets.all(6),
-                    decoration: BoxDecoration(
-                      color: context.bgApp,
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: context.bgCard),
-                    ),
+                    padding: const EdgeInsets.all(8),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -958,18 +922,19 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
                                       album.coverArtUrl!,
                                       fit: BoxFit.cover,
                                     )
-                                  : Icon(Icons.album, color: context.textMuted),
+                                  : Icon(Icons.album,
+                                      color: context.textSecondary),
                             ),
                           ),
                         ),
-                        const SizedBox(height: 6),
+                        const SizedBox(height: 8),
                         Text(
                           album.title,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
                             color: context.textPrimary,
-                            fontSize: 11.5,
+                            fontSize: 14,
                             fontWeight: FontWeight.w600,
                           ),
                         ),
@@ -977,8 +942,8 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
                           album.artist,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style:
-                              TextStyle(color: context.textMuted, fontSize: 10),
+                          style: TextStyle(
+                              color: context.textSecondary, fontSize: 12),
                         ),
                       ],
                     ),
@@ -1014,11 +979,11 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
         }
         if (artists.isEmpty) {
           return Text('Sin artistas',
-              style: TextStyle(color: context.textMuted));
+              style: TextStyle(color: context.textSecondary));
         }
         final showScrollbar = artists.length > 10;
         return SizedBox(
-          height: showScrollbar ? 165 : 145,
+          height: (showScrollbar ? 165 : 145) + _metadataExtraHeight(),
           child: Scrollbar(
             controller: _artistsScrollController,
             thumbVisibility: showScrollbar,
@@ -1065,12 +1030,13 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
                               child: artist.coverArtUrl == null
                                   ? Center(
                                       child: Icon(Icons.person,
-                                          color: context.textMuted, size: 32),
+                                          color: context.textSecondary,
+                                          size: 32),
                                     )
                                   : null,
                             ),
                           ),
-                          const SizedBox(height: 6),
+                          const SizedBox(height: 8),
                           Text(
                             artist.name,
                             maxLines: 1,
@@ -1078,7 +1044,7 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
                             textAlign: TextAlign.center,
                             style: TextStyle(
                               color: context.textPrimary,
-                              fontSize: 11.5,
+                              fontSize: 14,
                               fontWeight: FontWeight.w600,
                             ),
                           ),
@@ -1103,7 +1069,7 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
         padding: const EdgeInsets.symmetric(vertical: 8),
         child: Text(
           'Todavía no has escuchado nada',
-          style: TextStyle(color: context.textMuted, fontSize: 12),
+          style: TextStyle(color: context.textSecondary, fontSize: 12),
         ),
       );
     }
@@ -1137,14 +1103,14 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           color: context.textPrimary,
-                          fontSize: 12.5,
+                          fontSize: 14,
                           fontWeight: FontWeight.w600,
                         ),
                       ),
                       InteractiveArtistText(
                         artistString: track.artist,
-                        fontSize: 11,
-                        color: context.textMuted,
+                        fontSize: 12,
+                        color: context.textSecondary,
                       ),
                     ],
                   ),

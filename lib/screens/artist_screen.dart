@@ -14,6 +14,7 @@ import '../widgets/track_context_menu.dart';
 import 'album_detail_screen.dart';
 import '../widgets/interactive_artist_text.dart';
 import '../utils/app_colors.dart';
+import '../widgets/material_surface.dart';
 
 /// Pantalla de un artista estilo Spotify:
 /// - Header con portada, nombre, botón play
@@ -220,8 +221,10 @@ class _ArtistScreenState extends State<ArtistScreen> {
                                   ),
                                   onPressed: () {
                                     nav.toggleFollowArtist(widget.artist.id);
-                                    final messenger = ScaffoldMessenger.of(context);
-                                    final theme = context.read<ThemeController>().active;
+                                    final messenger =
+                                        ScaffoldMessenger.of(context);
+                                    final theme =
+                                        context.read<ThemeController>().active;
                                     messenger.showSnackBar(SnackBar(
                                       content: Text(following
                                           ? 'Dejaste de seguir a ${widget.artist.name}'
@@ -281,13 +284,11 @@ class _ArtistScreenState extends State<ArtistScreen> {
             backgroundColor: theme.bgElevated,
           ));
         } else if (value == 'community') {
-          final msg =
-              '🎤 [ARTIST:${widget.artist.id}] ${widget.artist.name}';
+          final msg = '🎤 [ARTIST:${widget.artist.id}] ${widget.artist.name}';
           await nav.addChatMessage(msg);
           if (mounted) {
             messenger.showSnackBar(SnackBar(
-              content:
-                  Text('${widget.artist.name} compartido en la comunidad'),
+              content: Text('${widget.artist.name} compartido en la comunidad'),
               backgroundColor: theme.bgElevated,
             ));
             ServerActivityPanel.show(context);
@@ -308,8 +309,8 @@ class _ArtistScreenState extends State<ArtistScreen> {
             excluded
                 ? 'Volver a reproducir este artista'
                 : 'No reproducir este artista',
-            style: TextStyle(
-                color: excluded ? theme.accent : theme.textPrimary),
+            style:
+                TextStyle(color: excluded ? theme.accent : theme.textPrimary),
           ),
         ),
         PopupMenuItem(
@@ -589,25 +590,27 @@ class _ArtistScreenState extends State<ArtistScreen> {
   }
 
   Widget _buildAlbumsGrid(List<Album> albums) {
-    final compact = MediaQuery.sizeOf(context).width < 700;
+    final extraHeight = (MediaQuery.textScalerOf(context).scale(14) - 14)
+            .clamp(0.0, double.infinity) *
+        3;
     return GridView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
-      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: compact ? 2 : 5,
-        childAspectRatio: compact ? 0.8 : 1.0,
-        crossAxisSpacing: compact ? 12 : 6,
+      gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
+        maxCrossAxisExtent: 180,
+        mainAxisExtent: 220 + extraHeight,
+        crossAxisSpacing: 16,
         mainAxisSpacing: 16,
       ),
       itemCount: albums.length,
       itemBuilder: (context, index) {
         final album = albums[index];
-        return InkWell(
+        return AppContentCard(
           onTap: () => Navigator.push(
             context,
             MaterialPageRoute(builder: (_) => AlbumDetailScreen(album: album)),
           ),
-          borderRadius: BorderRadius.circular(8),
+          padding: const EdgeInsets.all(8),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -627,7 +630,7 @@ class _ArtistScreenState extends State<ArtistScreen> {
                   child: album.coverArtUrl == null
                       ? Center(
                           child: Icon(Icons.album,
-                              color: context.textMuted, size: 36),
+                              color: context.textSecondary, size: 36),
                         )
                       : null,
                 ),
@@ -647,7 +650,7 @@ class _ArtistScreenState extends State<ArtistScreen> {
                 '${album.trackCount} canciones',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: TextStyle(color: context.textMuted, fontSize: 12),
+                style: TextStyle(color: context.textSecondary, fontSize: 13),
               ),
             ],
           ),

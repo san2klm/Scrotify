@@ -5,6 +5,10 @@ import '../models/server_profile.dart';
 import '../services/navidrome_service.dart';
 import '../services/server_profiles_controller.dart';
 import '../utils/app_colors.dart';
+import '../utils/responsive.dart';
+import '../widgets/profile_connection.dart';
+import '../services/pairing_server.dart';
+import '../services/theme_controller.dart';
 
 class ServerProfilesScreen extends StatefulWidget {
   const ServerProfilesScreen({super.key});
@@ -17,6 +21,7 @@ class _ServerProfilesScreenState extends State<ServerProfilesScreen> {
   @override
   Widget build(BuildContext context) {
     final profilesController = context.watch<ServerProfilesController>();
+    final colors = context.appTheme;
     final profiles = profilesController.profiles;
     final activeId = profilesController.activeProfileId;
 
@@ -35,119 +40,109 @@ class _ServerProfilesScreenState extends State<ServerProfilesScreen> {
                 style: TextStyle(color: context.textMuted),
               ),
             )
-          : ListView.builder(
-              padding: const EdgeInsets.all(16),
-              itemCount: profiles.length,
-              itemBuilder: (context, index) {
-                final profile = profiles[index];
-                final isActive = profile.id == activeId;
+          : ConstrainedContent(
+              maxWidth: 1000,
+              child: ListView.builder(
+                padding: const EdgeInsets.all(16),
+                itemCount: profiles.length,
+                itemBuilder: (context, index) {
+                  final profile = profiles[index];
+                  final isActive = profile.id == activeId;
 
-                return Card(
-                  color: context.bgCard,
-                  margin: const EdgeInsets.only(bottom: 12),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    side: BorderSide(
-                      color: isActive ? context.accent : context.bgElevated,
-                      width: isActive ? 1.5 : 1.0,
-                    ),
-                  ),
-                  child: ListTile(
-                    onTap: () => _connectToProfile(profile),
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 8,
-                    ),
-                    leading: CircleAvatar(
-                      backgroundColor:
-                          isActive ? context.accent : context.bgElevated,
-                      child: Icon(
-                        Icons.dns_outlined,
-                        color: isActive
-                            ? context.bgApp
-                            : context.textSecondary,
+                  return Card(
+                    color: context.bgCard,
+                    margin: const EdgeInsets.only(bottom: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      side: BorderSide(
+                        color: isActive ? context.accent : context.borderSubtle,
+                        width: isActive ? 1.5 : 1.0,
                       ),
                     ),
-                    title: Text(
-                      profile.nickname.isNotEmpty
-                          ? profile.nickname
-                          : profile.url,
-                      style: TextStyle(
-                        color: context.textPrimary,
-                        fontWeight: FontWeight.bold,
+                    child: ListTile(
+                      onTap: () => _connectToProfile(profile),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 8,
                       ),
-                    ),
-                    subtitle: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        if (profile.nickname.isNotEmpty) ...[
+                      leading: CircleAvatar(
+                        backgroundColor:
+                            isActive ? context.accent : context.bgElevated,
+                        child: Icon(
+                          Icons.dns_outlined,
+                          color: isActive
+                              ? context.onAccent
+                              : context.textSecondary,
+                        ),
+                      ),
+                      title: Text(
+                        profile.nickname.isNotEmpty
+                            ? profile.nickname
+                            : profile.url,
+                        style: TextStyle(
+                          color: context.textPrimary,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      subtitle: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          if (profile.nickname.isNotEmpty) ...[
+                            const SizedBox(height: 4),
+                            Text(
+                              profile.url,
+                              style: TextStyle(
+                                color: context.textSecondary,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
                           const SizedBox(height: 4),
                           Text(
-                            profile.url,
+                            'Usuario: ${profile.username}',
                             style: TextStyle(
-                              color: context.textSecondary,
+                              color: context.textMuted,
                               fontSize: 12,
                             ),
                           ),
                         ],
-                        const SizedBox(height: 4),
-                        Text(
-                          'Usuario: ${profile.username}',
-                          style: TextStyle(
-                            color: context.textMuted,
-                            fontSize: 12,
-                          ),
-                        ),
-                      ],
-                    ),
-                    trailing: PopupMenuButton<String>(
-                        icon: Icon(
-                          isActive ? Icons.check_circle : Icons.more_vert,
-                          color: isActive ? context.accent : context.textMuted,
-                        ),
-                        color: context.bgElevated,
-                        itemBuilder: (context) => [
-                          if (!isActive)
-                            PopupMenuItem(
-                              value: 'connect',
-                              child: Text(
-                                'Conectar',
-                                style: TextStyle(color: context.textPrimary),
-                              ),
-                            ),
+                      ),
+                      trailing: PopupMenuButton<String>(
+                        tooltip: 'Opciones de cuenta',
+                        icon: Icon(Icons.more_vert,
+                            color: isActive ? colors.accent : colors.textMuted),
+                        color: colors.bgElevated,
+                        itemBuilder: (_) => [
                           PopupMenuItem(
                             value: 'edit',
-                            child: Text(
-                              'Editar',
-                              style: TextStyle(color: context.textPrimary),
-                            ),
+                            child: Text('Modificar',
+                                style: TextStyle(color: colors.textPrimary)),
                           ),
-                          const PopupMenuDivider(),
                           PopupMenuItem(
-                            value: 'delete',
-                            child: Text(
-                              'Eliminar',
-                              style: TextStyle(color: context.danger),
-                            ),
+                            value: 'logout',
+                            enabled: isActive,
+                            child: Text('Cerrar sesión',
+                                style: TextStyle(
+                                    color: isActive
+                                        ? colors.danger
+                                        : colors.textMuted)),
                           ),
                         ],
                         onSelected: (value) async {
-                          if (value == 'connect') {
-                            _connectToProfile(profile);
-                          } else if (value == 'edit') {
+                          if (value == 'edit') {
                             _showProfileDialog(profile: profile);
-                          } else if (value == 'delete') {
-                            _confirmDelete(profile);
+                          } else if (value == 'logout') {
+                            _confirmLogout(profile);
                           }
                         },
                       ),
-                  ),
-                );
-              },
-            ),
+                    ),
+                  );
+                },
+              )),
       floatingActionButton: FloatingActionButton(
         backgroundColor: context.accent,
-        foregroundColor: context.bgApp,
+        foregroundColor: context.onAccent,
         onPressed: () => _showProfileDialog(),
         child: const Icon(Icons.add),
       ),
@@ -162,93 +157,49 @@ class _ServerProfilesScreenState extends State<ServerProfilesScreen> {
     );
   }
 
-  Future<void> _connectToProfile(ServerProfile profile) async {
+  Future<void> _connectToProfile(ServerProfile profile) =>
+      connectToServerProfile(context, profile);
+
+  Future<void> _confirmLogout(ServerProfile profile) async {
+    final colors = context.read<ThemeController>().active;
+    final controller = context.read<ServerProfilesController>();
     final nav = context.read<NavidromeService>();
-    final profilesController = context.read<ServerProfilesController>();
-
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => AlertDialog(
-        backgroundColor: context.bgCard,
-        content: Row(
-          children: [
-            CircularProgressIndicator(color: context.accent),
-            const SizedBox(width: 16),
-            Text(
-              'Conectando...',
-              style: TextStyle(color: context.textPrimary),
-            ),
-          ],
-        ),
-      ),
-    );
-
-    try {
-      await nav.connectByUrl(profile.url, profile.username, profile.password);
-      await profilesController.setActiveProfile(profile.id);
-      
-      if (mounted) {
-        Navigator.of(context).pop(); // Cierra diálogo
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            backgroundColor: context.bgElevated,
-            content: Text(
-              'Conectado a ${profile.nickname.isNotEmpty ? profile.nickname : profile.url}',
-              style: TextStyle(color: context.textPrimary),
-            ),
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        Navigator.of(context).pop(); // Cierra diálogo
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            backgroundColor: context.danger,
-            content: Text('Error al conectar: ${e.toString().replaceAll("Exception: ", "")}'),
-          ),
-        );
-      }
-    }
-  }
-
-  void _confirmDelete(ServerProfile profile) {
-    showDialog(
+    final server = context.read<PairingServer?>();
+    final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: context.bgCard,
-        title: Text(
-          'Eliminar perfil',
-          style: TextStyle(color: context.textPrimary),
-        ),
+        backgroundColor: colors.bgCard,
+        title: const Text('¿Cerrar sesión?'),
         content: Text(
-          '¿Estás seguro de eliminar el perfil "${profile.nickname.isNotEmpty ? profile.nickname : profile.url}"?',
-          style: TextStyle(color: context.textSecondary),
-        ),
+            'Se desconectará ${profile.nickname.isEmpty ? profile.username : profile.nickname}. El perfil quedará guardado para volver a entrar.'),
         actions: [
           TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: Text('Cancelar', style: TextStyle(color: context.textMuted)),
-          ),
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: const Text('Cancelar')),
           TextButton(
-            onPressed: () async {
-              final profilesController =
-                  context.read<ServerProfilesController>();
-              await profilesController.removeProfile(profile.id);
-              if (ctx.mounted) Navigator.of(ctx).pop();
-            },
-            child: Text('Eliminar', style: TextStyle(color: context.danger)),
-          ),
+              onPressed: () => Navigator.of(ctx).pop(true),
+              child: Text('Cerrar sesión',
+                  style: TextStyle(color: colors.danger))),
         ],
       ),
     );
+    if (confirmed != true ||
+        !mounted ||
+        controller.activeProfileId != profile.id) {
+      return;
+    }
+    await server?.stop();
+    await controller.logout();
+    if (nav.connected) nav.disconnect();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Sesión cerrada. El perfil sigue guardado.')));
   }
 }
 
 class _ProfileDialog extends StatefulWidget {
   final ServerProfile? profile;
-  
+
   const _ProfileDialog({this.profile});
 
   @override
@@ -284,9 +235,9 @@ class _ProfileDialogState extends State<_ProfileDialog> {
 
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
-    
+
     setState(() => _saving = true);
-    
+
     var url = _urlCtrl.text.trim();
     if (!url.startsWith('http://') && !url.startsWith('https://')) {
       url = 'https://$url';
@@ -307,7 +258,7 @@ class _ProfileDialogState extends State<_ProfileDialog> {
           );
 
     final profilesController = context.read<ServerProfilesController>();
-    
+
     try {
       if (widget.profile != null) {
         await profilesController.updateProfile(newProfile);
@@ -315,12 +266,13 @@ class _ProfileDialogState extends State<_ProfileDialog> {
         if (profilesController.activeProfileId == newProfile.id) {
           if (!mounted) return;
           final nav = context.read<NavidromeService>();
-          await nav.connectByUrl(newProfile.url, newProfile.username, newProfile.password);
+          await nav.connectByUrl(
+              newProfile.url, newProfile.username, newProfile.password);
         }
       } else {
         await profilesController.addProfile(newProfile);
       }
-      
+
       if (mounted) Navigator.of(context).pop();
     } catch (e) {
       if (mounted) {
@@ -361,7 +313,8 @@ class _ProfileDialogState extends State<_ProfileDialog> {
                 label: 'URL',
                 hint: 'https://...',
                 icon: Icons.dns_outlined,
-                validator: (v) => (v == null || v.trim().isEmpty) ? 'Requerido' : null,
+                validator: (v) =>
+                    (v == null || v.trim().isEmpty) ? 'Requerido' : null,
               ),
               const SizedBox(height: 12),
               _buildField(
@@ -369,7 +322,8 @@ class _ProfileDialogState extends State<_ProfileDialog> {
                 label: 'Usuario',
                 hint: 'admin',
                 icon: Icons.person_outline,
-                validator: (v) => (v == null || v.trim().isEmpty) ? 'Requerido' : null,
+                validator: (v) =>
+                    (v == null || v.trim().isEmpty) ? 'Requerido' : null,
               ),
               const SizedBox(height: 12),
               _buildField(
@@ -380,7 +334,9 @@ class _ProfileDialogState extends State<_ProfileDialog> {
                 obscure: _obscurePass,
                 suffix: IconButton(
                   icon: Icon(
-                    _obscurePass ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+                    _obscurePass
+                        ? Icons.visibility_outlined
+                        : Icons.visibility_off_outlined,
                     color: context.textMuted,
                   ),
                   onPressed: () => setState(() => _obscurePass = !_obscurePass),
@@ -400,11 +356,12 @@ class _ProfileDialogState extends State<_ProfileDialog> {
           onPressed: _saving ? null : _save,
           style: ElevatedButton.styleFrom(
             backgroundColor: context.accent,
-            foregroundColor: context.bgApp,
+            foregroundColor: context.onAccent,
           ),
           child: _saving
               ? const SizedBox(
-                  width: 16, height: 16,
+                  width: 16,
+                  height: 16,
                   child: CircularProgressIndicator(strokeWidth: 2),
                 )
               : const Text('Guardar'),

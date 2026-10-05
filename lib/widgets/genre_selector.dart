@@ -78,43 +78,16 @@ class _GenreSelectorState extends State<GenreSelector> {
           Semantics(
             button: true,
             label: _expanded ? 'Ocultar' : 'Mostrar todos',
-            child: InkWell(
+            child: TextButton.icon(
               key: const ValueKey('genre_selector_toggle'),
-              onTap: () => setState(() => _expanded = !_expanded),
-              borderRadius: BorderRadius.circular(16),
-              child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(
-                  color: context.bgElevated,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(
-                    color: context.accent.withValues(alpha: 0.35),
-                    width: 1,
-                  ),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      _expanded ? 'Ocultar' : 'Mostrar todos',
-                      style: TextStyle(
-                        color: context.accent,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const SizedBox(width: 4),
-                    Icon(
-                      _expanded
-                          ? Icons.keyboard_arrow_up_rounded
-                          : Icons.keyboard_arrow_down_rounded,
-                      size: 16,
-                      color: context.accent,
-                    ),
-                  ],
-                ),
-              ),
+              onPressed: () => setState(() => _expanded = !_expanded),
+              icon: Icon(
+                  _expanded
+                      ? Icons.keyboard_arrow_up_rounded
+                      : Icons.keyboard_arrow_down_rounded,
+                  size: 20),
+              label: Text(_expanded ? 'Ocultar' : 'Mostrar todos'),
+              style: TextButton.styleFrom(foregroundColor: context.accent),
             ),
           ),
       ],
@@ -127,34 +100,23 @@ class _GenreSelectorState extends State<GenreSelector> {
     required bool isSelected,
     required VoidCallback onTap,
   }) {
-    return Semantics(
-      button: true,
-      selected: isSelected,
-      label: 'Género $label',
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-          decoration: BoxDecoration(
-            color: isSelected
-                ? context.accent.withValues(alpha: 0.15)
-                : context.bgElevated,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: isSelected ? context.accent : context.bgCard,
-              width: 1,
-            ),
-          ),
-          child: Text(
-            label,
-            style: TextStyle(
-              color: isSelected ? context.accent : context.textPrimary,
-              fontSize: 12,
-              fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-            ),
-          ),
+    return Tooltip(
+      message: label,
+      child: ChoiceChip(
+        label: Text(label),
+        selected: isSelected,
+        showCheckmark: false,
+        onSelected: (_) => onTap(),
+        selectedColor: context.sidebarActiveBg,
+        backgroundColor: context.bgElevated,
+        labelStyle: TextStyle(
+          color: isSelected ? context.sidebarActiveText : context.textPrimary,
+          fontSize: 13,
+          fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
         ),
+        side: BorderSide(
+            color: isSelected ? context.accent : context.borderSubtle),
+        shape: const StadiumBorder(),
       ),
     );
   }

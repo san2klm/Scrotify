@@ -26,96 +26,99 @@ class _NowPlayingSidePanelState extends State<NowPlayingSidePanel> {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return SizedBox(
       width: NowPlayingSidePanel.width,
-      color: context.bgSidebar,
-      child: Consumer<PlayerController>(
-        builder: (context, player, _) {
-          final track = player.currentTrack;
-          if (track == null) return const _EmptyState();
+      child: Material(
+        color: context.bgSidebar,
+        child: Consumer<PlayerController>(
+          builder: (context, player, _) {
+            final track = player.currentTrack;
+            if (track == null) return const _EmptyState();
 
-          final upcoming = _upcoming(player);
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
-                child: Text(
-                  'Escuchando ahora',
-                  style: TextStyle(
-                    color: context.textPrimary,
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: FractionallySizedBox(
-                  widthFactor: 0.75,
-                  child: AspectRatio(
-                    aspectRatio: 1,
-                    child: CoverArt(
-                      url: track.albumArtUrl,
-                      artist: track.artist,
-                      album: track.album,
-                      title: track.title,
-                      borderRadius: 12,
-                      fallbackIconSize: 56,
+            final upcoming = _upcoming(player);
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
+                  child: Text(
+                    'Escuchando ahora',
+                    style: TextStyle(
+                      color: context.textPrimary,
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
                     ),
                   ),
                 ),
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(track.title,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                            color: context.textPrimary,
-                            fontSize: 17,
-                            fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 2),
-                    Text(track.artist,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                            color: context.textSecondary, fontSize: 13)),
-                  ],
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: FractionallySizedBox(
+                    widthFactor: 0.75,
+                    child: AspectRatio(
+                      aspectRatio: 1,
+                      child: CoverArt(
+                        url: track.albumArtUrl,
+                        artist: track.artist,
+                        album: track.album,
+                        title: track.title,
+                        borderRadius: 12,
+                        fallbackIconSize: 56,
+                      ),
+                    ),
+                  ),
                 ),
-              ),
-              const SizedBox(height: 16),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: SegmentedButton<bool>(
-                  showSelectedIcon: false,
-                  style:
-                      const ButtonStyle(visualDensity: VisualDensity.compact),
-                  segments: [
-                    ButtonSegment(
-                        value: false, label: Text('Cola (${upcoming.length})')),
-                    const ButtonSegment(value: true, label: Text('Letra')),
-                  ],
-                  selected: {_showLyrics},
-                  onSelectionChanged: (v) =>
-                      setState(() => _showLyrics = v.first),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(track.title,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                              color: context.textPrimary,
+                              fontSize: 17,
+                              fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 2),
+                      Text(track.artist,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                              color: context.textSecondary, fontSize: 13)),
+                    ],
+                  ),
                 ),
-              ),
-              const SizedBox(height: 8),
-              Expanded(
-                child: _showLyrics
-                    ? Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 12),
-                        child: LyricsFollowPanel(track: track),
-                      )
-                    : _QueueList(player: player, upcoming: upcoming),
-              ),
-            ],
-          );
-        },
+                const SizedBox(height: 16),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: SegmentedButton<bool>(
+                    showSelectedIcon: false,
+                    style:
+                        const ButtonStyle(visualDensity: VisualDensity.compact),
+                    segments: [
+                      ButtonSegment(
+                          value: false,
+                          label: Text('Cola (${upcoming.length})')),
+                      const ButtonSegment(value: true, label: Text('Letra')),
+                    ],
+                    selected: {_showLyrics},
+                    onSelectionChanged: (v) =>
+                        setState(() => _showLyrics = v.first),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Expanded(
+                  child: _showLyrics
+                      ? Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                          child: LyricsFollowPanel(track: track),
+                        )
+                      : _QueueList(player: player, upcoming: upcoming),
+                ),
+              ],
+            );
+          },
+        ),
       ),
     );
   }
@@ -167,7 +170,7 @@ class _QueueList extends StatelessWidget {
           subtitle: Text(t.artist,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: TextStyle(color: context.textMuted, fontSize: 11.5)),
+              style: TextStyle(color: context.textSecondary, fontSize: 12)),
           onTap: () {
             // Salta a esa pista conservando la cola completa.
             final all = player.orderedQueue;

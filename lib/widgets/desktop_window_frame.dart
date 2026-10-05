@@ -93,8 +93,12 @@ class _DesktopWindowFrameState extends State<DesktopWindowFrame>
                 child: Row(
                   children: [
                     const SizedBox(width: 12),
-                    Icon(Icons.graphic_eq_rounded,
-                        size: 15, color: colors.primary),
+                    Image.asset(
+                      'assets/icons/scrotify_app_icon.png',
+                      width: 15,
+                      height: 15,
+                      semanticLabel: 'Logo de Scrotify',
+                    ),
                     const SizedBox(width: 7),
                     Text(
                       'Scrotify',

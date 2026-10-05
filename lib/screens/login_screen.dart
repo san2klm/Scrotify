@@ -36,6 +36,7 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _tryAutoLogin() async {
+    var allowLegacyCredentials = true;
     try {
       if (mounted) {
         final profilesCtrl = context.read<ServerProfilesController>();
@@ -46,9 +47,8 @@ class _LoginScreenState extends State<LoginScreen> {
         } catch (err) {
           debugPrint('login_screen:46 ignorado: $err');
         }
-        if (active == null && profilesCtrl.profiles.isNotEmpty) {
-          active = profilesCtrl.profiles.first;
-        }
+        // Sin cuenta activa, se respeta el cierre de sesión aunque haya perfiles.
+        allowLegacyCredentials = profilesCtrl.profiles.isEmpty;
         if (active != null) {
           _savedUrl = active.url;
           _savedUser = active.username;
@@ -56,7 +56,8 @@ class _LoginScreenState extends State<LoginScreen> {
         }
       }
 
-      if (_savedUrl == null || _savedUser == null || _savedPass == null) {
+      if (allowLegacyCredentials &&
+          (_savedUrl == null || _savedUser == null || _savedPass == null)) {
         final hasCreds = await SecureStorage.hasCredentials();
         if (hasCreds) {
           final creds = await SecureStorage.getAll();
@@ -139,28 +140,11 @@ class _AmoledSplashScreen extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Container(
+            Image.asset(
+              'assets/icons/scrotify_app_icon.png',
               width: 60,
               height: 60,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: context.bgApp,
-                border: Border.all(
-                  color: context.logoStart.withValues(alpha: 0.5),
-                  width: 1.5,
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: context.accentGlow,
-                    blurRadius: 20,
-                  ),
-                ],
-              ),
-              child: Icon(
-                Icons.graphic_eq_rounded,
-                size: 32,
-                color: context.logoStart,
-              ),
+              semanticLabel: 'Logo de Scrotify',
             ),
             const SizedBox(height: 16),
             Text(

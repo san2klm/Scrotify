@@ -57,7 +57,8 @@ void main() {
         (tester) async {
       final nav = await _open(tester, platform);
       await tester.enterText(find.byType(TextField), 'Mi lista');
-      await tester.tap(find.text('Crear'));
+      await tester
+          .tap(find.byWidgetPredicate((widget) => widget is FilledButton));
       await tester.pump();
       nav.pending.complete(Playlist(
         id: 'playlist-1',

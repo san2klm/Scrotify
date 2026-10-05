@@ -7,6 +7,7 @@ import '../services/pairing_server.dart';
 import '../screens/settings_screen.dart';
 import '../utils/app_colors.dart';
 import 'pairing_panel.dart';
+import 'account_menu_button.dart';
 import 'server_activity_panel.dart';
 import 'search_explore_field.dart';
 
@@ -128,20 +129,17 @@ class _GlobalTopBarState extends State<GlobalTopBar> {
     final width = MediaQuery.sizeOf(context).width;
     final isMobile = width < 700;
     final nav = context.watch<NavidromeService>();
-    final username = nav.username ?? 'U';
-    final initial = username.isNotEmpty ? username[0].toUpperCase() : 'U';
 
     if (isMobile) {
-      return _buildMobileHeader(context, nav, initial);
+      return _buildMobileHeader(context, nav);
     }
-    return _buildDesktopHeader(context, nav, initial);
+    return _buildDesktopHeader(context, nav);
   }
 
   // ---------------------------------------------------------------------------
   // Cabecera Móvil
   // ---------------------------------------------------------------------------
-  Widget _buildMobileHeader(
-      BuildContext context, NavidromeService nav, String initial) {
+  Widget _buildMobileHeader(BuildContext context, NavidromeService nav) {
     final canPop = Navigator.canPop(context);
     final serverTitle = nav.serverUrl != null
         ? Uri.tryParse(nav.serverUrl!)?.host ?? nav.serverUrl!
@@ -167,24 +165,7 @@ class _GlobalTopBarState extends State<GlobalTopBar> {
                 onPressed: () => Navigator.of(context).pop(),
               )
             else
-              Container(
-                width: 32,
-                height: 32,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: context.accent2,
-                ),
-                child: Center(
-                  child: Text(
-                    initial,
-                    style: TextStyle(
-                      color: context.textPrimary,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 13,
-                    ),
-                  ),
-                ),
-              ),
+              const AccountMenuButton(),
             const SizedBox(width: 8),
             Expanded(
               child: Column(
@@ -237,8 +218,7 @@ class _GlobalTopBarState extends State<GlobalTopBar> {
   // ---------------------------------------------------------------------------
   // Cabecera Escritorio
   // ---------------------------------------------------------------------------
-  Widget _buildDesktopHeader(
-      BuildContext context, NavidromeService nav, String initial) {
+  Widget _buildDesktopHeader(BuildContext context, NavidromeService nav) {
     final canPop = Navigator.canPop(context);
 
     return Container(
@@ -279,7 +259,7 @@ class _GlobalTopBarState extends State<GlobalTopBar> {
               }
             },
           ),
-          const SizedBox(width: 16),
+          const SizedBox(width: 12),
 
           // Misma búsqueda y acceso lateral a Explorar que en móvil.
           Expanded(
@@ -329,7 +309,7 @@ class _GlobalTopBarState extends State<GlobalTopBar> {
               ),
             ),
           ),
-          const SizedBox(width: 16),
+          const SizedBox(width: 12),
 
           // Botón Rápido: Comunidad
           IconButton(
@@ -355,9 +335,21 @@ class _GlobalTopBarState extends State<GlobalTopBar> {
                   borderRadius: BorderRadius.circular(10)),
             ),
             icon: const Icon(Icons.qr_code_2_rounded, size: 17),
-            label: const Text(
-              'Vincular celular',
-              style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+            label: Tooltip(
+              message: 'Vincular celular',
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxWidth: MediaQuery.sizeOf(context).width < 900
+                      ? 128
+                      : double.infinity,
+                ),
+                child: const Text(
+                  'Vincular celular',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                ),
+              ),
             ),
           ),
 
@@ -376,31 +368,7 @@ class _GlobalTopBarState extends State<GlobalTopBar> {
 
           const SizedBox(width: 6),
 
-          // Avatar de Usuario
-          Container(
-            width: 32,
-            height: 32,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: context.accent2,
-              boxShadow: [
-                BoxShadow(
-                  color: context.accent2.withValues(alpha: 0.3),
-                  blurRadius: 8,
-                ),
-              ],
-            ),
-            child: Center(
-              child: Text(
-                initial,
-                style: TextStyle(
-                  color: context.textPrimary,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 13,
-                ),
-              ),
-            ),
-          ),
+          const AccountMenuButton(),
         ],
       ),
     );

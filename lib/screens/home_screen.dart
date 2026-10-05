@@ -6,6 +6,7 @@ import '../services/navidrome_service.dart';
 import '../services/player_controller.dart';
 import '../widgets/persistent_player_bar.dart';
 import '../widgets/cover_art.dart';
+import '../widgets/home_content_card.dart';
 import '../widgets/create_playlist_dialog.dart';
 import '../widgets/global_top_bar.dart';
 import '../widgets/explore_tracks_view.dart';
@@ -1089,6 +1090,11 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  double _metadataExtraHeight() {
+    final scaler = MediaQuery.textScalerOf(context);
+    return (scaler.scale(14) - 14).clamp(0.0, double.infinity) * 3;
+  }
+
   Widget _mainContent(List<Track> tracks) {
     final filteredTracks = _selectedGenre == null
         ? tracks
@@ -1105,7 +1111,7 @@ class _HomeScreenState extends State<HomeScreen> {
           const SizedBox(height: 20),
 
           _quickAccessGrid(),
-          const SizedBox(height: 28),
+          const SizedBox(height: 32),
           _sectionHeader(
             'Recientemente añadidos',
             onReload: () => setState(() {
@@ -1113,21 +1119,21 @@ class _HomeScreenState extends State<HomeScreen> {
                   context.read<NavidromeService>().getRecentlyAddedTracks();
             }),
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 12),
           _recentlyAddedSection(),
-          const SizedBox(height: 28),
+          const SizedBox(height: 32),
           _sectionHeader('Recomendados para ti'),
-          const SizedBox(height: 14),
+          const SizedBox(height: 12),
           _recommendedGrid(filteredTracks, context.watch<PlayerController>()),
-          const SizedBox(height: 28),
+          const SizedBox(height: 32),
           _sectionHeader('Álbumes destacados'),
-          const SizedBox(height: 14),
+          const SizedBox(height: 12),
           _albumsCarousel(),
-          const SizedBox(height: 28),
+          const SizedBox(height: 32),
           _sectionHeader('Artistas en tu biblioteca'),
-          const SizedBox(height: 14),
+          const SizedBox(height: 12),
           _artistsCarousel(),
-          const SizedBox(height: 28),
+          const SizedBox(height: 32),
           _sectionHeader('Escuchados recientemente'),
           const SizedBox(height: 12),
           _recentsList(),
@@ -1179,12 +1185,10 @@ class _HomeScreenState extends State<HomeScreen> {
           physics: const NeverScrollableScrollPhysics(),
           gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: cols,
-            // Estas seis tarjetas se muestran en dos o tres filas. Al
-            // duplicar la proporción y reducir el espaciado, el bloque ocupa
-            // aproximadamente la mitad de alto sin sacrificar la portada.
-            childAspectRatio: 5.6,
+            // Conserva el bloque compacto y reserva espacio para dos líneas.
+            mainAxisExtent: 52 + _metadataExtraHeight(),
             crossAxisSpacing: 12,
-            mainAxisSpacing: 6,
+            mainAxisSpacing: 8,
           ),
           itemCount: items.length + 1,
           itemBuilder: (context, index) {
@@ -1240,34 +1244,29 @@ class _HomeScreenState extends State<HomeScreen> {
     String? title,
     required VoidCallback onTap,
   }) {
-    return InkWell(
+    return HomeContentCard(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(10),
-      child: Container(
-        decoration: BoxDecoration(
-          color: context.bgApp,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: context.bgElevated, width: 1),
-        ),
-        child: Row(
-          children: [
-            SizedBox(
+      child: Row(
+        children: [
+          SizedBox(
+            width: 52,
+            height: double.infinity,
+            child: CoverArt(
+              url: albumArtUrl,
+              artist: artist,
+              album: album,
+              title: title,
               width: 52,
-              height: double.infinity,
-              child: CoverArt(
-                url: albumArtUrl,
-                artist: artist,
-                album: album,
-                title: title,
-                width: 52,
-                borderRadius: 9,
-                fallbackIcon: icon,
-                fallbackIconSize: 22,
-                fallbackColor: color,
-              ),
+              borderRadius: 9,
+              fallbackIcon: icon,
+              fallbackIconSize: 22,
+              fallbackColor: color,
             ),
-            const SizedBox(width: 12),
-            Expanded(
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.only(right: 12),
               child: Text(
                 label,
                 maxLines: 2,
@@ -1279,8 +1278,8 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -1312,9 +1311,12 @@ class _HomeScreenState extends State<HomeScreen> {
       future: _futureRecentlyAdded,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const SizedBox(
-            height: 180,
-            child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+          return SizedBox(
+            height: 180 + _metadataExtraHeight(),
+            child: Center(
+              child: CircularProgressIndicator(
+                  strokeWidth: 2, color: context.accent),
+            ),
           );
         }
         final tracks = snapshot.data ?? const <Track>[];
@@ -1328,7 +1330,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   isOffline
                       ? Icons.cloud_off_rounded
                       : Icons.info_outline_rounded,
-                  color: context.textMuted,
+                  color: context.textSecondary,
                   size: 18,
                 ),
                 const SizedBox(width: 8),
@@ -1337,7 +1339,8 @@ class _HomeScreenState extends State<HomeScreen> {
                     isOffline
                         ? 'Sin conexión para sincronizar novedades del servidor.'
                         : 'No hay contenido añadido recientemente.',
-                    style: TextStyle(color: context.textMuted, fontSize: 13),
+                    style:
+                        TextStyle(color: context.textSecondary, fontSize: 13),
                   ),
                 ),
               ],
@@ -1353,12 +1356,14 @@ class _HomeScreenState extends State<HomeScreen> {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(
-          title,
-          style: TextStyle(
-            color: context.textPrimary,
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
+        Expanded(
+          child: Text(
+            title,
+            style: TextStyle(
+              color: context.textPrimary,
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+            ),
           ),
         ),
         if (onReload != null)
@@ -1394,11 +1399,11 @@ class _HomeScreenState extends State<HomeScreen> {
     return GridView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
-      // Coincide con las tarjetas de «Álbumes destacados»: 130 × 180 px.
-      gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+      // Conserva las tarjetas compactas y amplía solo el espacio de texto.
+      gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
         maxCrossAxisExtent: 130,
-        childAspectRatio: 13 / 18,
-        crossAxisSpacing: 14,
+        mainAxisExtent: 180 + _metadataExtraHeight(),
+        crossAxisSpacing: 16,
         mainAxisSpacing: 16,
       ),
       itemCount: items.length,
@@ -1410,16 +1415,10 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _recommendedCard(Track track, List<Track> allTracks) {
-    return InkWell(
+    return HomeContentCard(
       onTap: () => _openPlayer(allTracks, allTracks.indexOf(track)),
-      borderRadius: BorderRadius.circular(10),
       child: Container(
         padding: const EdgeInsets.all(8),
-        decoration: BoxDecoration(
-          color: context.bgApp,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: context.bgCard),
-        ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -1444,14 +1443,14 @@ class _HomeScreenState extends State<HomeScreen> {
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
                 color: context.textPrimary,
-                fontSize: 12.5,
+                fontSize: 13,
                 fontWeight: FontWeight.bold,
               ),
             ),
             InteractiveArtistText(
               artistString: track.artist,
-              fontSize: 11,
-              color: context.textMuted,
+              fontSize: 12,
+              color: context.textSecondary,
             ),
           ],
         ),
@@ -1477,32 +1476,26 @@ class _HomeScreenState extends State<HomeScreen> {
         }
         if (albums.isEmpty) {
           return Text('Sin álbumes disponibles',
-              style: TextStyle(color: context.textMuted));
+              style: TextStyle(color: context.textSecondary));
         }
         return SizedBox(
-          height: 180,
+          height: 180 + _metadataExtraHeight(),
           child: ListView.builder(
             scrollDirection: Axis.horizontal,
             itemCount: albums.length,
             itemBuilder: (context, index) {
               final album = albums[index];
               return Padding(
-                padding: const EdgeInsets.only(right: 14),
-                child: InkWell(
+                padding: const EdgeInsets.only(right: 16),
+                child: HomeContentCard(
                   onTap: () => Navigator.push(
                     context,
                     MaterialPageRoute(
                         builder: (_) => AlbumDetailScreen(album: album)),
                   ),
-                  borderRadius: BorderRadius.circular(10),
                   child: Container(
                     width: 130,
                     padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: context.bgApp,
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: context.bgCard),
-                    ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -1518,17 +1511,19 @@ class _HomeScreenState extends State<HomeScreen> {
                                       fit: BoxFit.cover,
                                       errorBuilder: (_, __, ___) => Center(
                                         child: Icon(Icons.album,
-                                            color: context.textMuted, size: 28),
+                                            color: context.textSecondary,
+                                            size: 28),
                                       ),
                                     )
                                   : Center(
                                       child: Icon(Icons.album,
-                                          color: context.textMuted, size: 28),
+                                          color: context.textSecondary,
+                                          size: 28),
                                     ),
                             ),
                           ),
                         ),
-                        const SizedBox(height: 6),
+                        const SizedBox(height: 8),
                         Text(
                           album.title,
                           maxLines: 1,
@@ -1541,8 +1536,8 @@ class _HomeScreenState extends State<HomeScreen> {
                         ),
                         InteractiveArtistText(
                           artistString: album.artist,
-                          fontSize: 11,
-                          color: context.textMuted,
+                          fontSize: 12,
+                          color: context.textSecondary,
                         ),
                       ],
                     ),
@@ -1578,11 +1573,11 @@ class _HomeScreenState extends State<HomeScreen> {
         }
         if (artists.isEmpty) {
           return Text('Sin artistas',
-              style: TextStyle(color: context.textMuted));
+              style: TextStyle(color: context.textSecondary));
         }
         final showScrollbar = artists.length > 10;
         return SizedBox(
-          height: showScrollbar ? 180 : 160,
+          height: (showScrollbar ? 180 : 160) + _metadataExtraHeight(),
           child: Scrollbar(
             controller: _artistsScrollController,
             thumbVisibility: showScrollbar,
@@ -1596,7 +1591,7 @@ class _HomeScreenState extends State<HomeScreen> {
               itemBuilder: (context, index) {
                 final artist = artists[index];
                 return Padding(
-                  padding: const EdgeInsets.only(right: 14),
+                  padding: const EdgeInsets.only(right: 16),
                   child: InkWell(
                     onTap: () => Navigator.push(
                       context,
@@ -1629,12 +1624,13 @@ class _HomeScreenState extends State<HomeScreen> {
                               child: artist.coverArtUrl == null
                                   ? Center(
                                       child: Icon(Icons.person,
-                                          color: context.textMuted, size: 36),
+                                          color: context.textSecondary,
+                                          size: 36),
                                     )
                                   : null,
                             ),
                           ),
-                          const SizedBox(height: 6),
+                          const SizedBox(height: 8),
                           Text(
                             artist.name,
                             maxLines: 1,
@@ -1667,7 +1663,7 @@ class _HomeScreenState extends State<HomeScreen> {
         padding: const EdgeInsets.symmetric(vertical: 8),
         child: Text(
           'Todavía no has reproducido ninguna canción',
-          style: TextStyle(color: context.textMuted, fontSize: 12.5),
+          style: TextStyle(color: context.textSecondary, fontSize: 12.5),
         ),
       );
     }
@@ -1708,7 +1704,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       InteractiveArtistText(
                         artistString: track.artist,
                         fontSize: 11.5,
-                        color: context.textMuted,
+                        color: context.textSecondary,
                       ),
                     ],
                   ),

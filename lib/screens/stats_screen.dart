@@ -5,6 +5,8 @@ import 'package:provider/provider.dart';
 
 import '../services/listening_stats_service.dart';
 import '../utils/app_colors.dart';
+import '../utils/responsive.dart';
+import '../widgets/material_surface.dart';
 
 enum _TimeSeriesViewMode { daily, weekly, monthly }
 
@@ -72,68 +74,71 @@ class _StatsScreenState extends State<StatsScreen> {
       ),
       body: !hasData
           ? _buildEmptyState(context)
-          : ListView(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              children: [
-                // -------------------------------------------------------------
-                // Tarjetas resumen principales
-                // -------------------------------------------------------------
-                Row(
-                  children: [
-                    Expanded(
-                      child: _buildMetricCard(
-                        context,
-                        title: 'Tiempo total',
-                        value: _formatDuration(totalDuration),
-                        icon: Icons.timer_outlined,
-                        accentColor: context.accent,
+          : ConstrainedContent(
+              maxWidth: 1000,
+              child: ListView(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                children: [
+                  // -------------------------------------------------------------
+                  // Tarjetas resumen principales
+                  // -------------------------------------------------------------
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _buildMetricCard(
+                          context,
+                          title: 'Tiempo total',
+                          value: _formatDuration(totalDuration),
+                          icon: Icons.timer_outlined,
+                          accentColor: context.accent,
+                        ),
                       ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: _buildMetricCard(
-                        context,
-                        title: 'Reproducciones',
-                        value: '$totalPlays canciones',
-                        icon: Icons.play_arrow_rounded,
-                        accentColor: context.accent2,
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _buildMetricCard(
+                          context,
+                          title: 'Reproducciones',
+                          value: '$totalPlays canciones',
+                          icon: Icons.play_arrow_rounded,
+                          accentColor: context.accent2,
+                        ),
                       ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 20),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
 
-                // -------------------------------------------------------------
-                // Gráfico temporal (Día / Semana / Mes)
-                // -------------------------------------------------------------
-                _buildTimeSeriesSection(context, timeSeries),
-                const SizedBox(height: 24),
+                  // -------------------------------------------------------------
+                  // Gráfico temporal (Día / Semana / Mes)
+                  // -------------------------------------------------------------
+                  _buildTimeSeriesSection(context, timeSeries),
+                  const SizedBox(height: 24),
 
-                // -------------------------------------------------------------
-                // Top Pistas
-                // -------------------------------------------------------------
-                _buildSectionTitle('Canciones más escuchadas'),
-                const SizedBox(height: 10),
-                _buildTopTracksCard(context, topTracks),
-                const SizedBox(height: 24),
+                  // -------------------------------------------------------------
+                  // Top Pistas
+                  // -------------------------------------------------------------
+                  _buildSectionTitle('Canciones más escuchadas'),
+                  const SizedBox(height: 10),
+                  _buildTopTracksCard(context, topTracks),
+                  const SizedBox(height: 24),
 
-                // -------------------------------------------------------------
-                // Top Artistas
-                // -------------------------------------------------------------
-                _buildSectionTitle('Artistas principales'),
-                const SizedBox(height: 10),
-                _buildTopArtistsCard(context, topArtists),
-                const SizedBox(height: 24),
+                  // -------------------------------------------------------------
+                  // Top Artistas
+                  // -------------------------------------------------------------
+                  _buildSectionTitle('Artistas principales'),
+                  const SizedBox(height: 10),
+                  _buildTopArtistsCard(context, topArtists),
+                  const SizedBox(height: 24),
 
-                // -------------------------------------------------------------
-                // Top Géneros
-                // -------------------------------------------------------------
-                _buildSectionTitle('Géneros favoritos'),
-                const SizedBox(height: 10),
-                _buildTopGenresCard(context, topGenres),
-                const SizedBox(height: 32),
-              ],
-            ),
+                  // -------------------------------------------------------------
+                  // Top Géneros
+                  // -------------------------------------------------------------
+                  _buildSectionTitle('Géneros favoritos'),
+                  const SizedBox(height: 10),
+                  _buildTopGenresCard(context, topGenres),
+                  const SizedBox(height: 32),
+                ],
+              )),
     );
   }
 
@@ -153,7 +158,7 @@ class _StatsScreenState extends State<StatsScreen> {
               child: Icon(
                 Icons.insights_rounded,
                 size: 48,
-                color: context.textMuted,
+                color: context.textSecondary,
               ),
             ),
             const SizedBox(height: 20),
@@ -170,7 +175,7 @@ class _StatsScreenState extends State<StatsScreen> {
               'Las reproducciones se contabilizan automáticamente al escuchar al menos 30 segundos (o el 50% de temas cortos). Las pistas saltadas no se registran.',
               textAlign: TextAlign.center,
               style: TextStyle(
-                color: context.textMuted,
+                color: context.textSecondary,
                 fontSize: 13,
                 height: 1.4,
               ),
@@ -218,14 +223,15 @@ class _StatsScreenState extends State<StatsScreen> {
             children: [
               Icon(icon, color: accentColor, size: 20),
               const SizedBox(width: 8),
-              Text(
+              Expanded(
+                  child: Text(
                 title,
                 style: TextStyle(
                   color: context.textSecondary,
-                  fontSize: 12,
+                  fontSize: 13,
                   fontWeight: FontWeight.w500,
                 ),
-              ),
+              )),
             ],
           ),
           const SizedBox(height: 10),
@@ -248,17 +254,16 @@ class _StatsScreenState extends State<StatsScreen> {
         0, (m, p) => max(m, (p.duration.inSeconds / 60).ceil()));
     final safeMax = maxMinutes == 0 ? 1 : maxMinutes;
 
-    return Container(
+    return MaterialSurface(
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: context.bgElevated,
-        borderRadius: BorderRadius.circular(16),
-      ),
+      color: context.bgElevated,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          Wrap(
+            spacing: 16,
+            runSpacing: 12,
+            crossAxisAlignment: WrapCrossAlignment.center,
             children: [
               Text(
                 'Actividad de escucha',
@@ -303,7 +308,10 @@ class _StatsScreenState extends State<StatsScreen> {
 
           // Barras de visualización nativa
           SizedBox(
-            height: 140,
+            height: 140 +
+                (MediaQuery.textScalerOf(context).scale(12) - 12)
+                        .clamp(0.0, double.infinity) *
+                    5,
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
@@ -342,7 +350,7 @@ class _StatsScreenState extends State<StatsScreen> {
                           Text(
                             point.label,
                             style: TextStyle(
-                              color: context.textMuted,
+                              color: context.textSecondary,
                               fontSize: 10,
                             ),
                           ),
@@ -369,24 +377,18 @@ class _StatsScreenState extends State<StatsScreen> {
 
   Widget _buildTopTracksCard(BuildContext context, List<TrackStat> tracks) {
     if (tracks.isEmpty) {
-      return Container(
+      return MaterialSurface(
         padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: context.bgElevated,
-          borderRadius: BorderRadius.circular(16),
-        ),
+        color: context.bgElevated,
         child: Text(
           'Sin pistas registradas aún',
-          style: TextStyle(color: context.textMuted, fontSize: 13),
+          style: TextStyle(color: context.textSecondary, fontSize: 13),
         ),
       );
     }
 
-    return Container(
-      decoration: BoxDecoration(
-        color: context.bgElevated,
-        borderRadius: BorderRadius.circular(16),
-      ),
+    return MaterialSurface(
+      color: context.bgElevated,
       child: Column(
         children: [
           for (int i = 0; i < tracks.length; i++) ...[
@@ -394,7 +396,7 @@ class _StatsScreenState extends State<StatsScreen> {
               leading: Text(
                 '#${i + 1}',
                 style: TextStyle(
-                  color: i < 3 ? context.accent : context.textMuted,
+                  color: i < 3 ? context.accent : context.textSecondary,
                   fontWeight: FontWeight.bold,
                   fontSize: 14,
                 ),
@@ -414,7 +416,7 @@ class _StatsScreenState extends State<StatsScreen> {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
-                  color: context.textMuted,
+                  color: context.textSecondary,
                   fontSize: 12,
                 ),
               ),
@@ -433,7 +435,7 @@ class _StatsScreenState extends State<StatsScreen> {
                   Text(
                     _formatDuration(tracks[i].totalDuration),
                     style: TextStyle(
-                      color: context.textMuted,
+                      color: context.textSecondary,
                       fontSize: 10.5,
                     ),
                   ),
@@ -450,24 +452,18 @@ class _StatsScreenState extends State<StatsScreen> {
 
   Widget _buildTopArtistsCard(BuildContext context, List<ArtistStat> artists) {
     if (artists.isEmpty) {
-      return Container(
+      return MaterialSurface(
         padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: context.bgElevated,
-          borderRadius: BorderRadius.circular(16),
-        ),
+        color: context.bgElevated,
         child: Text(
           'Sin artistas registrados aún',
-          style: TextStyle(color: context.textMuted, fontSize: 13),
+          style: TextStyle(color: context.textSecondary, fontSize: 13),
         ),
       );
     }
 
-    return Container(
-      decoration: BoxDecoration(
-        color: context.bgElevated,
-        borderRadius: BorderRadius.circular(16),
-      ),
+    return MaterialSurface(
+      color: context.bgElevated,
       child: Column(
         children: [
           for (int i = 0; i < artists.length; i++) ...[
@@ -475,7 +471,7 @@ class _StatsScreenState extends State<StatsScreen> {
               leading: Text(
                 '#${i + 1}',
                 style: TextStyle(
-                  color: i < 3 ? context.accent : context.textMuted,
+                  color: i < 3 ? context.accent : context.textSecondary,
                   fontWeight: FontWeight.bold,
                   fontSize: 14,
                 ),
@@ -505,7 +501,7 @@ class _StatsScreenState extends State<StatsScreen> {
                   Text(
                     _formatDuration(artists[i].totalDuration),
                     style: TextStyle(
-                      color: context.textMuted,
+                      color: context.textSecondary,
                       fontSize: 10.5,
                     ),
                   ),
@@ -522,24 +518,18 @@ class _StatsScreenState extends State<StatsScreen> {
 
   Widget _buildTopGenresCard(BuildContext context, List<GenreStat> genres) {
     if (genres.isEmpty) {
-      return Container(
+      return MaterialSurface(
         padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: context.bgElevated,
-          borderRadius: BorderRadius.circular(16),
-        ),
+        color: context.bgElevated,
         child: Text(
           'Sin géneros registrados aún',
-          style: TextStyle(color: context.textMuted, fontSize: 13),
+          style: TextStyle(color: context.textSecondary, fontSize: 13),
         ),
       );
     }
 
-    return Container(
-      decoration: BoxDecoration(
-        color: context.bgElevated,
-        borderRadius: BorderRadius.circular(16),
-      ),
+    return MaterialSurface(
+      color: context.bgElevated,
       child: Column(
         children: [
           for (int i = 0; i < genres.length; i++) ...[
@@ -547,7 +537,7 @@ class _StatsScreenState extends State<StatsScreen> {
               leading: Text(
                 '#${i + 1}',
                 style: TextStyle(
-                  color: i < 3 ? context.accent2 : context.textMuted,
+                  color: i < 3 ? context.accent2 : context.textSecondary,
                   fontWeight: FontWeight.bold,
                   fontSize: 14,
                 ),
@@ -577,7 +567,7 @@ class _StatsScreenState extends State<StatsScreen> {
                   Text(
                     _formatDuration(genres[i].totalDuration),
                     style: TextStyle(
-                      color: context.textMuted,
+                      color: context.textSecondary,
                       fontSize: 10.5,
                     ),
                   ),
