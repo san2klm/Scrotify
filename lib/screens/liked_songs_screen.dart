@@ -7,6 +7,7 @@ import '../widgets/cover_art.dart';
 import '../widgets/interactive_artist_text.dart';
 import '../widgets/persistent_player_bar.dart';
 import '../widgets/global_top_bar.dart';
+import '../widgets/playlist_actions_panel.dart';
 import '../widgets/track_context_menu.dart';
 import '../utils/app_colors.dart';
 
@@ -33,8 +34,10 @@ class _LikedSongsScreenState extends State<LikedSongsScreen> {
     // Ajustar índice para reordenamiento correcto
     final int finalNewIndex = (newIndex > oldIndex) ? newIndex - 1 : newIndex;
 
-    if (oldIndex < 0 || oldIndex >= tracks.length ||
-        finalNewIndex < 0 || finalNewIndex >= tracks.length ||
+    if (oldIndex < 0 ||
+        oldIndex >= tracks.length ||
+        finalNewIndex < 0 ||
+        finalNewIndex >= tracks.length ||
         oldIndex == finalNewIndex) {
       return;
     }
@@ -43,8 +46,23 @@ class _LikedSongsScreenState extends State<LikedSongsScreen> {
     final moved = reordered.removeAt(oldIndex);
     reordered.insert(finalNewIndex, moved);
     context.read<NavidromeService>().reorderStarredTracks(reordered);
-    setState(() => _future = Future.value(reordered));
+    setState(() {
+      _future = Future.value(reordered);
+    });
   }
+
+  Future<void> _showActionsPanel(List<Track> tracks) =>
+      PlaylistActionsPanel.show(
+        context,
+        playlist: null,
+        tracks: tracks,
+        onChanged: () {
+          if (!mounted) return;
+          setState(() {
+            _future = context.read<NavidromeService>().getStarred();
+          });
+        },
+      );
 
   @override
   Widget build(BuildContext context) {
@@ -75,12 +93,7 @@ class _LikedSongsScreenState extends State<LikedSongsScreen> {
                           color: context.textPrimary));
                 }
                 final tracks = snapshot.data ?? <Track>[];
-                if (tracks.isEmpty) {
-                  return Center(
-                    child: Text('No tienes canciones favoritas',
-                        style: TextStyle(color: context.textMuted)),
-                  );
-                }
+                final pinned = nav.isPinnedPlaylist('__likes__');
                 return Column(
                   children: [
                     Padding(
@@ -88,8 +101,8 @@ class _LikedSongsScreenState extends State<LikedSongsScreen> {
                       child: Row(
                         children: [
                           Container(
-                            width: 120,
-                            height: 120,
+                            width: compact ? 80 : 120,
+                            height: compact ? 80 : 120,
                             decoration: BoxDecoration(
                               color: context.accent2,
                               borderRadius: BorderRadius.circular(8),
@@ -112,6 +125,48 @@ class _LikedSongsScreenState extends State<LikedSongsScreen> {
                                     style: TextStyle(
                                         color: context.textMuted,
                                         fontSize: 14)),
+                                const SizedBox(height: 8),
+                                Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    InkWell(
+                                      onTap: () =>
+                                          nav.togglePinPlaylist('__likes__'),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(
+                                            pinned
+                                                ? Icons.push_pin
+                                                : Icons.push_pin_outlined,
+                                            color: pinned
+                                                ? context.accent
+                                                : context.textMuted,
+                                            size: 18,
+                                          ),
+                                          const SizedBox(width: 6),
+                                          Text(
+                                            pinned ? 'Fijada' : 'Fijar',
+                                            style: TextStyle(
+                                              color: pinned
+                                                  ? context.accent
+                                                  : context.textMuted,
+                                              fontSize: 13,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    IconButton(
+                                      visualDensity: VisualDensity.compact,
+                                      tooltip: 'Acciones de favoritos',
+                                      icon: Icon(Icons.more_vert_rounded,
+                                          color: context.textMuted, size: 20),
+                                      onPressed: () =>
+                                          _showActionsPanel(tracks),
+                                    ),
+                                  ],
+                                ),
                               ],
                             ),
                           ),
@@ -134,109 +189,118 @@ class _LikedSongsScreenState extends State<LikedSongsScreen> {
                       ),
                     ),
                     Divider(color: context.themeBorder),
-                    Expanded(
-                      child: ReorderableListView.builder(
-                        buildDefaultDragHandles: false,
-                        itemCount: tracks.length,
-                        onReorderItem: (oldIndex, newIndex) =>
-                            _reorderTracks(tracks, oldIndex, newIndex),
-                        itemBuilder: (context, index) {
-                          final track = tracks[index];
-                          final starred = nav.isStarred(track.id);
-                          return InkWell(
-                            key: ValueKey('liked-${track.id}'),
-                            onTap: () => context
-                                .read<PlayerController>()
-                                .playQueue(tracks, startIndex: index),
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 8, vertical: 4),
-                              child: Row(
-                                crossAxisAlignment: CrossAxisAlignment.center,
-                                children: [
-                                  // Portada
-                                  CoverArt(
-                                    url: track.albumArtUrl,
-                                    artist: track.artist,
-                                    album: track.album,
-                                    title: track.title,
-                                    width: 40,
-                                    height: 40,
-                                    borderRadius: 4,
-                                    fallbackIcon: Icons.music_note,
-                                    fallbackIconSize: 20,
-                                    fallbackColor: context.bgElevated,
-                                  ),
-                                  const SizedBox(width: 10),
-                                  // Título + artista
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Text(
-                                          track.title,
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: TextStyle(
-                                              color: context.textPrimary,
-                                              fontSize: 14),
-                                        ),
-                                        InteractiveArtistText(
-                                            artistString: track.artist),
-                                      ],
+                    if (tracks.isEmpty)
+                      Expanded(
+                        child: Center(
+                          child: Text('No tienes canciones favoritas',
+                              style: TextStyle(color: context.textMuted)),
+                        ),
+                      )
+                    else
+                      Expanded(
+                        child: ReorderableListView.builder(
+                          buildDefaultDragHandles: false,
+                          itemCount: tracks.length,
+                          onReorderItem: (oldIndex, newIndex) =>
+                              _reorderTracks(tracks, oldIndex, newIndex),
+                          itemBuilder: (context, index) {
+                            final track = tracks[index];
+                            final starred = nav.isStarred(track.id);
+                            return InkWell(
+                              key: ValueKey('liked-${track.id}'),
+                              onTap: () => context
+                                  .read<PlayerController>()
+                                  .playQueue(tracks, startIndex: index),
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 8, vertical: 4),
+                                child: Row(
+                                  crossAxisAlignment: CrossAxisAlignment.center,
+                                  children: [
+                                    // Portada
+                                    CoverArt(
+                                      url: track.albumArtUrl,
+                                      artist: track.artist,
+                                      album: track.album,
+                                      title: track.title,
+                                      width: 40,
+                                      height: 40,
+                                      borderRadius: 4,
+                                      fallbackIcon: Icons.music_note,
+                                      fallbackIconSize: 20,
+                                      fallbackColor: context.bgElevated,
                                     ),
-                                  ),
-                                  // Drag handle centrado horizontalmente (en la mitad)
-                                  ReorderableDragStartListener(
-                                    index: index,
-                                    child: Padding(
-                                      padding: const EdgeInsets.symmetric(
-                                          horizontal: 8, vertical: 4),
-                                      child: Icon(
-                                        Icons.drag_handle_rounded,
-                                        color: context.textMuted,
-                                        size: 22,
+                                    const SizedBox(width: 10),
+                                    // Título + artista
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Text(
+                                            track.title,
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: TextStyle(
+                                                color: context.textPrimary,
+                                                fontSize: 14),
+                                          ),
+                                          InteractiveArtistText(
+                                              artistString: track.artist),
+                                        ],
                                       ),
                                     ),
-                                  ),
-                                  const Spacer(),
-                                  // Botón de me gusta
-                                  IconButton(
-                                    visualDensity: VisualDensity.compact,
-                                    icon: Icon(
-                                      starred
-                                          ? Icons.favorite
-                                          : Icons.favorite_border,
-                                      color: starred
-                                          ? context.accent
-                                          : context.textMuted,
-                                      size: 20,
+                                    // Drag handle centrado horizontalmente (en la mitad)
+                                    ReorderableDragStartListener(
+                                      index: index,
+                                      child: Padding(
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 8, vertical: 4),
+                                        child: Icon(
+                                          Icons.drag_handle_rounded,
+                                          color: context.textMuted,
+                                          size: 22,
+                                        ),
+                                      ),
                                     ),
-                                    onPressed: () async {
-                                      await nav.toggleStar(track);
-                                      if (mounted) {
-                                        setState(
-                                            () => _future = nav.getStarred());
-                                      }
-                                    },
-                                  ),
-                                  // Menú contextual ⋮
-                                  IconButton(
-                                    visualDensity: VisualDensity.compact,
-                                    icon: Icon(Icons.more_vert_rounded,
-                                        color: context.textMuted, size: 20),
-                                    onPressed: () =>
-                                        TrackContextMenu.show(context, track),
-                                  ),
-                                ],
+                                    const Spacer(),
+                                    // Botón de me gusta
+                                    IconButton(
+                                      visualDensity: VisualDensity.compact,
+                                      icon: Icon(
+                                        starred
+                                            ? Icons.favorite
+                                            : Icons.favorite_border,
+                                        color: starred
+                                            ? context.accent
+                                            : context.textMuted,
+                                        size: 20,
+                                      ),
+                                      onPressed: () async {
+                                        await nav.toggleStar(track);
+                                        if (mounted) {
+                                          setState(() {
+                                            _future = nav.getStarred();
+                                          });
+                                        }
+                                      },
+                                    ),
+                                    // Menú contextual ⋮
+                                    IconButton(
+                                      visualDensity: VisualDensity.compact,
+                                      icon: Icon(Icons.more_vert_rounded,
+                                          color: context.textMuted, size: 20),
+                                      onPressed: () =>
+                                          TrackContextMenu.show(context, track),
+                                    ),
+                                  ],
+                                ),
                               ),
-                            ),
-                          );
-                        },
+                            );
+                          },
+                        ),
                       ),
-                    ),
                   ],
                 );
               },

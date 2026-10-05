@@ -28,8 +28,13 @@ import '../utils/playback_time.dart';
 /// delgada en el borde superior de la barra, controles y texto compactos.
 class PersistentPlayerBar extends StatelessWidget {
   final bool compact;
+  final bool showQueue;
 
-  const PersistentPlayerBar({super.key, this.compact = false});
+  const PersistentPlayerBar({
+    super.key,
+    this.compact = false,
+    this.showQueue = true,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -150,7 +155,7 @@ class PersistentPlayerBar extends StatelessWidget {
               _jamButton(context),
               const SizedBox(width: 6),
             ],
-            _queueButton(context),
+            if (showQueue) _queueButton(context),
             if (showVolume) ...[
               const SizedBox(width: 8),
               _VolumeBar(player),
@@ -231,7 +236,7 @@ class PersistentPlayerBar extends StatelessWidget {
         _playbackHandler(jam, player, 'skip_next'),
         size: 24,
       ),
-      IconButton(
+      if (showQueue) IconButton(
         visualDensity: VisualDensity.compact,
         padding: EdgeInsets.zero,
         constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
@@ -459,7 +464,7 @@ class PersistentPlayerBar extends StatelessWidget {
       tooltip: 'Ventana completa',
       visualDensity: VisualDensity.compact,
       // Flecha hacia arriba: expande el reproductor (portada, letra…) a toda
-      // la ventana. Desde ahí hay un botón para pasar a pantalla completa.
+      // la ventana.
       icon: Icon(
         Icons.keyboard_arrow_up_rounded,
         color: context.textSecondary,

@@ -26,6 +26,7 @@ class Track {
   final String duration;
   final String? albumArtUrl;
   final int playCount;
+  final String? suffix;
   final String? artistId;
   final String? albumId;
   final String? genre;
@@ -43,6 +44,7 @@ class Track {
     required this.duration,
     this.albumArtUrl,
     this.playCount = 0,
+    this.suffix,
     this.artistId,
     this.albumId,
     this.genre,
@@ -59,6 +61,7 @@ class Track {
     String? duration,
     String? albumArtUrl,
     int? playCount,
+    String? suffix,
     String? artistId,
     String? albumId,
     String? genre,
@@ -74,6 +77,7 @@ class Track {
       duration: duration ?? this.duration,
       albumArtUrl: albumArtUrl ?? this.albumArtUrl,
       playCount: playCount ?? this.playCount,
+      suffix: suffix ?? this.suffix,
       artistId: artistId ?? this.artistId,
       albumId: albumId ?? this.albumId,
       genre: genre ?? this.genre,
@@ -128,6 +132,7 @@ class Track {
       duration: duration,
       albumArtUrl: coverArt,
       playCount: (json['playCount'] as num?)?.toInt() ?? 0,
+      suffix: json['suffix'] as String?,
       artistId: json['artistId'] as String?,
       albumId: json['albumId'] as String?,
       genre: json['genre'] as String?,

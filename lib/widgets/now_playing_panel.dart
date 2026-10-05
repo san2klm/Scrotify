@@ -9,7 +9,7 @@ import 'lyrics_follow_panel.dart';
 
 /// Panel lateral "Escuchando ahora" para escritorio (ventanas anchas).
 ///
-/// Muestra la carátula grande, los controles básicos y dos pestañas:
+/// Muestra la carátula grande, los datos de la canción y dos pestañas:
 /// la cola de reproducción y la letra sincronizada.
 class NowPlayingSidePanel extends StatefulWidget {
   const NowPlayingSidePanel({super.key});
@@ -51,15 +51,18 @@ class _NowPlayingSidePanelState extends State<NowPlayingSidePanel> {
               ),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: AspectRatio(
-                  aspectRatio: 1,
-                  child: CoverArt(
-                    url: track.albumArtUrl,
-                    artist: track.artist,
-                    album: track.album,
-                    title: track.title,
-                    borderRadius: 12,
-                    fallbackIconSize: 56,
+                child: FractionallySizedBox(
+                  widthFactor: 0.75,
+                  child: AspectRatio(
+                    aspectRatio: 1,
+                    child: CoverArt(
+                      url: track.albumArtUrl,
+                      artist: track.artist,
+                      album: track.album,
+                      title: track.title,
+                      borderRadius: 12,
+                      fallbackIconSize: 56,
+                    ),
                   ),
                 ),
               ),
@@ -84,17 +87,16 @@ class _NowPlayingSidePanelState extends State<NowPlayingSidePanel> {
                   ],
                 ),
               ),
-              _Controls(player: player),
+              const SizedBox(height: 16),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: SegmentedButton<bool>(
                   showSelectedIcon: false,
-                  style: const ButtonStyle(
-                      visualDensity: VisualDensity.compact),
+                  style:
+                      const ButtonStyle(visualDensity: VisualDensity.compact),
                   segments: [
                     ButtonSegment(
-                        value: false,
-                        label: Text('Cola (${upcoming.length})')),
+                        value: false, label: Text('Cola (${upcoming.length})')),
                     const ButtonSegment(value: true, label: Text('Letra')),
                   ],
                   selected: {_showLyrics},
@@ -124,46 +126,6 @@ class _NowPlayingSidePanelState extends State<NowPlayingSidePanel> {
     final start = player.currentOrderPos + 1;
     if (start <= 0 || start >= ordered.length) return const [];
     return ordered.sublist(start);
-  }
-}
-
-class _Controls extends StatelessWidget {
-  final PlayerController player;
-  const _Controls({required this.player});
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          IconButton(
-            tooltip: 'Anterior',
-            icon: Icon(Icons.skip_previous_rounded,
-                color: context.textPrimary, size: 28),
-            onPressed: player.skipPrevious,
-          ),
-          const SizedBox(width: 6),
-          IconButton.filled(
-            tooltip: player.playing ? 'Pausar' : 'Reproducir',
-            style: IconButton.styleFrom(backgroundColor: context.accent),
-            iconSize: 30,
-            icon: Icon(player.playing
-                ? Icons.pause_rounded
-                : Icons.play_arrow_rounded),
-            onPressed: player.togglePlay,
-          ),
-          const SizedBox(width: 6),
-          IconButton(
-            tooltip: 'Siguiente',
-            icon: Icon(Icons.skip_next_rounded,
-                color: context.textPrimary, size: 28),
-            onPressed: player.skipNext,
-          ),
-        ],
-      ),
-    );
   }
 }
 

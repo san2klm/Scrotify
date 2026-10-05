@@ -35,13 +35,16 @@ class MiniPlayerController extends ChangeNotifier {
       _restoreMaximized = await windowManager.isMaximized();
       if (_restoreMaximized) await windowManager.unmaximize();
       _restoreSize = await windowManager.getSize();
+      // Mostrar la vista mini antes de encoger evita comprimir la vista normal.
+      _enabled = true;
+      notifyListeners();
       // El mínimo se baja ANTES de encoger, si no la ventana no obedece.
       await windowManager.setMinimumSize(miniSize);
       await windowManager.setSize(miniSize);
       await windowManager.setAlwaysOnTop(true);
-      _enabled = true;
-      notifyListeners();
     } catch (e) {
+      _enabled = false;
+      notifyListeners();
       debugPrint('MiniPlayerController.enter: $e');
     } finally {
       _busy = false;

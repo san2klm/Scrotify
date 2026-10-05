@@ -6,22 +6,34 @@ import 'package:provider/provider.dart';
 
 import '../services/navidrome_service.dart';
 import '../utils/app_colors.dart';
+import 'import_playlist_dialog.dart';
 
 /// Diálogo compacto para crear una playlist desde la biblioteca.
 Future<Playlist?> showCreatePlaylistDialog(BuildContext context) async {
   final nav = context.read<NavidromeService>();
+  var importRequested = false;
   final playlist = await showDialog<Playlist>(
     context: context,
-    builder: (_) => _CreatePlaylistDialog(nav: nav),
+    builder: (dialogContext) => _CreatePlaylistDialog(
+      nav: nav,
+      onImport: () {
+        importRequested = true;
+        Navigator.of(dialogContext).pop();
+      },
+    ),
   );
+  if (importRequested && context.mounted) {
+    return showImportPlaylistDialog(context);
+  }
   if (playlist != null) nav.bumpPlaylists();
   return playlist;
 }
 
 class _CreatePlaylistDialog extends StatefulWidget {
-  const _CreatePlaylistDialog({required this.nav});
+  const _CreatePlaylistDialog({required this.nav, required this.onImport});
 
   final NavidromeService nav;
+  final VoidCallback onImport;
 
   @override
   State<_CreatePlaylistDialog> createState() => _CreatePlaylistDialogState();
@@ -35,6 +47,7 @@ class _CreatePlaylistDialogState extends State<_CreatePlaylistDialog> {
   Playlist? createdPlaylist;
   bool saving = false;
   bool picking = false;
+  int selectedTab = 1;
 
   @override
   void dispose() {
@@ -120,114 +133,141 @@ class _CreatePlaylistDialogState extends State<_CreatePlaylistDialog> {
     return PopScope(
       canPop: !saving,
       child: AlertDialog(
+        scrollable: true,
         backgroundColor: context.bgCard,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(18),
           side: BorderSide(color: context.borderSubtle),
         ),
-        title: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(7),
-              decoration: BoxDecoration(
-                color: context.accent.withValues(alpha: 0.14),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Icon(Icons.playlist_add_rounded,
-                  color: context.accent, size: 21),
-            ),
-            const SizedBox(width: 10),
-            Text('Crear playlist',
-                style: TextStyle(color: context.textPrimary, fontSize: 18)),
-          ],
+        title: SizedBox(
+          width: 390,
+          child: SegmentedButton<int>(
+            showSelectedIcon: false,
+            expandedInsets: EdgeInsets.zero,
+            segments: const [
+              ButtonSegment(value: 0, label: Text('Importar')),
+              ButtonSegment(value: 1, label: Text('Crear')),
+            ],
+            selected: {selectedTab},
+            onSelectionChanged: saving || picking || createdPlaylist != null
+                ? null
+                : (selection) {
+                    FocusScope.of(context).unfocus();
+                    setState(() => selectedTab = selection.first);
+                  },
+          ),
         ),
         content: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 390),
+          constraints: const BoxConstraints(maxWidth: 390, minHeight: 240),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              TextField(
-                controller: nameController,
-                enabled: !saving && createdPlaylist == null,
-                autofocus: true,
-                textInputAction: TextInputAction.done,
-                onSubmitted: (_) {
-                  if (!saving && !picking) _save();
-                },
-                style: TextStyle(color: context.textPrimary),
-                decoration: InputDecoration(
-                  labelText: 'Nombre de playlist *',
-                  labelStyle: TextStyle(color: context.textMuted),
-                  hintText: 'Mi playlist',
-                  hintStyle: TextStyle(color: context.textMuted),
-                  filled: true,
-                  fillColor: context.inputBg,
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: BorderSide(color: context.inputBorder),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: BorderSide(color: context.accent),
+              if (selectedTab == 0) ...[
+                const SizedBox(height: 24),
+                Icon(Icons.upload_file_rounded,
+                    color: context.accent, size: 48),
+                const SizedBox(height: 16),
+                Text(
+                  'Importar desde un archivo',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: context.textPrimary, fontSize: 16),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'CSV, M3U/M3U8, PLS o TXT',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: context.textMuted, fontSize: 13),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'Podés crear una playlist nueva o añadir las canciones a una existente.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: context.textSecondary, fontSize: 13),
+                ),
+              ] else ...[
+                TextField(
+                  controller: nameController,
+                  enabled: !saving && createdPlaylist == null,
+                  autofocus: true,
+                  textInputAction: TextInputAction.done,
+                  onSubmitted: (_) {
+                    if (!saving && !picking) _save();
+                  },
+                  style: TextStyle(color: context.textPrimary),
+                  decoration: InputDecoration(
+                    labelText: 'Nombre de playlist *',
+                    labelStyle: TextStyle(color: context.textMuted),
+                    hintText: 'Mi playlist',
+                    hintStyle: TextStyle(color: context.textMuted),
+                    filled: true,
+                    fillColor: context.inputBg,
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: BorderSide(color: context.inputBorder),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: BorderSide(color: context.accent),
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(height: 16),
-              Text('Portada (opcional)',
-                  style: TextStyle(
-                      color: context.textSecondary,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600)),
-              const SizedBox(height: 7),
-              InkWell(
-                borderRadius: BorderRadius.circular(10),
-                onTap: saving || picking ? null : _pickCover,
-                child: Container(
-                  height: 76,
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: context.inputBg,
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: context.inputBorder),
-                  ),
-                  child: Row(
-                    children: [
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(7),
-                        child: SizedBox(
-                          width: 58,
-                          height: 58,
-                          child: coverBytes == null
-                              ? Icon(Icons.image_outlined,
-                                  color: context.textMuted)
-                              : Image.memory(coverBytes!, fit: BoxFit.cover),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Text(
-                          coverName ?? 'Elegir PNG, JPG o WebP',
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color: coverName == null
-                                ? context.textMuted
-                                : context.textPrimary,
-                            fontSize: 12,
+                const SizedBox(height: 16),
+                Text('Portada (opcional)',
+                    style: TextStyle(
+                        color: context.textSecondary,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600)),
+                const SizedBox(height: 7),
+                InkWell(
+                  borderRadius: BorderRadius.circular(10),
+                  onTap: saving || picking ? null : _pickCover,
+                  child: Container(
+                    height: 76,
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: context.inputBg,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: context.inputBorder),
+                    ),
+                    child: Row(
+                      children: [
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(7),
+                          child: SizedBox(
+                            width: 58,
+                            height: 58,
+                            child: coverBytes == null
+                                ? Icon(Icons.image_outlined,
+                                    color: context.textMuted)
+                                : Image.memory(coverBytes!, fit: BoxFit.cover),
                           ),
                         ),
-                      ),
-                      Icon(Icons.upload_file_rounded,
-                          color: context.accent, size: 20),
-                    ],
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            coverName ?? 'Elegir PNG, JPG o WebP',
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: coverName == null
+                                  ? context.textMuted
+                                  : context.textPrimary,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ),
+                        Icon(Icons.upload_file_rounded,
+                            color: context.accent, size: 20),
+                      ],
+                    ),
                   ),
                 ),
-              ),
-              if (error != null) ...[
-                const SizedBox(height: 10),
-                Text(error!,
-                    style: TextStyle(color: context.danger, fontSize: 12)),
+                if (error != null) ...[
+                  const SizedBox(height: 10),
+                  Text(error!,
+                      style: TextStyle(color: context.danger, fontSize: 12)),
+                ],
               ],
             ],
           ),
@@ -241,16 +281,27 @@ class _CreatePlaylistDialogState extends State<_CreatePlaylistDialog> {
                 style: TextStyle(color: context.textSecondary)),
           ),
           FilledButton.icon(
-            onPressed: saving || picking ? null : _save,
+            onPressed: saving || picking
+                ? null
+                : selectedTab == 0
+                    ? widget.onImport
+                    : _save,
             icon: saving
                 ? const SizedBox(
                     width: 15,
                     height: 15,
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
-                : const Icon(Icons.add_rounded, size: 18),
-            label:
-                Text(createdPlaylist == null ? 'Crear' : 'Reintentar portada'),
+                : Icon(
+                    selectedTab == 0
+                        ? Icons.upload_file_rounded
+                        : Icons.add_rounded,
+                    size: 18),
+            label: Text(selectedTab == 0
+                ? 'Seleccionar archivo'
+                : createdPlaylist == null
+                    ? 'Crear'
+                    : 'Reintentar portada'),
           ),
         ],
       ),

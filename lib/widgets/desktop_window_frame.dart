@@ -130,16 +130,6 @@ class _DesktopWindowFrameState extends State<DesktopWindowFrame>
                             : Icons.crop_square_rounded,
                         onPressed: WindowControls.toggleMaximize,
                       ),
-                      _WindowButton(
-                        tooltip: _fullScreen
-                            ? 'Salir de pantalla completa (Esc)'
-                            : 'Pantalla completa (F11)',
-                        icon: _fullScreen
-                            ? Icons.fullscreen_exit_rounded
-                            : Icons.fullscreen_rounded,
-                        iconSize: 20,
-                        onPressed: WindowControls.toggleFullScreen,
-                      ),
                     ],
                     _WindowButton(
                       tooltip: 'Cerrar',
@@ -156,6 +146,7 @@ class _DesktopWindowFrameState extends State<DesktopWindowFrame>
         Expanded(
           child: mini.enabled
               ? Stack(
+                  fit: StackFit.expand,
                   children: [
                     // La interfaz normal sigue montada (conserva su estado y
                     // pila de navegación) pero oculta, con el tamaño que tenía.

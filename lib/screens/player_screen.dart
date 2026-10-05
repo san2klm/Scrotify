@@ -20,8 +20,6 @@ import '../widgets/player_position_builder.dart';
 import '../widgets/rating_stars.dart';
 import '../utils/app_colors.dart';
 import '../utils/playback_time.dart';
-import '../services/window_controls.dart';
-import 'package:window_manager/window_manager.dart';
 
 /// Pantalla completa del reproductor. Es una vista del estado global de
 /// reproducción ([PlayerController]); al cerrar esta pantalla la música sigue
@@ -33,50 +31,7 @@ class PlayerScreen extends StatefulWidget {
   State<PlayerScreen> createState() => _PlayerScreenState();
 }
 
-class _PlayerScreenState extends State<PlayerScreen> with WindowListener {
-  bool _fullScreen = false;
-
-  /// `true` si ESTA pantalla puso la ventana en pantalla completa: al cerrarla
-  /// se vuelve al tamaño anterior (no se toca si ya venía en pantalla completa).
-  bool _enteredFullScreenHere = false;
-
-  @override
-  void initState() {
-    super.initState();
-    if (WindowControls.isDesktop) {
-      windowManager.addListener(this);
-      windowManager.isFullScreen().then((v) {
-        if (mounted) setState(() => _fullScreen = v);
-      }).catchError((_) {});
-    }
-  }
-
-  @override
-  void dispose() {
-    if (WindowControls.isDesktop) {
-      windowManager.removeListener(this);
-      if (_enteredFullScreenHere && _fullScreen) {
-        WindowControls.setFullScreen(false);
-      }
-    }
-    super.dispose();
-  }
-
-  @override
-  void onWindowEnterFullScreen() {
-    if (mounted) setState(() => _fullScreen = true);
-  }
-
-  @override
-  void onWindowLeaveFullScreen() {
-    if (mounted) setState(() => _fullScreen = false);
-  }
-
-  Future<void> _toggleFullScreen() async {
-    _enteredFullScreenHere = !_fullScreen;
-    await WindowControls.setFullScreen(!_fullScreen);
-  }
-
+class _PlayerScreenState extends State<PlayerScreen> {
   // La letra se muestra de entrada; el usuario puede ocultarla desde el
   // mismo botón si prefiere ver sólo la portada.
   bool _showLyrics = true;
@@ -189,22 +144,6 @@ class _PlayerScreenState extends State<PlayerScreen> with WindowListener {
                                     color: context.textPrimary, size: 32),
                                 onPressed: () => Navigator.of(context).pop(),
                               ),
-                              // Solo en escritorio: de ventana completa a
-                              // pantalla completa real (Esc para salir).
-                              if (WindowControls.isDesktop)
-                                IconButton(
-                                  tooltip: _fullScreen
-                                      ? 'Salir de pantalla completa (Esc)'
-                                      : 'Pantalla completa (F11)',
-                                  icon: Icon(
-                                    _fullScreen
-                                        ? Icons.fullscreen_exit_rounded
-                                        : Icons.fullscreen_rounded,
-                                    color: context.textPrimary,
-                                    size: 28,
-                                  ),
-                                  onPressed: _toggleFullScreen,
-                                ),
                             ],
                           ),
                           _buildJamBadge(context, jam),
@@ -436,12 +375,12 @@ class _PlayerScreenState extends State<PlayerScreen> with WindowListener {
   /// portada a la izquierda y letra que sigue a la derecha.
   static const double _wideBreakpoint = 750;
 
-  /// 52 px en teléfono, 60 px en tablet/ventana media, 72 px en escritorio ancho.
+  /// 39 px en teléfono, 45 px en tablet/ventana media, 54 px en escritorio ancho.
   double _waveformHeight(BuildContext context) {
     final w = MediaQuery.sizeOf(context).width;
-    if (w < 700) return 52;
-    if (w < 1100) return 60;
-    return 72;
+    if (w < 700) return 39;
+    if (w < 1100) return 45;
+    return 54;
   }
 
   bool _isWide(BuildContext context) =>

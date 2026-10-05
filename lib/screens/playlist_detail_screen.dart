@@ -5,7 +5,7 @@ import '../services/navidrome_service.dart';
 import '../services/player_controller.dart';
 import '../widgets/cover_art.dart';
 import '../widgets/interactive_artist_text.dart';
-import '../widgets/add_playlist_tracks_dialog.dart';
+import '../widgets/playlist_actions_panel.dart';
 import '../widgets/persistent_player_bar.dart';
 import '../widgets/global_top_bar.dart';
 import '../widgets/track_context_menu.dart';
@@ -35,28 +35,26 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
     _future = context.read<NavidromeService>().getPlaylistTracks(_playlist.id);
   }
 
-  Future<void> _addTracks(List<Track> currentTracks) async {
+  Future<void> _reloadPlaylist() async {
+    if (!mounted) return;
     final nav = context.read<NavidromeService>();
-    final added = await showAddPlaylistTracksDialog(context, _playlist);
-    if (added == null || added.isEmpty || !mounted) return;
-
-    // El diálogo ya confirmó el guardado. Usamos los propios temas que acaba
-    // de devolver para que aparezcan al cerrar el diálogo, incluso si la
-    // lectura posterior al servidor tarda o falla.
-    setState(() => _future = Future.value([...currentTracks, ...added]));
+    setState(() {
+      _future = nav.getPlaylistTracks(_playlist.id);
+    });
     try {
       final updated = await nav.getPlaylist(_playlist.id);
       if (mounted && updated != null) setState(() => _playlist = updated);
     } catch (_) {
-      // Las canciones ya están guardadas; conservar la cabecera si no se
-      // pudieron recargar sus metadatos en este momento.
+      // Conservar la cabecera actual si no se pudieron recargar metadatos.
     }
   }
 
-  Widget _addTracksButton(List<Track> tracks) => FilledButton.icon(
-        onPressed: () => _addTracks(tracks),
-        icon: const Icon(Icons.playlist_add),
-        label: const Text('Añadir canciones'),
+  Future<void> _showActionsPanel(List<Track> tracks) =>
+      PlaylistActionsPanel.show(
+        context,
+        playlist: _playlist,
+        tracks: tracks,
+        onChanged: _reloadPlaylist,
       );
 
   /// Reproduce la playlist con el modo aleatorio activo (igual que la opción
@@ -76,7 +74,11 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
     // removeAt cambia el índice de los siguientes elementos.
     final int finalNewIndex = (newIndex > oldIndex) ? newIndex - 1 : newIndex;
 
-    if (finalNewIndex < 0 || finalNewIndex >= tracks.length || oldIndex == finalNewIndex) return;
+    if (finalNewIndex < 0 ||
+        finalNewIndex >= tracks.length ||
+        oldIndex == finalNewIndex) {
+      return;
+    }
 
     final reordered = List<Track>.of(tracks);
     final moved = reordered.removeAt(oldIndex);
@@ -95,7 +97,9 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
       );
     } catch (error) {
       if (!mounted) return;
-      setState(() => _future = Future.value(tracks));
+      setState(() {
+        _future = Future.value(tracks);
+      });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
@@ -211,19 +215,6 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
                           style: TextStyle(color: context.danger)));
                 }
                 final tracks = snapshot.data ?? <Track>[];
-                if (tracks.isEmpty) {
-                  return Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text('Playlist vacía',
-                            style: TextStyle(color: context.textMuted)),
-                        const SizedBox(height: 12),
-                        _addTracksButton(tracks),
-                      ],
-                    ),
-                  );
-                }
                 final pinned = nav.isPinnedPlaylist(_playlist.id);
                 return Column(
                   children: [
@@ -232,8 +223,8 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
                       child: Row(
                         children: [
                           Container(
-                            width: 120,
-                            height: 120,
+                            width: compact ? 80 : 120,
+                            height: compact ? 80 : 120,
                             decoration: BoxDecoration(
                               color: context.accent2,
                               borderRadius: BorderRadius.circular(8),
@@ -266,33 +257,46 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
                                         color: context.textMuted,
                                         fontSize: 14)),
                                 const SizedBox(height: 8),
-                                InkWell(
-                                  onTap: () =>
-                                      nav.togglePinPlaylist(_playlist.id),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Icon(
-                                        pinned
-                                            ? Icons.push_pin
-                                            : Icons.push_pin_outlined,
-                                        color: pinned
-                                            ? context.accent
-                                            : context.textMuted,
-                                        size: 18,
+                                Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    InkWell(
+                                      onTap: () =>
+                                          nav.togglePinPlaylist(_playlist.id),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(
+                                            pinned
+                                                ? Icons.push_pin
+                                                : Icons.push_pin_outlined,
+                                            color: pinned
+                                                ? context.accent
+                                                : context.textMuted,
+                                            size: 18,
+                                          ),
+                                          const SizedBox(width: 6),
+                                          Text(
+                                            pinned ? 'Fijada' : 'Fijar',
+                                            style: TextStyle(
+                                              color: pinned
+                                                  ? context.accent
+                                                  : context.textMuted,
+                                              fontSize: 13,
+                                            ),
+                                          ),
+                                        ],
                                       ),
-                                      const SizedBox(width: 6),
-                                      Text(
-                                        pinned ? 'Fijada' : 'Fijar',
-                                        style: TextStyle(
-                                          color: pinned
-                                              ? context.accent
-                                              : context.textMuted,
-                                          fontSize: 13,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
+                                    ),
+                                    IconButton(
+                                      visualDensity: VisualDensity.compact,
+                                      tooltip: 'Acciones de playlist',
+                                      icon: Icon(Icons.more_vert_rounded,
+                                          color: context.textMuted, size: 20),
+                                      onPressed: () =>
+                                          _showActionsPanel(tracks),
+                                    ),
+                                  ],
                                 ),
                               ],
                             ),
@@ -327,119 +331,119 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
                         ],
                       ),
                     ),
-                    // Padding reducido al mínimo para evitar espacio muerto
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                      child: Align(
-                        alignment: Alignment.centerLeft,
-                        child: _addTracksButton(tracks),
-                      ),
-                    ),
                     Divider(color: context.themeBorder, height: 1),
-                    Expanded(
-                      child: ReorderableListView.builder(
-                        physics: const BouncingScrollPhysics(),
-                        buildDefaultDragHandles: false,
-                        itemCount: tracks.length,
-                        onReorderItem: (oldIndex, newIndex) =>
-                            _reorderTracks(tracks, oldIndex, newIndex),
-                        itemBuilder: (context, index) {
-                          final track = tracks[index];
-                          return InkWell(
-                            key: ValueKey('playlist-${track.id}'),
-                            onTap: () =>
-                                context.read<PlayerController>().playQueue(
-                                      tracks,
-                                      startIndex: index,
-                                      sourcePlaylist: _playlist,
+                    if (tracks.isEmpty)
+                      Expanded(
+                        child: Center(
+                          child: Text('Playlist vacía',
+                              style: TextStyle(color: context.textMuted)),
+                        ),
+                      )
+                    else
+                      Expanded(
+                        child: ReorderableListView.builder(
+                          physics: const BouncingScrollPhysics(),
+                          buildDefaultDragHandles: false,
+                          itemCount: tracks.length,
+                          onReorderItem: (oldIndex, newIndex) =>
+                              _reorderTracks(tracks, oldIndex, newIndex),
+                          itemBuilder: (context, index) {
+                            final track = tracks[index];
+                            return InkWell(
+                              key: ValueKey('playlist-${track.id}'),
+                              onTap: () =>
+                                  context.read<PlayerController>().playQueue(
+                                        tracks,
+                                        startIndex: index,
+                                        sourcePlaylist: _playlist,
+                                      ),
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 8, vertical: 4),
+                                child: Row(
+                                  crossAxisAlignment: CrossAxisAlignment.center,
+                                  children: [
+                                    // Portada
+                                    CoverArt(
+                                      url: track.albumArtUrl,
+                                      artist: track.artist,
+                                      album: track.album,
+                                      title: track.title,
+                                      width: 40,
+                                      height: 40,
+                                      borderRadius: 4,
+                                      fallbackIcon: Icons.music_note,
+                                      fallbackIconSize: 20,
+                                      fallbackColor: context.bgElevated,
                                     ),
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 8, vertical: 4),
-                              child: Row(
-                                crossAxisAlignment: CrossAxisAlignment.center,
-                                children: [
-                                  // Portada
-                                  CoverArt(
-                                    url: track.albumArtUrl,
-                                    artist: track.artist,
-                                    album: track.album,
-                                    title: track.title,
-                                    width: 40,
-                                    height: 40,
-                                    borderRadius: 4,
-                                    fallbackIcon: Icons.music_note,
-                                    fallbackIconSize: 20,
-                                    fallbackColor: context.bgElevated,
-                                  ),
-                                  const SizedBox(width: 10),
-                                  // Título + artista
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Text(
-                                          track.title,
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: TextStyle(
-                                              color: context.textPrimary,
-                                              fontSize: 14),
-                                        ),
-                                        InteractiveArtistText(
-                                            artistString: track.artist),
-                                      ],
-                                    ),
-                                  ),
-                                  // Drag handle centrado horizontalmente (en la mitad)
-                                  ReorderableDragStartListener(
-                                    index: index,
-                                    child: Padding(
-                                      padding: const EdgeInsets.symmetric(
-                                          horizontal: 8, vertical: 4),
-                                      child: Icon(
-                                        Icons.drag_handle_rounded,
-                                        color: context.textMuted,
-                                        size: 22,
+                                    const SizedBox(width: 10),
+                                    // Título + artista
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Text(
+                                            track.title,
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: TextStyle(
+                                                color: context.textPrimary,
+                                                fontSize: 14),
+                                          ),
+                                          InteractiveArtistText(
+                                              artistString: track.artist),
+                                        ],
                                       ),
                                     ),
-                                  ),
-                                  const Spacer(),
-                                  // Botón de me gusta
-                                  IconButton(
-                                    visualDensity: VisualDensity.compact,
-                                    icon: Icon(
-                                      nav.isStarred(track.id)
-                                          ? Icons.favorite
-                                          : Icons.favorite_border,
-                                      color: nav.isStarred(track.id)
-                                          ? context.accent
-                                          : context.textMuted,
-                                      size: 20,
+                                    // Drag handle centrado horizontalmente (en la mitad)
+                                    ReorderableDragStartListener(
+                                      index: index,
+                                      child: Padding(
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 8, vertical: 4),
+                                        child: Icon(
+                                          Icons.drag_handle_rounded,
+                                          color: context.textMuted,
+                                          size: 22,
+                                        ),
+                                      ),
                                     ),
-                                    onPressed: () async {
-                                      await nav.toggleStar(track);
-                                      setState(() {});
-                                    },
-                                  ),
-                                  // Tres puntitos → menú contextual
-                                  IconButton(
-                                    visualDensity: VisualDensity.compact,
-                                    icon: Icon(Icons.more_vert_rounded,
-                                        color: context.textMuted, size: 20),
-                                    onPressed: () =>
-                                        TrackContextMenu.show(context, track,
-                                            playlistId: _playlist.id),
-                                  ),
-                                ],
+                                    const Spacer(),
+                                    // Botón de me gusta
+                                    IconButton(
+                                      visualDensity: VisualDensity.compact,
+                                      icon: Icon(
+                                        nav.isStarred(track.id)
+                                            ? Icons.favorite
+                                            : Icons.favorite_border,
+                                        color: nav.isStarred(track.id)
+                                            ? context.accent
+                                            : context.textMuted,
+                                        size: 20,
+                                      ),
+                                      onPressed: () async {
+                                        await nav.toggleStar(track);
+                                        setState(() {});
+                                      },
+                                    ),
+                                    // Tres puntitos → menú contextual
+                                    IconButton(
+                                      visualDensity: VisualDensity.compact,
+                                      icon: Icon(Icons.more_vert_rounded,
+                                          color: context.textMuted, size: 20),
+                                      onPressed: () => TrackContextMenu.show(
+                                          context, track,
+                                          playlistId: _playlist.id),
+                                    ),
+                                  ],
+                                ),
                               ),
-                            ),
-                          );
-                        },
+                            );
+                          },
+                        ),
                       ),
-                    ),
                   ],
                 );
               },

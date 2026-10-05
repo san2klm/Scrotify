@@ -10,7 +10,7 @@ import '../utils/app_colors.dart';
 /// Devuelve los temas guardados para que la vista que abrió el diálogo pueda
 /// incorporarlos inmediatamente, sin esperar una segunda petición al servidor.
 Future<List<Track>?> showAddPlaylistTracksDialog(
-    BuildContext context, Playlist playlist) {
+    BuildContext context, Playlist? playlist) {
   final nav = context.read<NavidromeService>();
   return showDialog<List<Track>>(
     context: context,
@@ -22,7 +22,7 @@ class _AddPlaylistTracksDialog extends StatefulWidget {
   const _AddPlaylistTracksDialog({required this.nav, required this.playlist});
 
   final NavidromeService nav;
-  final Playlist playlist;
+  final Playlist? playlist;
 
   @override
   State<_AddPlaylistTracksDialog> createState() =>
@@ -50,7 +50,10 @@ class _AddPlaylistTracksDialogState extends State<_AddPlaylistTracksDialog> {
 
   Future<void> _loadExistingTracks() async {
     try {
-      final tracks = await widget.nav.getPlaylistTracks(widget.playlist.id);
+      final playlist = widget.playlist;
+      final tracks = playlist == null
+          ? await widget.nav.getStarred()
+          : await widget.nav.getPlaylistTracks(playlist.id);
       if (mounted) {
         setState(() => _existingIds = tracks.map((t) => t.id).toSet());
       }
@@ -94,9 +97,8 @@ class _AddPlaylistTracksDialogState extends State<_AddPlaylistTracksDialog> {
 
   Future<void> _save() async {
     // Solo enviamos las que no estén ya en la playlist (doble seguridad).
-    final toAdd = _selected.keys
-        .where((id) => !_existingIds.contains(id))
-        .toList();
+    final toAdd =
+        _selected.keys.where((id) => !_existingIds.contains(id)).toList();
     if (toAdd.isEmpty) return;
 
     setState(() {
@@ -104,14 +106,24 @@ class _AddPlaylistTracksDialogState extends State<_AddPlaylistTracksDialog> {
       _error = null;
     });
     try {
-      await widget.nav.updatePlaylist(
-        playlistId: widget.playlist.id,
-        songIdsToAdd: toAdd,
-      );
+      final playlist = widget.playlist;
+      if (playlist == null) {
+        for (final id in toAdd) {
+          final track = _selected[id]!;
+          if (!widget.nav.isStarred(id)) await widget.nav.toggleStar(track);
+          if (!widget.nav.isStarred(id)) {
+            throw Exception('No se pudo añadir "${track.title}" a Likes.');
+          }
+        }
+      } else {
+        await widget.nav.updatePlaylist(
+          playlistId: playlist.id,
+          songIdsToAdd: toAdd,
+        );
+      }
       if (mounted) {
         // Devolvemos solo las que realmente se añadieron.
-        final added =
-            toAdd.map((id) => _selected[id]!).toList(growable: false);
+        final added = toAdd.map((id) => _selected[id]!).toList(growable: false);
         Navigator.of(context).pop(added);
       }
     } catch (e) {
@@ -155,15 +167,14 @@ class _AddPlaylistTracksDialogState extends State<_AddPlaylistTracksDialog> {
                     : _results.isEmpty
                         ? Center(
                             child: Text(_controller.text.trim().isEmpty
-                                ? 'Busca canciones para añadir a la playlist.'
+                                ? 'Busca canciones para añadir a la lista.'
                                 : 'No se encontraron canciones.'),
                           )
                         : ListView.builder(
                             itemCount: _results.length,
                             itemBuilder: (context, index) {
                               final track = _results[index];
-                              final alreadyIn =
-                                  _existingIds.contains(track.id);
+                              final alreadyIn = _existingIds.contains(track.id);
                               return CheckboxListTile(
                                 value: alreadyIn
                                     ? true
@@ -176,9 +187,7 @@ class _AddPlaylistTracksDialogState extends State<_AddPlaylistTracksDialog> {
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                   style: TextStyle(
-                                    color: alreadyIn
-                                        ? context.textMuted
-                                        : null,
+                                    color: alreadyIn ? context.textMuted : null,
                                   ),
                                 ),
                                 subtitle: alreadyIn
@@ -199,9 +208,7 @@ class _AddPlaylistTracksDialogState extends State<_AddPlaylistTracksDialog> {
                                       )
                                     : InteractiveArtistText(
                                         artistString: track.artist),
-                                checkColor: alreadyIn
-                                    ? context.accent
-                                    : null,
+                                checkColor: alreadyIn ? context.accent : null,
                                 activeColor: alreadyIn
                                     ? context.accent.withValues(alpha: 0.45)
                                     : null,
