@@ -10,6 +10,7 @@ export const SETTING_DEFS = {
   hostFailoverMs: { type: 'int', default: 60 * 1000, min: 0, max: 24 * 3600 * 1000, group: 'limits' },
   roomIdleMs: { type: 'int', default: 60 * 60 * 1000, min: 10 * 1000, max: 30 * 24 * 3600 * 1000, group: 'limits' },
   publicListingEnabled: { type: 'bool', default: true, group: 'features' },
+  reactionsEnabled: { type: 'bool', default: true, group: 'features' },
   chatEnabled: { type: 'bool', default: false, group: 'features' },
   persistentRoomsEnabled: { type: 'bool', default: false, group: 'features' },
   webLinkEnabled: { type: 'bool', default: false, group: 'features' },

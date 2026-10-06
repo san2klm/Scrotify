@@ -600,3 +600,7 @@ Las pistas viajan con `mbid`, `isrc`, `trackNumber`, `durationSec` opcionales. E
 ## Anexo: continuidad (Roadmap Fase 7)
 
 Relay: `create_room` → `hostToken`; `transfer_host{pin,toGuestId}`, `resume_host{pin,hostToken}`; eventos `host_changed{youAreHost,hostToken?,state?,guests?}`, `host_away`, `host_back`. `create_room` acepta `failover`, `ownerToken`. HTTP: `/j/:code`, `/.well-known/*`. En LAN el host es el servidor embebido: no hay transferencia (limitación).
+
+## Anexo: extras sociales (Roadmap Fase 8)
+
+Relay: `reaction{emoji}`, `chat_message{text}`, `set_chat{enabled}` → eventos `reaction{from,emoji}`, `chat{from,text,ts}`, `chat_state{enabled}`. Capabilities: `features.reactions`, `features.chat`. LAN: `op` equivalentes. Sin historial persistente.

@@ -9,6 +9,8 @@ import { createGuard } from './guard.js';
 
 export const PROTOCOL_VERSION = 2;
 const MAX_NAME_LENGTH = 48;
+const REACTIONS = new Set(['👍', '❤️', '🔥', '😂', '🎉', '👏', '😮', '🎶']);
+const MAX_CHAT_LENGTH = 280;
 const QUEUE_MODES = new Set(['free', 'fairTurns', 'voting', 'approval']);
 
 function readPositiveInteger(value, fallback) {
@@ -250,6 +252,7 @@ export function createJamServer({
         features: {
           publicListing: limits.publicListingEnabled,
           chat: limits.chatEnabled,
+          reactions: limits.reactionsEnabled,
           persistentRooms: limits.persistentRoomsEnabled,
           webLink: limits.webLinkEnabled,
         },
@@ -586,6 +589,60 @@ export function createJamServer({
     }
   }
 
+  /// Mínimo de milisegundos entre mensajes sociales por socket (anti-spam).
+  const social = new WeakMap();
+  function socialAllowed(socket, kind, max, windowMs) {
+    const now = Date.now();
+    const byKind = social.get(socket) ?? {};
+    const list = (byKind[kind] ?? []).filter((t) => now - t < windowMs);
+    if (list.length >= max) return false;
+    list.push(now);
+    byKind[kind] = list;
+    social.set(socket, byKind);
+    return true;
+  }
+
+  /// Quién envía y a quién se reenvía: todos los miembros de la sala menos el emisor.
+  function socialContext(socket) {
+    const membership = socketRooms.get(socket);
+    const room = membership ? rooms.get(membership.pin) : null;
+    if (!room) return null;
+    const from = membership.role === 'host' ? room.hostName : membership.guest?.name ?? 'Invitado';
+    const recipients = [room.host, ...[...room.guests].map((g) => g.socket)].filter((s) => s && s !== socket);
+    return { room, from, recipients };
+  }
+
+  function reaction(socket, message) {
+    if (!limits.reactionsEnabled) return serverError(socket, 'Las reacciones están desactivadas en este servidor.');
+    const ctx = socialContext(socket);
+    if (!ctx) return serverError(socket, 'No perteneces a ninguna sala.');
+    if (typeof message.emoji !== 'string' || !REACTIONS.has(message.emoji)) return serverError(socket, 'Reacción no permitida.');
+    if (!socialAllowed(socket, 'reaction', 5, 5000)) return; // se descarta en silencio
+    for (const s of ctx.recipients) send(s, { event: 'reaction', from: ctx.from, emoji: message.emoji });
+  }
+
+  function chat(socket, message) {
+    if (!limits.chatEnabled) return serverError(socket, 'El chat está desactivado en este servidor.');
+    const ctx = socialContext(socket);
+    if (!ctx) return serverError(socket, 'No perteneces a ninguna sala.');
+    if (ctx.room.chatDisabled) return serverError(socket, 'El anfitrión desactivó el chat de esta sala.');
+    if (typeof message.text !== 'string') return serverError(socket, 'Mensaje inválido.');
+    // Sin historial: solo se reenvía. Se descartan caracteres de control.
+    const text = message.text.replace(/[\u0000-\u001f\u007f]/g, ' ').trim();
+    if (text.length === 0 || text.length > MAX_CHAT_LENGTH) return serverError(socket, `El mensaje debe tener entre 1 y ${MAX_CHAT_LENGTH} caracteres.`);
+    if (!socialAllowed(socket, 'chat', 5, 10000)) return serverError(socket, 'Vas demasiado rápido.');
+    const ts = Date.now();
+    for (const s of ctx.recipients) send(s, { event: 'chat', from: ctx.from, text, ts });
+  }
+
+  function setChat(socket, message) {
+    const membership = socketRooms.get(socket);
+    const room = membership ? rooms.get(membership.pin) : null;
+    if (!room || membership.role !== 'host' || room.host !== socket) return serverError(socket, 'Sólo el anfitrión puede cambiar el chat.');
+    room.chatDisabled = message.enabled === false;
+    for (const g of room.guests) send(g.socket, { event: 'chat_state', enabled: !room.chatDisabled });
+  }
+
   function checkRoom(socket, message) {
     if (!admitAttempt(socket)) return;
     const pin = normalizePin(message.pin);
@@ -626,6 +683,9 @@ export function createJamServer({
         case 'kick_guest': return kickGuest(socket, message);
         case 'check_room': return checkRoom(socket, message);
         case 'resume_host': return resumeHost(socket, message);
+        case 'reaction': return reaction(socket, message);
+        case 'chat_message': return chat(socket, message);
+        case 'set_chat': return setChat(socket, message);
         case 'transfer_host': return transferHost(socket, message);
         case 'time_ping':
           return send(socket, {

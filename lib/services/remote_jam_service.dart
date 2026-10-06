@@ -53,6 +53,9 @@ class RemoteJamService {
   OnRemoteHostChanged? onHostChanged;
   void Function(int failoverMs)? onHostAway;
   void Function()? onHostBack;
+  void Function(String from, String emoji)? onReaction;
+  void Function(String from, String text, int ts)? onChat;
+  void Function(bool enabled)? onChatState;
 
   /// Pistas para continuidad (Fase 7): token del anfitrión (128 bits, solo en
   /// RAM), token de propietario de sala persistente y failover automático.
@@ -537,6 +540,16 @@ class RemoteJamService {
         onHostAway?.call((json['failoverMs'] as num?)?.toInt() ?? 0);
       case 'host_back':
         onHostBack?.call();
+      case 'reaction':
+        onReaction?.call(json['from']?.toString() ?? '', json['emoji']?.toString() ?? '');
+      case 'chat':
+        onChat?.call(
+          json['from']?.toString() ?? '',
+          json['text']?.toString() ?? '',
+          (json['ts'] as num?)?.toInt() ?? DateTime.now().millisecondsSinceEpoch,
+        );
+      case 'chat_state':
+        onChatState?.call(json['enabled'] != false);
       case 'room_closed' || 'kicked':
         final reason = json['message']?.toString() ??
             (event == 'kicked'
@@ -544,6 +557,45 @@ class RemoteJamService {
                 : 'La sala Jam fue cerrada.');
         onRoomClosed?.call(reason);
         disconnect();
+    }
+  }
+
+  void _sendAction(Map<String, dynamic> msg) {
+    if (!_isConnected) return;
+    try {
+      _channel?.sink.add(jsonEncode(msg));
+    } catch (_) {}
+  }
+
+  void sendReaction(String emoji) =>
+      _sendAction({'action': 'reaction', 'emoji': emoji});
+
+  void sendChat(String text) =>
+      _sendAction({'action': 'chat_message', 'text': text});
+
+  void setChatEnabled(bool enabled) =>
+      _sendAction({'action': 'set_chat', 'enabled': enabled});
+
+  /// Funciones que el admin del relay permite (`GET /api/capabilities`).
+  /// `null` si el servidor es antiguo o no responde (usar valores por defecto).
+  static Future<({bool reactions, bool chat})?> fetchCapabilities(
+      String endpoint) async {
+    final parsed = JamServerEndpoint.parse(endpoint);
+    if (!parsed.isValid) return null;
+    final client = HttpClient()..connectionTimeout = const Duration(seconds: 3);
+    try {
+      final req = await client
+          .getUrl(parsed.httpBase.replace(path: '/api/capabilities'));
+      final res = await req.close().timeout(const Duration(seconds: 3));
+      if (res.statusCode != 200) return null;
+      final data = jsonDecode(await res.transform(utf8.decoder).join());
+      final f = data is Map ? data['features'] : null;
+      if (f is! Map) return null;
+      return (reactions: f['reactions'] != false, chat: f['chat'] == true);
+    } catch (_) {
+      return null;
+    } finally {
+      client.close(force: true);
     }
   }
 

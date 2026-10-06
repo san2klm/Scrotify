@@ -807,3 +807,68 @@ test('web link landing: gated by setting, sanitized, well-known served from sett
   assert.equal(wk.status, 200);
   assert.equal((await http(server, 'GET', '/.well-known/apple-app-site-association')).status, 404);
 });
+
+// --- Fase 8: reacciones y chat -------------------------------------------------
+
+test('reactions: relayed to everyone else, whitelisted, rate limited, flag-gated', async () => {
+  const server = await startServer({ adminPassword: 'supersecret1' });
+  const { host, guest } = await roomWithGuest(server, 'RCT123');
+  try {
+    const onHost = waitFor(host, (m) => m.event === 'reaction');
+    guest.send(JSON.stringify({ action: 'reaction', emoji: '🔥' }));
+    assert.deepEqual(await onHost, { event: 'reaction', from: 'G', emoji: '🔥' });
+
+    assert.equal((await ask(guest, { action: 'reaction', emoji: '<script>' })).status, 'error');
+
+    // Límite: 5 cada 5 s; el resto se descarta sin eco.
+    let received = 0;
+    host.on('message', (d) => { if (JSON.parse(d.toString()).event === 'reaction') received++; });
+    for (let i = 0; i < 10; i++) guest.send(JSON.stringify({ action: 'reaction', emoji: '🎉' }));
+    await new Promise((r) => setTimeout(r, 200));
+    assert.ok(received <= 4); // 1 ya consumida arriba
+
+    const { cookie, csrf } = await adminLogin(server);
+    await http(server, 'PUT', '/admin/api/settings', { cookie, csrf, body: { reactionsEnabled: false } });
+    assert.equal((await http(server, 'GET', '/api/capabilities')).json.features.reactions, false);
+    assert.equal((await ask(guest, { action: 'reaction', emoji: '👍' })).status, 'error');
+  } finally {
+    host.close(); guest.close();
+  }
+});
+
+test('chat: off by default, 280-char limit, no history, host can disable per room', async () => {
+  const server = await startServer({ adminPassword: 'supersecret1', chatEnabled: true });
+  const { host, guest } = await roomWithGuest(server, 'CHT123');
+  try {
+    const onHost = waitFor(host, (m) => m.event === 'chat');
+    guest.send(JSON.stringify({ action: 'chat_message', text: '  hola\u0007 mundo  ' }));
+    const msg = await onHost;
+    assert.equal(msg.from, 'G');
+    assert.equal(msg.text, 'hola  mundo');
+    assert.ok(!msg.text.includes('\u0007'));
+    assert.ok(msg.ts > 0);
+
+    assert.equal((await ask(guest, { action: 'chat_message', text: 'x'.repeat(281) })).status, 'error');
+    assert.equal((await ask(guest, { action: 'chat_message', text: '   ' })).status, 'error');
+
+    const off = waitFor(guest, (m) => m.event === 'chat_state');
+    host.send(JSON.stringify({ action: 'set_chat', enabled: false }));
+    assert.equal((await off).enabled, false);
+    assert.match((await ask(guest, { action: 'chat_message', text: 'hola' })).message, /desactiv/);
+    // Un invitado no puede cambiarlo.
+    assert.equal((await ask(guest, { action: 'set_chat', enabled: true })).status, 'error');
+  } finally {
+    host.close(); guest.close();
+  }
+});
+
+test('chat is disabled globally by default', async () => {
+  const server = await startServer();
+  const { host, guest } = await roomWithGuest(server, 'CHT456');
+  try {
+    assert.equal((await http(server, 'GET', '/api/capabilities')).json.features.chat, false);
+    assert.equal((await ask(guest, { action: 'chat_message', text: 'hola' })).status, 'error');
+  } finally {
+    host.close(); guest.close();
+  }
+});

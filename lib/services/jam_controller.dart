@@ -9,6 +9,7 @@ import 'jam_clock.dart';
 import 'jam_history.dart';
 import 'jam_host_service.dart';
 import 'jam_queue_logic.dart';
+import 'jam_social.dart';
 import 'jam_track_resolver.dart';
 import 'jam_tls_identity.dart';
 import 'navidrome_service.dart';
@@ -58,6 +59,91 @@ class JamController extends ChangeNotifier {
   final Map<String, int> _myVotes = {}; // lado invitado (optimista)
   static const int _maxPendingRequests = 50;
   bool _hasRoomPassword = false;
+
+  // Reacciones y chat (efímeros, solo RAM).
+  final JamReactionFeed _reactions = JamReactionFeed();
+  final JamChatLog _chat = JamChatLog();
+  bool _cloudReactions = true;
+  bool _cloudChat = false;
+  bool _chatEnabledForRoom = true;
+  Timer? _reactionSweep;
+
+  List<JamReaction> get activeReactions => _reactions.active();
+  List<JamChatMessage> get chatMessages => _chat.items;
+
+  /// Reacciones/chat disponibles: en LAN siempre; en nube según el relay.
+  bool get reactionsAvailable => inJam && (_onLan || _cloudReactions);
+  bool get chatAvailable =>
+      inJam && _chatEnabledForRoom && (_onLan || _cloudChat);
+  bool get chatSupported => inJam && (_onLan || _cloudChat);
+  bool get chatRoomEnabled => _chatEnabledForRoom;
+  bool get _onLan => isHost ? _hostService.isRunning : _guestService.isConnected;
+
+  void _receiveReaction(String from, String emoji) {
+    if (!kJamReactions.contains(emoji)) return;
+    _reactions.add(JamReaction(from, emoji, DateTime.now()));
+    _reactionSweep?.cancel();
+    _reactionSweep = Timer(kJamReactionLife + const Duration(milliseconds: 100), notifyListeners);
+    notifyListeners();
+  }
+
+  void _receiveChat(String from, String text, {bool mine = false}) {
+    final clean = sanitizeChatText(text);
+    if (clean == null) return;
+    _chat.add(JamChatMessage(from, clean, DateTime.now(), mine: mine));
+    notifyListeners();
+  }
+
+  void sendReaction(String emoji) {
+    if (!reactionsAvailable || !kJamReactions.contains(emoji)) return;
+    final me = _localParticipant?.name ?? '';
+    _receiveReaction(me, emoji);
+    if (isHost) {
+      _hostService.broadcastMessage({'op': 'reaction', 'from': me, 'emoji': emoji});
+      if (_remoteService.isConnected) _remoteService.sendReaction(emoji);
+    } else if (_guestService.isConnected) {
+      _guestService.sendReaction(emoji);
+    } else if (_remoteService.isConnected) {
+      _remoteService.sendReaction(emoji);
+    }
+  }
+
+  void sendChat(String raw) {
+    final text = sanitizeChatText(raw);
+    if (text == null || !chatAvailable) return;
+    final me = _localParticipant?.name ?? '';
+    _receiveChat(me, text, mine: true);
+    if (isHost) {
+      _hostService.broadcastMessage({
+        'op': 'chat',
+        'from': me,
+        'text': text,
+        'ts': DateTime.now().millisecondsSinceEpoch,
+      });
+      if (_remoteService.isConnected) _remoteService.sendChat(text);
+    } else if (_guestService.isConnected) {
+      _guestService.sendChat(text);
+    } else if (_remoteService.isConnected) {
+      _remoteService.sendChat(text);
+    }
+  }
+
+  /// El anfitrión activa/desactiva el chat de su sala.
+  void setChatEnabled(bool enabled) {
+    if (!isHost) return;
+    _chatEnabledForRoom = enabled;
+    _hostService.chatEnabled = enabled;
+    if (_remoteService.isConnected) _remoteService.setChatEnabled(enabled);
+    notifyListeners();
+  }
+
+  Future<void> _loadCloudCapabilities() async {
+    final caps = await RemoteJamService.fetchCapabilities(_remoteService.endpoint);
+    if (caps == null) return; // relay antiguo: valores por defecto
+    _cloudReactions = caps.reactions;
+    _cloudChat = caps.chat;
+    notifyListeners();
+  }
   late final JamTrackResolver _resolver = JamTrackResolver(
     getSong: _navidrome.getSong,
     searchSongs: (q) async => (await _navidrome.search(q)).songs,
@@ -251,6 +337,11 @@ class JamController extends ChangeNotifier {
 
     _hostService.onTrackAddRequested = (track, participant, playNext) {
       unawaited(_addTrackAsHost(track, participant, playNext: playNext));
+    };
+
+    _hostService.onSocial = (from, emoji, text) {
+      if (emoji != null) _receiveReaction(from, emoji);
+      if (text != null) _receiveChat(from, text);
     };
 
     _hostService.onVoteRequested = (itemId, value, participant) {
@@ -708,6 +799,8 @@ class JamController extends ChangeNotifier {
     };
 
     _guestService.onNextTrackHint = _handleNextHint;
+    _guestService.onReaction = _receiveReaction;
+    _guestService.onChat = (from, text, ts) => _receiveChat(from, text);
 
     _guestService.onKicked = (reason) {
       leaveOrEndSession();
@@ -724,6 +817,12 @@ class JamController extends ChangeNotifier {
   void _initRemoteCallbacks() {
     _remoteService.onHostChanged = (youAreHost, hostName, state, guests) {
       unawaited(_handleRemoteHostChanged(youAreHost, hostName, guests));
+    };
+    _remoteService.onReaction = _receiveReaction;
+    _remoteService.onChat = (from, text, ts) => _receiveChat(from, text);
+    _remoteService.onChatState = (enabled) {
+      _chatEnabledForRoom = enabled;
+      notifyListeners();
     };
     _remoteService.onHostAway = (failoverMs) {
       if (!isGuest) return;
@@ -1051,6 +1150,7 @@ class JamController extends ChangeNotifier {
       return;
     }
     _remoteService.failoverEnabled = failover;
+    unawaited(_loadCloudCapabilities());
     _remoteService.ownerToken = ownerToken?.trim();
     final sessionId = 'jam_${DateTime.now().millisecondsSinceEpoch}';
     final hostName = customName?.trim().isNotEmpty == true
@@ -1087,6 +1187,8 @@ class JamController extends ChangeNotifier {
       initialPlaylistId: initialPlaylistId,
     );
     _hostService.roomPassword = _hasRoomPassword ? password : null;
+    _hostService.chatEnabled = true;
+    _chatEnabledForRoom = true;
 
     _role = JamRole.host;
     _rebuildHostQueueFromPlayer();
@@ -1801,6 +1903,7 @@ class JamController extends ChangeNotifier {
     await leaveOrEndSession();
     lastJoinError = null;
     _remoteService.roomPassword = password;
+    unawaited(_loadCloudCapabilities());
 
     String normalizedPin;
     try {
@@ -2184,6 +2287,10 @@ class JamController extends ChangeNotifier {
     _hintPreloadedTrackId = null;
     _resolver.clear();
     unavailableNotice = null;
+    _reactions.clear();
+    _chat.clear();
+    _chatEnabledForRoom = true;
+    _reactionSweep?.cancel();
     if (_role == JamRole.guest) unawaited(_player.setPlaybackSpeed(1.0));
     _hasRoomPassword = false;
     _remoteCreateFailures = 0;

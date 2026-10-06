@@ -189,3 +189,10 @@
 - [x] 7.3 `GET /j/:code` (si `webLinkEnabled`), `/.well-known/assetlinks.json` y `apple-app-site-association` desde ajustes del panel. Cliente: `JamInviteLink` (`scrotify://join?code=…&server=…` y `https://host/j/PIN`), `app_links`, diálogo de unión, "Copiar enlace de invitación", pegar enlace en el campo PIN. AndroidManifest: filtro `scrotify://join` (el filtro https está comentado: pon tu dominio).
 - [ ] No hecho: "migrar a la nube" desde LAN (`migrate_to_remote`); en LAN el host sigue siendo el servidor embebido (limitación documentada). iOS Universal Links/desktop no configurados.
 - Probar a mano: matar la app del host con failover activado; abrir `https://<relay>/j/PIN` en el móvil.
+
+## Jam Roadmap — Fase 8 (2026-10-06): extras sociales
+- [x] Reacciones efímeras (whitelist de 8 emoji, 5/5 s por conexión) y chat ligero (≤280 car., sin historial, 5/10 s). Relay: flags `reactionsEnabled` (por defecto sí) y `chatEnabled` (por defecto NO) en `/api/capabilities` y panel; el host puede desactivar el chat de su sala (`set_chat`). LAN: ops `reaction`/`chat_message`. UI: barra de reacciones + chat en la vista de Jam activa. 3 tests node + 3 dart.
+- [ ] No hecho (opcionales del roadmap): notificación persistente de Jam en Android, cast de letras a otra pantalla, proxy de stream opt-in (rompe el principio de no retransmitir audio; queda sin implementar a propósito).
+- Limitación: los mensajes sociales no se reenvían entre invitados LAN y de nube de la misma sala (cada transporte ve los suyos + el host).
+
+## Backlog de la app (sección 10 del roadmap): NO abordado en esta tanda.

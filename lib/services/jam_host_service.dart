@@ -1,3 +1,4 @@
+import 'jam_social.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -54,6 +55,8 @@ class JamRateLimiter {
 class _ParticipantThrottles {
   final JamRateLimiter playbackLimiter;
   final JamRateLimiter queueLimiter;
+  final JamRateLimiter socialLimiter =
+      JamRateLimiter(maxEvents: 5, window: const Duration(seconds: 5));
 
   _ParticipantThrottles({
     JamRateLimiter? playback,
@@ -145,6 +148,10 @@ class JamHostService {
   OnJamQueueReorderRequested? onQueueReorderRequested;
   OnJamPlaybackControlRequested? onPlaybackControlRequested;
   OnJamVoteRequested? onVoteRequested;
+
+  /// Reacción/chat de un invitado (ya validado y limitado). El host lo muestra.
+  void Function(String from, String? emoji, String? text)? onSocial;
+  bool chatEnabled = true;
   OnJamParticipantLeft? onParticipantLeft;
 
   bool get isRunning => _server != null;
@@ -649,6 +656,45 @@ class JamHostService {
               }
               break;
 
+            case 'reaction':
+            case 'chat_message':
+              if (participantId != null &&
+                  _participants.containsKey(participantId)) {
+                final participant = _participants[participantId]!;
+                final throttles = _rateLimiters.putIfAbsent(
+                    participantId!, () => _ParticipantThrottles());
+                if (!throttles.socialLimiter.tryAcquire()) return; // descartar
+                if (op == 'reaction') {
+                  final emoji = msg['emoji'];
+                  if (emoji is String && kJamReactions.contains(emoji)) {
+                    _broadcastSocial(participantId!, {
+                      'op': 'reaction',
+                      'from': participant.name,
+                      'emoji': emoji,
+                    });
+                    onSocial?.call(participant.name, emoji, null);
+                  }
+                } else if (chatEnabled) {
+                  final text = msg['text'] is String
+                      ? sanitizeChatText(msg['text'] as String)
+                      : null;
+                  if (text == null) {
+                    _sendError(socket, 'Mensaje de chat inválido.');
+                  } else {
+                    _broadcastSocial(participantId!, {
+                      'op': 'chat',
+                      'from': participant.name,
+                      'text': text,
+                      'ts': DateTime.now().millisecondsSinceEpoch,
+                    });
+                    onSocial?.call(participant.name, null, text);
+                  }
+                } else {
+                  _sendError(socket, 'El chat está desactivado en esta Jam.');
+                }
+              }
+              break;
+
             case 'vote':
               // Votar no requiere gestión de cola; sí pasa por el limitador.
               if (participantId != null &&
@@ -895,6 +941,17 @@ class JamHostService {
       'queue': queue.map((e) => e.toJson()).toList(),
       'queueRevision': rev,
     });
+  }
+
+  /// Reenvía un mensaje social a todos menos al emisor.
+  void _broadcastSocial(String exceptParticipantId, Map<String, dynamic> msg) {
+    final encoded = jsonEncode(msg);
+    for (final e in _clientSockets.entries) {
+      if (e.key == exceptParticipantId) continue;
+      try {
+        if (e.value.readyState == WebSocket.open) e.value.add(encoded);
+      } catch (_) {}
+    }
   }
 
   void sendToClient(String participantId, Map<String, dynamic> message) {

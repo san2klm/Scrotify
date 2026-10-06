@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'jam_history_dialog.dart';
+import 'jam_social_bar.dart';
 import 'package:flutter/services.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:provider/provider.dart';
@@ -760,6 +761,7 @@ class _JamDialogState extends State<JamDialog>
 
         const SizedBox(height: 14),
 
+        JamSocialBar(jam: jam),
         if (isHost && jam.shareLink != null)
           TextButton.icon(
             onPressed: () async {

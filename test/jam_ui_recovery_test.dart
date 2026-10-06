@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:navidrome_client/models/jam_models.dart';
 import 'package:navidrome_client/screens/player_screen.dart';
 import 'package:navidrome_client/services/jam_controller.dart';
+import 'package:navidrome_client/services/jam_social.dart';
 import 'package:navidrome_client/services/navidrome_service.dart';
 import 'package:navidrome_client/services/player_controller.dart';
 import 'package:navidrome_client/services/theme_controller.dart';
@@ -137,6 +138,24 @@ class TestJamController extends ChangeNotifier implements JamController {
 
   @override
   int myVoteFor(String itemId) => 0;
+
+  @override
+  bool get reactionsAvailable => false;
+
+  @override
+  bool get chatAvailable => false;
+
+  @override
+  bool get chatSupported => false;
+
+  @override
+  bool get chatRoomEnabled => true;
+
+  @override
+  List<JamReaction> get activeReactions => const [];
+
+  @override
+  List<JamChatMessage> get chatMessages => const [];
 
   @override
   bool isUnavailableForMe(String remoteTrackId) => false;

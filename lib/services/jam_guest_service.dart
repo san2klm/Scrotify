@@ -68,6 +68,8 @@ class JamGuestService {
   OnGuestSessionClosed? onSessionClosed;
   OnGuestError? onError;
   OnGuestNextTrackHint? onNextTrackHint;
+  void Function(String from, String emoji)? onReaction;
+  void Function(String from, String text, int ts)? onChat;
 
   /// Offset local→host (la hora de referencia en LAN es la del host).
   final ClockOffsetEstimator clock = ClockOffsetEstimator();
@@ -490,6 +492,20 @@ class JamGuestService {
                     serverNow: server,
                   ));
                 }
+                break;
+
+              case 'reaction':
+                onReaction?.call(
+                    msg['from']?.toString() ?? '', msg['emoji']?.toString() ?? '');
+                break;
+
+              case 'chat':
+                onChat?.call(
+                  msg['from']?.toString() ?? '',
+                  msg['text']?.toString() ?? '',
+                  (msg['ts'] as num?)?.toInt() ??
+                      DateTime.now().millisecondsSinceEpoch,
+                );
                 break;
 
               case 'next_track_hint':
@@ -1001,6 +1017,10 @@ class JamGuestService {
       'newIndex': newIndex,
     });
   }
+
+  void sendReaction(String emoji) => _send({'op': 'reaction', 'emoji': emoji});
+
+  void sendChat(String text) => _send({'op': 'chat_message', 'text': text});
 
   void sendVote(String itemId, int value) {
     _send({'op': 'vote', 'itemId': itemId, 'value': value.clamp(-1, 1)});
