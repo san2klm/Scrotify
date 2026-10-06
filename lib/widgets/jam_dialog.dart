@@ -68,6 +68,9 @@ class _JamDialogState extends State<JamDialog>
   bool _allowGuestControls = true;
   bool _allowGuestQueueManage = true;
   int _maxParticipants = 0;
+  JamQueueMode _queueMode = JamQueueMode.free;
+  int _fairTurns = 1;
+  bool _requireApproval = false;
 
   @override
   void initState() {
@@ -991,6 +994,68 @@ class _JamDialogState extends State<JamDialog>
                   onChanged: (value) =>
                       setState(() => _allowGuestQueueManage = value),
                 ),
+                DropdownButtonFormField<JamQueueMode>(
+                  initialValue: _queueMode == JamQueueMode.approval
+                      ? JamQueueMode.free
+                      : _queueMode,
+                  dropdownColor: context.bgElevated,
+                  style: TextStyle(color: context.textPrimary, fontSize: 13),
+                  decoration: InputDecoration(
+                    labelText: 'Orden de la cola',
+                    labelStyle: TextStyle(color: context.textMuted),
+                    filled: true,
+                    fillColor: context.bgCard,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: BorderSide(color: context.bgElevated),
+                    ),
+                  ),
+                  items: [
+                    for (final m in [
+                      JamQueueMode.free,
+                      JamQueueMode.fairTurns,
+                      JamQueueMode.voting,
+                    ])
+                      DropdownMenuItem(value: m, child: Text(m.label)),
+                  ],
+                  onChanged: (value) {
+                    if (value != null) setState(() => _queueMode = value);
+                  },
+                ),
+                if (_queueMode == JamQueueMode.fairTurns)
+                  DropdownButtonFormField<int>(
+                    initialValue: _fairTurns,
+                    dropdownColor: context.bgElevated,
+                    style: TextStyle(color: context.textPrimary, fontSize: 13),
+                    decoration: InputDecoration(
+                      labelText: 'Canciones por turno y persona',
+                      labelStyle: TextStyle(color: context.textMuted),
+                    ),
+                    items: [
+                      for (final n in [1, 2, 3, 5])
+                        DropdownMenuItem(value: n, child: Text('$n')),
+                    ],
+                    onChanged: (value) {
+                      if (value != null) setState(() => _fairTurns = value);
+                    },
+                  ),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  dense: true,
+                  title: Text('Aprobar canciones de invitados',
+                      style: TextStyle(
+                          color: context.textSecondary, fontSize: 12)),
+                  subtitle: Text(
+                      _queueMode == JamQueueMode.voting
+                          ? 'La votación no se combina con turnos justos.'
+                          : 'Combinable con turnos justos.',
+                      style:
+                          TextStyle(color: context.textMuted, fontSize: 11)),
+                  value: _requireApproval,
+                  activeTrackColor: context.accent,
+                  onChanged: (value) =>
+                      setState(() => _requireApproval = value),
+                ),
                 DropdownButtonFormField<int>(
                   initialValue: _maxParticipants,
                   dropdownColor: context.bgElevated,
@@ -1027,6 +1092,9 @@ class _JamDialogState extends State<JamDialog>
                       allowGuestControls: _allowGuestControls,
                       allowGuestQueueManage: _allowGuestQueueManage,
                       maxParticipants: _maxParticipants,
+                      queueMode: _queueMode,
+                      fairTurnsPerPerson: _fairTurns,
+                      requireApproval: _requireApproval,
                       customName: _nameController.text,
                     );
                   },

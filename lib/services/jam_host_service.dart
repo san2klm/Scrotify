@@ -20,6 +20,8 @@ typedef OnJamQueueReorderRequested = void Function(
     int oldIndex, int newIndex, JamParticipant participant);
 typedef OnJamPlaybackControlRequested = void Function(
     String action, int? positionMs, JamParticipant participant);
+typedef OnJamVoteRequested = void Function(
+    String itemId, int value, JamParticipant participant);
 typedef OnJamParticipantLeft = void Function(JamParticipant participant);
 
 /// Limitador de tasa con ventana deslizante y memoria acotada.
@@ -137,6 +139,7 @@ class JamHostService {
   OnJamTrackRemoveRequested? onTrackRemoveRequested;
   OnJamQueueReorderRequested? onQueueReorderRequested;
   OnJamPlaybackControlRequested? onPlaybackControlRequested;
+  OnJamVoteRequested? onVoteRequested;
   OnJamParticipantLeft? onParticipantLeft;
 
   bool get isRunning => _server != null;
@@ -611,6 +614,29 @@ class JamHostService {
                   onQueueReorderRequested?.call(oldIdx, newIdx, participant);
                 } else {
                   _sendError(socket, 'Índices de reordenamiento inválidos.');
+                }
+              }
+              break;
+
+            case 'vote':
+              // Votar no requiere gestión de cola; sí pasa por el limitador.
+              if (participantId != null &&
+                  _participants.containsKey(participantId)) {
+                final participant = _participants[participantId]!;
+                final throttles = _rateLimiters.putIfAbsent(
+                    participantId!, () => _ParticipantThrottles());
+                if (!throttles.queueLimiter.tryAcquire()) {
+                  _sendError(socket,
+                      'Límite de tasa excedido: máximo 10 modificaciones a la cola cada 10 segundos.');
+                  return;
+                }
+                final itemId = msg['itemId'];
+                final value = msg['value'];
+                if (itemId is String && itemId.isNotEmpty && value is num) {
+                  onVoteRequested?.call(
+                      itemId, value.toInt().clamp(-1, 1), participant);
+                } else {
+                  _sendError(socket, 'Voto inválido.');
                 }
               }
               break;

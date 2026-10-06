@@ -7,6 +7,7 @@ import { openStore, SETTING_DEFS } from './config.js';
 
 export const PROTOCOL_VERSION = 2;
 const MAX_NAME_LENGTH = 48;
+const QUEUE_MODES = new Set(['free', 'fairTurns', 'voting', 'approval']);
 
 function readPositiveInteger(value, fallback) {
   const parsed = Number.parseInt(value ?? '', 10);
@@ -41,6 +42,10 @@ function normalizeState(value, limits, existingState = null) {
     mode,
     allowGuestControls,
     allowGuestQueueManage,
+    queueMode,
+    fairTurnsPerPerson,
+    requireApproval,
+    pendingRequests,
   } = merged;
 
   if (trackId !== null && trackId !== undefined &&
@@ -83,6 +88,17 @@ function normalizeState(value, limits, existingState = null) {
   if (typeof mode === 'string') res.mode = mode;
   if (typeof allowGuestControls === 'boolean') res.allowGuestControls = allowGuestControls;
   if (typeof allowGuestQueueManage === 'boolean') res.allowGuestQueueManage = allowGuestQueueManage;
+  if (typeof queueMode === 'string' && QUEUE_MODES.has(queueMode)) res.queueMode = queueMode;
+  if (Number.isInteger(fairTurnsPerPerson)) res.fairTurnsPerPerson = Math.min(10, Math.max(1, fairTurnsPerPerson));
+  if (typeof requireApproval === 'boolean') res.requireApproval = requireApproval;
+  if (Array.isArray(pendingRequests)) {
+    res.pendingRequests = pendingRequests.filter((r) => r && typeof r === 'object').slice(0, 50);
+  }
+
+  // Un valor inválido no borra el último válido.
+  for (const key of ['queueMode', 'fairTurnsPerPerson', 'requireApproval']) {
+    if (res[key] === undefined && existingState?.[key] !== undefined) res[key] = existingState[key];
+  }
 
   return res;
 }

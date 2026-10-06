@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import '../models/jam_models.dart';
 import 'jam_guest_service.dart';
 import 'jam_host_service.dart';
+import 'jam_queue_logic.dart';
 import 'jam_tls_identity.dart';
 import 'navidrome_service.dart';
 import 'player_controller.dart';
@@ -43,6 +44,16 @@ class JamController extends ChangeNotifier {
   final Map<String, JamParticipant?> _trackAddedBy = {};
   JamParticipant? _currentTrackAddedBy;
   int _queueRevision = 0;
+
+  // Modos de cola (decididos por el host; el relay solo reenvía).
+  JamQueueMode _queueMode = JamQueueMode.free;
+  int _fairTurnsPerPerson = 1;
+  bool _requireApproval = false;
+  final List<JamQueueRequest> _pendingRequests = [];
+  final JamVoteBook _votes = JamVoteBook();
+  final Set<String> _pinnedIds = {};
+  final Map<String, int> _myVotes = {}; // lado invitado (optimista)
+  static const int _maxPendingRequests = 50;
 
   int _lastSyncServerTimestamp = 0;
   int _syncGeneration = 0;
@@ -116,6 +127,24 @@ class JamController extends ChangeNotifier {
   bool get isPublic => _session?.isPublic ?? true;
   int get maxParticipants => _session?.maxParticipants ?? 0;
   JamParticipant? get currentTrackAddedBy => _currentTrackAddedBy;
+  JamQueueMode get queueMode => _session?.queueMode ?? _queueMode;
+  int get fairTurnsPerPerson =>
+      _session?.fairTurnsPerPerson ?? _fairTurnsPerPerson;
+  bool get requireApproval => _session?.requireApproval ?? _requireApproval;
+  bool get approvalActive => _session?.approvalActive ?? false;
+  List<JamQueueRequest> get pendingRequests =>
+      _session?.pendingRequests ?? const [];
+
+  /// Solicitudes propias de este invitado (por nombre; en remoto el id lo
+  /// asigna el host y el invitado no lo conoce).
+  List<JamQueueRequest> get myPendingRequests => pendingRequests
+      .where((r) => r.requestedByName == _localParticipant?.name)
+      .toList();
+
+  /// Mi voto (−1/0/+1) sobre un ítem de la cola.
+  int myVoteFor(String itemId) => isHost
+      ? _votes.myVote(itemId, 'host_local')
+      : (_myVotes[itemId] ?? 0);
   JamConnectionState get connectionState => _guestService.connectionState;
   int get queueRevision =>
       isGuest ? _guestService.queueRevision : _queueRevision;
@@ -144,6 +173,10 @@ class JamController extends ChangeNotifier {
 
     _hostService.onTrackAddRequested = (track, participant, playNext) {
       unawaited(_addTrackAsHost(track, participant, playNext: playNext));
+    };
+
+    _hostService.onVoteRequested = (itemId, value, participant) {
+      _handleVote(itemId, value, participant.id);
     };
 
     _hostService.onTrackRemoveRequested = (queueItemId, participant) {
@@ -176,8 +209,18 @@ class JamController extends ChangeNotifier {
     Track track,
     JamParticipant? addedBy, {
     required bool playNext,
+    bool bypassApproval = false,
   }) async {
     if (!isHost) return;
+
+    // Modo aprobación: las canciones de invitados esperan al visto bueno.
+    if (!bypassApproval &&
+        addedBy != null &&
+        !addedBy.isHost &&
+        (_requireApproval || _queueMode == JamQueueMode.approval)) {
+      _addPendingRequest(track, addedBy, playNext);
+      return;
+    }
 
     final queueItem = JamQueueItem(
       id: 'item_${DateTime.now().microsecondsSinceEpoch}_${_hostJamQueue.length}',
@@ -196,7 +239,174 @@ class JamController extends ChangeNotifier {
 
     _queueRevision++;
     _rebuildHostQueueFromPlayer();
+    if (!playNext) _applyQueueModeOrdering();
     _publishHostState(includePlayback: true);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Modos de cola (host)
+  // ---------------------------------------------------------------------------
+
+  JamQueueMode get _orderMode => switch (_queueMode) {
+        JamQueueMode.fairTurns => JamQueueMode.fairTurns,
+        JamQueueMode.voting => JamQueueMode.voting,
+        _ => JamQueueMode.free,
+      };
+
+  /// Refleja votos y fijados en los ítems publicados.
+  void _refreshItemMeta() {
+    for (var i = 0; i < _hostJamQueue.length; i++) {
+      final item = _hostJamQueue[i];
+      final votes = _votes.total(item.id);
+      final pinned = _pinnedIds.contains(item.id);
+      if (votes != item.votes || pinned != item.pinned) {
+        _hostJamQueue[i] = item.copyWith(votes: votes, pinned: pinned);
+      }
+    }
+  }
+
+  /// Reordena la cola del reproductor según el modo, sin tocar la pista
+  /// actual (solo mueve ítems pendientes).
+  void _applyQueueModeOrdering() {
+    if (!isHost) return;
+    _refreshItemMeta();
+    if (_orderMode == JamQueueMode.free) return;
+    final target = orderQueue(_hostJamQueue,
+        mode: _orderMode, fairTurnsPerPerson: _fairTurnsPerPerson);
+    final moves = reorderMoves(
+      _hostJamQueue.map((e) => e.id).toList(),
+      target.map((e) => e.id).toList(),
+    );
+    if (moves.isEmpty) return;
+    final offset =
+        _player.currentOrderPos >= 0 ? _player.currentOrderPos + 1 : 0;
+    for (final (from, to) in moves) {
+      _player.reorderQueue(offset + from, offset + to);
+    }
+    _hostJamQueue
+      ..clear()
+      ..addAll(target);
+    _queueRevision++;
+    _rebuildHostQueueFromPlayer();
+    _refreshItemMeta();
+  }
+
+  void _addPendingRequest(Track track, JamParticipant by, bool playNext) {
+    final duplicate = _pendingRequests
+        .any((r) => r.requestedById == by.id && r.track.id == track.id);
+    if (duplicate || _pendingRequests.length >= _maxPendingRequests) return;
+    _pendingRequests.add(JamQueueRequest(
+      id: 'req_${DateTime.now().microsecondsSinceEpoch}_${_pendingRequests.length}',
+      track: track,
+      requestedById: by.id,
+      requestedByName: by.name,
+      requestedAt: DateTime.now(),
+      playNext: playNext,
+    ));
+    _queueRevision++;
+    _publishHostState();
+  }
+
+  Future<void> approveRequest(String requestId) async {
+    if (!isHost) return;
+    final i = _pendingRequests.indexWhere((r) => r.id == requestId);
+    if (i < 0) return;
+    final r = _pendingRequests.removeAt(i);
+    final by = _participantById(r.requestedById) ??
+        JamParticipant(
+          id: r.requestedById,
+          name: r.requestedByName,
+          avatarColorValue: 0xFF3B82F6,
+          isHost: false,
+          joinedAt: DateTime.now(),
+        );
+    await _addTrackAsHost(r.track, by,
+        playNext: r.playNext, bypassApproval: true);
+  }
+
+  void rejectRequest(String requestId) {
+    if (!isHost) return;
+    final before = _pendingRequests.length;
+    _pendingRequests.removeWhere((r) => r.id == requestId);
+    if (_pendingRequests.length == before) return;
+    _queueRevision++;
+    _publishHostState();
+  }
+
+  Future<void> approveAllRequests() async {
+    for (final id in _pendingRequests.map((r) => r.id).toList()) {
+      await approveRequest(id);
+    }
+  }
+
+  JamParticipant? _participantById(String id) {
+    for (final p in [..._hostService.participants, ..._remoteParticipants]) {
+      if (p.id == id) return p;
+    }
+    return null;
+  }
+
+  /// Cambia el modo de cola en vivo. `voting` excluye a `fairTurns`; la
+  /// aprobación se combina con cualquier orden.
+  void setQueueMode(
+    JamQueueMode mode, {
+    int? fairTurnsPerPerson,
+    bool? requireApproval,
+  }) {
+    if (!isHost) return;
+    _queueMode = mode;
+    if (fairTurnsPerPerson != null) {
+      _fairTurnsPerPerson = fairTurnsPerPerson.clamp(1, 10);
+    }
+    if (requireApproval != null) _requireApproval = requireApproval;
+    if (mode == JamQueueMode.approval) _requireApproval = true;
+    if (!(_requireApproval || mode == JamQueueMode.approval) &&
+        _pendingRequests.isNotEmpty) {
+      // Se desactivó la aprobación: las pendientes pasan a la cola.
+      unawaited(approveAllRequests());
+    }
+    _applyQueueModeOrdering();
+    _queueRevision++;
+    _publishHostState();
+  }
+
+  void pinQueueItem(String itemId, bool pinned) {
+    if (!isHost) return;
+    final changed = pinned ? _pinnedIds.add(itemId) : _pinnedIds.remove(itemId);
+    if (!changed) return;
+    _applyQueueModeOrdering();
+    _queueRevision++;
+    _publishHostState();
+  }
+
+  void _handleVote(String itemId, int value, String participantId) {
+    if (!isHost || _queueMode != JamQueueMode.voting) return;
+    if (!_hostJamQueue.any((i) => i.id == itemId)) return;
+    if (!_votes.vote(itemId, participantId, value)) return;
+    _applyQueueModeOrdering();
+    _queueRevision++;
+    _publishHostState();
+  }
+
+  /// Vota (+1/−1, 0 quita) un ítem de la cola. Funciona como host o invitado.
+  void voteOnItem(String itemId, int value) {
+    if (!inJam) return;
+    _clearActionError();
+    final v = value.clamp(-1, 1);
+    if (isHost) {
+      _handleVote(itemId, v, 'host_local');
+    } else if (isGuest) {
+      if (_guestService.isConnected) {
+        _guestService.sendVote(itemId, v);
+      } else if (_remoteService.isConnected) {
+        _remoteService.sendGuestAction('vote', {'itemId': itemId, 'value': v});
+      } else {
+        _reportActionError('No hay conexión activa con el anfitrión Jam.');
+        return;
+      }
+      _myVotes[itemId] = v;
+      notifyListeners();
+    }
   }
 
   void _removeTrackAsHost(String queueItemId) {
@@ -210,6 +420,8 @@ class JamController extends ChangeNotifier {
     if (playerIndex < 0) return;
 
     _hostJamQueue.removeAt(queueIndex);
+    _votes.removeItem(item.id);
+    _pinnedIds.remove(item.id);
     if (!_hostJamQueue.any((qi) => qi.track.id == item.track.id)) {
       _trackAddedBy.remove(item.track.id);
     }
@@ -304,6 +516,7 @@ class JamController extends ChangeNotifier {
     _hostJamQueue
       ..clear()
       ..addAll(rebuilt);
+    _refreshItemMeta();
   }
 
   void _publishToNavidromeIfPublic() {
@@ -507,6 +720,13 @@ class JamController extends ChangeNotifier {
           }
           break;
 
+        case 'vote':
+          if (payload is Map && payload['itemId'] is String) {
+            final value = (payload['value'] as num?)?.toInt() ?? 0;
+            _handleVote(payload['itemId'] as String, value.clamp(-1, 1), p.id);
+          }
+          break;
+
         case 'queue_remove':
           final canManage =
               (_session?.allowGuestQueueManage ?? true) && p.canManageQueue;
@@ -637,6 +857,11 @@ class JamController extends ChangeNotifier {
         ],
         allowGuestControls: allowControls,
         allowGuestQueueManage: allowQueue,
+        queueMode: JamQueueMode.fromName(state['queueMode'] as String?),
+        fairTurnsPerPerson:
+            ((state['fairTurnsPerPerson'] as num?)?.toInt() ?? 1).clamp(1, 10),
+        requireApproval: state['requireApproval'] == true,
+        pendingRequests: parseJamRequests(state['pendingRequests']),
       );
     } else {
       _session = _session!.copyWith(
@@ -648,6 +873,11 @@ class JamController extends ChangeNotifier {
         queue: rawQueue != null ? queue : _session!.queue,
         allowGuestControls: allowControls,
         allowGuestQueueManage: allowQueue,
+        queueMode: JamQueueMode.fromName(state['queueMode'] as String?),
+        fairTurnsPerPerson:
+            ((state['fairTurnsPerPerson'] as num?)?.toInt() ?? 1).clamp(1, 10),
+        requireApproval: state['requireApproval'] == true,
+        pendingRequests: parseJamRequests(state['pendingRequests']),
       );
     }
 
@@ -673,8 +903,18 @@ class JamController extends ChangeNotifier {
     int maxParticipants = 0,
     String? initialPlaylistId,
     String? customName,
+    JamQueueMode queueMode = JamQueueMode.free,
+    int fairTurnsPerPerson = 1,
+    bool requireApproval = false,
   }) async {
     await leaveOrEndSession();
+    _queueMode = queueMode;
+    _fairTurnsPerPerson = fairTurnsPerPerson.clamp(1, 10);
+    _requireApproval = requireApproval || queueMode == JamQueueMode.approval;
+    _pendingRequests.clear();
+    _votes.clear();
+    _pinnedIds.clear();
+    _myVotes.clear();
 
     final pinCode = JamCode.generate();
     final sessionId = 'jam_${DateTime.now().millisecondsSinceEpoch}';
@@ -753,6 +993,11 @@ class JamController extends ChangeNotifier {
       'mode': _hostService.mode.name,
       'allowGuestControls': _hostService.allowGuestControls,
       'allowGuestQueueManage': _hostService.allowGuestQueueManage,
+      'queueMode': _queueMode.name,
+      'fairTurnsPerPerson': _fairTurnsPerPerson,
+      'requireApproval': _requireApproval,
+      'pendingRequests':
+          _pendingRequests.take(20).map((r) => r.toJson()).toList(),
     };
   }
 
@@ -838,6 +1083,10 @@ class JamController extends ChangeNotifier {
       maxParticipants: _hostService.maxParticipants,
       initialPlaylistId: _hostService.initialPlaylistId,
       queueRevision: _queueRevision,
+      queueMode: _queueMode,
+      fairTurnsPerPerson: _fairTurnsPerPerson,
+      requireApproval: _requireApproval,
+      pendingRequests: List.of(_pendingRequests),
     );
   }
 

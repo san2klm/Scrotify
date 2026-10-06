@@ -429,3 +429,38 @@ test('settings persist across restarts, rooms do not', async () => {
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test('relays queue-mode fields and drops invalid ones', async () => {
+  const server = await startServer();
+  const endpoint = `ws://127.0.0.1:${server.port}`;
+  const host = await connect(endpoint);
+  const guest = await connect(endpoint);
+  try {
+    host.send(JSON.stringify({ action: 'create_room', pin: 'QMD123', hostName: 'H', initialState }));
+    await nextMessage(host);
+    const joined = nextMessage(guest);
+    guest.send(JSON.stringify({ action: 'join_room', pin: 'QMD123', guestName: 'G' }));
+    await joined;
+    const sync = nextMessage(guest);
+    host.send(JSON.stringify({
+      action: 'update_state', pin: 'QMD123',
+      state: {
+        trackId: 't', position: 0, isPlaying: false, queue: [],
+        queueMode: 'voting', fairTurnsPerPerson: 99, requireApproval: true,
+        pendingRequests: [{ id: 'r1' }, 'junk'],
+      },
+    }));
+    const { state } = await sync;
+    assert.equal(state.queueMode, 'voting');
+    assert.equal(state.fairTurnsPerPerson, 10);
+    assert.equal(state.requireApproval, true);
+    assert.deepEqual(state.pendingRequests, [{ id: 'r1' }]);
+
+    const sync2 = nextMessage(guest);
+    host.send(JSON.stringify({ action: 'update_state', pin: 'QMD123', state: { queueMode: 'bogus' } }));
+    assert.equal((await sync2).state.queueMode, 'voting'); // inválido: se conserva (merge)
+  } finally {
+    host.close();
+    guest.close();
+  }
+});

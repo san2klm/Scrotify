@@ -120,6 +120,25 @@ class TestJamController extends ChangeNotifier implements JamController {
   JamParticipant? get currentTrackAddedBy => _session?.currentTrackAddedBy;
 
   @override
+  JamQueueMode get queueMode => _session?.queueMode ?? JamQueueMode.free;
+
+  @override
+  bool get approvalActive => _session?.approvalActive ?? false;
+
+  @override
+  bool get requireApproval => _session?.requireApproval ?? false;
+
+  @override
+  List<JamQueueRequest> get pendingRequests =>
+      _session?.pendingRequests ?? const [];
+
+  @override
+  List<JamQueueRequest> get myPendingRequests => const [];
+
+  @override
+  int myVoteFor(String itemId) => 0;
+
+  @override
   JamConnectionState get connectionState => JamConnectionState.connected;
 
   @override

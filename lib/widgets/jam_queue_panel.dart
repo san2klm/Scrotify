@@ -110,6 +110,45 @@ class JamQueuePanel extends StatelessWidget {
                   ],
                 ),
               ),
+              if (inJam && jam.isHost)
+                PopupMenuButton<Object>(
+                  tooltip: 'Modo de cola',
+                  icon: Icon(Icons.tune_rounded,
+                      color: context.textMuted, size: 20),
+                  onSelected: (v) {
+                    if (v is JamQueueMode) {
+                      jam.setQueueMode(v,
+                          requireApproval: jam.requireApproval);
+                    } else {
+                      jam.setQueueMode(
+                        jam.queueMode == JamQueueMode.approval
+                            ? JamQueueMode.free
+                            : jam.queueMode,
+                        requireApproval: !jam.approvalActive,
+                      );
+                    }
+                  },
+                  itemBuilder: (_) => [
+                    for (final m in [
+                      JamQueueMode.free,
+                      JamQueueMode.fairTurns,
+                      JamQueueMode.voting,
+                    ])
+                      CheckedPopupMenuItem<Object>(
+                        value: m,
+                        checked: jam.queueMode == m ||
+                            (m == JamQueueMode.free &&
+                                jam.queueMode == JamQueueMode.approval),
+                        child: Text(m.label),
+                      ),
+                    const PopupMenuDivider(),
+                    CheckedPopupMenuItem<Object>(
+                      value: 'approval',
+                      checked: jam.approvalActive,
+                      child: const Text('Aprobar canciones de invitados'),
+                    ),
+                  ],
+                ),
               if (queueItems.isNotEmpty && (!inJam || canManageJamQueue))
                 TextButton(
                   onPressed: () {
@@ -231,6 +270,8 @@ class JamQueuePanel extends StatelessWidget {
             ),
             const SizedBox(height: 16),
           ],
+
+          if (inJam) _JamRequestsTray(jam: jam),
 
           // Lista Siguiente en la Cola
           Text(
@@ -395,6 +436,25 @@ class JamQueuePanel extends StatelessWidget {
                                     ],
                                   ),
                                 ),
+                                if (jam.queueMode == JamQueueMode.voting)
+                                  _VoteControls(jam: jam, item: item),
+                                if (jam.isHost)
+                                  IconButton(
+                                    tooltip: item.pinned ? 'Desfijar' : 'Fijar',
+                                    icon: Icon(
+                                        item.pinned
+                                            ? Icons.push_pin_rounded
+                                            : Icons.push_pin_outlined,
+                                        color: item.pinned
+                                            ? context.accent
+                                            : context.textMuted,
+                                        size: 18),
+                                    onPressed: () =>
+                                        jam.pinQueueItem(item.id, !item.pinned),
+                                  )
+                                else if (item.pinned)
+                                  Icon(Icons.push_pin_rounded,
+                                      color: context.accent, size: 16),
                                 if (canRemove)
                                   IconButton(
                                     icon: Icon(Icons.close_rounded,
@@ -560,6 +620,125 @@ class JamQueuePanel extends StatelessWidget {
               fontWeight: FontWeight.w600,
             ),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Botones ▲/▼ con contador (modo votación).
+class _VoteControls extends StatelessWidget {
+  final JamController jam;
+  final JamQueueItem item;
+
+  const _VoteControls({required this.jam, required this.item});
+
+  @override
+  Widget build(BuildContext context) {
+    final mine = jam.myVoteFor(item.id);
+    Widget arrow(IconData icon, int value) => InkWell(
+          onTap: () => jam.voteOnItem(item.id, mine == value ? 0 : value),
+          child: Icon(icon,
+              size: 22,
+              color: mine == value ? context.accent : context.textMuted),
+        );
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        arrow(Icons.keyboard_arrow_up_rounded, 1),
+        Text('${item.votes}',
+            style: TextStyle(
+                color: context.textPrimary,
+                fontSize: 11,
+                fontWeight: FontWeight.bold)),
+        arrow(Icons.keyboard_arrow_down_rounded, -1),
+      ],
+    );
+  }
+}
+
+/// Bandeja de solicitudes: el host aprueba/rechaza; el invitado ve las suyas
+/// como "pendientes".
+class _JamRequestsTray extends StatelessWidget {
+  final JamController jam;
+
+  const _JamRequestsTray({required this.jam});
+
+  @override
+  Widget build(BuildContext context) {
+    final requests = jam.isHost ? jam.pendingRequests : jam.myPendingRequests;
+    if (requests.isEmpty) return const SizedBox.shrink();
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: context.bgCard,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: context.accent2.withValues(alpha: 0.4)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  jam.isHost
+                      ? 'SOLICITUDES PENDIENTES (${requests.length})'
+                      : 'PENDIENTE DE APROBACIÓN',
+                  style: TextStyle(
+                      color: context.textMuted,
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 1.1),
+                ),
+              ),
+              if (jam.isHost && requests.length > 1)
+                TextButton(
+                  onPressed: jam.approveAllRequests,
+                  child: const Text('Aceptar todas',
+                      style: TextStyle(fontSize: 12)),
+                ),
+            ],
+          ),
+          for (final r in requests)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 2),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      jam.isHost
+                          ? '${r.track.title} · ${r.track.artist} — ${r.requestedByName}'
+                          : '${r.track.title} · ${r.track.artist}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style:
+                          TextStyle(color: context.textPrimary, fontSize: 12),
+                    ),
+                  ),
+                  if (jam.isHost) ...[
+                    IconButton(
+                      tooltip: 'Aceptar',
+                      icon: Icon(Icons.check_rounded,
+                          color: context.accent, size: 20),
+                      onPressed: () => jam.approveRequest(r.id),
+                    ),
+                    IconButton(
+                      tooltip: 'Rechazar',
+                      icon: Icon(Icons.close_rounded,
+                          color: context.textMuted, size: 20),
+                      onPressed: () => jam.rejectRequest(r.id),
+                    ),
+                  ] else
+                    Text('pendiente',
+                        style: TextStyle(
+                            color: context.accent2,
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold)),
+                ],
+              ),
+            ),
         ],
       ),
     );

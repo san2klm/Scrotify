@@ -130,6 +130,27 @@ enum JamMode {
   synchronizedListening,
 }
 
+/// Cómo se ordena la cola compartida. Lo decide el host (y puede cambiarlo en
+/// vivo). `approval` equivale a orden libre con aprobación previa; la
+/// aprobación también se puede combinar con `fairTurns` vía
+/// [JamSessionState.requireApproval]. `voting` excluye a `fairTurns`.
+enum JamQueueMode {
+  free,
+  fairTurns,
+  voting,
+  approval;
+
+  static JamQueueMode fromName(String? name) => JamQueueMode.values
+      .firstWhere((m) => m.name == name, orElse: () => JamQueueMode.free);
+
+  String get label => switch (this) {
+        JamQueueMode.free => 'Libre',
+        JamQueueMode.fairTurns => 'Turnos justos',
+        JamQueueMode.voting => 'Votación',
+        JamQueueMode.approval => 'Aprobación del anfitrión',
+      };
+}
+
 /// Estado de la conexión de red en una sesión Jam.
 enum JamConnectionState {
   connected,
@@ -327,12 +348,29 @@ class JamQueueItem {
   final JamParticipant? addedBy;
   final DateTime addedAt;
 
+  /// Suma de votos (+1/-1) de los participantes (modo votación).
+  final int votes;
+
+  /// Ítem fijado por el host: conserva su sitio al reordenar por modo.
+  final bool pinned;
+
   const JamQueueItem({
     required this.id,
     required this.track,
     this.addedBy,
     required this.addedAt,
+    this.votes = 0,
+    this.pinned = false,
   });
+
+  JamQueueItem copyWith({int? votes, bool? pinned}) => JamQueueItem(
+        id: id,
+        track: track,
+        addedBy: addedBy,
+        addedAt: addedAt,
+        votes: votes ?? this.votes,
+        pinned: pinned ?? this.pinned,
+      );
 
   Map<String, dynamic> toJson() => {
         'id': id,
@@ -346,6 +384,8 @@ class JamQueueItem {
         },
         if (addedBy != null) 'addedBy': addedBy!.toJson(),
         'addedAt': addedAt.toIso8601String(),
+        if (votes != 0) 'votes': votes,
+        if (pinned) 'pinned': true,
       };
 
   factory JamQueueItem.fromJson(Map<String, dynamic> json) {
@@ -366,6 +406,63 @@ class JamQueueItem {
       addedAt: json['addedAt'] != null
           ? DateTime.tryParse(json['addedAt'] as String) ?? DateTime.now()
           : DateTime.now(),
+      votes: (json['votes'] as num?)?.toInt() ?? 0,
+      pinned: json['pinned'] as bool? ?? false,
+    );
+  }
+}
+
+/// Propuesta de un invitado pendiente de aprobación del host (modo aprobación).
+class JamQueueRequest {
+  final String id;
+  final Track track;
+  final String requestedById;
+  final String requestedByName;
+  final DateTime requestedAt;
+  final bool playNext;
+
+  const JamQueueRequest({
+    required this.id,
+    required this.track,
+    required this.requestedById,
+    required this.requestedByName,
+    required this.requestedAt,
+    this.playNext = false,
+  });
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'track': {
+          'id': track.id,
+          'title': track.title,
+          'artist': track.artist,
+          'album': track.album,
+          'duration': track.duration,
+          'albumArtUrl': sanitizeArtUrl(track.albumArtUrl),
+        },
+        'requestedById': requestedById,
+        'requestedByName': requestedByName,
+        'requestedAt': requestedAt.toIso8601String(),
+        if (playNext) 'playNext': true,
+      };
+
+  factory JamQueueRequest.fromJson(Map<String, dynamic> json) {
+    final t = json['track'] as Map<String, dynamic>;
+    return JamQueueRequest(
+      id: json['id'] as String,
+      track: Track(
+        id: (t['id'] as String?) ?? '',
+        title: (t['title'] as String?) ?? 'Unknown',
+        artist: (t['artist'] as String?) ?? 'Unknown',
+        album: (t['album'] as String?) ?? 'Unknown',
+        duration: (t['duration'] as String?) ?? '',
+        albumArtUrl: t['albumArtUrl'] as String?,
+      ),
+      requestedById: (json['requestedById'] as String?) ?? '',
+      requestedByName: (json['requestedByName'] as String?) ?? 'Invitado',
+      requestedAt: DateTime.tryParse((json['requestedAt'] as String?) ?? '') ??
+          DateTime.now(),
+      playNext: json['playNext'] as bool? ?? false,
     );
   }
 }
@@ -394,6 +491,14 @@ class JamSessionState {
   final String? initialPlaylistId;
   final int maxParticipants;
   final int queueRevision;
+  final JamQueueMode queueMode;
+  final int fairTurnsPerPerson;
+  final bool requireApproval;
+  final List<JamQueueRequest> pendingRequests;
+
+  /// Aprobación efectiva (modo `approval` o bandera combinable).
+  bool get approvalActive =>
+      requireApproval || queueMode == JamQueueMode.approval;
 
   const JamSessionState({
     required this.sessionId,
@@ -417,6 +522,10 @@ class JamSessionState {
     this.initialPlaylistId,
     this.maxParticipants = 0,
     this.queueRevision = 0,
+    this.queueMode = JamQueueMode.free,
+    this.fairTurnsPerPerson = 1,
+    this.requireApproval = false,
+    this.pendingRequests = const [],
   });
 
   Map<String, dynamic> toJson() => {
@@ -450,6 +559,11 @@ class JamSessionState {
         if (initialPlaylistId != null) 'initialPlaylistId': initialPlaylistId,
         'maxParticipants': maxParticipants,
         'queueRevision': queueRevision,
+        'queueMode': queueMode.name,
+        'fairTurnsPerPerson': fairTurnsPerPerson,
+        'requireApproval': requireApproval,
+        if (pendingRequests.isNotEmpty)
+          'pendingRequests': pendingRequests.map((r) => r.toJson()).toList(),
       };
 
   factory JamSessionState.fromJson(Map<String, dynamic> json) {
@@ -508,6 +622,11 @@ class JamSessionState {
       initialPlaylistId: json['initialPlaylistId'] as String?,
       maxParticipants: (json['maxParticipants'] as num?)?.toInt() ?? 0,
       queueRevision: (json['queueRevision'] as num?)?.toInt() ?? 0,
+      queueMode: JamQueueMode.fromName(json['queueMode'] as String?),
+      fairTurnsPerPerson:
+          ((json['fairTurnsPerPerson'] as num?)?.toInt() ?? 1).clamp(1, 10),
+      requireApproval: json['requireApproval'] as bool? ?? false,
+      pendingRequests: parseJamRequests(json['pendingRequests']),
     );
   }
 
@@ -535,6 +654,10 @@ class JamSessionState {
     String? initialPlaylistId,
     int? maxParticipants,
     int? queueRevision,
+    JamQueueMode? queueMode,
+    int? fairTurnsPerPerson,
+    bool? requireApproval,
+    List<JamQueueRequest>? pendingRequests,
   }) {
     return JamSessionState(
       sessionId: sessionId ?? this.sessionId,
@@ -562,8 +685,26 @@ class JamSessionState {
       initialPlaylistId: initialPlaylistId ?? this.initialPlaylistId,
       maxParticipants: maxParticipants ?? this.maxParticipants,
       queueRevision: queueRevision ?? this.queueRevision,
+      queueMode: queueMode ?? this.queueMode,
+      fairTurnsPerPerson: fairTurnsPerPerson ?? this.fairTurnsPerPerson,
+      requireApproval: requireApproval ?? this.requireApproval,
+      pendingRequests: pendingRequests ?? this.pendingRequests,
     );
   }
+}
+
+/// Parsea una lista de solicitudes ignorando entradas corruptas.
+List<JamQueueRequest> parseJamRequests(Object? raw) {
+  if (raw is! List) return const [];
+  final out = <JamQueueRequest>[];
+  for (final e in raw) {
+    if (e is Map) {
+      try {
+        out.add(JamQueueRequest.fromJson(Map<String, dynamic>.from(e)));
+      } catch (_) {}
+    }
+  }
+  return out;
 }
 
 /// Sesión Jam descubierta mediante radar UDP en la LAN.

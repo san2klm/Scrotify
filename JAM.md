@@ -571,3 +571,10 @@ curl http://scrotify-jam:8080/health
 
 - El endpoint remoto ya no es fijo: `SettingsController.jamServerUrl` (por defecto `wss://jam.templo.cloud/`) alimenta `RemoteJamService`, el radar (`GET /rooms`) y los anuncios de sala. Validación en `JamServerEndpoint` (`wss://`; `ws://` solo en hosts privados).
 - `jam-server`: `GET /api/capabilities` → `{protocolVersion: 2, features, limits, publicUrl}`; panel `/admin` y ajustes persistentes en `/data/jam.db`. Ver `jam-server/README.md`.
+
+## Anexo: modos de cola (Roadmap Fase 2)
+
+- `JamQueueMode { free, fairTurns, voting, approval }` + `requireApproval` (combinable con `fairTurns`; `voting` excluye turnos). Lógica pura en `lib/services/jam_queue_logic.dart` (`orderQueue`, `JamVoteBook`, `reorderMoves`); el host es la fuente de verdad.
+- Estado nuevo (todo opcional → clientes viejos lo ignoran): `queueMode`, `fairTurnsPerPerson`, `requireApproval`, `pendingRequests`; ítems con `votes`, `pinned`.
+- Ops: `vote {itemId,value}` (LAN `op:vote`, remoto `guest_action vote`). En modo aprobación el `add_to_queue` de un invitado crea una `JamQueueRequest` (no hay `propose_track` aparte, así los clientes viejos también quedan sujetos a aprobación). Aprobar/rechazar/fijar/cambiar modo son acciones locales del host; el resultado viaja en `state_sync`/`queue_updated`.
+- Desvío del roadmap: `pendingRequests` se difunde a todos y el cliente invitado filtra las suyas por nombre.

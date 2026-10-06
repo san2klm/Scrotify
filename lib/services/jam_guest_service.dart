@@ -939,6 +939,10 @@ class JamGuestService {
     });
   }
 
+  void sendVote(String itemId, int value) {
+    _send({'op': 'vote', 'itemId': itemId, 'value': value.clamp(-1, 1)});
+  }
+
   void sendPlaybackControl(String action, {int? positionMs}) {
     if (_localParticipant != null && !_localParticipant!.canControlPlayback) {
       const msg = 'El anfitrión ha deshabilitado el control de reproducción.';
