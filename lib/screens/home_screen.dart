@@ -13,6 +13,7 @@ import '../widgets/explore_tracks_view.dart';
 import '../services/home_navigation_controller.dart';
 import '../widgets/track_context_menu.dart';
 import '../widgets/local_download_button.dart';
+import '../widgets/offline_connection_banner.dart';
 import 'liked_songs_screen.dart';
 import 'playlist_detail_screen.dart';
 import 'album_detail_screen.dart';
@@ -1118,6 +1119,7 @@ class _HomeScreenState extends State<HomeScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          const OfflineConnectionBanner(),
           _quickAccessGrid(),
           const SizedBox(height: 32),
           _sectionHeader(

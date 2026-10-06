@@ -98,7 +98,8 @@ class ExploreTracksView extends StatelessWidget {
                         track.title,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: TextStyle(color: context.textPrimary, fontSize: 13.5),
+                        style: TextStyle(
+                            color: context.textPrimary, fontSize: 13.5),
                       ),
                       const SizedBox(height: 2),
                       Wrap(
@@ -110,7 +111,8 @@ class ExploreTracksView extends StatelessWidget {
                           ),
                           Text(
                             ' · ${track.album}',
-                            style: TextStyle(color: context.textMuted, fontSize: 11.5),
+                            style: TextStyle(
+                                color: context.textMuted, fontSize: 11.5),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),

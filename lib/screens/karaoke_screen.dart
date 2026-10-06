@@ -7,7 +7,9 @@ import '../services/lyrics_service.dart';
 import '../services/navidrome_service.dart';
 import '../services/player_controller.dart';
 import '../services/cover_fallback_service.dart';
+import '../services/local_music_service.dart';
 import '../utils/app_colors.dart';
+import '../widgets/cover_art.dart';
 
 /// Pantalla inmersiva de Modo Karaoke: letra de gran tamaño sincronizada
 /// con efecto de avance y control de reducción de voz (en Desktop).
@@ -122,6 +124,19 @@ class _KaraokeScreenState extends State<KaraokeScreen> {
               Positioned.fill(
                 child: FutureBuilder<String?>(
                   future: () async {
+                    final nav = context.read<NavidromeService?>();
+                    final local = context
+                        .read<LocalMusicService?>()
+                        ?.artworkForMetadata(nav?.serverScope,
+                            artist: track.artist,
+                            album: track.album,
+                            title: track.title);
+                    if (local != null) return Uri.file(local).toString();
+                    if (nav?.offlineMode == true &&
+                        Uri.tryParse(track.albumArtUrl ?? '')?.scheme !=
+                            'file') {
+                      return null;
+                    }
                     if (track.albumArtUrl != null &&
                         track.albumArtUrl!.isNotEmpty) {
                       return track.albumArtUrl;
@@ -146,10 +161,10 @@ class _KaraokeScreenState extends State<KaraokeScreen> {
                     return RepaintBoundary(
                       child: ImageFiltered(
                         imageFilter: ImageFilter.blur(sigmaX: 70, sigmaY: 70),
-                        child: Image.network(
-                          url,
+                        child: Image(
+                          image: ResizeImage(CoverArt.imageProvider(url),
+                              width: 128),
                           fit: BoxFit.cover,
-                          cacheWidth: 128,
                           filterQuality: FilterQuality.low,
                           color: context.textPrimary.withValues(alpha: 0.18),
                           colorBlendMode: BlendMode.modulate,

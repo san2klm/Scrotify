@@ -11,10 +11,10 @@ import 'package:provider/provider.dart';
 import 'package:window_manager/window_manager.dart';
 
 import 'services/home_widget_service.dart';
+import 'services/cover_fallback_service.dart';
 import 'services/mini_player_controller.dart';
 import 'services/scrotify_audio_handler.dart';
 
-import 'services/cover_fallback_service.dart';
 import 'services/equalizer_service.dart';
 import 'services/jam_controller.dart';
 import 'services/listening_stats_service.dart';
@@ -133,12 +133,27 @@ class MyApp extends StatelessWidget {
         Provider<OfflineCacheService>(
           create: (_) => OfflineCacheService(
             metadataStore: Platform.isLinux || Platform.isWindows
-                ? InMemoryOfflineCacheMetadataStore() : null,
+                ? InMemoryOfflineCacheMetadataStore()
+                : null,
           ),
           dispose: (_, service) => service.close(),
         ),
         ChangeNotifierProvider<LocalMusicService>(
-          create: (ctx) => LocalMusicService(ctx.read<OfflineCacheService>()),
+          lazy: false,
+          create: (ctx) {
+            final music = LocalMusicService(ctx.read<OfflineCacheService>(),
+                artworkFallback: (track) => CoverFallbackService.instance
+                    .findCover(
+                        artist: track.artist,
+                        album: track.album,
+                        title: track.title,
+                        size: 600));
+            ctx.read<NavidromeService>().localMusic = music;
+            music.initialize().catchError((Object _) {
+              debugPrint('No se pudo abrir la carpeta de música local.');
+            });
+            return music;
+          },
         ),
         ChangeNotifierProvider<OfflineDownloadManager>(
           create: (ctx) => OfflineDownloadManager(

@@ -9,11 +9,13 @@ import '../services/jam_controller.dart';
 import '../services/player_controller.dart';
 import '../services/navidrome_service.dart';
 import '../services/cover_fallback_service.dart';
+import '../services/local_music_service.dart';
 import '../widgets/jam_dialog.dart';
 import '../widgets/jam_queue_panel.dart';
 import '../widgets/lyrics_follow_panel.dart';
 import '../widgets/lyrics_overlay.dart';
 import '../widgets/track_context_menu.dart';
+import '../widgets/local_download_button.dart';
 import '../widgets/cover_art.dart';
 import '../widgets/waveform_progress_bar.dart';
 import '../widgets/player_position_builder.dart';
@@ -141,6 +143,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                             ],
                           ),
                           _buildJamBadge(context, jam),
+                          LocalDownloadButton(tracks: [track], compact: true),
                           IconButton(
                             icon: Icon(Icons.more_horiz,
                                 color: context.textPrimary),
@@ -492,6 +495,17 @@ class _PlayerScreenState extends State<PlayerScreen> {
     return Positioned.fill(
       child: FutureBuilder<String?>(
         future: () async {
+          final nav = context.read<NavidromeService?>();
+          final local = context.read<LocalMusicService?>()?.artworkForMetadata(
+              nav?.serverScope,
+              artist: track.artist,
+              album: track.album,
+              title: track.title);
+          if (local != null) return Uri.file(local).toString();
+          if (nav?.offlineMode == true &&
+              Uri.tryParse(track.albumArtUrl ?? '')?.scheme != 'file') {
+            return null;
+          }
           if (track.albumArtUrl != null && track.albumArtUrl!.isNotEmpty) {
             return track.albumArtUrl;
           }
@@ -512,10 +526,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
           return RepaintBoundary(
             child: ImageFiltered(
               imageFilter: ImageFilter.blur(sigmaX: 60, sigmaY: 60),
-              child: Image.network(
-                url,
+              child: Image(
+                image: ResizeImage(CoverArt.imageProvider(url), width: 128),
                 fit: BoxFit.cover,
-                cacheWidth: 128,
                 filterQuality: FilterQuality.low,
                 color: context.textPrimary.withAlpha(70),
                 colorBlendMode: BlendMode.modulate,

@@ -146,7 +146,8 @@ class _LikedSongsScreenState extends State<LikedSongsScreen> {
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis),
                               ),
-                              LocalDownloadButton(tracks: tracks, collection: 'likes'),
+                              LocalDownloadButton(
+                                  tracks: tracks, collection: 'likes'),
                               IconButton(
                                 visualDensity: VisualDensity.compact,
                                 tooltip: 'Acciones de favoritos',
@@ -274,7 +275,8 @@ class _LikedSongsScreenState extends State<LikedSongsScreen> {
                                       },
                                     ),
                                     // Menú contextual ⋮
-                                    LocalDownloadButton(tracks: [track], compact: true),
+                                    LocalDownloadButton(
+                                        tracks: [track], compact: true),
                                     IconButton(
                                       visualDensity: VisualDensity.compact,
                                       tooltip: 'Acciones de la canción',

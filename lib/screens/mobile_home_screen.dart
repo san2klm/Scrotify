@@ -18,6 +18,8 @@ import '../widgets/pairing_panel.dart';
 import '../widgets/server_activity_panel.dart';
 import '../widgets/interactive_artist_text.dart';
 import '../widgets/track_context_menu.dart';
+import '../widgets/local_download_button.dart';
+import '../widgets/offline_connection_banner.dart';
 import 'liked_songs_screen.dart';
 import 'playlist_detail_screen.dart';
 import 'album_detail_screen.dart';
@@ -581,6 +583,7 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              const OfflineConnectionBanner(),
               QuickActionsRow(tracks: filteredTracks),
               const SizedBox(height: 16),
               _quickAccessGrid(),
@@ -829,18 +832,29 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Expanded(
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(6),
-                        child: CoverArt(
-                          url: track.albumArtUrl,
-                          artist: track.artist,
-                          album: track.album,
-                          title: track.title,
-                          borderRadius: 0,
-                          fallbackIcon: Icons.music_note,
-                          fallbackColor: context.bgCard,
+                      child: Stack(fit: StackFit.expand, children: [
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(6),
+                          child: CoverArt(
+                            url: track.albumArtUrl,
+                            artist: track.artist,
+                            album: track.album,
+                            title: track.title,
+                            borderRadius: 0,
+                            fallbackIcon: Icons.music_note,
+                            fallbackColor: context.bgCard,
+                          ),
                         ),
-                      ),
+                        Positioned(
+                            right: 0,
+                            bottom: 0,
+                            child: Material(
+                              color: context.bgCard,
+                              borderRadius: BorderRadius.circular(20),
+                              child: LocalDownloadButton(
+                                  tracks: [track], compact: true),
+                            )),
+                      ]),
                     ),
                     const SizedBox(height: 8),
                     Text(

@@ -8,6 +8,7 @@ import '../services/jam_controller.dart';
 import '../services/navidrome_service.dart';
 import '../services/offline_cache_service.dart';
 import '../services/offline_download_manager.dart';
+import '../services/local_music_service.dart';
 import '../services/player_controller.dart';
 import '../services/theme_controller.dart';
 import 'cover_art.dart';
@@ -172,9 +173,8 @@ class TrackContextMenu extends StatelessWidget {
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: Icon(Icons.speaker_group_rounded,
-                            color: inJamQueue
-                                ? context.accent2
-                                : context.accent,
+                            color:
+                                inJamQueue ? context.accent2 : context.accent,
                             size: 20),
                       ),
                       title: Text(
@@ -182,9 +182,7 @@ class TrackContextMenu extends StatelessWidget {
                             ? 'Ya está en la cola Jam'
                             : 'Añadir a la cola Jam',
                         style: TextStyle(
-                          color: inJamQueue
-                              ? context.accent2
-                              : context.accent,
+                          color: inJamQueue ? context.accent2 : context.accent,
                           fontWeight: FontWeight.bold,
                           fontSize: 14,
                         ),
@@ -622,14 +620,35 @@ class TrackContextMenu extends StatelessWidget {
       builder: (ctx) {
         return Consumer<PlayerController>(
           builder: (context, player, _) {
-            final options = <({String label, Duration? duration, bool isEndOfTrack})>[
+            final options =
+                <({String label, Duration? duration, bool isEndOfTrack})>[
               (label: 'Desactivado', duration: null, isEndOfTrack: false),
               (label: 'Fin de la canción', duration: null, isEndOfTrack: true),
-              (label: 'En 5 minutos', duration: const Duration(minutes: 5), isEndOfTrack: false),
-              (label: 'En 15 minutos', duration: const Duration(minutes: 15), isEndOfTrack: false),
-              (label: 'En 30 minutos', duration: const Duration(minutes: 30), isEndOfTrack: false),
-              (label: 'En 45 minutos', duration: const Duration(minutes: 45), isEndOfTrack: false),
-              (label: 'En 1 hora', duration: const Duration(hours: 1), isEndOfTrack: false),
+              (
+                label: 'En 5 minutos',
+                duration: const Duration(minutes: 5),
+                isEndOfTrack: false
+              ),
+              (
+                label: 'En 15 minutos',
+                duration: const Duration(minutes: 15),
+                isEndOfTrack: false
+              ),
+              (
+                label: 'En 30 minutos',
+                duration: const Duration(minutes: 30),
+                isEndOfTrack: false
+              ),
+              (
+                label: 'En 45 minutos',
+                duration: const Duration(minutes: 45),
+                isEndOfTrack: false
+              ),
+              (
+                label: 'En 1 hora',
+                duration: const Duration(hours: 1),
+                isEndOfTrack: false
+              ),
               (
                 label: 'En 1 hora y 30 minutos',
                 duration: const Duration(minutes: 90),
@@ -637,7 +656,8 @@ class TrackContextMenu extends StatelessWidget {
               ),
             ];
 
-            bool isSelected(({String label, Duration? duration, bool isEndOfTrack}) opt) {
+            bool isSelected(
+                ({String label, Duration? duration, bool isEndOfTrack}) opt) {
               if (opt.isEndOfTrack) {
                 return player.isSleepTimerEndOfTrack;
               }
@@ -770,7 +790,8 @@ class TrackContextMenu extends StatelessWidget {
                     ),
                     const Divider(height: 1),
                     ListTile(
-                      leading: Icon(Icons.tune_rounded, color: context.textSecondary),
+                      leading: Icon(Icons.tune_rounded,
+                          color: context.textSecondary),
                       title: Text(
                         'Personalizado...',
                         style: TextStyle(
@@ -793,7 +814,8 @@ class TrackContextMenu extends StatelessWidget {
     );
   }
 
-  void _showCustomSleepTimerDialog(BuildContext parentContext, PlayerController player) {
+  void _showCustomSleepTimerDialog(
+      BuildContext parentContext, PlayerController player) {
     final theme = parentContext.read<ThemeController>().active;
     final controller = TextEditingController(text: '20');
     showDialog<void>(
@@ -1221,7 +1243,12 @@ class _TrackOfflineSectionState extends State<TrackOfflineSection> {
     }
 
     try {
-      await manager.queueTrack(track, serverScope: serverScope);
+      final music = Provider.of<LocalMusicService?>(context, listen: false);
+      if (music != null) {
+        await music.download(manager, track, serverScope);
+      } else {
+        await manager.queueTrack(track, serverScope: serverScope);
+      }
       if (mounted) {
         messenger.showSnackBar(
           SnackBar(

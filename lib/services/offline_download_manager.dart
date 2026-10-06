@@ -413,6 +413,7 @@ class OfflineDownloadManager extends ChangeNotifier {
   final Map<String, DownloadTask> _tasks = {};
   final Map<String, _CancellationToken> _activeCancellations = {};
   bool _initialized = false;
+  Future<void>? _initialization;
   bool _isDisposed = false;
 
   OfflineDownloadManager({
@@ -473,7 +474,9 @@ class OfflineDownloadManager extends ChangeNotifier {
 
   /// Initializes the manager, loads non-sensitive pending tasks from persistence,
   /// converts any previously downloading tasks to paused, cleans temp files, and starts queue processing.
-  Future<void> initialize() async {
+  Future<void> initialize() => _initialization ??= _initialize();
+
+  Future<void> _initialize() async {
     if (_initialized) return;
     await beforeInitialize?.call();
     await _cacheService.initialize();
@@ -735,6 +738,26 @@ class OfflineDownloadManager extends ChangeNotifier {
 
     File? tempFile;
     try {
+      // Una tarea restaurada puede tener ya su archivo completo en disco.
+      final cached = await _cacheService.lookup(task.serverScope, task.trackId);
+      if (cancelToken.isCancelled) return;
+      if (cached != null) {
+        _updateTask(
+            task.copyWith(
+              status: DownloadTaskStatus.completed,
+              downloadedBytes: cached.byteSize,
+              totalBytes: cached.byteSize,
+              clearFailureCategory: true,
+              clearFailureMessage: true,
+              updatedAt: _now(),
+            ),
+            persist: true);
+        return;
+      }
+      // Comprobar el destino antes de transferir o escribir el audio.
+      final resolvedTarget =
+          destinationResolver != null ? await destinationResolver!(task) : null;
+      if (cancelToken.isCancelled) return;
       tempFile = await getTempFile(task.serverScope, task.trackId);
       if (await tempFile.exists()) {
         try {
@@ -785,10 +808,8 @@ class OfflineDownloadManager extends ChangeNotifier {
       }
 
       // Safe transfer: target file atomically replaced with rollback
-      final targetPath =
-          destinationResolver != null
-              ? await destinationResolver!(task)
-              : await _cacheService.getAudioFilePath(task.serverScope, task.trackId);
+      final targetPath = resolvedTarget ??
+          await _cacheService.getAudioFilePath(task.serverScope, task.trackId);
       final targetFile = File(targetPath);
       final targetDir = targetFile.parent;
       if (!await targetDir.exists()) {

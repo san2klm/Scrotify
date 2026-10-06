@@ -1,4 +1,9 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../services/local_music_service.dart';
+import '../services/navidrome_service.dart';
 import '../utils/app_colors.dart';
 import '../services/cover_fallback_service.dart';
 
@@ -27,7 +32,14 @@ class CoverArt extends StatefulWidget {
     this.fallbackColor = const Color(0xFF2A2A2A),
   });
 
+  /// También admite la URI de una portada guardada en el dispositivo.
   final String? url;
+
+  static ImageProvider imageProvider(String source) {
+    final uri = Uri.tryParse(source);
+    if (uri?.scheme == 'file') return FileImage(File.fromUri(uri!));
+    return NetworkImage(source);
+  }
 
   /// Metadatos usados para buscar la carátula en fuentes externas cuando
   /// [url] es nula o la imagen no carga. Si no se indican, no hay búsqueda.
@@ -55,6 +67,17 @@ class _CoverArtState extends State<CoverArt> {
 
   bool get _hasUrl => widget.url != null && widget.url!.isNotEmpty;
 
+  bool get _offline => context.read<NavidromeService?>()?.offlineMode ?? false;
+
+  String? _localArtwork() {
+    if (Uri.tryParse(widget.url ?? '')?.scheme == 'file') return widget.url;
+    final music = context.read<LocalMusicService?>();
+    final scope = context.read<NavidromeService?>()?.serverScope;
+    final path = music?.artworkForMetadata(scope,
+        artist: widget.artist, album: widget.album, title: widget.title);
+    return path == null ? null : Uri.file(path).toString();
+  }
+
   bool get _canSearchExternal =>
       widget.artist != null || widget.album != null || widget.title != null;
 
@@ -62,7 +85,11 @@ class _CoverArtState extends State<CoverArt> {
   void didChangeDependencies() {
     super.didChangeDependencies();
     // Primera vez o tras cambio de MediaQuery: lanzar búsqueda pendiente.
-    if (!_fetchScheduled && !_hasUrl && _canSearchExternal) {
+    if (!_fetchScheduled &&
+        !_hasUrl &&
+        _canSearchExternal &&
+        !_offline &&
+        _localArtwork() == null) {
       _fetchScheduled = true;
       _fetchExternal();
     }
@@ -78,7 +105,10 @@ class _CoverArtState extends State<CoverArt> {
       _externalUrl = null;
       _loadingFailed = false;
       _fetchScheduled = false;
-      if (!_hasUrl && _canSearchExternal) {
+      if (!_hasUrl &&
+          _canSearchExternal &&
+          !_offline &&
+          _localArtwork() == null) {
         _fetchScheduled = true;
         _fetchExternal();
       }
@@ -86,6 +116,7 @@ class _CoverArtState extends State<CoverArt> {
   }
 
   void _fetchExternal() {
+    if (_offline || _localArtwork() != null) return;
     final dpr = MediaQuery.maybeDevicePixelRatioOf(context) ?? 2.0;
 
     double rawSize = (widget.width ?? 300.0).toDouble();
@@ -109,6 +140,8 @@ class _CoverArtState extends State<CoverArt> {
 
   @override
   Widget build(BuildContext context) {
+    context.watch<LocalMusicService?>();
+    context.watch<NavidromeService?>();
     final Widget placeholder = _placeholder(context);
 
     // La URL de Navidrome falló y hay metadatos: intentar fuentes externas.
@@ -117,8 +150,11 @@ class _CoverArtState extends State<CoverArt> {
       // hasta que llegue la URL externa.
     }
 
-    String? effectiveUrl = (_hasUrl && !_loadingFailed) ? widget.url : null;
-    effectiveUrl ??= _externalUrl;
+    String? effectiveUrl = _localArtwork();
+    if (!_offline) {
+      effectiveUrl ??= (_hasUrl && !_loadingFailed) ? widget.url : null;
+      effectiveUrl ??= _externalUrl;
+    }
 
     // Decodificar al tamaño real en pantalla evita mantener en memoria
     // bitmaps de 600px para miniaturas de 48px.
@@ -128,17 +164,20 @@ class _CoverArtState extends State<CoverArt> {
         : null;
 
     final Widget image = effectiveUrl != null && effectiveUrl.isNotEmpty
-        ? Image.network(
-            effectiveUrl,
+        ? Image(
+            image: ResizeImage.resizeIfNeeded(
+                cacheWidth, null, CoverArt.imageProvider(effectiveUrl)),
             width: widget.width,
             height: widget.height,
-            cacheWidth: cacheWidth,
             fit: BoxFit.cover,
             gaplessPlayback: true,
             errorBuilder: (_, __, ___) {
               // Si falló la URL original de Navidrome y aún no probamos
               // fuentes externas, disparar la búsqueda una sola vez.
-              if (_hasUrl && !_loadingFailed && _canSearchExternal) {
+              if (_hasUrl &&
+                  !_loadingFailed &&
+                  _canSearchExternal &&
+                  !_offline) {
                 WidgetsBinding.instance.addPostFrameCallback((_) {
                   if (!mounted) return;
                   setState(() => _loadingFailed = true);
