@@ -74,6 +74,34 @@ class RemoteJamService {
     }
   }
 
+  /// Comprueba `GET /health` del servidor [endpoint]. Devuelve `null` si
+  /// responde `{"status":"ok"}`, o el motivo del fallo para mostrar en UI.
+  static Future<String?> testConnection(String endpoint) async {
+    final parsed = JamServerEndpoint.parse(endpoint);
+    if (!parsed.isValid) return parsed.error;
+    final client = HttpClient()..connectionTimeout = const Duration(seconds: 4);
+    try {
+      final request =
+          await client.getUrl(parsed.httpBase.replace(path: '/health'));
+      final response =
+          await request.close().timeout(const Duration(seconds: 4));
+      if (response.statusCode != 200) {
+        return 'El servidor respondió ${response.statusCode}.';
+      }
+      final body = await response.transform(utf8.decoder).join();
+      final data = jsonDecode(body);
+      return data is Map && data['status'] == 'ok'
+          ? null
+          : 'La respuesta no parece de un servidor Jam.';
+    } on TimeoutException {
+      return 'Tiempo de espera agotado.';
+    } catch (e) {
+      return 'No se pudo conectar: $e';
+    } finally {
+      client.close(force: true);
+    }
+  }
+
   // ---------------------------------------------------------------------------
   // Host: Crear sala y publicar estado
   // ---------------------------------------------------------------------------
@@ -389,10 +417,9 @@ class RemoteJamService {
   Future<List<DiscoveredJamSession>> getActiveRooms({String? customEndpoint}) async {
     final target = customEndpoint ?? _endpoint;
     try {
-      final httpUrl = target
-          .replaceFirst('wss://', 'https://')
-          .replaceFirst('ws://', 'http://');
-      final uri = Uri.parse(httpUrl).replace(path: '/rooms');
+      final parsed = JamServerEndpoint.parse(target);
+      if (!parsed.isValid) return [];
+      final uri = parsed.httpBase.replace(path: '/rooms');
 
       final client = HttpClient()..connectionTimeout = const Duration(seconds: 4);
       final request = await client.getUrl(uri);
@@ -412,8 +439,8 @@ class RemoteJamService {
           );
 
           return DiscoveredJamSession(
-            host: 'jam.templo.cloud',
-            port: 443,
+            host: parsed.host,
+            port: parsed.port,
             pin: (m['pin'] as String?) ?? '',
             sessionTitle: (m['sessionTitle'] as String?) ??
                 'Jam de ${(m['hostName'] as String?) ?? "Anfitrión"}',
@@ -423,8 +450,8 @@ class RemoteJamService {
             currentTrackArtist: m['currentTrackArtist'] as String?,
             albumArtUrl: m['albumArtUrl'] as String?,
             mode: mode,
-            remoteHost: 'jam.templo.cloud',
-            remotePort: 443,
+            remoteHost: parsed.host,
+            remotePort: parsed.port,
           );
         }).toList();
       }

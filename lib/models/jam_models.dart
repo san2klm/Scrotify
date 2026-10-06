@@ -34,6 +34,88 @@ const String kJamDiscoveryAppTag = 'scrotify-jam';
 /// Endpoint WebSocket remoto por defecto para Scrotify Jam en la nube.
 const String kDefaultRemoteJamEndpoint = 'wss://jam.templo.cloud/';
 
+/// Resultado de validar la URL del servidor Jam configurada por el usuario.
+class JamServerEndpoint {
+  /// URL normalizada (`wss://host[:puerto]/`), o `null` si no es válida.
+  final String? url;
+
+  /// Motivo del rechazo, en español, listo para mostrar en UI.
+  final String? error;
+
+  /// Aviso no bloqueante (p. ej. `ws://` en red local sin cifrado).
+  final String? warning;
+
+  const JamServerEndpoint._({this.url, this.error, this.warning});
+
+  bool get isValid => url != null;
+
+  Uri get _uri => Uri.parse(url!);
+
+  /// Host del servidor (para anunciar las salas descubiertas).
+  String get host => _uri.host;
+
+  /// Puerto efectivo (443 para `wss`, 80 para `ws` si no se indicó otro).
+  int get port => _uri.hasPort ? _uri.port : (_uri.scheme == 'wss' ? 443 : 80);
+
+  /// Base HTTP(S) equivalente para `/health`, `/rooms`, `/api/capabilities`.
+  Uri get httpBase =>
+      _uri.replace(scheme: _uri.scheme == 'wss' ? 'https' : 'http');
+
+  /// `wss://` siempre; `ws://` solo hacia host local/privado, con aviso.
+  /// Acepta `https://`/`http://` por comodidad y los convierte.
+  static JamServerEndpoint parse(String input) {
+    var text = input.trim();
+    if (text.isEmpty) {
+      return const JamServerEndpoint._(error: 'Introduce la URL del servidor.');
+    }
+    if (!text.contains('://')) text = 'wss://$text';
+    final uri = Uri.tryParse(text);
+    if (uri == null || uri.host.isEmpty) {
+      return const JamServerEndpoint._(error: 'La URL no es válida.');
+    }
+    var scheme = uri.scheme.toLowerCase();
+    if (scheme == 'https') scheme = 'wss';
+    if (scheme == 'http') scheme = 'ws';
+    if (scheme != 'wss' && scheme != 'ws') {
+      return const JamServerEndpoint._(
+          error: 'Usa wss:// (o ws:// solo en red local).');
+    }
+    String? warning;
+    if (scheme == 'ws') {
+      if (!isPrivateHost(uri.host)) {
+        return const JamServerEndpoint._(
+            error: 'ws:// sin cifrado solo se permite en red local. Usa wss://.');
+      }
+      warning = 'Conexión sin cifrar (ws://): úsala solo en tu red local.';
+    }
+    final normalized = Uri(
+      scheme: scheme,
+      host: uri.host,
+      port: uri.hasPort ? uri.port : null,
+      path: '/',
+    ).toString();
+    return JamServerEndpoint._(url: normalized, warning: warning);
+  }
+
+  /// Loopback, `.local`, y rangos privados RFC 1918 / link-local / ULA.
+  static bool isPrivateHost(String host) {
+    final h = host.toLowerCase();
+    if (h == 'localhost' || h.endsWith('.local') || h == '::1') return true;
+    final parts = h.split('.');
+    if (parts.length == 4) {
+      final o = parts.map(int.tryParse).toList();
+      if (o.every((v) => v != null && v >= 0 && v <= 255)) {
+        return o[0] == 10 ||
+            o[0] == 127 ||
+            (o[0] == 192 && o[1] == 168) ||
+            (o[0] == 172 && o[1]! >= 16 && o[1]! <= 31) ||
+            (o[0] == 169 && o[1] == 254);
+      }
+    }
+    return h.startsWith('fc') || h.startsWith('fd') || h.startsWith('fe80');
+  }
+}
+
 /// Rol del usuario actual en la sesión Jam.
 enum JamRole { none, host, guest }
 

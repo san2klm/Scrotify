@@ -86,3 +86,7 @@ build/
 **/key.properties
 *.jks
 *.keystore
+
+# Jam server
+jam-server/data/
+jam-server/.env

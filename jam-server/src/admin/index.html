@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Scrotify Jam — Admin</title>
+<style>
+  :root { color-scheme: dark light; --bg:#121212; --fg:#eee; --card:#1e1e1e; --muted:#999; --accent:#1db954; --err:#e5484d; }
+  @media (prefers-color-scheme: light) { :root { --bg:#f5f5f5; --fg:#111; --card:#fff; --muted:#666; } }
+  body { margin:0; font:15px system-ui,sans-serif; background:var(--bg); color:var(--fg); }
+  main { max-width:760px; margin:0 auto; padding:16px; }
+  h1 { font-size:20px; } .card { background:var(--card); border-radius:10px; padding:16px; margin:12px 0; }
+  nav { display:flex; gap:6px; flex-wrap:wrap; } nav button { background:var(--card); color:var(--fg); border:0; padding:8px 14px; border-radius:20px; cursor:pointer; }
+  nav button.on { background:var(--accent); color:#000; }
+  label { display:flex; justify-content:space-between; align-items:center; gap:12px; padding:8px 0; }
+  input[type=text],input[type=number],input[type=password],input[type=url] { background:transparent; color:var(--fg); border:1px solid var(--muted); border-radius:6px; padding:6px 8px; width:200px; }
+  button.primary { background:var(--accent); color:#000; border:0; padding:8px 16px; border-radius:6px; cursor:pointer; }
+  .muted { color:var(--muted); font-size:13px; } .err { color:var(--err); } pre { white-space:pre-wrap; font-size:12px; }
+  [hidden] { display:none !important; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Scrotify Jam — Administración</h1>
+  <div id="msg" class="muted" role="status"></div>
+
+  <section id="auth" class="card" hidden>
+    <p id="authHint" class="muted"></p>
+    <label>Contraseña <input id="pw" type="password" autocomplete="current-password"></label>
+    <button id="authBtn" class="primary"></button>
+  </section>
+
+  <section id="app" hidden>
+    <nav id="tabs"></nav>
+    <div id="view"></div>
+    <p><button id="logout">Cerrar sesión</button></p>
+  </section>
+</main>
+<script>
+'use strict';
+const $ = (id) => document.getElementById(id);
+let csrf = null, configured = true, tab = 'Estado', defs = {}, values = {};
+const TABS = ['Estado', 'Límites', 'Seguridad', 'Funciones', 'Salas persistentes', 'Logs'];
+const LABELS = {
+  maxParticipants: 'Máx. participantes por sala', maxRooms: 'Máx. salas simultáneas',
+  maxMessageBytes: 'Tamaño máx. de mensaje (bytes)', maxQueueItems: 'Máx. canciones en cola',
+  roomIdleMs: 'Inactividad antes de cerrar sala (ms)', publicListingEnabled: 'Listado público de salas (/rooms)',
+  chatEnabled: 'Chat ligero', persistentRoomsEnabled: 'Salas persistentes', webLinkEnabled: 'Enlaces web compartibles',
+  publicUrl: 'URL pública (https://…)',
+};
+
+function say(text, isErr) { const m = $('msg'); m.textContent = text || ''; m.className = isErr ? 'err' : 'muted'; }
+async function api(method, path, body) {
+  const headers = { 'content-type': 'application/json' };
+  if (method !== 'GET' && csrf) headers['x-csrf-token'] = csrf;
+  const res = await fetch('/admin/api/' + path, { method, headers, body: body ? JSON.stringify(body) : undefined, credentials: 'same-origin' });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || ('Error ' + res.status));
+  return data;
+}
+function el(tag, props, ...kids) {
+  const e = Object.assign(document.createElement(tag), props || {});
+  for (const k of kids) e.append(k);
+  return e;
+}
+
+async function boot() {
+  const s = await api('GET', 'session');
+  configured = s.configured; csrf = s.csrf;
+  $('auth').hidden = s.authenticated; $('app').hidden = !s.authenticated;
+  if (!s.authenticated) {
+    $('authHint').textContent = configured ? 'Introduce la contraseña de administrador.' : 'Primer arranque: elige una contraseña de administrador (mín. 8 caracteres).';
+    $('authBtn').textContent = configured ? 'Entrar' : 'Crear contraseña';
+  } else { render(); }
+}
+
+$('authBtn').onclick = async () => {
+  try {
+    const r = await api('POST', configured ? 'login' : 'setup', { password: $('pw').value });
+    csrf = r.csrf; $('pw').value = ''; say(''); await boot();
+  } catch (e) { say(e.message, true); }
+};
+$('logout').onclick = async () => { try { await api('POST', 'logout'); } catch {} csrf = null; await boot(); };
+
+function renderTabs() {
+  const nav = $('tabs'); nav.replaceChildren();
+  for (const t of TABS) nav.append(el('button', { textContent: t, className: t === tab ? 'on' : '', onclick: () => { tab = t; render(); } }));
+}
+
+async function render() {
+  renderTabs(); const v = $('view'); v.replaceChildren(); say('');
+  try {
+    if (tab === 'Estado') {
+      const s = await api('GET', 'status');
+      const card = el('div', { className: 'card' });
+      for (const [k, val] of [['Salas activas', s.rooms], ['Participantes', s.participants], ['Uptime (s)', s.uptimeSec], ['Memoria RSS (MB)', s.memoryMb]])
+        card.append(el('label', {}, k, String(val)));
+      v.append(card);
+    } else if (tab === 'Límites' || tab === 'Funciones') {
+      const group = tab === 'Límites' ? 'limits' : 'features';
+      const st = await api('GET', 'settings'); defs = st.defs; values = st.values;
+      const card = el('div', { className: 'card' }); const inputs = {};
+      for (const [k, d] of Object.entries(defs).filter(([, d]) => d.group === group || (group === 'features' && d.group === 'general'))) {
+        const input = el('input', d.type === 'bool' ? { type: 'checkbox', checked: values[k] } : d.type === 'int' ? { type: 'number', value: values[k], min: d.min, max: d.max } : { type: 'url', value: values[k] });
+        inputs[k] = [input, d]; card.append(el('label', {}, LABELS[k] || k, input));
+      }
+      card.append(el('button', { className: 'primary', textContent: 'Guardar', onclick: async () => {
+        const patch = {};
+        for (const [k, [i, d]] of Object.entries(inputs)) patch[k] = d.type === 'bool' ? i.checked : d.type === 'int' ? Number(i.value) : i.value;
+        try { await api('PUT', 'settings', patch); say('Guardado. Se aplica sin reiniciar.'); } catch (e) { say(e.message, true); }
+      } }));
+      v.append(card);
+    } else if (tab === 'Seguridad') {
+      const card = el('div', { className: 'card' }); const cur = el('input', { type: 'password', autocomplete: 'current-password' }), nxt = el('input', { type: 'password', autocomplete: 'new-password' });
+      card.append(el('label', {}, 'Contraseña actual', cur), el('label', {}, 'Nueva contraseña', nxt),
+        el('button', { className: 'primary', textContent: 'Cambiar contraseña', onclick: async () => {
+          try { await api('POST', 'password', { current: cur.value, next: nxt.value }); csrf = null; say('Contraseña cambiada. Vuelve a entrar.'); await boot(); } catch (e) { say(e.message, true); }
+        } }),
+        el('p', { className: 'muted', textContent: 'Recomendado: proteger /admin además con Cloudflare Access o restricción por IP.' }));
+      v.append(card);
+    } else if (tab === 'Salas persistentes') {
+      v.append(el('div', { className: 'card muted', textContent: 'Disponible en una fase posterior del roadmap (Fase 7).' }));
+    } else if (tab === 'Logs') {
+      const l = await api('GET', 'logs'); v.append(el('div', { className: 'card' }, el('pre', { textContent: l.lines.join('\n') || '(sin eventos)' })));
+    }
+  } catch (e) { say(e.message, true); if (/autenticado/.test(e.message)) boot(); }
+}
+boot();
+</script>
+</body>
+</html>

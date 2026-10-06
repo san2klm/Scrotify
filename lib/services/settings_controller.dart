@@ -5,6 +5,7 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 
+import '../models/jam_models.dart';
 import 'replay_gain.dart';
 
 /// Calidad de streaming. `lossless` transmite el archivo original (sin
@@ -68,6 +69,7 @@ class SettingsController extends ChangeNotifier {
   ReplayGainMode _replayGainMode = ReplayGainMode.off;
   double _replayGainPreamp = 0.0;
   bool _replayGainPreventClipping = true;
+  String _jamServerUrl = kDefaultRemoteJamEndpoint;
 
   // Red actual detectada. Si no se puede saber (sin NetworkManager, etc.) se
   // asume "casa" para no degradar la calidad sin motivo.
@@ -114,6 +116,23 @@ class SettingsController extends ChangeNotifier {
 
   /// Si está activa la prevención de clipping mediante el pico de amplitud.
   bool get replayGainPreventClipping => _replayGainPreventClipping;
+
+  /// URL (normalizada) del servidor Jam usado para salas remotas y el radar.
+  String get jamServerUrl => _jamServerUrl;
+
+  /// Valida y guarda la URL del servidor Jam. Devuelve el resultado de la
+  /// validación; solo persiste si es válida.
+  JamServerEndpoint setJamServerUrl(String input) {
+    final parsed = JamServerEndpoint.parse(input);
+    if (parsed.isValid && parsed.url != _jamServerUrl) {
+      _jamServerUrl = parsed.url!;
+      _save();
+      notifyListeners();
+    }
+    return parsed;
+  }
+
+  void resetJamServerUrl() => setJamServerUrl(kDefaultRemoteJamEndpoint);
 
   /// Activa o desactiva la eliminación de silencios.
   void setSilenceRemovalEnabled(bool enabled) {
@@ -277,6 +296,9 @@ class SettingsController extends ChangeNotifier {
           rawPreamp == null ? 0.0 : rawPreamp.clamp(-12.0, 12.0);
       _replayGainPreventClipping =
           data['replayGainPreventClipping'] as bool? ?? true;
+      final jamUrl =
+          JamServerEndpoint.parse(data['jamServerUrl'] as String? ?? '');
+      _jamServerUrl = jamUrl.url ?? kDefaultRemoteJamEndpoint;
       notifyListeners();
     } catch (_) {
       // Silently ignore — los ajustes no son críticos.
@@ -300,6 +322,7 @@ class SettingsController extends ChangeNotifier {
         'replayGainMode': _replayGainMode.name,
         'replayGainPreamp': _replayGainPreamp,
         'replayGainPreventClipping': _replayGainPreventClipping,
+        'jamServerUrl': _jamServerUrl,
       }));
     } catch (err) {
       debugPrint('settings_controller:304 ignorado: $err');

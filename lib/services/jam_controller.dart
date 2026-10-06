@@ -10,6 +10,7 @@ import 'jam_tls_identity.dart';
 import 'navidrome_service.dart';
 import 'player_controller.dart';
 import 'remote_jam_service.dart';
+import 'settings_controller.dart';
 
 /// Controlador principal de sesiones Jam.
 /// Actúa como puente entre los servicios de red ([JamHostService], [JamGuestService], [RemoteJamService])
@@ -53,7 +54,16 @@ class JamController extends ChangeNotifier {
   Timer? _hostSyncHeartbeat;
   Timer? _hostPublishTimer;
 
-  JamController(this._player, this._navidrome) {
+  final SettingsController? _settings;
+
+  /// Endpoint remoto vigente ya validado (host/puerto para anunciar salas).
+  JamServerEndpoint get _remoteEndpoint =>
+      JamServerEndpoint.parse(_remoteService.endpoint);
+
+  JamController(this._player, this._navidrome, {SettingsController? settings})
+      : _settings = settings {
+    _applyServerUrl();
+    _settings?.addListener(_applyServerUrl);
     _initHostCallbacks();
     _initGuestCallbacks();
     _initRemoteCallbacks();
@@ -64,6 +74,13 @@ class JamController extends ChangeNotifier {
       'canCtrl=${_localParticipant?.canControlPlayback ?? false} '
       'canQueue=${_localParticipant?.canManageQueue ?? false}',
     );
+  }
+
+  void _applyServerUrl() {
+    final url = _settings?.jamServerUrl;
+    if (url != null && url != _remoteService.endpoint) {
+      _remoteService.setEndpoint(url);
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -600,8 +617,8 @@ class JamController extends ChangeNotifier {
         sessionId: 'remote_${_remoteService.pin}',
         pinCode: _remoteService.pin ?? '',
         hostName: state['hostName'] as String? ?? 'Anfitrión',
-        hostIp: 'jam.templo.cloud',
-        port: 443,
+        hostIp: _remoteEndpoint.host,
+        port: _remoteEndpoint.port,
         mode: mode,
         currentTrack: currentTrack,
         isPlaying: isPlaying,
@@ -1000,7 +1017,7 @@ class JamController extends ChangeNotifier {
 
       final Map<String, DiscoveredJamSession> map = {};
 
-      // 1. Agregar salas del servidor central remoto (https://jam.templo.cloud)
+      // 1. Agregar salas del servidor central remoto (servidor configurado en Ajustes)
       for (final s in remoteResults) {
         final clean = s.pin.toUpperCase().replaceAll(RegExp(r'[^A-Z0-9]'), '');
         if (clean.isNotEmpty) {
@@ -1038,9 +1055,10 @@ class JamController extends ChangeNotifier {
     String? customName,
     int? customColor,
   }) async {
-    if (disc.host == 'jam.templo.cloud' ||
+    final remoteHost = _remoteEndpoint.host;
+    if (disc.host == remoteHost ||
         disc.port == 443 ||
-        disc.remoteHost == 'jam.templo.cloud') {
+        disc.remoteHost == remoteHost) {
       return joinRemoteSession(
         pin: disc.pin,
         customName: customName,
@@ -1105,7 +1123,7 @@ class JamController extends ChangeNotifier {
         lanWarning = lastJoinError;
       }
 
-      // 3. Conectar a través del servidor central WebSocket (jam.templo.cloud)
+      // 3. Conectar a través del servidor central WebSocket configurado en Ajustes
       final remoteOk = await joinRemoteSession(
         pin: pin,
         customName: customName,
@@ -1443,6 +1461,7 @@ class JamController extends ChangeNotifier {
 
   @override
   void dispose() {
+    _settings?.removeListener(_applyServerUrl);
     _syncGeneration++;
     _lastSyncServerTimestamp = 0;
     _hostSyncHeartbeat?.cancel();

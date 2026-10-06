@@ -1,6 +1,24 @@
 # Servidor remoto de Scrotify Jam
 
-Servidor WebSocket en Node.js para salas Jam remotas. Conserva las salas sólo en memoria: reiniciar el contenedor cierra todas las salas activas.
+Servidor WebSocket en Node.js para salas Jam remotas. Conserva las salas sólo en memoria: reiniciar el contenedor cierra todas las salas activas. Los **ajustes y la cuenta de admin** sí persisten en `/data/jam.db` (SQLite vía `node:sqlite`, requiere Node ≥ 22.13; la imagen usa Node 24).
+
+## Configuración y panel `/admin`
+
+| Variable | Uso |
+|---|---|
+| `ADMIN_PASSWORD` | Contraseña inicial (≥ 8 car.). Solo se usa si aún no hay admin; se guarda su hash scrypt. Sin ella, el primer acceso a `/admin` abre un asistente de creación. |
+| `PUBLIC_URL` | Valor inicial de `publicUrl` (el panel lo sobrescribe). |
+| `TRUST_PROXY` | `none` (defecto) \| `cloudflare` (`CF-Connecting-IP`) \| `forwarded` (`X-Forwarded-For`). Solo así se confía en cabeceras de proxy para el rate limit del login. |
+| `DATA_DIR` | Directorio de la base (defecto `/data`). |
+| `PORT`, `MAX_MESSAGE_BYTES`, `MAX_PARTICIPANTS`, `ROOM_IDLE_MS` | Valores iniciales de los límites. |
+
+El panel (`/admin`) edita límites (participantes, salas, cola, tamaño de mensaje, inactividad) y funciones (listado público, chat, salas persistentes, enlaces web). Los cambios se aplican sin reiniciar. Sesión por cookie `HttpOnly; SameSite=Strict`, CSRF en mutaciones y límite de intentos de login por IP.
+
+**Protege `/admin`** además con Cloudflare Access o restricción por IP/ruta cuando lo expongas por Internet.
+
+`GET /api/capabilities` devuelve `protocolVersion`, funciones habilitadas y límites para que el cliente adapte su UI.
+
+**Backups:** `tar czf data-$(date +%F).tgz data/` antes de cada despliegue.
 
 ## Desplegar con Portainer
 

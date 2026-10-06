@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../models/jam_models.dart';
 import '../services/navidrome_service.dart';
+import '../services/remote_jam_service.dart';
 import '../services/pairing_server.dart';
 import '../services/secure_storage.dart';
 import '../services/settings_controller.dart';
@@ -305,6 +307,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   const SizedBox(height: 12),
                   // Temas (.zip estilo Psysonic, carpeta configurable).
                   const ThemesSection(),
+
+                  // ---------------------------------------------------------------
+                  // Servidor Jam (relay propio o por defecto)
+                  // ---------------------------------------------------------------
+                  _sectionTitle('Servidor Jam'),
+                  _card(children: [_JamServerField(settings: settings)]),
 
                   // ---------------------------------------------------------------
                   // Playlists (gestionar/borrar)
@@ -781,6 +789,106 @@ class _InfoText extends StatelessWidget {
     return Text(
       text,
       style: TextStyle(color: context.textSecondary, fontSize: 13, height: 1.4),
+    );
+  }
+}
+
+/// Campo de URL del servidor Jam con validación, prueba de conexión
+/// (`GET /health`) y restauración del valor por defecto.
+class _JamServerField extends StatefulWidget {
+  final SettingsController settings;
+
+  const _JamServerField({required this.settings});
+
+  @override
+  State<_JamServerField> createState() => _JamServerFieldState();
+}
+
+class _JamServerFieldState extends State<_JamServerField> {
+  late final TextEditingController _controller =
+      TextEditingController(text: widget.settings.jamServerUrl);
+  String? _error;
+  String? _info;
+  bool _testing = false;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _save() {
+    final result = widget.settings.setJamServerUrl(_controller.text);
+    setState(() {
+      _error = result.error;
+      _info = result.warning;
+      if (result.isValid) _controller.text = result.url!;
+    });
+  }
+
+  Future<void> _test() async {
+    setState(() {
+      _testing = true;
+      _error = null;
+      _info = null;
+    });
+    final failure = await RemoteJamService.testConnection(_controller.text);
+    if (!mounted) return;
+    setState(() {
+      _testing = false;
+      if (failure == null) {
+        _info = 'Conexión correcta.';
+      } else {
+        _error = failure;
+      }
+    });
+  }
+
+  void _reset() {
+    widget.settings.resetJamServerUrl();
+    setState(() {
+      _controller.text = kDefaultRemoteJamEndpoint;
+      _error = null;
+      _info = null;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        TextField(
+          controller: _controller,
+          keyboardType: TextInputType.url,
+          autocorrect: false,
+          style: TextStyle(color: context.textPrimary, fontSize: 14),
+          decoration: InputDecoration(
+            labelText: 'URL del servidor',
+            hintText: kDefaultRemoteJamEndpoint,
+            errorText: _error,
+            helperText: _info,
+          ),
+          onSubmitted: (_) => _save(),
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          children: [
+            FilledButton(onPressed: _save, child: const Text('Guardar')),
+            OutlinedButton(
+              onPressed: _testing ? null : _test,
+              child: Text(_testing ? 'Probando…' : 'Probar conexión'),
+            ),
+            TextButton(
+                onPressed: _reset, child: const Text('Restaurar por defecto')),
+          ],
+        ),
+        const SizedBox(height: 8),
+        const _InfoText(
+            'Relay para salas Jam remotas. Puedes alojar el tuyo con el '
+            'Docker de jam-server/. Usa wss://; ws:// solo en red local.'),
+      ],
     );
   }
 }

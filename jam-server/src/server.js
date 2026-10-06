@@ -1,13 +1,12 @@
+import { mkdirSync } from 'node:fs';
 import http from 'node:http';
 import { WebSocketServer, WebSocket } from 'ws';
 
-const defaultLimits = {
-  maxMessageBytes: 16 * 1024,
-  maxNameLength: 48,
-  maxQueueLength: 500,
-  maxParticipants: 50,
-  roomIdleMs: 60 * 60 * 1000,
-};
+import { createAdmin } from './admin.js';
+import { openStore, SETTING_DEFS } from './config.js';
+
+export const PROTOCOL_VERSION = 2;
+const MAX_NAME_LENGTH = 48;
 
 function readPositiveInteger(value, fallback) {
   const parsed = Number.parseInt(value ?? '', 10);
@@ -50,7 +49,7 @@ function normalizeState(value, limits, existingState = null) {
   }
   if (typeof position !== 'number' || !Number.isFinite(position)) return null;
   if (typeof isPlaying !== 'boolean' || !Array.isArray(queue) ||
-      queue.length > limits.maxQueueLength) {
+      queue.length > limits.maxQueueItems) {
     return null;
   }
   const normalizedQueue = [];
@@ -98,11 +97,89 @@ function serverError(socket, message) {
   send(socket, { status: 'error', message });
 }
 
-export function createJamServer({ port, host = '0.0.0.0', ...overrides } = {}) {
-  const limits = { ...defaultLimits, ...overrides };
+function createLogBuffer(max = 200) {
+  const entries = [];
+  return {
+    push(text) {
+      entries.push(`${new Date().toISOString()} ${text}`);
+      if (entries.length > max) entries.shift();
+    },
+    lines: () => [...entries],
+  };
+}
+
+/// IP del cliente. Las cabeceras de proxy solo se respetan si `trustProxy`
+/// lo indica explícitamente (`cloudflare` | `forwarded`), nunca por defecto.
+function clientIp(request, trustProxy) {
+  const header = (name) => {
+    const v = request.headers[name];
+    return typeof v === 'string' ? v.split(',')[0].trim() : null;
+  };
+  if (trustProxy === 'cloudflare') return header('cf-connecting-ip') ?? request.socket.remoteAddress ?? 'unknown';
+  if (trustProxy === 'forwarded') return header('x-forwarded-for') ?? request.socket.remoteAddress ?? 'unknown';
+  return request.socket.remoteAddress ?? 'unknown';
+}
+
+export function createJamServer({
+  port,
+  host = '0.0.0.0',
+  dbPath = ':memory:',
+  adminPassword,
+  trustProxy = 'none',
+  loginMaxFailures,
+  ...overrides
+} = {}) {
+  const store = openStore(dbPath, overrides);
+  const limits = { maxNameLength: MAX_NAME_LENGTH };
+  for (const key of Object.keys(SETTING_DEFS)) {
+    Object.defineProperty(limits, key, { get: () => store.get(key), enumerable: true });
+  }
+  const startedAt = Date.now();
+  const logs = createLogBuffer();
   const rooms = new Map();
   const socketRooms = new WeakMap();
-  const httpServer = http.createServer((request, response) => {
+  const admin = createAdmin({
+    store,
+    adminPassword,
+    loginMaxFailures,
+    logs,
+    getStatus: () => {
+      let participants = 0;
+      for (const room of rooms.values()) participants += room.guests.size + 1;
+      return {
+        rooms: rooms.size,
+        participants,
+        uptimeSec: Math.floor((Date.now() - startedAt) / 1000),
+        memoryMb: Math.round(process.memoryUsage().rss / (1024 * 1024)),
+      };
+    },
+  });
+  const httpServer = http.createServer(async (request, response) => {
+    const path = request.url?.split('?')[0];
+    if (path === '/admin' || path?.startsWith('/admin/')) {
+      await admin.handle(request, response, clientIp(request, trustProxy));
+      websocketServer.options.maxPayload = limits.maxMessageBytes;
+      return;
+    }
+    if (request.method === 'GET' && path === '/api/capabilities') {
+      response.writeHead(200, { 'content-type': 'application/json', 'access-control-allow-origin': '*' });
+      response.end(JSON.stringify({
+        protocolVersion: PROTOCOL_VERSION,
+        features: {
+          publicListing: limits.publicListingEnabled,
+          chat: limits.chatEnabled,
+          persistentRooms: limits.persistentRoomsEnabled,
+          webLink: limits.webLinkEnabled,
+        },
+        limits: {
+          maxParticipants: limits.maxParticipants,
+          maxQueueItems: limits.maxQueueItems,
+          maxMessageBytes: limits.maxMessageBytes,
+        },
+        publicUrl: limits.publicUrl || null,
+      }));
+      return;
+    }
     if (request.method === 'GET' && request.url === '/health') {
       response.writeHead(200, {
         'content-type': 'application/json',
@@ -113,7 +190,14 @@ export function createJamServer({ port, host = '0.0.0.0', ...overrides } = {}) {
     }
     if (request.method === 'GET' && (request.url === '/rooms' || request.url === '/api/rooms')) {
       const publicRooms = [];
-      for (const room of rooms.values()) {
+      let publicHost = request.headers.host?.split(':')[0] ?? 'localhost';
+      let publicPort = 443;
+      if (limits.publicUrl) {
+        const parsed = new URL(limits.publicUrl);
+        publicHost = parsed.hostname;
+        publicPort = parsed.port ? Number(parsed.port) : (parsed.protocol === 'https:' ? 443 : 80);
+      }
+      for (const room of limits.publicListingEnabled ? rooms.values() : []) {
         publicRooms.push({
           pin: room.pin,
           hostName: room.hostName,
@@ -123,10 +207,10 @@ export function createJamServer({ port, host = '0.0.0.0', ...overrides } = {}) {
           currentTrackArtist: room.state?.artist ?? null,
           albumArtUrl: room.state?.albumArtUrl ?? null,
           mode: room.state?.mode ?? 'partySpeaker',
-          host: 'jam.templo.cloud',
-          port: 443,
-          remoteHost: 'jam.templo.cloud',
-          remotePort: 443,
+          host: publicHost,
+          port: publicPort,
+          remoteHost: publicHost,
+          remotePort: publicPort,
           isPublic: true,
           updatedAt: room.updatedAt,
         });
@@ -145,6 +229,7 @@ export function createJamServer({ port, host = '0.0.0.0', ...overrides } = {}) {
     server: httpServer,
     maxPayload: limits.maxMessageBytes,
   });
+  logs.push('Servidor iniciado');
 
   function closeRoom(room, reason = 'El anfitrión ha finalizado la sesión Jam') {
     if (rooms.get(room.pin) !== room) return;
@@ -180,6 +265,7 @@ export function createJamServer({ port, host = '0.0.0.0', ...overrides } = {}) {
     const state = normalizeState(message.initialState, limits);
     if (!pin || !hostName || !state) return serverError(socket, 'Datos de sala inválidos.');
     if (rooms.has(pin)) return serverError(socket, 'Ese PIN ya está en uso.');
+    if (rooms.size >= limits.maxRooms) return serverError(socket, 'El servidor alcanzó el límite de salas.');
     const room = { pin, host: socket, hostName, state, guests: new Set(), updatedAt: Date.now() };
     rooms.set(pin, room);
     socketRooms.set(socket, { pin, role: 'host' });
@@ -304,7 +390,7 @@ export function createJamServer({ port, host = '0.0.0.0', ...overrides } = {}) {
     for (const room of rooms.values()) {
       if (room.updatedAt < threshold) closeRoom(room, 'La sala Jam expiró por inactividad.');
     }
-  }, Math.min(limits.roomIdleMs, 60 * 1000));
+  }, 5 * 1000);
   expiryTimer.unref();
 
   return {
@@ -327,16 +413,27 @@ export function createJamServer({ port, host = '0.0.0.0', ...overrides } = {}) {
       for (const room of [...rooms.values()]) closeRoom(room, 'El servidor Jam se está apagando.');
       await new Promise((resolve) => websocketServer.close(() => resolve()));
       await new Promise((resolve) => httpServer.close(() => resolve()));
+      store.close();
     },
   };
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
+  const envInt = (name) => {
+    const parsed = Number.parseInt(process.env[name] ?? '', 10);
+    return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : undefined;
+  };
+  const dataDir = process.env.DATA_DIR ?? '/data';
+  mkdirSync(dataDir, { recursive: true });
   const server = createJamServer({
-    port: readPositiveInteger(process.env.PORT, 8080),
-    maxMessageBytes: readPositiveInteger(process.env.MAX_MESSAGE_BYTES, defaultLimits.maxMessageBytes),
-    maxParticipants: readPositiveInteger(process.env.MAX_PARTICIPANTS, defaultLimits.maxParticipants),
-    roomIdleMs: readPositiveInteger(process.env.ROOM_IDLE_MS, defaultLimits.roomIdleMs),
+    port: envInt('PORT') ?? 8080,
+    dbPath: `${dataDir}/jam.db`,
+    adminPassword: process.env.ADMIN_PASSWORD,
+    trustProxy: process.env.TRUST_PROXY ?? 'none',
+    publicUrl: process.env.PUBLIC_URL || undefined,
+    maxMessageBytes: envInt('MAX_MESSAGE_BYTES'),
+    maxParticipants: envInt('MAX_PARTICIPANTS'),
+    roomIdleMs: envInt('ROOM_IDLE_MS'),
   });
   await server.start();
   const shutdown = async () => {

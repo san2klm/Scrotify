@@ -157,6 +157,7 @@ class MyApp extends StatelessWidget {
           create: (ctx) => JamController(
             ctx.read<PlayerController>(),
             ctx.read<NavidromeService>(),
+            settings: ctx.read<SettingsController>(),
           ),
         ),
       ],

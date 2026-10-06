@@ -151,3 +151,9 @@
 - Nota: el commit `fc94ddc` (ya en el remoto) aún contiene el servidor Jam nuevo; el revert está sin commit.
 
 - [x] **Jam.P3** (2026-10-04) Causa confirmada contra `jam.templo.cloud`: el servidor cierra el socket del anfitrión (1009) cuando un mensaje supera `MAX_MESSAGE_BYTES` (16 KB), o sea con colas de más de ~35 canciones; la sala remota desaparece y el invitado no la encuentra. Arreglo en el cliente: `RemoteJamService.fitStateToMessageLimit` recorta la cola al prefijo que cabe, y el anfitrión vuelve a registrar la sala con retroceso exponencial si pierde la conexión. Verificación: analyze 0 issues, 310 tests. Falta probar en dispositivos reales (hay que reinstalar la app en el anfitrión). Con colas largas el invitado remoto ve sólo las primeras ~34 canciones siguientes.
+
+## Jam Roadmap — Fase 1 (2026-10-06): ajuste "Servidor Jam" + servidor administrable
+
+- [x] **R1.1** Servidor: ajustes en SQLite (`node:sqlite`, sin dependencia nativa; desvío respecto a `better-sqlite3` del roadmap), panel `/admin` (login scrypt, cookie HttpOnly/SameSite=Strict, CSRF, rate limit de login por IP, pestañas Estado/Límites/Seguridad/Funciones/Persistentes*/Logs), `GET /api/capabilities`, límites en caliente (`maxRooms`, `maxQueueItems`, `publicListingEnabled`…), `/rooms` ya no hardcodea `jam.templo.cloud`. Dockerfile con volumen `/data` + HEALTHCHECK. 13 tests node verdes. (*pestaña de salas persistentes: placeholder hasta la Fase 7.)
+- [x] **R1.2** Cliente: `jamServerUrl` en `SettingsController` (validación `JamServerEndpoint`: `wss://`, `ws://` solo host privado con aviso), `RemoteJamService`/radar/`JamController` usan el ajuste, UI en Ajustes (guardar, probar `/health`, restaurar). `flutter analyze` 0 issues; tests jam verdes.
+- [ ] **R1.3** Pendiente: el cliente aún no lee `/api/capabilities` (se consumirá en las fases que habiliten funciones); no hay despliegue en el servidor real (faltan datos de la sección 1 del roadmap).

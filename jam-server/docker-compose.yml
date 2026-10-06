@@ -5,8 +5,15 @@ services:
     restart: unless-stopped
     environment:
       PORT: 8080
-      MAX_MESSAGE_BYTES: 16384
-      MAX_PARTICIPANTS: 50
-      ROOM_IDLE_MS: 3600000
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}   # solo para el primer arranque; luego se guarda el hash
+      PUBLIC_URL: ${PUBLIC_URL:-}
+      TRUST_PROXY: ${TRUST_PROXY:-none}     # none | cloudflare | forwarded
+    volumes:
+      - ./data:/data
     ports:
       - "8080:8080"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
