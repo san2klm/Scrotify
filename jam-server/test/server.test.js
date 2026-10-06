@@ -872,3 +872,35 @@ test('chat is disabled globally by default', async () => {
     host.close(); guest.close();
   }
 });
+
+// --- Chat comunitario (lobby) ---------------------------------------------------
+
+test('lobby chat: per-channel, ordered, gated by chatEnabled, validated', async () => {
+  const server = await startServer({ chatEnabled: true });
+  const post = (body) => http(server, 'POST', '/api/lobby/messages', { body });
+  assert.equal((await post({ channel: 'navidrome.example.org', username: 'ana', message: 'hola' })).status, 200);
+  assert.equal((await post({ channel: 'navidrome.example.org', username: 'bob', message: 'qué tal' })).status, 200);
+  assert.equal((await post({ channel: 'otro.org', username: 'x', message: 'aparte' })).status, 200);
+
+  const all = (await http(server, 'GET', '/api/lobby/messages?channel=navidrome.example.org')).json.messages;
+  assert.deepEqual(all.map((m) => `${m.username}:${m.message}`), ['ana:hola', 'bob:qué tal']);
+  assert.ok(all[1].time > all[0].time);
+  const since = (await http(server, 'GET', `/api/lobby/messages?channel=navidrome.example.org&since=${all[0].time}`)).json.messages;
+  assert.equal(since.length, 1);
+
+  assert.equal((await post({ channel: 'BAD CHANNEL!', username: 'a', message: 'x' })).status, 400);
+  assert.equal((await post({ channel: 'ok', username: 'a', message: '' })).status, 400);
+  assert.equal((await post({ channel: 'ok', username: 'a', message: 'x'.repeat(2049) })).status, 400);
+});
+
+test('lobby chat is off when chat is disabled and rate limited when on', async () => {
+  const off = await startServer();
+  assert.equal((await http(off, 'GET', '/api/lobby/messages?channel=x')).status, 403);
+  const on = await startServer({ chatEnabled: true });
+  let limited = 0;
+  for (let i = 0; i < 14; i++) {
+    const r = await http(on, 'POST', '/api/lobby/messages', { body: { channel: 'c', username: 'u', message: `m${i}` } });
+    if (r.status === 429) limited++;
+  }
+  assert.ok(limited >= 3);
+});

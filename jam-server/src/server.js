@@ -188,6 +188,12 @@ export function createJamServer({
     Object.defineProperty(limits, key, { get: () => store.get(key), enumerable: true });
   }
   const startedAt = Date.now();
+  // Chat comunitario ("lobby") por canal (p. ej. el host de Navidrome). Solo RAM.
+  const lobby = new Map(); // channel -> [{ username, time, message }]
+  const LOBBY_KEEP = 100;
+  const LOBBY_MAX_AGE_MS = 24 * 3600 * 1000;
+  const LOBBY_MAX_CHANNELS = 200;
+  const LOBBY_MAX_MESSAGE = 2048;
   const logs = createLogBuffer();
   const rooms = new Map();
   const socketRooms = new WeakMap();
@@ -243,6 +249,10 @@ export function createJamServer({
         'referrer-policy': 'no-referrer',
       });
       response.end(`<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Unirse a la Jam</title><style>body{font:16px system-ui;background:#121212;color:#eee;text-align:center;padding:48px 16px}a.b{display:inline-block;background:#1db954;color:#000;padding:12px 24px;border-radius:24px;text-decoration:none;margin:16px}code{font-size:28px;letter-spacing:4px}</style></head><body><h1>Te invitaron a una Jam de Scrotify</h1><p>PIN de la sala</p><p><code>${code}</code></p><a class="b" href="${deep}">Abrir en Scrotify</a><p>¿No tienes la app? Instala Scrotify, abre <b>Jam → Unirse</b> e introduce el PIN.</p><script>setTimeout(function(){location.href=${JSON.stringify(deep)}},300)</script></body></html>`);
+      return;
+    }
+    if (path === '/api/lobby/messages') {
+      handleLobby(request, response);
       return;
     }
     if (request.method === 'GET' && path === '/api/capabilities') {
@@ -311,6 +321,58 @@ export function createJamServer({
     response.writeHead(404);
     response.end();
   });
+  function handleLobby(request, response) {
+    const reply = (status, body) => {
+      response.writeHead(status, { 'content-type': 'application/json', 'access-control-allow-origin': '*', 'cache-control': 'no-store' });
+      response.end(JSON.stringify(body));
+    };
+    if (!limits.chatEnabled) return reply(403, { error: 'El chat está desactivado en este servidor.' });
+    const ip = clientIp(request, trustProxy);
+    if (store.isBlockedIp(ip)) return reply(403, { error: 'Acceso denegado.' });
+    const url = new URL(request.url, 'http://x');
+    const validChannel = (c) => typeof c === 'string' && /^[a-z0-9.:_-]{1,100}$/.test(c);
+    const now = Date.now();
+    const prune = (list) => list.filter((m) => now - m.time < LOBBY_MAX_AGE_MS);
+
+    if (request.method === 'GET') {
+      const channel = url.searchParams.get('channel');
+      if (!validChannel(channel)) return reply(400, { error: 'Canal inválido.' });
+      const gate = guard.attempt(`lobby-read:${ip}`, { max: 60, windowMs: 60_000 });
+      if (!gate.ok) return reply(429, { error: 'Demasiadas consultas.' });
+      const since = Number(url.searchParams.get('since') ?? 0) || 0;
+      const list = prune(lobby.get(channel) ?? []);
+      lobby.set(channel, list);
+      return reply(200, { messages: list.filter((m) => m.time > since) });
+    }
+    if (request.method === 'POST') {
+      const chunks = [];
+      let size = 0;
+      request.on('data', (c) => { size += c.length; if (size <= 8192) chunks.push(c); });
+      request.on('end', () => {
+        if (size > 8192) return reply(413, { error: 'Mensaje demasiado grande.' });
+        let body;
+        try { body = JSON.parse(Buffer.concat(chunks).toString()); } catch { return reply(400, { error: 'JSON inválido.' }); }
+        const gate = guard.attempt(`lobby-write:${ip}`, { max: 10, windowMs: 10_000 });
+        if (!gate.ok) return reply(429, { error: 'Vas demasiado rápido.' });
+        const username = normalizeName(body.username, limits.maxNameLength);
+        const message = typeof body.message === 'string'
+          ? body.message.replace(/[\u0000-\u0008\u000b-\u001f\u007f]/g, ' ').trim() : '';
+        if (!validChannel(body.channel) || !username || !message || message.length > LOBBY_MAX_MESSAGE) {
+          return reply(400, { error: 'Datos de mensaje inválidos.' });
+        }
+        if (!lobby.has(body.channel) && lobby.size >= LOBBY_MAX_CHANNELS) lobby.delete(lobby.keys().next().value);
+        const list = prune(lobby.get(body.channel) ?? []);
+        // time estrictamente creciente para que `since` no pierda mensajes.
+        const time = Math.max(now, (list.at(-1)?.time ?? 0) + 1);
+        list.push({ username, time, message });
+        lobby.set(body.channel, list.slice(-LOBBY_KEEP));
+        return reply(200, { ok: true, time });
+      });
+      return;
+    }
+    reply(405, { error: 'Método no permitido.' });
+  }
+
   const websocketServer = new WebSocketServer({
     server: httpServer,
     maxPayload: limits.maxMessageBytes,

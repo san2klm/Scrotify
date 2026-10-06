@@ -231,6 +231,10 @@ class JamController extends ChangeNotifier {
 
   void _applyServerUrl() {
     final url = _settings?.jamServerUrl;
+    if (url != null) {
+      final ep = JamServerEndpoint.parse(url);
+      if (ep.isValid) _navidrome.lobbyBaseUrl = ep.httpBase;
+    }
     if (url != null && url != _remoteService.endpoint) {
       _remoteService.setEndpoint(url);
     }

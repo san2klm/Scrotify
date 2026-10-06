@@ -664,6 +664,8 @@ class PlayerController extends ChangeNotifier {
     if (_currentlyTrackedId != track.id) {
       _currentlyTrackedId = track.id;
       _currentTrackPlayCounted = false;
+      // "Ahora sonando" para los demás usuarios del servidor.
+      unawaited(_service.reportNowPlaying(track.id));
     }
 
     if (_currentTrackPlayCounted) return;

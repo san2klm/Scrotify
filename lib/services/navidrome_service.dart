@@ -1916,6 +1916,27 @@ class NavidromeService with ChangeNotifier {
 
   /// Registra una reproducción para el usuario conectado. Navidrome solo
   /// actualiza su contador al recibir este evento, nunca solo por `stream`.
+  /// Informa a Navidrome de lo que suena ahora (`submission=false`); es lo que
+  /// alimenta "Ahora sonando" para los demás usuarios.
+  Future<void> reportNowPlaying(String trackId) async {
+    if (!_connected) return;
+    try {
+      final (salt, token) = _auth();
+      await _client.get(Uri.parse('$_url/rest/scrobble.view').replace(
+        queryParameters: {
+          'u': _user!,
+          's': salt,
+          't': token,
+          'v': '1.16.1',
+          'c': 'Scrotify',
+          'f': 'json',
+          'id': trackId,
+          'submission': 'false',
+        },
+      ));
+    } catch (_) {}
+  }
+
   Future<void> scrobble(String trackId) async {
     if (!_connected) return;
     try {
@@ -2239,9 +2260,62 @@ class NavidromeService with ChangeNotifier {
     }
   }
 
+  /// Base HTTP del relay Jam usada para el chat comunitario. Navidrome no
+  /// implementa el chat de Subsonic (responde 410), así que se hospeda allí.
+  Uri? lobbyBaseUrl;
+
+  /// Canal del chat: el host de este servidor Navidrome.
+  String? get _lobbyChannel {
+    final host = Uri.tryParse(_url ?? '')?.host.toLowerCase();
+    return host == null || host.isEmpty ? null : host;
+  }
+
+  Future<List<ChatMessage>> _getLobbyMessages() async {
+    final channel = _lobbyChannel;
+    final base = lobbyBaseUrl;
+    if (channel == null || base == null) return [];
+    try {
+      final res = await _client
+          .get(base.replace(
+              path: '/api/lobby/messages',
+              queryParameters: {'channel': channel}))
+          .timeout(const Duration(seconds: 5));
+      if (res.statusCode != 200) return [];
+      final list = (jsonDecode(res.body)['messages'] as List?) ?? const [];
+      return [
+        for (final m in list)
+          if (m is Map<String, dynamic>) ChatMessage.fromJson(m),
+      ];
+    } catch (e) {
+      debugPrint('NavidromeService.lobby get error: $e');
+      return [];
+    }
+  }
+
+  Future<bool> _addLobbyMessage(String message) async {
+    final channel = _lobbyChannel;
+    final base = lobbyBaseUrl;
+    if (channel == null || base == null || _user == null) return false;
+    try {
+      final res = await _client
+          .post(
+            base.replace(path: '/api/lobby/messages', queryParameters: null),
+            headers: {'content-type': 'application/json'},
+            body: jsonEncode(
+                {'channel': channel, 'username': _user, 'message': message}),
+          )
+          .timeout(const Duration(seconds: 5));
+      return res.statusCode == 200;
+    } catch (e) {
+      debugPrint('NavidromeService.lobby post error: $e');
+      return false;
+    }
+  }
+
   /// Obtiene los mensajes del chat comunitario del servidor.
   Future<List<ChatMessage>> getChatMessages({int? since}) async {
     if (!_connected) return [];
+    if (lobbyBaseUrl != null) return _getLobbyMessages();
     final (salt, token) = _auth();
     final params = <String, String>{
       'u': _user!,
@@ -2276,6 +2350,7 @@ class NavidromeService with ChangeNotifier {
   /// Envía un mensaje al chat comunitario del servidor.
   Future<bool> addChatMessage(String message) async {
     if (!_connected || message.trim().isEmpty) return false;
+    if (lobbyBaseUrl != null) return _addLobbyMessage(message.trim());
     final (salt, token) = _auth();
     final uri =
         Uri.parse('$_url/rest/addChatMessage.view').replace(queryParameters: {
