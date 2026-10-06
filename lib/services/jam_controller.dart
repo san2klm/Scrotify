@@ -1751,17 +1751,25 @@ class JamController extends ChangeNotifier {
         }
       }
 
-      // 2. Agregar anuncios de Navidrome
+      String cleanPin(DiscoveredJamSession s) =>
+          s.pin.toUpperCase().replaceAll(RegExp(r'[^A-Z0-9]'), '');
+      final lanPins = {for (final s in lanResults) cleanPin(s)};
+
+      // 2. Agregar anuncios de Navidrome. Un anuncio sobrevive en el chat si
+      // el anfitrión se cierra de golpe, así que solo se muestra si la sala
+      // responde en la LAN o en el servidor central; si apunta a un servidor
+      // central que no podemos consultar, se conserva (no hay forma de saberlo).
+      final remoteHost = _remoteEndpoint.host;
       for (final s in serverResults) {
-        final clean = s.pin.toUpperCase().replaceAll(RegExp(r'[^A-Z0-9]'), '');
-        if (clean.isNotEmpty && !map.containsKey(clean)) {
-          map[clean] = s;
-        }
+        final clean = cleanPin(s);
+        if (clean.isEmpty || map.containsKey(clean)) continue;
+        final foreignCloud = s.remoteHost != null && s.remoteHost != remoteHost;
+        if (lanPins.contains(clean) || foreignCloud) map[clean] = s;
       }
 
       // 3. Si la sala está en la red local (LAN), preferir LAN por menor latencia
       for (final s in lanResults) {
-        final clean = s.pin.toUpperCase().replaceAll(RegExp(r'[^A-Z0-9]'), '');
+        final clean = cleanPin(s);
         if (clean.isNotEmpty) {
           map[clean] = s;
         }
@@ -2284,7 +2292,11 @@ class JamController extends ChangeNotifier {
     _hostPublishTimer = null;
 
     _player.removeListener(_onPlayerChangedAsHost);
-    if (_role == JamRole.host) _trackHistory(finalize: true);
+    if (_role == JamRole.host) {
+      _trackHistory(finalize: true);
+      final ending = _session;
+      if (ending != null) unawaited(_navidrome.publishServerJamEnded(ending));
+    }
     _guestService.roomPassword = null;
     _remoteService.roomPassword = null;
     _hintSentForTrackId = null;

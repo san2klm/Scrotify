@@ -738,6 +738,8 @@ export function createJamServer({
 
   websocketServer.on('connection', (socket, request) => {
     socketIps.set(socket, clientIp(request, trustProxy));
+    socket.isAlive = true;
+    socket.on('pong', () => { socket.isAlive = true; });
     socket.on('message', (raw, isBinary) => {
       if (isBinary) return serverError(socket, 'Sólo se aceptan mensajes JSON.');
       let message;
@@ -782,6 +784,17 @@ export function createJamServer({
   }, 5 * 1000);
   expiryTimer.unref();
 
+  // Un anfitrión que se cae sin cerrar el socket (app matada, sin red) no envía
+  // 'close': sin ping, su sala seguiría listada hasta expirar por inactividad.
+  const heartbeatTimer = setInterval(() => {
+    for (const socket of websocketServer.clients) {
+      if (socket.isAlive === false) { socket.terminate(); continue; }
+      socket.isAlive = false;
+      try { socket.ping(); } catch { socket.terminate(); }
+    }
+  }, 15 * 1000);
+  heartbeatTimer.unref();
+
   return {
     get port() {
       const address = httpServer.address();
@@ -799,6 +812,7 @@ export function createJamServer({
     },
     async stop() {
       clearInterval(expiryTimer);
+      clearInterval(heartbeatTimer);
       for (const room of [...rooms.values()]) closeRoom(room, 'El servidor Jam se está apagando.');
       await new Promise((resolve) => websocketServer.close(() => resolve()));
       await new Promise((resolve) => httpServer.close(() => resolve()));

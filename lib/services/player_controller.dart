@@ -1,3 +1,4 @@
+import '../utils/app_data_dir.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -6,7 +7,6 @@ import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:media_kit/media_kit.dart' as mk;
-import 'package:path_provider/path_provider.dart';
 
 import 'navidrome_service.dart';
 import 'settings_controller.dart';
@@ -739,7 +739,7 @@ class PlayerController extends ChangeNotifier {
 
   Future<void> _loadHistory() async {
     try {
-      final dir = await getApplicationDocumentsDirectory();
+      final dir = await getAppDataDirectory();
       final session = _mostPlayedSession;
       File file;
       if (session != null) {
@@ -770,7 +770,7 @@ class PlayerController extends ChangeNotifier {
 
   Future<void> _saveHistory() async {
     try {
-      final dir = await getApplicationDocumentsDirectory();
+      final dir = await getAppDataDirectory();
       final session = _mostPlayedSession;
       final fileName = session != null
           ? _historyFileName(session)
@@ -839,7 +839,7 @@ class PlayerController extends ChangeNotifier {
     if (session == null) return;
     final loadGeneration = ++_mostPlayedLoadGeneration;
     try {
-      final dir = await getApplicationDocumentsDirectory();
+      final dir = await getAppDataDirectory();
       final file = File('${dir.path}/${_mostPlayedFileName(session)}');
       if (!await file.exists()) return;
       final values = jsonDecode(await file.readAsString()) as List;
@@ -869,7 +869,7 @@ class PlayerController extends ChangeNotifier {
     if (session == null) return;
     final values = _mostPlayedByKey.values.map(_mostPlayedToJson).toList();
     try {
-      final dir = await getApplicationDocumentsDirectory();
+      final dir = await getAppDataDirectory();
       final file = File('${dir.path}/${_mostPlayedFileName(session)}');
       await file.writeAsString(jsonEncode(values));
     } catch (_) {}

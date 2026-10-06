@@ -1,8 +1,8 @@
+import '../utils/app_data_dir.dart';
 import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
-import 'package:path_provider/path_provider.dart';
 
 /// Servicio y modelo de configuración del ecualizador de 10 bandas (Fase 10).
 ///
@@ -149,7 +149,7 @@ class EqualizerService extends ChangeNotifier {
 
   Future<void> _load() async {
     try {
-      final dir = await getApplicationDocumentsDirectory();
+      final dir = await getAppDataDirectory();
       final file = File('${dir.path}/equalizer.json');
       if (!await file.exists()) return;
 
@@ -173,7 +173,7 @@ class EqualizerService extends ChangeNotifier {
 
   Future<void> _save() async {
     try {
-      final dir = await getApplicationDocumentsDirectory();
+      final dir = await getAppDataDirectory();
       final file = File('${dir.path}/equalizer.json');
       await file.writeAsString(jsonEncode({
         'enabled': _enabled,

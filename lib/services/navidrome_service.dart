@@ -1,3 +1,4 @@
+import '../utils/app_data_dir.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -6,7 +7,6 @@ import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 import 'package:flutter/foundation.dart';
 import 'package:crypto/crypto.dart';
-import 'package:path_provider/path_provider.dart';
 
 import '../models/jam_models.dart';
 import '../models/server_profile.dart';
@@ -457,7 +457,7 @@ class NavidromeService with ChangeNotifier {
 
   Future<File?> _resolveScopedFile(String name) async {
     try {
-      final dir = await getApplicationDocumentsDirectory();
+      final dir = await getAppDataDirectory();
       final userScopedFile = File('${dir.path}/${_scopedName(name)}');
       if (await userScopedFile.exists()) {
         return userScopedFile;
@@ -1247,7 +1247,7 @@ class NavidromeService with ChangeNotifier {
 
   Future<void> _saveStarredOrder() async {
     try {
-      final dir = await getApplicationDocumentsDirectory();
+      final dir = await getAppDataDirectory();
       final file = File('${dir.path}/${_scopedName("starred_track_order.json")}');
       await file.writeAsString(jsonEncode(_starredSongOrder));
     } catch (_) {
@@ -1347,7 +1347,7 @@ class NavidromeService with ChangeNotifier {
 
   Future<void> _savePins() async {
     try {
-      final dir = await getApplicationDocumentsDirectory();
+      final dir = await getAppDataDirectory();
       final file = File('${dir.path}/${_scopedName("pinned_playlists.json")}');
       await file.writeAsString(jsonEncode(_pinnedPlaylistIds.toList()));
     } catch (err) {
@@ -1357,7 +1357,7 @@ class NavidromeService with ChangeNotifier {
 
   Future<void> _saveFollowedArtists() async {
     try {
-      final dir = await getApplicationDocumentsDirectory();
+      final dir = await getAppDataDirectory();
       final file = File('${dir.path}/${_scopedName("followed_artists.json")}');
       await file.writeAsString(jsonEncode(_followedArtistIds.toList()));
     } catch (err) {
@@ -1367,7 +1367,7 @@ class NavidromeService with ChangeNotifier {
 
   Future<void> _saveExcludedArtists() async {
     try {
-      final dir = await getApplicationDocumentsDirectory();
+      final dir = await getAppDataDirectory();
       final file = File('${dir.path}/${_scopedName("excluded_artists.json")}');
       await file.writeAsString(jsonEncode(_excludedArtistIds.toList()));
     } catch (err) {
@@ -1444,7 +1444,7 @@ class NavidromeService with ChangeNotifier {
 
   Future<void> _saveTrackRatings() async {
     try {
-      final dir = await getApplicationDocumentsDirectory();
+      final dir = await getAppDataDirectory();
       final file = File('${dir.path}/${_scopedName("track_ratings.json")}');
       await file.writeAsString(jsonEncode(_trackRatings));
     } catch (err) {
@@ -2036,7 +2036,7 @@ class NavidromeService with ChangeNotifier {
   Future<void> saveLastSelectedGenre(String genre) async {
     _lastSelectedGenreSuggestion = genre;
     try {
-      final dir = await getApplicationDocumentsDirectory();
+      final dir = await getAppDataDirectory();
       final file = File('${dir.path}/${_scopedName("last_genre_suggestion.json")}');
       await file.writeAsString(jsonEncode({'genre': genre}));
     } catch (err) {
@@ -2411,6 +2411,22 @@ class NavidromeService with ChangeNotifier {
     }
   }
 
+  /// Retira el anuncio de una Jam que terminó de forma ordenada.
+  Future<void> publishServerJamEnded(JamSessionState session) async {
+    if (!_connected || !session.isPublic) return;
+    _lastJamAnnounce = null;
+    try {
+      await addChatMessage('[JAM_END]:${jsonEncode({
+            'tag': 'SCROTIFY_JAM',
+            'sessionId': session.sessionId,
+            'pin': session.pinCode,
+            'timestamp': DateTime.now().millisecondsSinceEpoch,
+          })}');
+    } catch (e) {
+      debugPrint('NavidromeService.publishServerJamEnded error: $e');
+    }
+  }
+
   /// Descubre sesiones Jam activas anunciadas en este servidor Navidrome.
   Future<List<DiscoveredJamSession>> getServerActiveJams() async {
     if (!_connected) return [];
@@ -2421,6 +2437,19 @@ class NavidromeService with ChangeNotifier {
       final messages = await getChatMessages();
       final now = DateTime.now().millisecondsSinceEpoch;
 
+      // PIN -> momento en que el anfitrión cerró la sala.
+      final endedAt = <String, int>{};
+      for (final msg in messages) {
+        if (!msg.message.startsWith('[JAM_END]:')) continue;
+        try {
+          final data = jsonDecode(msg.message.substring('[JAM_END]:'.length))
+              as Map<String, dynamic>;
+          final pin = (data['pin'] as String?) ?? '';
+          final ts = (data['timestamp'] as num?)?.toInt() ?? 0;
+          if (pin.isNotEmpty && ts > (endedAt[pin] ?? 0)) endedAt[pin] = ts;
+        } catch (_) {}
+      }
+
       for (final msg in messages.reversed) {
         if (msg.message.startsWith('[JAM_LIVE]:')) {
           try {
@@ -2428,8 +2457,13 @@ class NavidromeService with ChangeNotifier {
             final data = jsonDecode(jsonStr) as Map<String, dynamic>;
             final ts = (data['timestamp'] as num?)?.toInt() ?? 0;
 
-            // Ignorar sesiones con más de 25 minutos sin actualización
-            if (data['isPublic'] != false && now - ts < 25 * 60 * 1000) {
+            final closedAt = endedAt[(data['pin'] as String?) ?? ''];
+            final closed = closedAt != null && closedAt >= ts;
+
+            // Ignorar sesiones cerradas o con más de 25 minutos sin actualización
+            if (!closed &&
+                data['isPublic'] != false &&
+                now - ts < 25 * 60 * 1000) {
               final host = (data['host'] as String?) ?? '127.0.0.1';
               final port = (data['port'] as num?)?.toInt() ?? 0;
               final pin = (data['pin'] as String?) ?? '';

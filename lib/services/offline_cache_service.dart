@@ -1,3 +1,4 @@
+import '../utils/app_data_dir.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -208,7 +209,7 @@ class SqfliteOfflineCacheMetadataStore implements OfflineCacheMetadataStore {
     if (_customDbPath != null) {
       path = _customDbPath!;
     } else {
-      final docDir = await getApplicationDocumentsDirectory();
+      final docDir = await getAppDataDirectory();
       path = p.join(docDir.path, dbName);
     }
 

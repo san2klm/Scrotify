@@ -1,3 +1,4 @@
+import '../utils/app_data_dir.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -5,7 +6,6 @@ import 'dart:io';
 import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
-import 'package:path_provider/path_provider.dart';
 
 import 'ffmpeg_waveform_decoder.dart';
 import 'pcm_waveform_analyzer.dart';
@@ -276,7 +276,7 @@ class AudioWaveformService implements WaveformService {
         }
         return cacheDirOverride;
       }
-      final docs = await getApplicationDocumentsDirectory();
+      final docs = await getAppDataDirectory();
       final dir = Directory('${docs.path}/$_cacheDirName');
       if (!await dir.exists()) {
         await dir.create(recursive: true);

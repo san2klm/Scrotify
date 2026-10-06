@@ -1,9 +1,9 @@
+import '../utils/app_data_dir.dart';
 import 'dart:convert';
 import 'dart:io';
 
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/foundation.dart';
-import 'package:path_provider/path_provider.dart';
 
 import '../models/jam_models.dart';
 import 'replay_gain.dart';
@@ -273,7 +273,7 @@ class SettingsController extends ChangeNotifier {
 
   Future<void> _load() async {
     try {
-      final dir = await getApplicationDocumentsDirectory();
+      final dir = await getAppDataDirectory();
       final file = File('${dir.path}/settings.json');
       if (!await file.exists()) return;
       final data =
@@ -307,7 +307,7 @@ class SettingsController extends ChangeNotifier {
 
   Future<void> _save() async {
     try {
-      final dir = await getApplicationDocumentsDirectory();
+      final dir = await getAppDataDirectory();
       final file = File('${dir.path}/settings.json');
       await file.writeAsString(jsonEncode({
         'wifiQuality': _wifiQuality.name,
