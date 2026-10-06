@@ -31,6 +31,10 @@ class RemoteJamService {
   String _endpoint = kDefaultRemoteJamEndpoint;
   String? _lastError;
 
+  /// Contraseña de sala (anfitrión al crear / invitado al unirse). Viaja solo
+  /// por canal TLS (`wss://`); el servidor guarda únicamente su hash.
+  String? roomPassword;
+
   OnRemoteStateSync? onStateSync;
   OnRemoteGuestJoined? onGuestJoined;
   OnRemoteGuestAction? onGuestAction;
@@ -187,6 +191,8 @@ class RemoteJamService {
         'pin': normalizedPin,
         'hostName': hostName,
         'initialState': fitStateToMessageLimit(initialState),
+        if (roomPassword != null && roomPassword!.isNotEmpty)
+          'roomPassword': roomPassword,
       }));
 
       timeoutTimer = Timer(const Duration(seconds: 6), () {
@@ -228,6 +234,8 @@ class RemoteJamService {
         'action': 'kick_guest',
         'pin': _pin,
         'guestName': guestName,
+        if (roomPassword != null && roomPassword!.isNotEmpty)
+          'roomPassword': roomPassword,
       }));
     } catch (e) {
       debugPrint('RemoteJamService.kickGuest error: $e');

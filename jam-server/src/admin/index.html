@@ -47,6 +47,7 @@ const LABELS = {
   roomIdleMs: 'Inactividad antes de cerrar sala (ms)', publicListingEnabled: 'Listado público de salas (/rooms)',
   chatEnabled: 'Chat ligero', persistentRoomsEnabled: 'Salas persistentes', webLinkEnabled: 'Enlaces web compartibles',
   publicUrl: 'URL pública (https://…)',
+  joinRateMax: 'Intentos de unión por IP y ventana', joinRateWindowMs: 'Ventana de intentos (ms)', pinFailMax: 'Fallos de PIN antes de bloquear IP',
 };
 
 function say(text, isErr) { const m = $('msg'); m.textContent = text || ''; m.className = isErr ? 'err' : 'muted'; }
@@ -111,6 +112,21 @@ async function render() {
       } }));
       v.append(card);
     } else if (tab === 'Seguridad') {
+      const st = await api('GET', 'settings'); defs = st.defs; values = st.values;
+      const sec = el('div', { className: 'card' }); const sIn = {};
+      for (const [k, d] of Object.entries(defs).filter(([, d]) => d.group === 'security')) {
+        const i = el('input', { type: 'number', value: values[k], min: d.min, max: d.max }); sIn[k] = i; sec.append(el('label', {}, LABELS[k] || k, i));
+      }
+      sec.append(el('button', { className: 'primary', textContent: 'Guardar', onclick: async () => {
+        const patch = {}; for (const [k, i] of Object.entries(sIn)) patch[k] = Number(i.value);
+        try { await api('PUT', 'settings', patch); say('Guardado.'); } catch (e) { say(e.message, true); }
+      } }), el('p', { className: 'muted', textContent: 'Bloqueo progresivo: 1 min, 2, 4… hasta 1 h por IP. Las cabeceras de proxy solo se respetan con TRUST_PROXY.' }));
+      v.append(sec);
+      const ips = await api('GET', 'blocked-ips'); const bl = el('div', { className: 'card' }, el('strong', { textContent: 'IPs bloqueadas' }));
+      const ipIn = el('input', { type: 'text', placeholder: '203.0.113.7' });
+      for (const b of ips.ips) bl.append(el('label', {}, b.ip + (b.reason ? ' — ' + b.reason : ''), el('button', { textContent: 'Quitar', onclick: async () => { try { await api('DELETE', 'blocked-ips?ip=' + encodeURIComponent(b.ip)); render(); } catch (e) { say(e.message, true); } } })));
+      bl.append(el('label', {}, ipIn, el('button', { className: 'primary', textContent: 'Bloquear', onclick: async () => { try { await api('POST', 'blocked-ips', { ip: ipIn.value }); render(); } catch (e) { say(e.message, true); } } })));
+      v.append(bl);
       const card = el('div', { className: 'card' }); const cur = el('input', { type: 'password', autocomplete: 'current-password' }), nxt = el('input', { type: 'password', autocomplete: 'new-password' });
       card.append(el('label', {}, 'Contraseña actual', cur), el('label', {}, 'Nueva contraseña', nxt),
         el('button', { className: 'primary', textContent: 'Cambiar contraseña', onclick: async () => {

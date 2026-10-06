@@ -582,3 +582,8 @@ curl http://scrotify-jam:8080/health
 ## Anexo: historial (Roadmap Fase 3)
 
 El historial (`JamHistory`) vive solo en la RAM del host; el servidor no guarda nada. Una pista entra si sonó ≥30 s o ≥50 %. `JamController.saveHistoryAsPlaylist` crea "Jam YYYY-MM-DD" en Navidrome. Pendiente: compartir snapshot con invitados.
+
+## Anexo: seguridad (Roadmap Fase 4)
+
+- Relay: `joinRateMax/joinRateWindowMs/pinFailMax` (panel `/admin` → Seguridad), bloqueo progresivo por IP, IPs bloqueadas, `TRUST_PROXY` para `CF-Connecting-IP`. `create_room.roomPassword` / `join_room.roomPassword`; `/rooms` y `check_room` exponen `hasPassword`.
+- LAN: `join_request.password`; fallos limitados por `JamFailureBlocker` (10/min).

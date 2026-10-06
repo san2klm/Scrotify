@@ -7,6 +7,7 @@ import 'package:flutter/foundation.dart';
 
 import '../models/jam_models.dart';
 import 'jam_network_platform.dart';
+import 'jam_security.dart';
 import 'jam_tls_identity.dart';
 import 'navidrome_service.dart';
 
@@ -122,6 +123,10 @@ class JamHostService {
   JamMode _mode = JamMode.synchronizedListening;
   final Set<String> _kickedNames = {};
   final Set<String> _kickedParticipantIds = {};
+
+  /// Contraseña opcional de la sala (solo en RAM del host).
+  String? roomPassword;
+  final JamFailureBlocker _joinFailures = JamFailureBlocker();
   bool _allowGuestControls = true;
   bool _allowGuestQueueManage = true;
   bool _isPublic = true;
@@ -373,7 +378,12 @@ class JamHostService {
               final rawPin = msg['pin'] as String?;
               final pin =
                   rawPin?.toUpperCase().replaceAll(RegExp(r'[^A-Z0-9]'), '');
+              if (_joinFailures.isBlocked()) {
+                _rejectJoin(socket, 'Demasiados intentos. Prueba más tarde.');
+                return;
+              }
               if (pin == null || pin != _pinCode?.value) {
+                _joinFailures.recordFailure();
                 _rejectJoin(socket, 'PIN incorrecto.');
                 return;
               }
@@ -387,6 +397,7 @@ class JamHostService {
                     ? _participantTokens[reconnectParticipantId]
                     : null;
                 if (reconnectParticipantId != null &&
+                    !_kickedParticipantIds.contains(reconnectParticipantId) &&
                     _participants.containsKey(reconnectParticipantId) &&
                     token != null &&
                     storedToken != null &&
@@ -434,6 +445,17 @@ class JamHostService {
               if (participantId != null) {
                 _rejectJoin(socket, 'Esta conexión ya está unida a la sesión.');
                 return;
+              }
+
+              // Contraseña de sala: misma respuesta que un PIN erróneo.
+              final expected = roomPassword;
+              if (expected != null && expected.isNotEmpty) {
+                final given = msg['password'];
+                if (given is! String || !constantTimeEquals(given, expected)) {
+                  _joinFailures.recordFailure();
+                  _rejectJoin(socket, 'PIN incorrecto.');
+                  return;
+                }
               }
 
               // El anfitrión cuenta dentro del límite configurado.
@@ -1135,6 +1157,8 @@ class JamHostService {
     _graceTimers.clear();
     _kickedNames.clear();
     _kickedParticipantIds.clear();
+    roomPassword = null;
+    _joinFailures.reset();
     hostParticipant = null;
     _lastInboundActivity.clear();
     _participantTokens.clear();

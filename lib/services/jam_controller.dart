@@ -55,6 +55,8 @@ class JamController extends ChangeNotifier {
   final Set<String> _pinnedIds = {};
   final Map<String, int> _myVotes = {}; // lado invitado (optimista)
   static const int _maxPendingRequests = 50;
+  bool _hasRoomPassword = false;
+  bool get hasRoomPassword => _hasRoomPassword;
 
   // Historial (solo en RAM del host).
   final JamHistory _history = JamHistory();
@@ -934,6 +936,7 @@ class JamController extends ChangeNotifier {
     int maxParticipants = 0,
     String? initialPlaylistId,
     String? customName,
+    String? roomPassword,
     JamQueueMode queueMode = JamQueueMode.free,
     int fairTurnsPerPerson = 1,
     bool requireApproval = false,
@@ -971,6 +974,9 @@ class JamController extends ChangeNotifier {
     _remoteParticipants.clear();
     _currentTrackAddedBy = _localParticipant;
 
+    final password = roomPassword?.trim();
+    _hasRoomPassword = password != null && password.isNotEmpty;
+    _remoteService.roomPassword = _hasRoomPassword ? password : null;
     await _hostService.start(
       sessionId: sessionId,
       pinCode: pinCode,
@@ -982,6 +988,7 @@ class JamController extends ChangeNotifier {
       maxParticipants: maxParticipants,
       initialPlaylistId: initialPlaylistId,
     );
+    _hostService.roomPassword = _hasRoomPassword ? password : null;
 
     _role = JamRole.host;
     _rebuildHostQueueFromPlayer();
@@ -1203,9 +1210,11 @@ class JamController extends ChangeNotifier {
     String? fallbackHost,
     int? fallbackPort,
     String? tlsFingerprint,
+    String? password,
   }) async {
     await leaveOrEndSession();
     lastJoinError = null;
+    _guestService.roomPassword = password;
 
     String normalizedPin;
     try {
@@ -1366,6 +1375,7 @@ class JamController extends ChangeNotifier {
     DiscoveredJamSession disc, {
     String? customName,
     int? customColor,
+    String? password,
   }) async {
     final remoteHost = _remoteEndpoint.host;
     if (disc.host == remoteHost ||
@@ -1375,6 +1385,7 @@ class JamController extends ChangeNotifier {
         pin: disc.pin,
         customName: customName,
         customColor: customColor,
+        password: password,
       );
     }
     // UDP discovery is intentionally unauthenticated. It can advertise a
@@ -1390,6 +1401,7 @@ class JamController extends ChangeNotifier {
     String uri, {
     String? customName,
     int? customColor,
+    String? password,
   }) async {
     final data = JamQrData.fromUri(uri);
     if (data == null) return false;
@@ -1402,6 +1414,7 @@ class JamController extends ChangeNotifier {
       fallbackHost: data.remoteHost,
       fallbackPort: data.remotePort,
       tlsFingerprint: data.tlsFingerprint,
+      password: password,
     );
   }
 
@@ -1409,6 +1422,7 @@ class JamController extends ChangeNotifier {
     String pin, {
     String? customName,
     int? customColor,
+    String? password,
   }) async {
     _isScanningRadar = true;
     notifyListeners();
@@ -1430,7 +1444,9 @@ class JamController extends ChangeNotifier {
       String? lanWarning;
       if (session != null) {
         final ok = await joinDiscovered(session,
-            customName: customName, customColor: customColor);
+            customName: customName,
+            customColor: customColor,
+            password: password);
         if (ok) return true;
         lanWarning = lastJoinError;
       }
@@ -1440,6 +1456,7 @@ class JamController extends ChangeNotifier {
         pin: pin,
         customName: customName,
         customColor: customColor,
+        password: password,
       );
       if (!remoteOk && lanWarning != null) {
         lastJoinError = lanWarning;
@@ -1458,9 +1475,11 @@ class JamController extends ChangeNotifier {
     String? customName,
     int? customColor,
     String? customEndpoint,
+    String? password,
   }) async {
     await leaveOrEndSession();
     lastJoinError = null;
+    _remoteService.roomPassword = password;
 
     String normalizedPin;
     try {
@@ -1742,6 +1761,9 @@ class JamController extends ChangeNotifier {
 
     _player.removeListener(_onPlayerChangedAsHost);
     if (_role == JamRole.host) _trackHistory(finalize: true);
+    _guestService.roomPassword = null;
+    _remoteService.roomPassword = null;
+    _hasRoomPassword = false;
     _remoteCreateFailures = 0;
     _nextRemoteCreateAt = null;
 

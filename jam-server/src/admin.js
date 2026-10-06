@@ -1,5 +1,6 @@
 import crypto from 'node:crypto';
 import { readFileSync } from 'node:fs';
+import net from 'node:net';
 import { SETTING_DEFS } from './config.js';
 
 const SESSION_TTL_MS = 8 * 60 * 60 * 1000;
@@ -172,6 +173,21 @@ export function createAdmin({ store, adminPassword, getStatus, loginMaxFailures 
         const applied = store.update(body);
         logs?.push(`Ajustes actualizados: ${Object.keys(applied).join(', ')}`);
         json(response, 200, { values: store.all() });
+      } else if (request.method === 'GET' && route === 'blocked-ips') {
+        json(response, 200, { ips: store.listBlockedIps() });
+      } else if (request.method === 'POST' && route === 'blocked-ips') {
+        const body = await readBody(request);
+        if (typeof body.ip !== 'string' || net.isIP(body.ip.trim()) === 0) {
+          return json(response, 400, { error: 'IP inválida' }), true;
+        }
+        store.blockIp(body.ip.trim(), body.reason);
+        logs?.push(`IP bloqueada: ${body.ip.trim()}`);
+        json(response, 200, { ips: store.listBlockedIps() });
+      } else if (request.method === 'DELETE' && route === 'blocked-ips') {
+        const ip = url.searchParams.get('ip') ?? '';
+        store.unblockIp(ip);
+        logs?.push(`IP desbloqueada: ${ip}`);
+        json(response, 200, { ips: store.listBlockedIps() });
       } else if (request.method === 'POST' && route === 'password') {
         const body = await readBody(request);
         if (!checkPassword(body.current)) return json(response, 401, { error: 'Contraseña actual incorrecta' }), true;

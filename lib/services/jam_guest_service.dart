@@ -344,6 +344,9 @@ class JamGuestService {
   // Conexión y Gestión de Sesión WebSocket
   // ---------------------------------------------------------------------------
 
+  /// Contraseña de sala a enviar al unirse (nunca se persiste ni se loguea).
+  String? roomPassword;
+
   Future<bool> connect({
     required String host,
     required int port,
@@ -719,6 +722,7 @@ class JamGuestService {
         'avatarColorValue': avatarColorValue,
         if (participantId != null) 'participantId': participantId,
         if (token != null) 'token': token,
+        if (token == null && roomPassword != null) 'password': roomPassword,
       });
 
       final connected = await completer.future.timeout(

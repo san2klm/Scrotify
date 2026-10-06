@@ -1,9 +1,11 @@
+import crypto from 'node:crypto';
 import { mkdirSync } from 'node:fs';
 import http from 'node:http';
 import { WebSocketServer, WebSocket } from 'ws';
 
 import { createAdmin } from './admin.js';
 import { openStore, SETTING_DEFS } from './config.js';
+import { createGuard } from './guard.js';
 
 export const PROTOCOL_VERSION = 2;
 const MAX_NAME_LENGTH = 48;
@@ -103,6 +105,17 @@ function normalizeState(value, limits, existingState = null) {
   return res;
 }
 
+function hashRoomPassword(password, salt = crypto.randomBytes(16)) {
+  return { salt, hash: crypto.scryptSync(password, salt, 32) };
+}
+
+function checkRoomPassword(room, password) {
+  if (!room.password) return true;
+  if (typeof password !== 'string') return false;
+  const { hash } = hashRoomPassword(password, room.password.salt);
+  return crypto.timingSafeEqual(hash, room.password.hash);
+}
+
 function send(socket, message) {
   if (socket.readyState === WebSocket.OPEN) {
     socket.send(JSON.stringify(message));
@@ -154,6 +167,8 @@ export function createJamServer({
   const logs = createLogBuffer();
   const rooms = new Map();
   const socketRooms = new WeakMap();
+  const socketIps = new WeakMap();
+  const guard = createGuard();
   const admin = createAdmin({
     store,
     adminPassword,
@@ -228,6 +243,7 @@ export function createJamServer({
           remoteHost: publicHost,
           remotePort: publicPort,
           isPublic: true,
+          hasPassword: !!room.password,
           updatedAt: room.updatedAt,
         });
       }
@@ -282,20 +298,60 @@ export function createJamServer({
     if (!pin || !hostName || !state) return serverError(socket, 'Datos de sala inválidos.');
     if (rooms.has(pin)) return serverError(socket, 'Ese PIN ya está en uso.');
     if (rooms.size >= limits.maxRooms) return serverError(socket, 'El servidor alcanzó el límite de salas.');
-    const room = { pin, host: socket, hostName, state, guests: new Set(), updatedAt: Date.now() };
+    let password = null;
+    if (message.roomPassword !== undefined && message.roomPassword !== null && message.roomPassword !== '') {
+      if (typeof message.roomPassword !== 'string' || message.roomPassword.length < 4 || message.roomPassword.length > 128) {
+        return serverError(socket, 'Contraseña de sala inválida (4–128 caracteres).');
+      }
+      password = hashRoomPassword(message.roomPassword);
+    }
+    const room = {
+      pin, host: socket, hostName, state, guests: new Set(), updatedAt: Date.now(),
+      password, banned: new Set(),
+    };
     rooms.set(pin, room);
     socketRooms.set(socket, { pin, role: 'host' });
     send(socket, { status: 'room_created', pin });
     console.info('Jam room created');
   }
 
+  /// Aplica ventana de intentos + bloqueo progresivo. `false` si hay que
+  /// rechazar (ya se respondió al cliente).
+  function admitAttempt(socket) {
+    const ip = socketIps.get(socket) ?? 'unknown';
+    if (store.isBlockedIp(ip)) {
+      serverError(socket, 'Acceso denegado.');
+      return false;
+    }
+    const gate = guard.attempt(ip, { max: limits.joinRateMax, windowMs: limits.joinRateWindowMs });
+    if (!gate.ok) {
+      send(socket, { status: 'error', message: 'Demasiados intentos. Prueba más tarde.', retryAfterMs: gate.retryMs });
+      return false;
+    }
+    return true;
+  }
+
+  function failAttempt(socket) {
+    guard.fail(socketIps.get(socket) ?? 'unknown', { max: limits.pinFailMax });
+  }
+
   function joinRoom(socket, message) {
     if (socketRooms.has(socket)) return serverError(socket, 'Esta conexión ya pertenece a una sala.');
+    if (!admitAttempt(socket)) return;
     const pin = normalizePin(message.pin);
     const guestName = normalizeName(message.guestName, limits.maxNameLength);
     const room = pin ? rooms.get(pin) : null;
-    if (!room || !guestName) return serverError(socket, 'Sala no encontrada o PIN inválido.');
+    // Misma respuesta para PIN inexistente y contraseña errónea: no revelar cuál.
+    if (!room || !guestName || !checkRoomPassword(room, message.roomPassword)) {
+      failAttempt(socket);
+      return serverError(socket, 'Sala no encontrada o PIN inválido.');
+    }
+    if (room.banned.has(guestName.toLowerCase())) {
+      failAttempt(socket);
+      return serverError(socket, 'Sala no encontrada o PIN inválido.');
+    }
     if (room.guests.size + 1 >= limits.maxParticipants) return serverError(socket, 'La sala alcanzó el límite de participantes.');
+    guard.success(socketIps.get(socket) ?? 'unknown');
     const guest = { socket, name: guestName };
     room.guests.add(guest);
     room.updatedAt = Date.now();
@@ -345,6 +401,7 @@ export function createJamServer({
     const guestName = normalizeName(message.guestName, limits.maxNameLength);
     if (!guestName) return serverError(socket, 'Nombre de invitado inválido.');
     let found = false;
+    room.banned.add(guestName.toLowerCase());
     for (const guest of room.guests) {
       if (guest.name === guestName) {
         found = true;
@@ -361,21 +418,26 @@ export function createJamServer({
   }
 
   function checkRoom(socket, message) {
+    if (!admitAttempt(socket)) return;
     const pin = normalizePin(message.pin);
     const room = pin ? rooms.get(pin) : null;
     if (!room) {
+      failAttempt(socket);
       return send(socket, { status: 'not_found', pin });
     }
+    const unlocked = checkRoomPassword(room, message.roomPassword);
     return send(socket, {
       status: 'room_found',
       pin: room.pin,
       hostName: room.hostName,
-      state: room.state,
+      ...(unlocked ? { state: room.state } : {}),
       participantCount: room.guests.size + 1,
+      hasPassword: !!room.password,
     });
   }
 
-  websocketServer.on('connection', (socket) => {
+  websocketServer.on('connection', (socket, request) => {
+    socketIps.set(socket, clientIp(request, trustProxy));
     socket.on('message', (raw, isBinary) => {
       if (isBinary) return serverError(socket, 'Sólo se aceptan mensajes JSON.');
       let message;

@@ -464,3 +464,120 @@ test('relays queue-mode fields and drops invalid ones', async () => {
     guest.close();
   }
 });
+
+// --- Fase 4: seguridad -------------------------------------------------------
+
+async function ask(socket, payload) {
+  const reply = nextMessage(socket);
+  socket.send(JSON.stringify(payload));
+  return reply;
+}
+
+async function makeRoom(endpoint, pin, extra = {}) {
+  const host = await connect(endpoint);
+  const created = await ask(host, { action: 'create_room', pin, hostName: 'H', initialState, ...extra });
+  assert.equal(created.status, 'room_created');
+  return host;
+}
+
+test('PIN brute force from one IP gets blocked, even for the right PIN', async () => {
+  const server = await startServer({ pinFailMax: 3, joinRateMax: 100 });
+  const endpoint = `ws://127.0.0.1:${server.port}`;
+  const host = await makeRoom(endpoint, 'RIGHT1');
+  const attacker = await connect(endpoint);
+  try {
+    for (let i = 0; i < 3; i++) {
+      const r = await ask(attacker, { action: 'join_room', pin: `BAD00${i}`, guestName: 'x' });
+      assert.equal(r.message, 'Sala no encontrada o PIN inválido.');
+    }
+    const blocked = await ask(attacker, { action: 'join_room', pin: 'RIGHT1', guestName: 'x' });
+    assert.equal(blocked.status, 'error');
+    assert.match(blocked.message, /Demasiados intentos/);
+    assert.ok(blocked.retryAfterMs > 0);
+  } finally {
+    host.close();
+    attacker.close();
+  }
+});
+
+test('join rate limit applies per IP window', async () => {
+  const server = await startServer({ joinRateMax: 2, pinFailMax: 1000 });
+  const endpoint = `ws://127.0.0.1:${server.port}`;
+  const s = await connect(endpoint);
+  try {
+    assert.equal((await ask(s, { action: 'check_room', pin: 'AAA111' })).status, 'not_found');
+    assert.equal((await ask(s, { action: 'check_room', pin: 'AAA111' })).status, 'not_found');
+    assert.match((await ask(s, { action: 'check_room', pin: 'AAA111' })).message, /Demasiados/);
+  } finally {
+    s.close();
+  }
+});
+
+test('password-protected rooms reject without it and answer generically', async () => {
+  const server = await startServer();
+  const endpoint = `ws://127.0.0.1:${server.port}`;
+  const host = await makeRoom(endpoint, 'PWD123', { roomPassword: 'secreto1' });
+  const g1 = await connect(endpoint);
+  const g2 = await connect(endpoint);
+  const g3 = await connect(endpoint);
+  try {
+    const missing = await ask(g1, { action: 'join_room', pin: 'PWD123', guestName: 'a' });
+    const unknown = await ask(g2, { action: 'join_room', pin: 'ZZZ999', guestName: 'a' });
+    assert.equal(missing.message, unknown.message); // no revela si el PIN existe
+
+    const peek = await ask(g1, { action: 'check_room', pin: 'PWD123' });
+    assert.equal(peek.hasPassword, true);
+    assert.equal(peek.state, undefined);
+
+    const ok = await ask(g3, { action: 'join_room', pin: 'PWD123', guestName: 'b', roomPassword: 'secreto1' });
+    assert.equal(ok.status, 'joined');
+    const rooms = (await http(server, 'GET', '/rooms')).json;
+    assert.equal(rooms[0].hasPassword, true);
+    assert.equal(JSON.stringify(rooms).includes('secreto1'), false);
+  } finally {
+    host.close(); g1.close(); g2.close(); g3.close();
+  }
+});
+
+test('a kicked guest cannot rejoin the room under the same name', async () => {
+  const server = await startServer();
+  const endpoint = `ws://127.0.0.1:${server.port}`;
+  const host = await makeRoom(endpoint, 'BAN123');
+  const guest = await connect(endpoint);
+  const again = await connect(endpoint);
+  try {
+    assert.equal((await ask(guest, { action: 'join_room', pin: 'BAN123', guestName: 'Pepe' })).status, 'joined');
+    await nextMessage(host); // guest_joined
+    host.send(JSON.stringify({ action: 'kick_guest', pin: 'BAN123', guestName: 'Pepe' }));
+    await new Promise((r) => setTimeout(r, 50));
+    const retry = await ask(again, { action: 'join_room', pin: 'BAN123', guestName: 'pepe' });
+    assert.equal(retry.status, 'error');
+  } finally {
+    host.close(); guest.close(); again.close();
+  }
+});
+
+test('admin-blocked IPs are refused and management needs auth/CSRF', async () => {
+  const server = await startServer({ adminPassword: 'supersecret1' });
+  const endpoint = `ws://127.0.0.1:${server.port}`;
+  const host = await makeRoom(endpoint, 'IPB123');
+  const { cookie, csrf } = await adminLogin(server);
+  try {
+    assert.equal((await http(server, 'POST', '/admin/api/blocked-ips', { cookie, body: { ip: '127.0.0.1' } })).status, 403);
+    assert.equal((await http(server, 'POST', '/admin/api/blocked-ips', { cookie, csrf, body: { ip: 'nope' } })).status, 400);
+    const added = await http(server, 'POST', '/admin/api/blocked-ips', { cookie, csrf, body: { ip: '127.0.0.1', reason: 'test' } });
+    assert.equal(added.json.ips[0].ip, '127.0.0.1');
+
+    const guest = await connect(endpoint);
+    const r = await ask(guest, { action: 'join_room', pin: 'IPB123', guestName: 'g' });
+    assert.equal(r.message, 'Acceso denegado.');
+    guest.close();
+
+    await http(server, 'DELETE', '/admin/api/blocked-ips?ip=127.0.0.1', { cookie, csrf });
+    const guest2 = await connect(endpoint);
+    assert.equal((await ask(guest2, { action: 'join_room', pin: 'IPB123', guestName: 'g' })).status, 'joined');
+    guest2.close();
+  } finally {
+    host.close();
+  }
+});

@@ -164,3 +164,9 @@
 ## Jam Roadmap — Fase 3 (2026-10-06): historial + guardar como playlist
 - [x] `jam_history.dart` (umbral 30 s / 50 %, resumen, filtro por participante; 5 tests), registro en el host, diálogo con "Guardar como playlist" (`createPlaylist` + `updatePlaylist`). Historial en RAM del host; se conserva tras finalizar hasta la siguiente Jam.
 - [ ] No hecho: `history_snapshot` para invitados y "guardar mis aportaciones" del invitado (el historial solo vive en el host).
+
+## Jam Roadmap — Fase 4 (2026-10-06): seguridad
+- [x] Servidor: rate limit por IP (ventana + bloqueo progresivo 1 min→1 h) en `join_room`/`check_room`, IPs bloqueadas por admin (SQLite + panel), respuesta genérica PIN/contraseña, contraseña de sala (scrypt+sal en RAM; `check_room` no revela estado sin ella), baneo por nombre tras kick. 19 tests node.
+- [x] Cliente: contraseña de sala (crear/unirse, LAN y nube), `JamFailureBlocker` en el host LAN, reconexión rechazada para IDs expulsados.
+- Desvío: el relay recibe la contraseña en claro por TLS y guarda solo su hash (el roadmap decía que el host enviaba el hash; así no hay que compartir sal con los invitados).
+- Límite documentado: el ban por nombre/ID es evadible; el ban por IP es solo del admin.

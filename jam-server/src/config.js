@@ -13,6 +13,9 @@ export const SETTING_DEFS = {
   persistentRoomsEnabled: { type: 'bool', default: false, group: 'features' },
   webLinkEnabled: { type: 'bool', default: false, group: 'features' },
   publicUrl: { type: 'url', default: '', group: 'general' },
+  joinRateMax: { type: 'int', default: 10, min: 1, max: 1000, group: 'security' },
+  joinRateWindowMs: { type: 'int', default: 60 * 1000, min: 1000, max: 3600 * 1000, group: 'security' },
+  pinFailMax: { type: 'int', default: 10, min: 1, max: 1000, group: 'security' },
 };
 
 export function coerceSetting(key, value) {
@@ -50,6 +53,7 @@ export function openStore(path = ':memory:', overrides = {}) {
   const db = new DatabaseSync(path);
   db.exec(`
     CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+    CREATE TABLE IF NOT EXISTS blocked_ips (ip TEXT PRIMARY KEY, reason TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL);
     CREATE TABLE IF NOT EXISTS admin (id INTEGER PRIMARY KEY CHECK (id = 1), salt TEXT NOT NULL, hash TEXT NOT NULL);
   `);
   const getRow = db.prepare('SELECT value FROM settings WHERE key = ?');
@@ -90,6 +94,12 @@ export function openStore(path = ':memory:', overrides = {}) {
     setAdmin: (salt, hash) => db.prepare(
       'INSERT INTO admin (id, salt, hash) VALUES (1, ?, ?) ON CONFLICT(id) DO UPDATE SET salt = excluded.salt, hash = excluded.hash',
     ).run(salt, hash),
+    listBlockedIps: () => db.prepare('SELECT ip, reason, created_at AS createdAt FROM blocked_ips ORDER BY created_at DESC').all(),
+    isBlockedIp: (ip) => !!db.prepare('SELECT 1 AS x FROM blocked_ips WHERE ip = ?').get(ip),
+    blockIp: (ip, reason = '') => db.prepare(
+      'INSERT INTO blocked_ips (ip, reason, created_at) VALUES (?, ?, ?) ON CONFLICT(ip) DO UPDATE SET reason = excluded.reason',
+    ).run(ip, String(reason).slice(0, 200), Date.now()),
+    unblockIp: (ip) => db.prepare('DELETE FROM blocked_ips WHERE ip = ?').run(ip),
     close: () => db.close(),
   };
 }

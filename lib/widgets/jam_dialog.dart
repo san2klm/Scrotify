@@ -54,6 +54,8 @@ class _JamDialogState extends State<JamDialog>
   late TabController _tabController;
   final TextEditingController _pinController = TextEditingController();
   final TextEditingController _nameController = TextEditingController();
+  final TextEditingController _roomPasswordController = TextEditingController();
+  final TextEditingController _joinPasswordController = TextEditingController();
   final TextEditingController _directHostController = TextEditingController();
   final TextEditingController _directPortController =
       TextEditingController(text: '$kJamHostPort');
@@ -89,6 +91,8 @@ class _JamDialogState extends State<JamDialog>
   void dispose() {
     _tabController.dispose();
     _pinController.dispose();
+    _roomPasswordController.dispose();
+    _joinPasswordController.dispose();
     _nameController.dispose();
     _directHostController.dispose();
     _directPortController.dispose();
@@ -1011,6 +1015,18 @@ class _JamDialogState extends State<JamDialog>
                   onChanged: (value) =>
                       setState(() => _allowGuestQueueManage = value),
                 ),
+                TextField(
+                  controller: _roomPasswordController,
+                  obscureText: true,
+                  style: TextStyle(color: context.textPrimary, fontSize: 13),
+                  decoration: InputDecoration(
+                    labelText: 'Contraseña de la sala (opcional)',
+                    labelStyle: TextStyle(color: context.textMuted),
+                    helperText:
+                        'Se envía solo por conexión cifrada; el servidor guarda su hash.',
+                  ),
+                ),
+                const SizedBox(height: 8),
                 DropdownButtonFormField<JamQueueMode>(
                   initialValue: _queueMode == JamQueueMode.approval
                       ? JamQueueMode.free
@@ -1112,6 +1128,7 @@ class _JamDialogState extends State<JamDialog>
                       queueMode: _queueMode,
                       fairTurnsPerPerson: _fairTurns,
                       requireApproval: _requireApproval,
+                      roomPassword: _roomPasswordController.text,
                       customName: _nameController.text,
                     );
                   },
@@ -1148,6 +1165,17 @@ class _JamDialogState extends State<JamDialog>
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         // Ingreso Rápido por PIN
+        TextField(
+          controller: _joinPasswordController,
+          obscureText: true,
+          style: TextStyle(color: context.textPrimary, fontSize: 13),
+          decoration: InputDecoration(
+            isDense: true,
+            labelText: 'Contraseña de la sala (si tiene)',
+            labelStyle: TextStyle(color: context.textMuted, fontSize: 12),
+          ),
+        ),
+        const SizedBox(height: 8),
         Row(
           children: [
             Expanded(
@@ -1198,7 +1226,10 @@ class _JamDialogState extends State<JamDialog>
               onPressed: () async {
                 final pin = _pinController.text.trim();
                 if (pin.length >= 6) {
-                  final ok = await jam.joinByPin(pin);
+                  final ok = await jam.joinByPin(pin,
+                      password: _joinPasswordController.text.isEmpty
+                          ? null
+                          : _joinPasswordController.text);
                   if (!ok && mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
@@ -1420,7 +1451,10 @@ class _JamDialogState extends State<JamDialog>
                   if (raw != null && raw.startsWith('scrotify://jam')) {
                     _scannerController?.stop();
                     setState(() => _isCameraActive = false);
-                    final ok = await jam.joinByQr(raw);
+                    final ok = await jam.joinByQr(raw,
+                        password: _joinPasswordController.text.isEmpty
+                            ? null
+                            : _joinPasswordController.text);
                     if (!ok && mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
