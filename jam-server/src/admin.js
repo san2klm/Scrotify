@@ -173,6 +173,27 @@ export function createAdmin({ store, adminPassword, getStatus, loginMaxFailures 
         const applied = store.update(body);
         logs?.push(`Ajustes actualizados: ${Object.keys(applied).join(', ')}`);
         json(response, 200, { values: store.all() });
+      } else if (request.method === 'GET' && route === 'persistent-rooms') {
+        json(response, 200, { rooms: store.listPersistentRooms() });
+      } else if (request.method === 'POST' && route === 'persistent-rooms') {
+        const body = await readBody(request);
+        const pin = typeof body.pin === 'string' ? body.pin.toUpperCase().replace(/[^A-Z0-9]/g, '') : '';
+        // Mismo alfabeto que genera el cliente (sin 0/1/I/O) para que el PIN sea válido en la app.
+        if (!/^[A-HJ-NP-Z2-9]{6}$/.test(pin)) return json(response, 400, { error: 'PIN inválido (6 caracteres sin 0, 1, I, O)' }), true;
+        const name = typeof body.name === 'string' ? body.name.trim().slice(0, 48) : '';
+        if (!name) return json(response, 400, { error: 'Nombre obligatorio' }), true;
+        const idle = body.idleExpiryMs === undefined ? 0 : body.idleExpiryMs;
+        if (!Number.isInteger(idle) || idle < 0) return json(response, 400, { error: 'idleExpiryMs inválido (0 = nunca)' }), true;
+        if (store.getPersistentRoom(pin)) return json(response, 409, { error: 'Ese PIN ya es persistente' }), true;
+        const ownerToken = crypto.randomBytes(16).toString('hex');
+        const ownerSalt = crypto.randomBytes(16).toString('hex');
+        store.addPersistentRoom({ pin, name, ownerSalt, ownerHash: scrypt(ownerToken, ownerSalt), idleExpiryMs: idle });
+        logs?.push(`Sala persistente creada: ${pin}`);
+        // El token solo se muestra ahora; se guarda únicamente su hash.
+        json(response, 200, { pin, ownerToken, rooms: store.listPersistentRooms() });
+      } else if (request.method === 'DELETE' && route === 'persistent-rooms') {
+        store.deletePersistentRoom(url.searchParams.get('pin') ?? '');
+        json(response, 200, { rooms: store.listPersistentRooms() });
       } else if (request.method === 'GET' && route === 'blocked-ips') {
         json(response, 200, { ips: store.listBlockedIps() });
       } else if (request.method === 'POST' && route === 'blocked-ips') {

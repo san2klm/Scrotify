@@ -114,6 +114,19 @@ function normalizeState(value, limits, existingState = null) {
   return res;
 }
 
+function sha256(value) {
+  return crypto.createHash('sha256').update(value).digest();
+}
+
+function newToken() {
+  return crypto.randomBytes(16).toString('hex'); // 128 bits
+}
+
+function tokenMatches(token, expectedHash) {
+  if (typeof token !== 'string' || !expectedHash) return false;
+  return crypto.timingSafeEqual(sha256(token), expectedHash);
+}
+
 function hashRoomPassword(password, salt = crypto.randomBytes(16)) {
   return { salt, hash: crypto.scryptSync(password, salt, 32) };
 }
@@ -126,7 +139,7 @@ function checkRoomPassword(room, password) {
 }
 
 function send(socket, message) {
-  if (socket.readyState === WebSocket.OPEN) {
+  if (socket && socket.readyState === WebSocket.OPEN) {
     socket.send(JSON.stringify(message));
   }
 }
@@ -201,6 +214,35 @@ export function createJamServer({
       websocketServer.options.maxPayload = limits.maxMessageBytes;
       return;
     }
+    if (request.method === 'GET' && path === '/.well-known/assetlinks.json' && limits.assetLinksJson) {
+      response.writeHead(200, { 'content-type': 'application/json' });
+      response.end(limits.assetLinksJson);
+      return;
+    }
+    if (request.method === 'GET' && path === '/.well-known/apple-app-site-association' && limits.appleAppSiteAssociation) {
+      response.writeHead(200, { 'content-type': 'application/json' });
+      response.end(limits.appleAppSiteAssociation);
+      return;
+    }
+    const linkMatch = path?.match(/^\/j\/([A-Za-z0-9-]{1,12})$/);
+    if (request.method === 'GET' && linkMatch && limits.webLinkEnabled) {
+      const code = normalizePin(linkMatch[1]);
+      if (!code) {
+        response.writeHead(404);
+        response.end();
+        return;
+      }
+      const server = limits.publicUrl ? new URL(limits.publicUrl).host : (request.headers.host ?? '');
+      const deep = `scrotify://join?code=${code}&server=${encodeURIComponent(server)}`;
+      response.writeHead(200, {
+        'content-type': 'text/html; charset=utf-8',
+        'content-security-policy': "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; base-uri 'none'",
+        'x-frame-options': 'DENY',
+        'referrer-policy': 'no-referrer',
+      });
+      response.end(`<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Unirse a la Jam</title><style>body{font:16px system-ui;background:#121212;color:#eee;text-align:center;padding:48px 16px}a.b{display:inline-block;background:#1db954;color:#000;padding:12px 24px;border-radius:24px;text-decoration:none;margin:16px}code{font-size:28px;letter-spacing:4px}</style></head><body><h1>Te invitaron a una Jam de Scrotify</h1><p>PIN de la sala</p><p><code>${code}</code></p><a class="b" href="${deep}">Abrir en Scrotify</a><p>¿No tienes la app? Instala Scrotify, abre <b>Jam → Unirse</b> e introduce el PIN.</p><script>setTimeout(function(){location.href=${JSON.stringify(deep)}},300)</script></body></html>`);
+      return;
+    }
     if (request.method === 'GET' && path === '/api/capabilities') {
       response.writeHead(200, { 'content-type': 'application/json', 'access-control-allow-origin': '*' });
       response.end(JSON.stringify({
@@ -272,15 +314,66 @@ export function createJamServer({
   });
   logs.push('Servidor iniciado');
 
+  const PERSISTED_CONFIG_KEYS = ['allowGuestControls', 'allowGuestQueueManage', 'queueMode', 'fairTurnsPerPerson', 'requireApproval', 'mode'];
+
+  /// Persiste solo la configuración de una sala persistente (nunca qué suena).
+  function persistRoomConfig(room) {
+    if (!room.persistent) return;
+    const config = {};
+    for (const key of PERSISTED_CONFIG_KEYS) if (room.state?.[key] !== undefined) config[key] = room.state[key];
+    store.touchPersistentRoom(room.pin, config);
+  }
+
   function closeRoom(room, reason = 'El anfitrión ha finalizado la sesión Jam') {
     if (rooms.get(room.pin) !== room) return;
     rooms.delete(room.pin);
+    clearTimeout(room.failoverTimer);
+    persistRoomConfig(room);
     for (const guest of room.guests) {
       send(guest.socket, { event: 'room_closed', message: reason });
       guest.socket.close(1000, 'Room closed');
     }
     room.guests.clear();
-    console.info(`Jam room closed (${room.guests.size} guests)`);
+    console.info('Jam room closed');
+  }
+
+  function roster(room) {
+    return [...room.guests].map((g) => ({ id: g.id, name: g.name }));
+  }
+
+  /// Convierte a [guest] en anfitrión: recibe estado, roster y un hostToken nuevo.
+  function promoteGuest(room, guest, reason) {
+    room.guests.delete(guest);
+    clearTimeout(room.failoverTimer);
+    room.host = guest.socket;
+    room.hostName = guest.name;
+    room.hostGone = false;
+    const hostToken = newToken();
+    room.hostTokenHash = sha256(hostToken);
+    socketRooms.set(guest.socket, { pin: room.pin, role: 'host' });
+    room.updatedAt = Date.now();
+    send(guest.socket, {
+      event: 'host_changed', youAreHost: true, reason, hostToken,
+      hostName: room.hostName, hostId: guest.id, state: room.state, guests: roster(room),
+    });
+    for (const other of room.guests) {
+      send(other.socket, { event: 'host_changed', youAreHost: false, reason, hostName: room.hostName, hostId: guest.id });
+    }
+    logs.push(`Anfitrión cambiado (${reason})`);
+  }
+
+  function startFailoverTimer(room) {
+    clearTimeout(room.failoverTimer);
+    room.failoverTimer = setTimeout(() => {
+      if (rooms.get(room.pin) !== room || !room.hostGone) return;
+      // Solo se promueve si los invitados pueden gestionar la cola (el host lo permitió).
+      const eligible = room.state?.allowGuestQueueManage !== false
+        ? [...room.guests].sort((a, b) => a.joinedAt - b.joinedAt)[0]
+        : null;
+      if (eligible) promoteGuest(room, eligible, 'failover');
+      else closeRoom(room, 'El anfitrión se desconectó y no hay quien lo sustituya.');
+    }, limits.hostFailoverMs);
+    room.failoverTimer.unref?.();
   }
 
   function removeSocket(socket) {
@@ -290,6 +383,13 @@ export function createJamServer({
     const room = rooms.get(membership.pin);
     if (!room) return;
     if (membership.role === 'host' && room.host === socket) {
+      if (room.failover && limits.hostFailoverMs > 0 && room.guests.size > 0) {
+        room.host = null;
+        room.hostGone = true;
+        for (const g of room.guests) send(g.socket, { event: 'host_away', failoverMs: limits.hostFailoverMs });
+        startFailoverTimer(room);
+        return;
+      }
       closeRoom(room);
       return;
     }
@@ -299,6 +399,13 @@ export function createJamServer({
     }
   }
 
+  function ownerTokenValid(persistent, token) {
+    if (typeof token !== 'string') return false;
+    const given = crypto.scryptSync(token, persistent.ownerSalt, 64).toString('hex');
+    return given.length === persistent.ownerHash.length &&
+      crypto.timingSafeEqual(Buffer.from(given, 'hex'), Buffer.from(persistent.ownerHash, 'hex'));
+  }
+
   function createRoom(socket, message) {
     if (socketRooms.has(socket)) return serverError(socket, 'Esta conexión ya pertenece a una sala.');
     const pin = normalizePin(message.pin);
@@ -306,6 +413,12 @@ export function createJamServer({
     const state = normalizeState(message.initialState, limits);
     if (!pin || !hostName || !state) return serverError(socket, 'Datos de sala inválidos.');
     if (rooms.has(pin)) return serverError(socket, 'Ese PIN ya está en uso.');
+    // PIN reservado por una sala persistente: solo su propietario puede reclamarlo.
+    store.purgeExpiredPersistentRooms();
+    const persistent = limits.persistentRoomsEnabled ? store.getPersistentRoom(pin) : null;
+    if (persistent && !ownerTokenValid(persistent, message.ownerToken)) {
+      return serverError(socket, 'Ese PIN ya está en uso.');
+    }
     if (rooms.size >= limits.maxRooms) return serverError(socket, 'El servidor alcanzó el límite de salas.');
     let password = null;
     if (message.roomPassword !== undefined && message.roomPassword !== null && message.roomPassword !== '') {
@@ -314,14 +427,61 @@ export function createJamServer({
       }
       password = hashRoomPassword(message.roomPassword);
     }
+    const hostToken = newToken();
     const room = {
       pin, host: socket, hostName, state, guests: new Set(), updatedAt: Date.now(),
-      password, banned: new Set(),
+      password, banned: new Set(), hostTokenHash: sha256(hostToken), hostGone: false,
+      failover: message.failover === true, failoverTimer: null,
+      persistent: !!persistent,
     };
     rooms.set(pin, room);
     socketRooms.set(socket, { pin, role: 'host' });
-    send(socket, { status: 'room_created', pin });
+    if (persistent) store.touchPersistentRoom(pin);
+    send(socket, {
+      status: 'room_created', pin, hostToken,
+      ...(persistent ? { persistent: true, name: persistent.name, config: persistent.config } : {}),
+    });
     console.info('Jam room created');
+  }
+
+  /// El anfitrión recupera su sala tras una caída (dentro de hostFailoverMs).
+  function resumeHost(socket, message) {
+    if (socketRooms.has(socket)) return serverError(socket, 'Esta conexión ya pertenece a una sala.');
+    if (!admitAttempt(socket)) return;
+    const pin = normalizePin(message.pin);
+    const room = pin ? rooms.get(pin) : null;
+    if (!room || !tokenMatches(message.hostToken, room.hostTokenHash)) {
+      failAttempt(socket);
+      return serverError(socket, 'No se pudo recuperar la sala.');
+    }
+    guard.success(socketIps.get(socket) ?? 'unknown');
+    if (room.host && room.host !== socket) {
+      socketRooms.delete(room.host);
+      room.host.close(1000, 'Replaced by resumed host');
+    }
+    clearTimeout(room.failoverTimer);
+    room.host = socket;
+    room.hostGone = false;
+    room.updatedAt = Date.now();
+    socketRooms.set(socket, { pin, role: 'host' });
+    send(socket, { status: 'host_resumed', pin, state: room.state, guests: roster(room) });
+    for (const g of room.guests) send(g.socket, { event: 'host_back' });
+  }
+
+  /// El anfitrión cede el control a un invitado; el anterior pasa a invitado.
+  function transferHost(socket, message) {
+    const membership = socketRooms.get(socket);
+    const pin = normalizePin(message.pin);
+    const room = pin ? rooms.get(pin) : null;
+    if (!membership || !room || membership.pin !== pin || membership.role !== 'host' || room.host !== socket) {
+      return serverError(socket, 'Sólo el anfitrión puede transferir la sala.');
+    }
+    const target = [...room.guests].find((g) => g.id === message.toGuestId);
+    if (!target) return serverError(socket, 'Invitado no encontrado.');
+    const former = { socket, name: room.hostName, id: crypto.randomBytes(6).toString('hex'), joinedAt: Date.now() };
+    room.guests.add(former);
+    socketRooms.set(socket, { pin, role: 'guest', guest: former });
+    promoteGuest(room, target, 'transfer');
   }
 
   /// Aplica ventana de intentos + bloqueo progresivo. `false` si hay que
@@ -361,12 +521,12 @@ export function createJamServer({
     }
     if (room.guests.size + 1 >= limits.maxParticipants) return serverError(socket, 'La sala alcanzó el límite de participantes.');
     guard.success(socketIps.get(socket) ?? 'unknown');
-    const guest = { socket, name: guestName };
+    const guest = { socket, name: guestName, id: crypto.randomBytes(6).toString('hex'), joinedAt: Date.now() };
     room.guests.add(guest);
     room.updatedAt = Date.now();
     socketRooms.set(socket, { pin, role: 'guest', guest });
     send(socket, { status: 'joined', state: room.state });
-    send(room.host, { event: 'guest_joined', guestName, totalParticipants: room.guests.size + 1 });
+    send(room.host, { event: 'guest_joined', guestName, guestId: guest.id, totalParticipants: room.guests.size + 1 });
   }
 
   function updateState(socket, message) {
@@ -380,6 +540,7 @@ export function createJamServer({
     if (!state) return serverError(socket, 'Estado de reproducción inválido.');
     room.state = state;
     room.updatedAt = Date.now();
+    persistRoomConfig(room);
     for (const guest of room.guests) send(guest.socket, { event: 'sync_state', state });
   }
 
@@ -389,9 +550,8 @@ export function createJamServer({
       return serverError(socket, 'Sólo los invitados pueden enviar acciones.');
     }
     const room = rooms.get(membership.pin);
-    if (!room || !room.host) {
-      return serverError(socket, 'Sala no encontrada.');
-    }
+    if (!room) return serverError(socket, 'Sala no encontrada.');
+    if (!room.host) return serverError(socket, 'El anfitrión no está conectado ahora mismo.');
     send(room.host, {
       event: 'guest_action',
       guestName: membership.guest?.name ?? 'Invitado',
@@ -465,6 +625,8 @@ export function createJamServer({
         case 'guest_action': return relayGuestAction(socket, message);
         case 'kick_guest': return kickGuest(socket, message);
         case 'check_room': return checkRoom(socket, message);
+        case 'resume_host': return resumeHost(socket, message);
+        case 'transfer_host': return transferHost(socket, message);
         case 'time_ping':
           return send(socket, {
             status: 'time_pong',

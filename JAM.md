@@ -596,3 +596,7 @@ El historial (`JamHistory`) vive solo en la RAM del host; el servidor no guarda 
 ## Anexo: matching (Roadmap Fase 6)
 
 Las pistas viajan con `mbid`, `isrc`, `trackNumber`, `durationSec` opcionales. El invitado (modo sincronizado) resuelve cada pista contra su biblioteca con `JamTrackResolver`; en modo altavoz no aplica.
+
+## Anexo: continuidad (Roadmap Fase 7)
+
+Relay: `create_room` → `hostToken`; `transfer_host{pin,toGuestId}`, `resume_host{pin,hostToken}`; eventos `host_changed{youAreHost,hostToken?,state?,guests?}`, `host_away`, `host_back`. `create_room` acepta `failover`, `ownerToken`. HTTP: `/j/:code`, `/.well-known/*`. En LAN el host es el servidor embebido: no hay transferencia (limitación).

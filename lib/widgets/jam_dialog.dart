@@ -74,6 +74,9 @@ class _JamDialogState extends State<JamDialog>
   JamQueueMode _queueMode = JamQueueMode.free;
   int _fairTurns = 1;
   bool _requireApproval = false;
+  bool _failover = false;
+  final TextEditingController _fixedPinController = TextEditingController();
+  final TextEditingController _ownerTokenController = TextEditingController();
 
   @override
   void initState() {
@@ -92,6 +95,8 @@ class _JamDialogState extends State<JamDialog>
     _tabController.dispose();
     _pinController.dispose();
     _roomPasswordController.dispose();
+    _fixedPinController.dispose();
+    _ownerTokenController.dispose();
     _joinPasswordController.dispose();
     _nameController.dispose();
     _directHostController.dispose();
@@ -755,6 +760,39 @@ class _JamDialogState extends State<JamDialog>
 
         const SizedBox(height: 14),
 
+        if (isHost && jam.shareLink != null)
+          TextButton.icon(
+            onPressed: () async {
+              await Clipboard.setData(ClipboardData(text: jam.shareLink!));
+              if (!mounted) return;
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Enlace de invitación copiado')),
+              );
+            },
+            icon: const Icon(Icons.link_rounded, size: 18),
+            label: const Text('Copiar enlace de invitación'),
+          ),
+        if (isHost && jam.transferableParticipants.isNotEmpty)
+          TextButton.icon(
+            onPressed: () async {
+              final target = await showDialog<JamParticipant>(
+                context: context,
+                builder: (dialogContext) => SimpleDialog(
+                  title: const Text('Transferir anfitrión a…'),
+                  children: [
+                    for (final p in jam.transferableParticipants)
+                      SimpleDialogOption(
+                        onPressed: () => Navigator.of(dialogContext).pop(p),
+                        child: Text(p.name),
+                      ),
+                  ],
+                ),
+              );
+              if (target != null) jam.transferHostTo(target);
+            },
+            icon: const Icon(Icons.swap_horiz_rounded, size: 18),
+            label: const Text('Transferir anfitrión'),
+          ),
         if (isHost)
           TextButton.icon(
             onPressed: () => JamHistoryDialog.show(context, jam),
@@ -1089,6 +1127,40 @@ class _JamDialogState extends State<JamDialog>
                   onChanged: (value) =>
                       setState(() => _requireApproval = value),
                 ),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  dense: true,
+                  title: Text('Cambio automático de anfitrión',
+                      style: TextStyle(
+                          color: context.textSecondary, fontSize: 12)),
+                  subtitle: Text(
+                      'Si te desconectas, la sala sigue en la nube y pasa al invitado más antiguo.',
+                      style:
+                          TextStyle(color: context.textMuted, fontSize: 11)),
+                  value: _failover,
+                  activeTrackColor: context.accent,
+                  onChanged: (value) => setState(() => _failover = value),
+                ),
+                ExpansionTile(
+                  tilePadding: EdgeInsets.zero,
+                  title: Text('Sala persistente (avanzado)',
+                      style: TextStyle(
+                          color: context.textSecondary, fontSize: 12)),
+                  children: [
+                    TextField(
+                      controller: _fixedPinController,
+                      textCapitalization: TextCapitalization.characters,
+                      decoration: const InputDecoration(
+                          labelText: 'PIN fijo (reservado por el admin)'),
+                    ),
+                    TextField(
+                      controller: _ownerTokenController,
+                      obscureText: true,
+                      decoration: const InputDecoration(
+                          labelText: 'Token de propietario'),
+                    ),
+                  ],
+                ),
                 DropdownButtonFormField<int>(
                   initialValue: _maxParticipants,
                   dropdownColor: context.bgElevated,
@@ -1129,6 +1201,9 @@ class _JamDialogState extends State<JamDialog>
                       fairTurnsPerPerson: _fairTurns,
                       requireApproval: _requireApproval,
                       roomPassword: _roomPasswordController.text,
+                      failover: _failover,
+                      fixedPin: _fixedPinController.text,
+                      ownerToken: _ownerTokenController.text,
                       customName: _nameController.text,
                     );
                   },
@@ -1197,7 +1272,7 @@ class _JamDialogState extends State<JamDialog>
                     fontWeight: FontWeight.bold,
                   ),
                   decoration: InputDecoration(
-                    hintText: 'PIN (ej: AB3-4EF)',
+                    hintText: 'PIN (ej: AB3-4EF) o enlace',
                     hintStyle: TextStyle(
                       color: context.textMuted,
                       fontSize: 12,
@@ -1225,7 +1300,20 @@ class _JamDialogState extends State<JamDialog>
             FilledButton(
               onPressed: () async {
                 final pin = _pinController.text.trim();
-                if (pin.length >= 6) {
+                if (JamInviteLink.parse(pin) != null) {
+                  // Enlace de invitación pegado en el campo del PIN.
+                  final ok = await jam.joinByLink(pin,
+                      password: _joinPasswordController.text.isEmpty
+                          ? null
+                          : _joinPasswordController.text);
+                  if (!ok && mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                      content: Text(jam.lastJoinError ??
+                          'No se pudo unir con ese enlace'),
+                      backgroundColor: context.danger,
+                    ));
+                  }
+                } else if (pin.length >= 6) {
                   final ok = await jam.joinByPin(pin,
                       password: _joinPasswordController.text.isEmpty
                           ? null

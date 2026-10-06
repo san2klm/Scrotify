@@ -1,3 +1,4 @@
+import 'widgets/jam_deep_link_listener.dart';
 import 'dart:io' show Platform;
 
 import 'package:flutter/foundation.dart'
@@ -98,6 +99,8 @@ Future<void> main() async {
   }
 }
 
+final GlobalKey<NavigatorState> rootNavigatorKey = GlobalKey<NavigatorState>();
+
 class MyApp extends StatelessWidget {
   final Map<String, dynamic> initialTheme;
   final ScrotifyAudioHandler? audioHandler;
@@ -167,9 +170,14 @@ class MyApp extends StatelessWidget {
           return MaterialApp(
             title: 'Scrotify',
             debugShowCheckedModeBanner: false,
+            navigatorKey: rootNavigatorKey,
             theme: appTheme.toThemeData(),
-            builder: (context, child) =>
-                DesktopWindowFrame(child: child ?? const SizedBox.shrink()),
+            builder: (context, child) => DesktopWindowFrame(
+              child: JamDeepLinkListener(
+                navigatorKey: rootNavigatorKey,
+                child: child ?? const SizedBox.shrink(),
+              ),
+            ),
             home: const LoginScreen(),
           );
         },

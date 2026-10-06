@@ -38,6 +38,24 @@
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
+
+            <!-- Enlaces de invitación Jam: scrotify://join?code=ABC234&server=host -->
+            <meta-data android:name="flutter_deeplinking_enabled" android:value="false" />
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data android:scheme="scrotify" android:host="join"/>
+            </intent-filter>
+            <!-- App Links https://<tu-relay>/j/<PIN>: descomenta y pon tu dominio
+                 (y publica /.well-known/assetlinks.json desde el panel /admin).
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data android:scheme="https" android:host="jam.example.org" android:pathPrefix="/j/"/>
+            </intent-filter>
+            -->
         </activity>
 
         <service

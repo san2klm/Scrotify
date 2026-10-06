@@ -9,6 +9,15 @@ import 'jam_clock.dart';
 
 typedef OnRemoteStateSync = void Function(Map<String, dynamic> state);
 typedef OnRemoteGuestJoined = void Function(String guestName, int totalParticipants);
+
+/// El relay cambió de anfitrión (transferencia o failover). [state]/[guests]
+/// solo vienen para el nuevo anfitrión.
+typedef OnRemoteHostChanged = void Function(
+  bool youAreHost,
+  String hostName,
+  Map<String, dynamic>? state,
+  List<Map<String, dynamic>> guests,
+);
 typedef OnRemoteGuestAction = void Function(String fromGuest, String actionType, dynamic payload);
 typedef OnRemoteRoomClosed = void Function(String reason);
 typedef OnRemoteError = void Function(String error);
@@ -41,6 +50,18 @@ class RemoteJamService {
   OnRemoteGuestAction? onGuestAction;
   OnRemoteRoomClosed? onRoomClosed;
   OnRemoteError? onError;
+  OnRemoteHostChanged? onHostChanged;
+  void Function(int failoverMs)? onHostAway;
+  void Function()? onHostBack;
+
+  /// Pistas para continuidad (Fase 7): token del anfitrión (128 bits, solo en
+  /// RAM), token de propietario de sala persistente y failover automático.
+  String? hostToken;
+  String? ownerToken;
+  bool failoverEnabled = false;
+
+  /// IDs que el relay asigna a los invitados (por nombre), para transferir.
+  final Map<String, String> guestIds = {};
 
   bool get isConnected => _isConnected;
   bool get isHost => _isHost;
@@ -117,8 +138,11 @@ class RemoteJamService {
     required String hostName,
     required Map<String, dynamic> initialState,
     String? customEndpoint,
+    bool resume = false,
   }) async {
+    final keepToken = resume ? hostToken : null;
     await disconnect();
+    hostToken = keepToken;
     _lastError = null;
     final targetEndpoint = customEndpoint ?? _endpoint;
     final normalizedPin = pin.toUpperCase().replaceAll(RegExp(r'[^A-Z0-9]'), '');
@@ -136,7 +160,9 @@ class RemoteJamService {
             final json = jsonDecode(text) as Map<String, dynamic>;
             if (_handleClockMessage(json)) return;
 
-            if (json['status'] == 'room_created') {
+            if (json['status'] == 'room_created' ||
+                json['status'] == 'host_resumed') {
+              if (json['hostToken'] is String) hostToken = json['hostToken'] as String;
               _isConnected = true;
               _isHost = true;
               _pin = normalizedPin;
@@ -156,18 +182,7 @@ class RemoteJamService {
               return;
             }
 
-            // Eventos recibidos por el host
-            final event = json['event'];
-            if (event == 'guest_joined') {
-              final guestName = json['guestName']?.toString() ?? 'Invitado';
-              final total = (json['totalParticipants'] as num?)?.toInt() ?? 1;
-              onGuestJoined?.call(guestName, total);
-            } else if (event == 'guest_action') {
-              final from = json['guestName']?.toString() ?? 'Invitado';
-              final actionType = json['actionType']?.toString() ?? '';
-              final payload = json['payload'];
-              onGuestAction?.call(from, actionType, payload);
-            }
+            _dispatchEvent(json);
           } catch (e) {
             debugPrint('RemoteJamService parsing error: $e');
           }
@@ -189,14 +204,19 @@ class RemoteJamService {
       );
 
       // Enviar create_room
-      _channel!.sink.add(jsonEncode({
-        'action': 'create_room',
-        'pin': normalizedPin,
-        'hostName': hostName,
-        'initialState': fitStateToMessageLimit(initialState),
-        if (roomPassword != null && roomPassword!.isNotEmpty)
-          'roomPassword': roomPassword,
-      }));
+      _channel!.sink.add(jsonEncode(resume && keepToken != null
+          ? {'action': 'resume_host', 'pin': normalizedPin, 'hostToken': keepToken}
+          : {
+              'action': 'create_room',
+              'pin': normalizedPin,
+              'hostName': hostName,
+              'initialState': fitStateToMessageLimit(initialState),
+              if (roomPassword != null && roomPassword!.isNotEmpty)
+                'roomPassword': roomPassword,
+              if (failoverEnabled) 'failover': true,
+              if (ownerToken != null && ownerToken!.isNotEmpty)
+                'ownerToken': ownerToken,
+            }));
 
       timeoutTimer = Timer(const Duration(seconds: 6), () {
         if (!completer.isCompleted) {
@@ -294,18 +314,7 @@ class RemoteJamService {
               return;
             }
 
-            final event = json['event'];
-            if (event == 'sync_state') {
-              final state = json['state'] as Map<String, dynamic>? ?? {};
-              onStateSync?.call(state);
-            } else if (event == 'room_closed' || event == 'kicked') {
-              final reason = json['message']?.toString() ??
-                  (event == 'kicked'
-                      ? 'Has sido expulsado de la sala por el anfitrión.'
-                      : 'La sala Jam fue cerrada.');
-              onRoomClosed?.call(reason);
-              disconnect();
-            }
+            _dispatchEvent(json);
           } catch (e) {
             debugPrint('RemoteJamService guest message parsing error: $e');
           }
@@ -478,6 +487,80 @@ class RemoteJamService {
   // ---------------------------------------------------------------------------
   // Desconexión
   // ---------------------------------------------------------------------------
+
+  /// Eventos del relay válidos para cualquier rol: el rol puede cambiar a mitad
+  /// de sesión (transferencia/failover) sin reabrir el socket.
+  void _dispatchEvent(Map<String, dynamic> json) {
+    final event = json['event'];
+    switch (event) {
+      case 'guest_joined':
+        final guestName = json['guestName']?.toString() ?? 'Invitado';
+        final id = json['guestId']?.toString();
+        if (id != null) guestIds[guestName] = id;
+        onGuestJoined?.call(
+            guestName, (json['totalParticipants'] as num?)?.toInt() ?? 1);
+      case 'guest_action':
+        onGuestAction?.call(
+          json['guestName']?.toString() ?? 'Invitado',
+          json['actionType']?.toString() ?? '',
+          json['payload'],
+        );
+      case 'sync_state':
+        onStateSync?.call(json['state'] as Map<String, dynamic>? ?? {});
+      case 'host_changed':
+        final youAreHost = json['youAreHost'] == true;
+        _isHost = youAreHost;
+        if (youAreHost && json['hostToken'] is String) {
+          hostToken = json['hostToken'] as String;
+        } else if (!youAreHost) {
+          hostToken = null;
+        }
+        guestIds.clear();
+        final guests = <Map<String, dynamic>>[
+          for (final g in (json['guests'] as List? ?? const []))
+            if (g is Map) Map<String, dynamic>.from(g),
+        ];
+        for (final g in guests) {
+          final name = g['name']?.toString();
+          final id = g['id']?.toString();
+          if (name != null && id != null) guestIds[name] = id;
+        }
+        onHostChanged?.call(
+          youAreHost,
+          json['hostName']?.toString() ?? 'Anfitrión',
+          json['state'] is Map
+              ? Map<String, dynamic>.from(json['state'] as Map)
+              : null,
+          guests,
+        );
+      case 'host_away':
+        onHostAway?.call((json['failoverMs'] as num?)?.toInt() ?? 0);
+      case 'host_back':
+        onHostBack?.call();
+      case 'room_closed' || 'kicked':
+        final reason = json['message']?.toString() ??
+            (event == 'kicked'
+                ? 'Has sido expulsado de la sala por el anfitrión.'
+                : 'La sala Jam fue cerrada.');
+        onRoomClosed?.call(reason);
+        disconnect();
+    }
+  }
+
+  /// Cede el control de la sala a un invitado (por nombre). Devuelve `false`
+  /// si no se conoce su ID en el relay.
+  bool transferHost(String guestName) {
+    final id = guestIds[guestName];
+    final p = _pin;
+    if (!_isHost || id == null || p == null) return false;
+    try {
+      _channel?.sink.add(jsonEncode(
+          {'action': 'transfer_host', 'pin': p, 'toGuestId': id}));
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
 
   // ---------------------------------------------------------------------------
   // Reloj de referencia (el relay): `time_ping` / `time_pong`

@@ -43,6 +43,7 @@ dependencies:
   audio_service: ^0.18.19
   audio_session: ^0.1.25
   home_widget: ^0.10.0
+  app_links: ^7.2.1
 dev_dependencies:
   flutter_test:
     sdk: flutter

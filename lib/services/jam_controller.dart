@@ -722,6 +722,22 @@ class JamController extends ChangeNotifier {
   // Inicialización de Callbacks del Servidor Remoto (Cloud Jam)
   // ---------------------------------------------------------------------------
   void _initRemoteCallbacks() {
+    _remoteService.onHostChanged = (youAreHost, hostName, state, guests) {
+      unawaited(_handleRemoteHostChanged(youAreHost, hostName, guests));
+    };
+    _remoteService.onHostAway = (failoverMs) {
+      if (!isGuest) return;
+      lastActionError =
+          'El anfitrión se desconectó; si no vuelve en ${(failoverMs / 1000).round()} s la sala cambiará de anfitrión.';
+      notifyListeners();
+    };
+    _remoteService.onHostBack = () {
+      if (lastActionError?.startsWith('El anfitrión se desconectó') ?? false) {
+        lastActionError = null;
+        notifyListeners();
+      }
+    };
+
     _remoteService.onGuestJoined = (guestName, totalParticipants) {
       if (!isHost || _session == null) return;
       if (_kickedRemoteNames.contains(guestName.trim().toLowerCase())) {
@@ -1004,6 +1020,9 @@ class JamController extends ChangeNotifier {
     String? initialPlaylistId,
     String? customName,
     String? roomPassword,
+    bool failover = false,
+    String? fixedPin,
+    String? ownerToken,
     JamQueueMode queueMode = JamQueueMode.free,
     int fairTurnsPerPerson = 1,
     bool requireApproval = false,
@@ -1020,7 +1039,19 @@ class JamController extends ChangeNotifier {
     _lastVotesByTrack.clear();
     _histTrack = null;
 
-    final pinCode = JamCode.generate();
+    // Sala persistente: PIN fijo (validado con el alfabeto de JamCode).
+    JamCode pinCode;
+    try {
+      pinCode = fixedPin != null && fixedPin.trim().isNotEmpty
+          ? JamCode(fixedPin)
+          : JamCode.generate();
+    } on ArgumentError {
+      lastJoinError = 'PIN fijo inválido: 6 caracteres sin 0, 1, I, O.';
+      notifyListeners();
+      return;
+    }
+    _remoteService.failoverEnabled = failover;
+    _remoteService.ownerToken = ownerToken?.trim();
     final sessionId = 'jam_${DateTime.now().millisecondsSinceEpoch}';
     final hostName = customName?.trim().isNotEmpty == true
         ? customName!.trim()
@@ -1067,10 +1098,18 @@ class JamController extends ChangeNotifier {
 
     _publishToNavidromeIfPublic();
 
-    // Suscribirse a cambios en PlayerController
+    _startHostLoops();
+    notifyListeners();
+  }
+
+  /// Escucha al reproductor y arranca heartbeat/anuncios del anfitrión. Lo usa
+  /// también un invitado que pasa a anfitrión (transferencia/failover).
+  void _startHostLoops() {
+    _player.removeListener(_onPlayerChangedAsHost);
     _player.addListener(_onPlayerChangedAsHost);
 
     // Heartbeat periódico para sincronización precisa
+    _hostSyncHeartbeat?.cancel();
     _hostSyncHeartbeat = Timer.periodic(const Duration(seconds: 3), (_) {
       if (_role == JamRole.host && _hostService.isRunning) {
         _syncHostPlayback();
@@ -1079,10 +1118,165 @@ class JamController extends ChangeNotifier {
     });
 
     // El anuncio remoto expira, por lo que se renueva mientras el host exista.
+    _hostPublishTimer?.cancel();
     _hostPublishTimer = Timer.periodic(const Duration(minutes: 1), (_) {
       _publishToNavidromeIfPublic();
     });
+  }
 
+  // ---------------------------------------------------------------------------
+  // Continuidad: transferencia de anfitrión (solo salas en la nube)
+  // ---------------------------------------------------------------------------
+
+  /// Participantes remotos a los que se puede ceder la sala (tienen ID en el relay).
+  List<JamParticipant> get transferableParticipants => isHost
+      ? _remoteParticipants
+          .where((p) => _remoteService.guestIds.containsKey(p.name))
+          .toList()
+      : const [];
+
+  /// Cede el anfitrión a [participant]. Solo en la nube; en LAN el host es el
+  /// servidor embebido (ver `migrateToCloud`, no disponible aún).
+  bool transferHostTo(JamParticipant participant) {
+    if (!isHost || !_remoteService.isConnected) {
+      _reportActionError('Solo se puede transferir el anfitrión en una sala en la nube.');
+      return false;
+    }
+    final ok = _remoteService.transferHost(participant.name);
+    if (!ok) _reportActionError('No se pudo transferir: el invitado no está registrado en el relay.');
+    return ok;
+  }
+
+  /// Enlace compartible `https://<servidor>/j/<PIN>` (si el relay lo permite).
+  String? get shareLink {
+    final pin = _hostService.pinCode?.value ?? _session?.pinCode;
+    if (pin == null || pin.isEmpty) return null;
+    final ep = _remoteEndpoint;
+    if (!ep.isValid) return null;
+    return ep.httpBase.replace(path: '/j/$pin').toString();
+  }
+
+  Future<void> _handleRemoteHostChanged(
+    bool youAreHost,
+    String hostName,
+    List<Map<String, dynamic>> guests,
+  ) async {
+    if (youAreHost && isGuest) {
+      await _becomeRemoteHost(guests);
+    } else if (!youAreHost && isHost) {
+      await _demoteToRemoteGuest(hostName);
+    } else if (!youAreHost && isGuest && _session != null) {
+      _session = _session!.copyWith(hostName: hostName);
+      notifyListeners();
+    }
+  }
+
+  /// Un invitado asume el rol de anfitrión: arranca el servidor LAN con el
+  /// mismo PIN, reconstruye la cola desde el último estado y empieza a emitir.
+  Future<void> _becomeRemoteHost(List<Map<String, dynamic>> guests) async {
+    final prev = _session;
+    final pin = _remoteService.pin;
+    if (prev == null || pin == null || _localParticipant == null) return;
+
+    _syncGeneration++;
+    unawaited(_player.setPlaybackSpeed(1.0));
+    final me = _localParticipant!;
+    _localParticipant = JamParticipant(
+      id: 'host_local',
+      name: me.name,
+      avatarColorValue: 0xFFA855F7,
+      isHost: true,
+      joinedAt: DateTime.now(),
+    );
+    _queueMode = prev.queueMode;
+    _fairTurnsPerPerson = prev.fairTurnsPerPerson;
+    _requireApproval = prev.requireApproval;
+    _pendingRequests.clear();
+    _votes.clear();
+    _pinnedIds.clear();
+    _trackAddedBy.clear();
+    _hostJamQueue.clear();
+    _remoteParticipants
+      ..clear()
+      ..addAll([
+        for (final g in guests)
+          JamParticipant(
+            id: 'remote_${g['id']}',
+            name: g['name']?.toString() ?? 'Invitado',
+            avatarColorValue: 0xFF3B82F6,
+            isHost: false,
+            joinedAt: DateTime.now(),
+            canControlPlayback: prev.allowGuestControls,
+            canManageQueue: prev.allowGuestQueueManage,
+          ),
+      ]);
+
+    // Reproductor: la pista actual y la cola resueltas contra MI biblioteca.
+    final wanted = <Track>[
+      if (prev.currentTrack != null) prev.currentTrack!,
+      ...prev.queue.map((q) => q.track),
+    ];
+    final local = <Track>[];
+    for (final t in wanted) {
+      try {
+        final r = await _resolver.resolve(t);
+        if (r.isAvailable) local.add(r.track!);
+      } catch (_) {
+        local.add(t);
+      }
+    }
+    if (local.isNotEmpty &&
+        (_player.currentTrack == null ||
+            _player.currentTrack!.id != local.first.id)) {
+      await _player.playQueue(local, startIndex: 0);
+      await _player.seek(Duration(milliseconds: prev.positionMs));
+      if (!prev.isPlaying && _player.playing) await _player.togglePlay();
+    }
+
+    _hostService.roomPassword = null; // el relay conserva la suya
+    await _hostService.start(
+      sessionId: 'jam_${DateTime.now().millisecondsSinceEpoch}',
+      pinCode: JamCode(pin),
+      hostName: me.name,
+      mode: prev.mode,
+      allowGuestControls: prev.allowGuestControls,
+      allowGuestQueueManage: prev.allowGuestQueueManage,
+      isPublic: prev.isPublic,
+      maxParticipants: prev.maxParticipants,
+    );
+    _role = JamRole.host;
+    _currentTrackAddedBy = _localParticipant;
+    _rebuildHostQueueFromPlayer();
+    _onPlayerChangedAsHost();
+    _syncHostState();
+    _startHostLoops();
+    _publishHostState(includePlayback: true);
+    lastActionError = null;
+    notifyListeners();
+  }
+
+  /// El anfitrión cedió la sala: deja de emitir y pasa a seguir al nuevo.
+  Future<void> _demoteToRemoteGuest(String newHostName) async {
+    _hostSyncHeartbeat?.cancel();
+    _hostSyncHeartbeat = null;
+    _hostPublishTimer?.cancel();
+    _hostPublishTimer = null;
+    _player.removeListener(_onPlayerChangedAsHost);
+    _trackHistory(finalize: true);
+    await _hostService.stop();
+    final prev = _session;
+    final me = _localParticipant;
+    _role = JamRole.guest;
+    _localParticipant = me?.copyWith(
+      id: 'guest_remote',
+      isHost: false,
+      canControlPlayback: prev?.allowGuestControls ?? true,
+      canManageQueue: prev?.allowGuestQueueManage ?? true,
+    );
+    _hostJamQueue.clear();
+    _remoteParticipants.clear();
+    if (_session != null) _session = _session!.copyWith(hostName: newHostName);
+    _lastSyncServerTimestamp = 0;
     notifyListeners();
   }
 
@@ -1136,11 +1330,23 @@ class JamController extends ChangeNotifier {
 
     _remoteCreating = true;
     try {
-      final ok = await _remoteService.createRoom(
+      // Con un hostToken vigente se intenta recuperar la misma sala (el relay
+      // la conserva durante hostFailoverMs); si falla se crea de nuevo.
+      final resuming = retry && _remoteService.hostToken != null;
+      var ok = await _remoteService.createRoom(
         pin: pin,
         hostName: _localParticipant?.name ?? 'Host',
         initialState: _remoteStatePayload(),
+        resume: resuming,
       );
+      if (resuming && !ok) {
+        _remoteService.hostToken = null;
+        ok = await _remoteService.createRoom(
+          pin: pin,
+          hostName: _localParticipant?.name ?? 'Host',
+          initialState: _remoteStatePayload(),
+        );
+      }
       debugPrint('JamController: Creación en servidor remoto: $ok');
       if (!isHost || _hostService.pinCode?.value != pin) {
         // La sesión terminó mientras se conectaba: no dejar la sala huérfana.
@@ -1488,6 +1694,28 @@ class JamController extends ChangeNotifier {
         'La Jam LAN fue descubierta, pero para unirse de forma segura escaneá el QR del anfitrión.';
     notifyListeners();
     return false;
+  }
+
+  /// Une a una Jam en la nube desde un enlace de invitación (`JamInviteLink`).
+  Future<bool> joinByLink(
+    String link, {
+    String? customName,
+    int? customColor,
+    String? password,
+  }) async {
+    final parsed = JamInviteLink.parse(link);
+    if (parsed == null) {
+      lastJoinError = 'El enlace de invitación no es válido.';
+      notifyListeners();
+      return false;
+    }
+    return joinRemoteSession(
+      pin: parsed.code,
+      customName: customName,
+      customColor: customColor,
+      customEndpoint: parsed.endpoint,
+      password: password,
+    );
   }
 
   Future<bool> joinByQr(

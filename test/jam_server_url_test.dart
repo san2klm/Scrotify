@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:navidrome_client/models/jam_models.dart';
 
 void main() {
+  inviteTests();
   group('JamServerEndpoint.parse', () {
     test('accepts wss and normalizes path', () {
       final e = JamServerEndpoint.parse(' wss://jam.example.org ');
@@ -46,6 +47,34 @@ void main() {
     test('default endpoint is valid', () {
       expect(JamServerEndpoint.parse(kDefaultRemoteJamEndpoint).url,
           kDefaultRemoteJamEndpoint);
+    });
+  });
+}
+
+void inviteTests() {
+  group('JamInviteLink', () {
+    test('custom scheme with server', () {
+      final l = JamInviteLink.parse('scrotify://join?code=abc-234&server=jam.example.org')!;
+      expect(l.code, 'ABC234');
+      expect(l.endpoint, 'wss://jam.example.org/');
+    });
+    test('https landing link', () {
+      final l = JamInviteLink.parse('https://jam.example.org/j/ABC234')!;
+      expect(l.code, 'ABC234');
+      expect(l.server, 'jam.example.org');
+      expect(JamInviteLink.parse('http://192.168.1.5:8080/j/ABC234')!.endpoint,
+          'ws://192.168.1.5:8080/');
+    });
+    test('rejects junk, bad codes and public ws:// servers', () {
+      expect(JamInviteLink.parse('hola'), isNull);
+      expect(JamInviteLink.parse('scrotify://join?code=ABC'), isNull);
+      expect(JamInviteLink.parse('scrotify://join?code=ABC10O'), isNull); // 0/1/I/O
+      expect(JamInviteLink.parse('https://x.org/otra/ABC234'), isNull);
+      expect(JamInviteLink.parse('scrotify://jam?code=ABC234'), isNull);
+      expect(JamInviteLink.parse('scrotify://join?code=ABC234&server=ws://evil.org')!.endpoint, isNull);
+    });
+    test('link without server uses the configured relay', () {
+      expect(JamInviteLink.parse('scrotify://join?code=ABC234')!.endpoint, isNull);
     });
   });
 }

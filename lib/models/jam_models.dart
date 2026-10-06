@@ -150,6 +150,50 @@ Track trackFromJamJson(Map<String, dynamic> j) {
   );
 }
 
+/// Enlace de invitación a una Jam en la nube: `scrotify://join?code=ABC234&server=host`
+/// o `https://host/j/ABC234`. Solo lleva el PIN (y el servidor) — nunca credenciales.
+class JamInviteLink {
+  final String code;
+
+  /// Servidor del relay (`host[:puerto]`), si el enlace lo indica.
+  final String? server;
+
+  const JamInviteLink(this.code, this.server);
+
+  /// `wss://server/` listo para `joinRemoteSession(customEndpoint:)`, o `null`
+  /// si el enlace no trae servidor o este no es válido.
+  String? get endpoint {
+    final s = server;
+    if (s == null || s.isEmpty) return null;
+    return JamServerEndpoint.parse(s).url;
+  }
+
+  static JamInviteLink? parse(String input) {
+    final text = input.trim();
+    final uri = Uri.tryParse(text);
+    if (uri == null || uri.scheme.isEmpty) return null;
+    String? rawCode;
+    String? server;
+    if (uri.scheme == 'scrotify' && uri.host == 'join') {
+      rawCode = uri.queryParameters['code'];
+      server = uri.queryParameters['server'];
+    } else if ((uri.scheme == 'https' || uri.scheme == 'http') &&
+        uri.pathSegments.length == 2 &&
+        uri.pathSegments.first == 'j') {
+      rawCode = uri.pathSegments[1];
+      server = uri.scheme == 'http'
+          ? uri.origin // JamServerEndpoint lo valida (ws:// solo en red local)
+          : (uri.hasPort ? '${uri.host}:${uri.port}' : uri.host);
+    }
+    if (rawCode == null) return null;
+    try {
+      return JamInviteLink(JamCode(rawCode).value, server);
+    } on ArgumentError {
+      return null;
+    }
+  }
+}
+
 /// Rol del usuario actual en la sesión Jam.
 enum JamRole { none, host, guest }
 

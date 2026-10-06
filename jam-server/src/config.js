@@ -7,12 +7,15 @@ export const SETTING_DEFS = {
   maxRooms: { type: 'int', default: 200, min: 1, max: 100000, group: 'limits' },
   maxMessageBytes: { type: 'int', default: 16 * 1024, min: 1024, max: 1024 * 1024, group: 'limits' },
   maxQueueItems: { type: 'int', default: 500, min: 1, max: 5000, group: 'limits' },
+  hostFailoverMs: { type: 'int', default: 60 * 1000, min: 0, max: 24 * 3600 * 1000, group: 'limits' },
   roomIdleMs: { type: 'int', default: 60 * 60 * 1000, min: 10 * 1000, max: 30 * 24 * 3600 * 1000, group: 'limits' },
   publicListingEnabled: { type: 'bool', default: true, group: 'features' },
   chatEnabled: { type: 'bool', default: false, group: 'features' },
   persistentRoomsEnabled: { type: 'bool', default: false, group: 'features' },
   webLinkEnabled: { type: 'bool', default: false, group: 'features' },
   publicUrl: { type: 'url', default: '', group: 'general' },
+  assetLinksJson: { type: 'json', default: '', group: 'links' },
+  appleAppSiteAssociation: { type: 'json', default: '', group: 'links' },
   joinRateMax: { type: 'int', default: 10, min: 1, max: 1000, group: 'security' },
   joinRateWindowMs: { type: 'int', default: 60 * 1000, min: 1000, max: 3600 * 1000, group: 'security' },
   pinFailMax: { type: 'int', default: 10, min: 1, max: 1000, group: 'security' },
@@ -43,6 +46,14 @@ export function coerceSetting(key, value) {
       }
       return parsed.origin;
     }
+    case 'json': {
+      if (typeof value !== 'string') throw new Error(`${key} debe ser texto JSON`);
+      const v = value.trim();
+      if (v === '') return '';
+      if (v.length > 8192) throw new Error(`${key} es demasiado largo (máx. 8 KB)`);
+      try { JSON.parse(v); } catch { throw new Error(`${key} no es JSON válido`); }
+      return v;
+    }
     default:
       throw new Error(`Tipo no soportado: ${def.type}`);
   }
@@ -54,6 +65,11 @@ export function openStore(path = ':memory:', overrides = {}) {
   db.exec(`
     CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS blocked_ips (ip TEXT PRIMARY KEY, reason TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL);
+    CREATE TABLE IF NOT EXISTS persistent_rooms (
+      pin TEXT PRIMARY KEY, name TEXT NOT NULL, owner_salt TEXT NOT NULL, owner_hash TEXT NOT NULL,
+      idle_expiry_ms INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL, last_used_at INTEGER NOT NULL,
+      config TEXT NOT NULL DEFAULT '{}'
+    );
     CREATE TABLE IF NOT EXISTS admin (id INTEGER PRIMARY KEY CHECK (id = 1), salt TEXT NOT NULL, hash TEXT NOT NULL);
   `);
   const getRow = db.prepare('SELECT value FROM settings WHERE key = ?');
@@ -100,6 +116,27 @@ export function openStore(path = ':memory:', overrides = {}) {
       'INSERT INTO blocked_ips (ip, reason, created_at) VALUES (?, ?, ?) ON CONFLICT(ip) DO UPDATE SET reason = excluded.reason',
     ).run(ip, String(reason).slice(0, 200), Date.now()),
     unblockIp: (ip) => db.prepare('DELETE FROM blocked_ips WHERE ip = ?').run(ip),
+    listPersistentRooms: () => db.prepare(
+      'SELECT pin, name, idle_expiry_ms AS idleExpiryMs, created_at AS createdAt, last_used_at AS lastUsedAt, config FROM persistent_rooms ORDER BY created_at DESC',
+    ).all().map((r) => ({ ...r, config: JSON.parse(r.config) })),
+    getPersistentRoom: (pin) => {
+      const r = db.prepare('SELECT pin, name, owner_salt AS ownerSalt, owner_hash AS ownerHash, idle_expiry_ms AS idleExpiryMs, last_used_at AS lastUsedAt, config FROM persistent_rooms WHERE pin = ?').get(pin);
+      return r ? { ...r, config: JSON.parse(r.config) } : null;
+    },
+    addPersistentRoom: ({ pin, name, ownerSalt, ownerHash, idleExpiryMs }) => {
+      const now = Date.now();
+      db.prepare('INSERT INTO persistent_rooms (pin, name, owner_salt, owner_hash, idle_expiry_ms, created_at, last_used_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
+        .run(pin, name, ownerSalt, ownerHash, idleExpiryMs, now, now);
+    },
+    deletePersistentRoom: (pin) => db.prepare('DELETE FROM persistent_rooms WHERE pin = ?').run(pin),
+    touchPersistentRoom: (pin, config) => db.prepare(
+      config === undefined
+        ? 'UPDATE persistent_rooms SET last_used_at = ? WHERE pin = ?'
+        : 'UPDATE persistent_rooms SET last_used_at = ?, config = ? WHERE pin = ?',
+    ).run(...(config === undefined ? [Date.now(), pin] : [Date.now(), JSON.stringify(config), pin])),
+    purgeExpiredPersistentRooms: () => db.prepare(
+      'DELETE FROM persistent_rooms WHERE idle_expiry_ms > 0 AND last_used_at + idle_expiry_ms < ?',
+    ).run(Date.now()),
     close: () => db.close(),
   };
 }

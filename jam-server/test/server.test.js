@@ -51,7 +51,10 @@ test('creates a room, joins a guest, and broadcasts host state', async () => {
     hostName: 'Proyecto',
     initialState,
   }));
-  assert.deepEqual(await created, { status: 'room_created', pin: 'GCG36B' });
+  const createdMsg = await created;
+  assert.equal(createdMsg.status, 'room_created');
+  assert.equal(createdMsg.pin, 'GCG36B');
+  assert.match(createdMsg.hostToken, /^[0-9a-f]{32}$/); // 128 bits
 
   const guest = await connect(endpoint);
   const hostJoined = nextMessage(host);
@@ -63,7 +66,10 @@ test('creates a room, joins a guest, and broadcasts host state', async () => {
   }));
 
   assert.deepEqual(await joined, { status: 'joined', state: initialState });
-  assert.deepEqual(await hostJoined, {
+  const joinedEvent = await hostJoined;
+  assert.match(joinedEvent.guestId, /^[0-9a-f]{12}$/);
+  delete joinedEvent.guestId;
+  assert.deepEqual(joinedEvent, {
     event: 'guest_joined',
     guestName: 'Amigo',
     totalParticipants: 2,
@@ -618,4 +624,186 @@ test('refTs/nextHint are ephemeral: not carried over by partial updates', async 
   } finally {
     host.close(); guest.close();
   }
+});
+
+// --- Fase 7: continuidad -----------------------------------------------------
+
+function waitFor(socket, predicate, ms = 3000) {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => { socket.off('message', onMsg); reject(new Error('timeout waiting for message')); }, ms);
+    function onMsg(data) {
+      const msg = JSON.parse(data.toString());
+      if (predicate(msg)) { clearTimeout(timer); socket.off('message', onMsg); resolve(msg); }
+    }
+    socket.on('message', onMsg);
+  });
+}
+
+async function roomWithGuest(server, pin, { failover = false, guestName = 'G' } = {}) {
+  const endpoint = `ws://127.0.0.1:${server.port}`;
+  const host = await connect(endpoint);
+  const created = await ask(host, { action: 'create_room', pin, hostName: 'H', initialState, failover });
+  const guest = await connect(endpoint);
+  const hostSees = waitFor(host, (m) => m.event === 'guest_joined');
+  const joined = await ask(guest, { action: 'join_room', pin, guestName });
+  assert.equal(joined.status, 'joined');
+  const gj = await hostSees;
+  return { host, guest, hostToken: created.hostToken, guestId: gj.guestId };
+}
+
+test('host transfer: guest becomes host, old host becomes guest, old token dies', async () => {
+  const server = await startServer();
+  const { host, guest, hostToken, guestId } = await roomWithGuest(server, 'TRF123');
+  try {
+    assert.ok(guestId);
+    const toNew = waitFor(guest, (m) => m.event === 'host_changed');
+    const toOld = waitFor(host, (m) => m.event === 'host_changed');
+    host.send(JSON.stringify({ action: 'transfer_host', pin: 'TRF123', toGuestId: guestId }));
+    const newHost = await toNew;
+    const oldHost = await toOld;
+    assert.equal(newHost.youAreHost, true);
+    assert.match(newHost.hostToken, /^[0-9a-f]{32}$/);
+    assert.notEqual(newHost.hostToken, hostToken);
+    assert.equal(oldHost.youAreHost, false);
+    assert.equal(newHost.guests.length, 1); // el anfitrión anterior ahora es invitado
+
+    // El anfitrión anterior ya no puede actualizar el estado; el nuevo sí.
+    assert.equal((await ask(host, { action: 'update_state', pin: 'TRF123', state: initialState })).status, 'error');
+    const sync = waitFor(host, (m) => m.event === 'sync_state');
+    guest.send(JSON.stringify({ action: 'update_state', pin: 'TRF123', state: { ...initialState, position: 77 } }));
+    assert.equal((await sync).state.position, 77);
+  } finally {
+    host.close(); guest.close();
+  }
+});
+
+test('only the host can transfer, and only to an existing guest', async () => {
+  const server = await startServer();
+  const { host, guest } = await roomWithGuest(server, 'TRF456');
+  try {
+    assert.equal((await ask(guest, { action: 'transfer_host', pin: 'TRF456', toGuestId: 'x' })).status, 'error');
+    assert.equal((await ask(host, { action: 'transfer_host', pin: 'TRF456', toGuestId: 'nope' })).status, 'error');
+  } finally {
+    host.close(); guest.close();
+  }
+});
+
+test('failover: room survives host loss and promotes the oldest guest', async () => {
+  const server = await startServer({ hostFailoverMs: 150 });
+  const { host, guest } = await roomWithGuest(server, 'FOV123', { failover: true });
+  try {
+    const away = waitFor(guest, (m) => m.event === 'host_away');
+    const promoted = waitFor(guest, (m) => m.event === 'host_changed');
+    host.terminate();
+    await away;
+    const msg = await promoted;
+    assert.equal(msg.youAreHost, true);
+    assert.equal(msg.reason, 'failover');
+    assert.equal((await http(server, 'GET', '/health')).json.rooms, 1);
+  } finally {
+    guest.close();
+  }
+});
+
+test('resume_host within the window keeps the original host; bad token is refused', async () => {
+  const server = await startServer({ hostFailoverMs: 2000 });
+  const { host, guest, hostToken } = await roomWithGuest(server, 'RSM123', { failover: true });
+  const endpoint = `ws://127.0.0.1:${server.port}`;
+  try {
+    const away = waitFor(guest, (m) => m.event === 'host_away');
+    host.terminate();
+    await away;
+    const intruder = await connect(endpoint);
+    assert.equal((await ask(intruder, { action: 'resume_host', pin: 'RSM123', hostToken: 'f'.repeat(32) })).status, 'error');
+    intruder.close();
+
+    const back = waitFor(guest, (m) => m.event === 'host_back');
+    const again = await connect(endpoint);
+    const resumed = await ask(again, { action: 'resume_host', pin: 'RSM123', hostToken });
+    assert.equal(resumed.status, 'host_resumed');
+    await back;
+    again.close();
+  } finally {
+    guest.close();
+  }
+});
+
+test('without failover the room closes when the host leaves (as before)', async () => {
+  const server = await startServer({ hostFailoverMs: 100 });
+  const { host, guest } = await roomWithGuest(server, 'NOF123', { failover: false });
+  const closed = waitFor(guest, (m) => m.event === 'room_closed');
+  host.terminate();
+  await closed;
+  assert.equal((await http(server, 'GET', '/health')).json.rooms, 0);
+  guest.close();
+});
+
+test('persistent rooms: reserved PIN, owner claim, config survives restart', async () => {
+  const { mkdtempSync, rmSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+  const dir = mkdtempSync(`${tmpdir()}/jam-`);
+  try {
+    const dbPath = `${dir}/jam.db`;
+    const first = await startServer({ dbPath, adminPassword: 'supersecret1', persistentRoomsEnabled: true });
+    const { cookie, csrf } = await adminLogin(first);
+    const bad = await http(first, 'POST', '/admin/api/persistent-rooms', { cookie, csrf, body: { pin: 'ABC10O', name: 'x' } });
+    assert.equal(bad.status, 400); // 0/1/I/O no válidos
+    const made = await http(first, 'POST', '/admin/api/persistent-rooms', { cookie, csrf, body: { pin: 'FKX234', name: 'Sala fija' } });
+    assert.equal(made.status, 200);
+    const { ownerToken } = made.json;
+    assert.match(ownerToken, /^[0-9a-f]{32}$/);
+    assert.equal(JSON.stringify(made.json.rooms).includes(ownerToken), false); // el token no se vuelve a listar
+
+    const endpoint1 = `ws://127.0.0.1:${first.port}`;
+    const intruder = await connect(endpoint1);
+    assert.equal((await ask(intruder, { action: 'create_room', pin: 'FKX234', hostName: 'x', initialState })).status, 'error');
+    intruder.close();
+
+    const owner = await connect(endpoint1);
+    const claimed = await ask(owner, { action: 'create_room', pin: 'FKX234', hostName: 'Dueño', ownerToken, initialState: { ...initialState, queueMode: 'voting', allowGuestControls: false } });
+    assert.equal(claimed.status, 'room_created');
+    assert.equal(claimed.persistent, true);
+    owner.close(); // al cerrar se guarda solo la configuración
+    await new Promise((r) => setTimeout(r, 50));
+    await first.stop();
+    running.splice(running.indexOf(first), 1);
+
+    const second = await startServer({ dbPath, persistentRoomsEnabled: true });
+    const owner2 = await connect(`ws://127.0.0.1:${second.port}`);
+    const again = await ask(owner2, { action: 'create_room', pin: 'FKX234', hostName: 'Dueño', ownerToken, initialState });
+    assert.equal(again.status, 'room_created');
+    assert.equal(again.config.queueMode, 'voting');
+    assert.equal(again.config.allowGuestControls, false);
+    assert.equal(JSON.stringify(again.config).includes('trackId'), false); // nada de lo que suena
+    owner2.close();
+  } finally {
+    await Promise.all(running.splice(0).map((s) => s.stop()));
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('persistent room reservation is off unless enabled', async () => {
+  const server = await startServer({ adminPassword: 'supersecret1' });
+  const { cookie, csrf } = await adminLogin(server);
+  await http(server, 'POST', '/admin/api/persistent-rooms', { cookie, csrf, body: { pin: 'PFF234', name: 'x' } });
+  const s = await connect(`ws://127.0.0.1:${server.port}`);
+  assert.equal((await ask(s, { action: 'create_room', pin: 'PFF234', hostName: 'x', initialState })).status, 'room_created');
+  s.close();
+});
+
+test('web link landing: gated by setting, sanitized, well-known served from settings', async () => {
+  const server = await startServer({ adminPassword: 'supersecret1', publicUrl: 'https://jam.example.org' });
+  assert.equal((await http(server, 'GET', '/j/ABC234')).status, 404);
+  const { cookie, csrf } = await adminLogin(server);
+  const links = JSON.stringify([{ relation: ['delegate_permission/common.handle_all_urls'] }]);
+  assert.equal((await http(server, 'PUT', '/admin/api/settings', { cookie, csrf, body: { webLinkEnabled: true, assetLinksJson: links } })).status, 200);
+  assert.equal((await http(server, 'PUT', '/admin/api/settings', { cookie, csrf, body: { assetLinksJson: '{no json' } })).status, 400);
+
+  const page = await http(server, 'GET', '/j/abc-234');
+  assert.equal(page.status, 200);
+  assert.match(page.text, /scrotify:\/\/join\?code=ABC234&server=jam\.example\.org/);
+  assert.equal((await http(server, 'GET', '/j/<script>')).status, 404);
+  const wk = await http(server, 'GET', '/.well-known/assetlinks.json');
+  assert.equal(wk.status, 200);
+  assert.equal((await http(server, 'GET', '/.well-known/apple-app-site-association')).status, 404);
 });
