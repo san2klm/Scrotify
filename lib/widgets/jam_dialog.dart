@@ -358,7 +358,8 @@ class _JamDialogState extends State<JamDialog>
     final session = jam.session;
     final isHost = jam.isHost;
 
-    return Column(
+    return SingleChildScrollView(
+        child: Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -683,7 +684,8 @@ class _JamDialogState extends State<JamDialog>
           ),
         ),
         const SizedBox(height: 6),
-        Flexible(
+        ConstrainedBox(
+          constraints: const BoxConstraints(maxHeight: 150),
           child: ListView.builder(
             shrinkWrap: true,
             itemCount: jam.participants.length,
@@ -827,7 +829,7 @@ class _JamDialogState extends State<JamDialog>
           ),
         ),
       ],
-    );
+    ));
   }
 
   // ===========================================================================
@@ -1122,8 +1124,7 @@ class _JamDialogState extends State<JamDialog>
                       _queueMode == JamQueueMode.voting
                           ? 'La votación no se combina con turnos justos.'
                           : 'Combinable con turnos justos.',
-                      style:
-                          TextStyle(color: context.textMuted, fontSize: 11)),
+                      style: TextStyle(color: context.textMuted, fontSize: 11)),
                   value: _requireApproval,
                   activeTrackColor: context.accent,
                   onChanged: (value) =>
@@ -1137,8 +1138,7 @@ class _JamDialogState extends State<JamDialog>
                           color: context.textSecondary, fontSize: 12)),
                   subtitle: Text(
                       'Si te desconectas, la sala sigue en la nube y pasa al invitado más antiguo.',
-                      style:
-                          TextStyle(color: context.textMuted, fontSize: 11)),
+                      style: TextStyle(color: context.textMuted, fontSize: 11)),
                   value: _failover,
                   activeTrackColor: context.accent,
                   onChanged: (value) => setState(() => _failover = value),
