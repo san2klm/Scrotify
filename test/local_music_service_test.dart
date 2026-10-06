@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:async';
 import 'dart:io';
 
@@ -185,6 +186,33 @@ void main() {
     await music.download(manager, track, scope);
     await complete(manager, track.id);
     expect(transfers, 2);
+  });
+
+  test('Reescaneo guarda huellas y las reutiliza si el archivo no cambia',
+      () async {
+    await music.download(manager, track, scope);
+    await complete(manager, track.id);
+    final path = File(music.localPath(scope, track.id)!).absolute.path;
+    await music.rescan();
+    final state = File(p.join(temp.path, 'estado.json'));
+    Map<String, dynamic> fingerprints() =>
+        (jsonDecode(state.readAsStringSync())['fingerprints'] as Map)
+            .cast<String, dynamic>();
+    expect(fingerprints().keys, contains(path));
+    // Una huella falsa con tamaño y fecha vigentes demuestra que no se relee.
+    final stat = File(path).statSync();
+    final stored = jsonDecode(state.readAsStringSync()) as Map<String, dynamic>;
+    (stored['fingerprints'] as Map)[path] = {
+      'size': stat.size,
+      'mtime': stat.modified.millisecondsSinceEpoch,
+      'hash': 'huella-guardada',
+    };
+    state.writeAsStringSync(jsonEncode(stored));
+    final restarted = newMusic(cache);
+    addTearDown(restarted.dispose);
+    await restarted.initialize();
+    await restarted.rescan();
+    expect(fingerprints()[path]['hash'], 'huella-guardada');
   });
 
   test('Archivo sustituido no conserva la identidad de la canción anterior',

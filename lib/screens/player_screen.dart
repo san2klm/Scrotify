@@ -15,7 +15,6 @@ import '../widgets/jam_queue_panel.dart';
 import '../widgets/lyrics_follow_panel.dart';
 import '../widgets/lyrics_overlay.dart';
 import '../widgets/track_context_menu.dart';
-import '../widgets/local_download_button.dart';
 import '../widgets/cover_art.dart';
 import '../widgets/waveform_progress_bar.dart';
 import '../widgets/player_position_builder.dart';
@@ -143,7 +142,6 @@ class _PlayerScreenState extends State<PlayerScreen> {
                             ],
                           ),
                           _buildJamBadge(context, jam),
-                          LocalDownloadButton(tracks: [track], compact: true),
                           IconButton(
                             icon: Icon(Icons.more_horiz,
                                 color: context.textPrimary),

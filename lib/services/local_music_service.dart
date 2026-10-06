@@ -38,6 +38,7 @@ class LocalMusicService extends ChangeNotifier {
   final Map<String, Future<void>> _requests = {};
   final Set<String> _roots = {};
   final Map<String, String> _legacyOwners = {};
+  final Map<String, Map<String, dynamic>> _fingerprints = {};
   final Map<String, Map<String, dynamic>> _libraries = {};
   final Map<String, Map<String, dynamic>> _trackDetails = {};
   bool scanning = false;
@@ -70,6 +71,13 @@ class LocalMusicService extends ChangeNotifier {
           .addAll(Map<String, String>.from(data['destinations'] as Map? ?? {}));
       _legacyOwners
           .addAll(Map<String, String>.from(data['legacyOwners'] as Map? ?? {}));
+      final stored = data['fingerprints'];
+      if (stored is Map) {
+        for (final entry in stored.entries) {
+          _fingerprints[entry.key as String] =
+              Map<String, dynamic>.from(entry.value as Map);
+        }
+      }
       for (final field in ['libraries', 'details']) {
         final target = field == 'libraries' ? _libraries : _trackDetails;
         final stored = Map<String, dynamic>.from(data[field] as Map? ?? {});
@@ -107,9 +115,24 @@ class LocalMusicService extends ChangeNotifier {
         await _remember(entry);
       }
     }
-    await rescan(requestAccess: false);
+    // Registro rápido (sin hashes) de lo ya descargado, para que una descarga
+    // pedida justo al arrancar no se repita mientras el escaneo sigue en curso.
+    for (final record in _records.values) {
+      final path = (record['paths'] as List? ?? [])
+          .cast<String>()
+          .where((path) =>
+              FileSystemEntity.typeSync(path, followLinks: false) ==
+              FileSystemEntityType.file)
+          .firstOrNull;
+      if (path != null) await _registerRecord(record, path);
+    }
     await _save();
     _notify();
+    // El escaneo hashea cada archivo (GB en el móvil): no debe bloquear la
+    // carga de la biblioteca, que espera a initialize().
+    unawaited(rescan(requestAccess: false).catchError((Object error) {
+      debugPrint('No se pudo reescanear la música local: $error');
+    }));
   }
 
   static Future<Directory> _platformRoot() async {
@@ -572,8 +595,25 @@ class LocalMusicService extends ChangeNotifier {
     return path;
   }
 
-  Future<String> _fingerprint(File file) async =>
-      (await sha256.bind(file.openRead()).first).toString();
+  /// SHA-256 del archivo. Se reutiliza el hash guardado mientras la ruta, el
+  /// tamaño y la fecha de modificación no cambien, para no releer GB de música
+  /// en cada arranque.
+  Future<String> _fingerprint(File file) async {
+    final stat = await file.stat();
+    final cached = _fingerprints[file.absolute.path];
+    if (cached != null &&
+        cached['size'] == stat.size &&
+        cached['mtime'] == stat.modified.millisecondsSinceEpoch) {
+      return cached['hash'] as String;
+    }
+    final hash = (await sha256.bind(file.openRead()).first).toString();
+    _fingerprints[file.absolute.path] = {
+      'size': stat.size,
+      'mtime': stat.modified.millisecondsSinceEpoch,
+      'hash': hash,
+    };
+    return hash;
+  }
 
   Future<void> _remember(OfflineCacheEntry entry) async {
     final key = _key(entry.serverScope, entry.trackId);
@@ -677,6 +717,10 @@ class LocalMusicService extends ChangeNotifier {
           await cache.forget(record['scope'] as String, record['id'] as String);
         }
       }
+      // Descartar huellas de archivos que ya no existen.
+      _fingerprints.removeWhere((path, _) =>
+          FileSystemEntity.typeSync(path, followLinks: false) !=
+          FileSystemEntityType.file);
       await _save();
     } finally {
       scanning = false;
@@ -692,7 +736,8 @@ class LocalMusicService extends ChangeNotifier {
       'legacyOwners': _legacyOwners,
       'libraries': _libraries,
       'details': _trackDetails,
-      'destinations': _destinations
+      'destinations': _destinations,
+      'fingerprints': _fingerprints,
     });
     final result = _write.catchError((Object _) {}).then((_) async {
       await _state!.parent.create(recursive: true);

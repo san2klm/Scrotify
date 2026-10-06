@@ -207,6 +207,24 @@ void main() {
   });
   final imported = _imported();
   final themes = [AppTheme.fixedThemes[0], AppTheme.fixedThemes[1], imported];
+  for (final entry in <String, String>{
+    'Audio y calidad': 'Detectar red automáticamente',
+    'Reproducción': 'Crossfade',
+    'Apariencia y temas': 'Resolución de portadas',
+    'Servidor Jam': 'Servidor Jam',
+  }.entries) {
+    testWidgets('ajustes: categoría ${entry.key} abre su subpantalla',
+        (tester) async {
+      await _pump(tester, const SettingsScreen(), _Themes(themes[0], imported),
+          const Size(375, 812), 1.5);
+      await tester.ensureVisible(find.text(entry.key).first);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text(entry.key).first);
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      expect(find.text(entry.value), findsWidgets);
+    });
+  }
   for (final theme in themes) {
     test('Material respeta los tokens del tema ${theme.id}', () {
       final data = theme.toThemeData();

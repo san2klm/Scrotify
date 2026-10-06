@@ -970,7 +970,11 @@ class _HomeScreenState extends State<HomeScreen> {
               children: [
                 Padding(
                   padding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
-                  child: _genreSelector(),
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(
+                        maxHeight: MediaQuery.sizeOf(context).height * 0.35),
+                    child: SingleChildScrollView(child: _genreSelector()),
+                  ),
                 ),
                 Expanded(child: body),
               ],

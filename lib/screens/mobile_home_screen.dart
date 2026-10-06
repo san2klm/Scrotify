@@ -1174,7 +1174,11 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
         if (_showExplore || _searchResults != null)
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-            child: _genreSelector(),
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                  maxHeight: MediaQuery.sizeOf(context).height * 0.35),
+              child: SingleChildScrollView(child: _genreSelector()),
+            ),
           ),
         Expanded(
           child: _showExplore
