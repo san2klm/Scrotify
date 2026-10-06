@@ -160,3 +160,7 @@
 
 ## Jam Roadmap — Fase 2 (2026-10-06): modos de cola
 - [x] Modelos + `jam_queue_logic.dart` (11 tests), controlador host (aprobación, votos, fijado, modo en vivo), protocolo LAN/remoto, servidor relay (campos nuevos), UI (selector al crear, menú en vivo, ▲/▼, pin, bandeja de solicitudes). analyze 0, tests verdes.
+
+## Jam Roadmap — Fase 3 (2026-10-06): historial + guardar como playlist
+- [x] `jam_history.dart` (umbral 30 s / 50 %, resumen, filtro por participante; 5 tests), registro en el host, diálogo con "Guardar como playlist" (`createPlaylist` + `updatePlaylist`). Historial en RAM del host; se conserva tras finalizar hasta la siguiente Jam.
+- [ ] No hecho: `history_snapshot` para invitados y "guardar mis aportaciones" del invitado (el historial solo vive en el host).

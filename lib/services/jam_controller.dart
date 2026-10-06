@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import '../models/jam_models.dart';
 import 'jam_guest_service.dart';
+import 'jam_history.dart';
 import 'jam_host_service.dart';
 import 'jam_queue_logic.dart';
 import 'jam_tls_identity.dart';
@@ -54,6 +55,13 @@ class JamController extends ChangeNotifier {
   final Set<String> _pinnedIds = {};
   final Map<String, int> _myVotes = {}; // lado invitado (optimista)
   static const int _maxPendingRequests = 50;
+
+  // Historial (solo en RAM del host).
+  final JamHistory _history = JamHistory();
+  Track? _histTrack;
+  JamParticipant? _histAddedBy;
+  Duration _histMaxPos = Duration.zero;
+  final Map<String, int> _lastVotesByTrack = {};
 
   int _lastSyncServerTimestamp = 0;
   int _syncGeneration = 0;
@@ -127,6 +135,28 @@ class JamController extends ChangeNotifier {
   bool get isPublic => _session?.isPublic ?? true;
   int get maxParticipants => _session?.maxParticipants ?? 0;
   JamParticipant? get currentTrackAddedBy => _currentTrackAddedBy;
+  JamHistory get history => _history;
+  JamHistorySummary get historySummary => _history.summary();
+
+  /// Crea en Navidrome una playlist "Jam {fecha}" con el historial (opcionalmente
+  /// solo las pistas de [participantId]). Devuelve cuántas pistas guardó.
+  Future<int> saveHistoryAsPlaylist({String? participantId}) async {
+    final entries = participantId == null
+        ? _history.entries
+        : _history.byParticipant(participantId);
+    if (entries.isEmpty) return 0;
+    final now = DateTime.now();
+    final date =
+        '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+    final playlist = await _navidrome.createPlaylist('Jam $date');
+    if (playlist == null) throw Exception('No se pudo crear la playlist.');
+    await _navidrome.updatePlaylist(
+      playlistId: playlist.id,
+      songIdsToAdd: entries.map((e) => e.track.id).toList(),
+    );
+    return entries.length;
+  }
+
   JamQueueMode get queueMode => _session?.queueMode ?? _queueMode;
   int get fairTurnsPerPerson =>
       _session?.fairTurnsPerPerson ?? _fairTurnsPerPerson;
@@ -258,6 +288,7 @@ class JamController extends ChangeNotifier {
     for (var i = 0; i < _hostJamQueue.length; i++) {
       final item = _hostJamQueue[i];
       final votes = _votes.total(item.id);
+      _lastVotesByTrack[item.track.id] = votes;
       final pinned = _pinnedIds.contains(item.id);
       if (votes != item.votes || pinned != item.pinned) {
         _hostJamQueue[i] = item.copyWith(votes: votes, pinned: pinned);
@@ -915,6 +946,9 @@ class JamController extends ChangeNotifier {
     _votes.clear();
     _pinnedIds.clear();
     _myVotes.clear();
+    _history.clear();
+    _lastVotesByTrack.clear();
+    _histTrack = null;
 
     final pinCode = JamCode.generate();
     final sessionId = 'jam_${DateTime.now().millisecondsSinceEpoch}';
@@ -1044,6 +1078,7 @@ class JamController extends ChangeNotifier {
     );
 
     _rebuildHostQueueFromPlayer();
+    _trackHistory();
     _syncHostState();
     if (_session != null) _hostService.broadcastSessionState(_session!);
     _syncHostPlayback();
@@ -1090,8 +1125,36 @@ class JamController extends ChangeNotifier {
     );
   }
 
+  /// Registra en el historial la pista que acaba de terminar (si cumple el
+  /// umbral) y empieza a seguir la nueva. Con [finalize] cierra la actual.
+  void _trackHistory({bool finalize = false}) {
+    final cur = finalize ? null : _player.currentTrack;
+    if (finalize && _player.position > _histMaxPos) {
+      _histMaxPos = _player.position;
+    }
+    if (_histTrack != null && cur?.id != _histTrack!.id) {
+      _history.record(
+        _histTrack!,
+        _histAddedBy,
+        listened: _histMaxPos,
+        total: parseTrackDuration(_histTrack!.duration),
+        votes: _lastVotesByTrack[_histTrack!.id] ?? 0,
+      );
+      _histTrack = null;
+    }
+    if (cur == null) return;
+    if (_histTrack == null) {
+      _histTrack = cur;
+      _histAddedBy = _currentTrackAddedBy;
+      _histMaxPos = Duration.zero;
+    }
+    final pos = _player.position;
+    if (pos > _histMaxPos) _histMaxPos = pos;
+  }
+
   void _syncHostPlayback() {
     if (_role != JamRole.host) return;
+    _trackHistory();
     final curTrack = _player.currentTrack;
     final pos = _player.position.inMilliseconds;
     final playing = _player.playing;
@@ -1678,6 +1741,7 @@ class JamController extends ChangeNotifier {
     _hostPublishTimer = null;
 
     _player.removeListener(_onPlayerChangedAsHost);
+    if (_role == JamRole.host) _trackHistory(finalize: true);
     _remoteCreateFailures = 0;
     _nextRemoteCreateAt = null;
 

@@ -578,3 +578,7 @@ curl http://scrotify-jam:8080/health
 - Estado nuevo (todo opcional → clientes viejos lo ignoran): `queueMode`, `fairTurnsPerPerson`, `requireApproval`, `pendingRequests`; ítems con `votes`, `pinned`.
 - Ops: `vote {itemId,value}` (LAN `op:vote`, remoto `guest_action vote`). En modo aprobación el `add_to_queue` de un invitado crea una `JamQueueRequest` (no hay `propose_track` aparte, así los clientes viejos también quedan sujetos a aprobación). Aprobar/rechazar/fijar/cambiar modo son acciones locales del host; el resultado viaja en `state_sync`/`queue_updated`.
 - Desvío del roadmap: `pendingRequests` se difunde a todos y el cliente invitado filtra las suyas por nombre.
+
+## Anexo: historial (Roadmap Fase 3)
+
+El historial (`JamHistory`) vive solo en la RAM del host; el servidor no guarda nada. Una pista entra si sonó ≥30 s o ≥50 %. `JamController.saveHistoryAsPlaylist` crea "Jam YYYY-MM-DD" en Navidrome. Pendiente: compartir snapshot con invitados.

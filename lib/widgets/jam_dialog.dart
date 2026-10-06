@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'jam_history_dialog.dart';
 import 'package:flutter/services.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:provider/provider.dart';
@@ -750,6 +751,13 @@ class _JamDialogState extends State<JamDialog>
 
         const SizedBox(height: 14),
 
+        if (isHost)
+          TextButton.icon(
+            onPressed: () => JamHistoryDialog.show(context, jam),
+            icon: const Icon(Icons.history_rounded, size: 18),
+            label: const Text('Historial de la Jam'),
+          ),
+
         // Botón de Salir o Terminar
         FilledButton.tonalIcon(
           onPressed: () async {
@@ -786,6 +794,15 @@ class _JamDialogState extends State<JamDialog>
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        if (!jam.history.isEmpty)
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton.icon(
+              onPressed: () => JamHistoryDialog.show(context, jam),
+              icon: const Icon(Icons.history_rounded, size: 18),
+              label: const Text('Historial de la última Jam'),
+            ),
+          ),
         // Header
         Row(
           children: [
