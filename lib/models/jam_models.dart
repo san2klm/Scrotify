@@ -116,6 +116,40 @@ class JamServerEndpoint {
   }
 }
 
+/// Serializa una pista para el protocolo Jam. Incluye metadatos opcionales
+/// (`mbid`, `isrc`, `trackNumber`, `durationSec`) para que otros servidores
+/// Navidrome puedan emparejarla; sin credenciales (`sanitizeArtUrl`).
+Map<String, dynamic> trackToJamJson(Track t) {
+  final secs = int.tryParse(t.duration);
+  return {
+    'id': t.id,
+    'title': t.title,
+    'artist': t.artist,
+    'album': t.album,
+    'duration': t.duration,
+    'albumArtUrl': sanitizeArtUrl(t.albumArtUrl),
+    if (t.mbid != null) 'mbid': t.mbid,
+    if (t.isrc != null) 'isrc': t.isrc,
+    if (t.trackNumber != null) 'trackNumber': t.trackNumber,
+    if (secs != null) 'durationSec': secs,
+  };
+}
+
+/// Inverso tolerante de [trackToJamJson] (campos ausentes → valores por defecto).
+Track trackFromJamJson(Map<String, dynamic> j) {
+  return Track(
+    id: (j['id'] as String?) ?? '',
+    title: (j['title'] as String?) ?? 'Unknown',
+    artist: (j['artist'] as String?) ?? 'Unknown',
+    album: (j['album'] as String?) ?? 'Unknown',
+    duration: (j['duration'] as String?) ?? '',
+    albumArtUrl: j['albumArtUrl'] as String?,
+    mbid: j['mbid'] as String?,
+    isrc: j['isrc'] as String?,
+    trackNumber: (j['trackNumber'] as num?)?.toInt(),
+  );
+}
+
 /// Rol del usuario actual en la sesión Jam.
 enum JamRole { none, host, guest }
 
@@ -374,14 +408,7 @@ class JamQueueItem {
 
   Map<String, dynamic> toJson() => {
         'id': id,
-        'track': {
-          'id': track.id,
-          'title': track.title,
-          'artist': track.artist,
-          'album': track.album,
-          'duration': track.duration,
-          'albumArtUrl': sanitizeArtUrl(track.albumArtUrl),
-        },
+        'track': trackToJamJson(track),
         if (addedBy != null) 'addedBy': addedBy!.toJson(),
         'addedAt': addedAt.toIso8601String(),
         if (votes != 0) 'votes': votes,
@@ -392,14 +419,7 @@ class JamQueueItem {
     final trackJson = json['track'] as Map<String, dynamic>;
     return JamQueueItem(
       id: json['id'] as String,
-      track: Track(
-        id: (trackJson['id'] as String?) ?? '',
-        title: (trackJson['title'] as String?) ?? 'Unknown',
-        artist: (trackJson['artist'] as String?) ?? 'Unknown',
-        album: (trackJson['album'] as String?) ?? 'Unknown',
-        duration: (trackJson['duration'] as String?) ?? '',
-        albumArtUrl: trackJson['albumArtUrl'] as String?,
-      ),
+      track: trackFromJamJson(trackJson),
       addedBy: json['addedBy'] != null
           ? JamParticipant.fromJson(json['addedBy'] as Map<String, dynamic>)
           : null,
@@ -432,14 +452,7 @@ class JamQueueRequest {
 
   Map<String, dynamic> toJson() => {
         'id': id,
-        'track': {
-          'id': track.id,
-          'title': track.title,
-          'artist': track.artist,
-          'album': track.album,
-          'duration': track.duration,
-          'albumArtUrl': sanitizeArtUrl(track.albumArtUrl),
-        },
+        'track': trackToJamJson(track),
         'requestedById': requestedById,
         'requestedByName': requestedByName,
         'requestedAt': requestedAt.toIso8601String(),
@@ -450,14 +463,7 @@ class JamQueueRequest {
     final t = json['track'] as Map<String, dynamic>;
     return JamQueueRequest(
       id: json['id'] as String,
-      track: Track(
-        id: (t['id'] as String?) ?? '',
-        title: (t['title'] as String?) ?? 'Unknown',
-        artist: (t['artist'] as String?) ?? 'Unknown',
-        album: (t['album'] as String?) ?? 'Unknown',
-        duration: (t['duration'] as String?) ?? '',
-        albumArtUrl: t['albumArtUrl'] as String?,
-      ),
+      track: trackFromJamJson(t),
       requestedById: (json['requestedById'] as String?) ?? '',
       requestedByName: (json['requestedByName'] as String?) ?? 'Invitado',
       requestedAt: DateTime.tryParse((json['requestedAt'] as String?) ?? '') ??
@@ -535,15 +541,7 @@ class JamSessionState {
         'hostIp': hostIp,
         'port': port,
         'mode': mode.name,
-        if (currentTrack != null)
-          'currentTrack': {
-            'id': currentTrack!.id,
-            'title': currentTrack!.title,
-            'artist': currentTrack!.artist,
-            'album': currentTrack!.album,
-            'duration': currentTrack!.duration,
-            'albumArtUrl': sanitizeArtUrl(currentTrack!.albumArtUrl),
-          },
+        if (currentTrack != null) 'currentTrack': trackToJamJson(currentTrack!),
         if (currentTrackAddedBy != null)
           'currentTrackAddedBy': currentTrackAddedBy!.toJson(),
         'isPlaying': isPlaying,
@@ -570,14 +568,7 @@ class JamSessionState {
     Track? track;
     if (json['currentTrack'] != null) {
       final t = json['currentTrack'] as Map<String, dynamic>;
-      track = Track(
-        id: (t['id'] as String?) ?? '',
-        title: (t['title'] as String?) ?? 'Unknown',
-        artist: (t['artist'] as String?) ?? 'Unknown',
-        album: (t['album'] as String?) ?? 'Unknown',
-        duration: (t['duration'] as String?) ?? '',
-        albumArtUrl: t['albumArtUrl'] as String?,
-      );
+      track = trackFromJamJson(t);
     }
 
     JamParticipant? addedBy;

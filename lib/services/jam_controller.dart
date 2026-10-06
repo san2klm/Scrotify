@@ -9,6 +9,7 @@ import 'jam_clock.dart';
 import 'jam_history.dart';
 import 'jam_host_service.dart';
 import 'jam_queue_logic.dart';
+import 'jam_track_resolver.dart';
 import 'jam_tls_identity.dart';
 import 'navidrome_service.dart';
 import 'player_controller.dart';
@@ -57,6 +58,48 @@ class JamController extends ChangeNotifier {
   final Map<String, int> _myVotes = {}; // lado invitado (optimista)
   static const int _maxPendingRequests = 50;
   bool _hasRoomPassword = false;
+  late final JamTrackResolver _resolver = JamTrackResolver(
+    getSong: _navidrome.getSong,
+    searchSongs: (q) async => (await _navidrome.search(q)).songs,
+  );
+  bool _resolvingQueue = false;
+
+  /// Aviso discreto cuando la pista actual del host no existe en mi biblioteca.
+  String? unavailableNotice;
+
+  /// ¿Esta pista de la Jam no está en MI biblioteca? (solo invitado en modo
+  /// sincronizado, y solo si ya se resolvió).
+  bool isUnavailableForMe(String remoteTrackId) {
+    if (_role != JamRole.guest ||
+        _session?.mode != JamMode.synchronizedListening) {
+      return false;
+    }
+    final r = _resolver.cached(remoteTrackId);
+    return r != null && !r.isAvailable;
+  }
+
+  /// Resuelve la cola por lotes en segundo plano (no bloquea la UI).
+  void _scheduleQueueResolve() {
+    if (_resolvingQueue ||
+        _role != JamRole.guest ||
+        _session?.mode != JamMode.synchronizedListening) {
+      return;
+    }
+    final tracks = [
+      if (_session!.currentTrack != null) _session!.currentTrack!,
+      ..._session!.queue.map((q) => q.track),
+    ];
+    if (tracks.every((t) => _resolver.cached(t.id) != null)) return;
+    _resolvingQueue = true;
+    unawaited(_resolver
+        .resolveBatch(tracks,
+            onProgress: notifyListeners,
+            isCancelled: () => _role != JamRole.guest)
+        .whenComplete(() {
+      _resolvingQueue = false;
+    }));
+  }
+
   String? _hintSentForTrackId;
   String? _hintPreloadedTrackId;
   bool get hasRoomPassword => _hasRoomPassword;
@@ -604,6 +647,7 @@ class JamController extends ChangeNotifier {
     _guestService.onStateSync = (state) {
       _session = state;
       _currentTrackAddedBy = state.currentTrackAddedBy;
+      _scheduleQueueResolve();
       _syncGuestAudioIfApplicable(
         track: state.currentTrack,
         isPlaying: state.isPlaying,
@@ -651,6 +695,7 @@ class JamController extends ChangeNotifier {
     _guestService.onQueueUpdated = (queue) {
       if (_session != null) {
         _session = _session!.copyWith(queue: queue);
+        _scheduleQueueResolve();
         debugPrint(
           '[JAM] JamController.onQueueUpdated: id=${identityHashCode(this)} '
           'rev=${_session?.queueRevision ?? 0} qLen=${_session?.queue.length ?? 0} '
@@ -866,6 +911,9 @@ class JamController extends ChangeNotifier {
         album: album ?? '',
         albumArtUrl: albumArtUrl,
         duration: duration,
+        mbid: state['mbid'] as String?,
+        isrc: state['isrc'] as String?,
+        trackNumber: (state['trackNumber'] as num?)?.toInt(),
       );
     }
 
@@ -919,6 +967,7 @@ class JamController extends ChangeNotifier {
       );
     }
 
+    _scheduleQueueResolve();
     final refTs = (state['refTs'] as num?)?.toInt();
     final useRef = refTs != null && _remoteService.clock.isReady;
     _syncGuestAudioIfApplicable(
@@ -1049,6 +1098,9 @@ class JamController extends ChangeNotifier {
       'album': curTrack?.album,
       'albumArtUrl': sanitizeArtUrl(curTrack?.albumArtUrl),
       'duration': int.tryParse(curTrack?.duration ?? '') ?? 0,
+      if (curTrack?.mbid != null) 'mbid': curTrack!.mbid,
+      if (curTrack?.isrc != null) 'isrc': curTrack!.isrc,
+      if (curTrack?.trackNumber != null) 'trackNumber': curTrack!.trackNumber,
       'mode': _hostService.mode.name,
       'allowGuestControls': _hostService.allowGuestControls,
       'allowGuestQueueManage': _hostService.allowGuestQueueManage,
@@ -1600,9 +1652,31 @@ class JamController extends ChangeNotifier {
         return;
       }
 
+      // Emparejar con MI biblioteca (servidores distintos). Un error de red
+      // degrada al comportamiento anterior (usar la pista tal cual).
+      var playable = track;
+      try {
+        final resolution = await _resolver.resolve(track);
+        if (_syncGeneration != currentGen || _role != JamRole.guest) return;
+        if (!resolution.isAvailable) {
+          unavailableNotice =
+              '«${track.title}» no está en tu biblioteca; se omite en tu dispositivo.';
+          if (_player.playing) await _player.togglePlay();
+          notifyListeners();
+          return;
+        }
+        playable = resolution.track!;
+        if (unavailableNotice != null) {
+          unavailableNotice = null;
+          notifyListeners();
+        }
+      } catch (e) {
+        debugPrint('JamController: resolver no disponible ($e); uso la pista tal cual');
+      }
+
       // Si la canción actual es diferente, cargar y reproducir
-      if (_player.currentTrack?.id != track.id) {
-        await _player.playQueue([track], startIndex: 0);
+      if (_player.currentTrack?.id != playable.id) {
+        await _player.playQueue([playable], startIndex: 0);
         if (_syncGeneration != currentGen || _role != JamRole.guest) return;
       }
 
@@ -1664,7 +1738,15 @@ class JamController extends ChangeNotifier {
       return;
     }
     _hintPreloadedTrackId = next.id;
-    unawaited(_player.addNextInQueue(next));
+    unawaited(() async {
+      var playable = next;
+      try {
+        final r = await _resolver.resolve(next);
+        if (!r.isAvailable) return; // no existe aquí: no se precarga
+        playable = r.track!;
+      } catch (_) {}
+      if (_role == JamRole.guest) await _player.addNextInQueue(playable);
+    }());
   }
 
   /// Pista siguiente si faltan ≤10 s para terminar la actual.
@@ -1686,14 +1768,7 @@ class JamController extends ChangeNotifier {
     );
   }
 
-  Map<String, dynamic> _trackHintJson(Track t) => {
-        'id': t.id,
-        'title': t.title,
-        'artist': t.artist,
-        'album': t.album,
-        'duration': t.duration,
-        'albumArtUrl': sanitizeArtUrl(t.albumArtUrl),
-      };
+  Map<String, dynamic> _trackHintJson(Track t) => trackToJamJson(t);
 
   // ---------------------------------------------------------------------------
   // Acciones Compartidas (Cola y Reproducción)
@@ -1879,6 +1954,8 @@ class JamController extends ChangeNotifier {
     _remoteService.roomPassword = null;
     _hintSentForTrackId = null;
     _hintPreloadedTrackId = null;
+    _resolver.clear();
+    unavailableNotice = null;
     if (_role == JamRole.guest) unawaited(_player.setPlaybackSpeed(1.0));
     _hasRoomPassword = false;
     _remoteCreateFailures = 0;

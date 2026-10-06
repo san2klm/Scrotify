@@ -117,8 +117,7 @@ class JamQueuePanel extends StatelessWidget {
                       color: context.textMuted, size: 20),
                   onSelected: (v) {
                     if (v is JamQueueMode) {
-                      jam.setQueueMode(v,
-                          requireApproval: jam.requireApproval);
+                      jam.setQueueMode(v, requireApproval: jam.requireApproval);
                     } else {
                       jam.setQueueMode(
                         jam.queueMode == JamQueueMode.approval
@@ -272,6 +271,12 @@ class JamQueuePanel extends StatelessWidget {
           ],
 
           if (inJam) _JamRequestsTray(jam: jam),
+          if (inJam && jam.unavailableNotice != null)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Text(jam.unavailableNotice!,
+                  style: TextStyle(color: context.textMuted, fontSize: 11)),
+            ),
 
           // Lista Siguiente en la Cola
           Text(
@@ -318,8 +323,9 @@ class JamQueuePanel extends StatelessWidget {
                         itemCount: queueItems.length,
                         onReorderItem: canManageJamQueue
                             ? (oldIndex, newIndex) {
-                                final adjustedNew =
-                                    newIndex > oldIndex ? newIndex - 1 : newIndex;
+                                final adjustedNew = newIndex > oldIndex
+                                    ? newIndex - 1
+                                    : newIndex;
                                 jam.reorderJamQueue(oldIndex, adjustedNew);
                               }
                             : (_, __) {},
@@ -329,141 +335,156 @@ class JamQueuePanel extends StatelessWidget {
                           final isDuplicate = queueItems
                                   .where((qi) =>
                                       (qi is JamQueueItem
-                                              ? qi.track.id
-                                              : (qi as Track).id) ==
+                                          ? qi.track.id
+                                          : (qi as Track).id) ==
                                       item.track.id)
                                   .length >
                               1;
 
-                          return Container(
+                          final unavailable =
+                              jam.isUnavailableForMe(item.track.id);
+                          return Opacity(
                             key: ValueKey(item.id),
-                            margin: const EdgeInsets.only(bottom: 8),
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 10, vertical: 8),
-                            decoration: BoxDecoration(
-                              color: context.bgCard,
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: context.bgElevated),
-                            ),
-                            child: Row(
-                              children: [
-                                if (canManageJamQueue)
-                                  ReorderableDragStartListener(
-                                    index: i,
-                                    child: Padding(
+                            opacity: unavailable ? 0.45 : 1,
+                            child: Container(
+                              margin: const EdgeInsets.only(bottom: 8),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 10, vertical: 8),
+                              decoration: BoxDecoration(
+                                color: context.bgCard,
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: context.bgElevated),
+                              ),
+                              child: Row(
+                                children: [
+                                  if (canManageJamQueue)
+                                    ReorderableDragStartListener(
+                                      index: i,
+                                      child: Padding(
+                                        padding:
+                                            const EdgeInsets.only(right: 10),
+                                        child: Icon(Icons.drag_handle_rounded,
+                                            color: context.textMuted, size: 20),
+                                      ),
+                                    )
+                                  else
+                                    Padding(
                                       padding: const EdgeInsets.only(right: 10),
-                                      child: Icon(Icons.drag_handle_rounded,
-                                          color: context.textMuted, size: 20),
+                                      child: Icon(Icons.lock_outline_rounded,
+                                          color: context.textMuted, size: 17),
                                     ),
-                                  )
-                                else
-                                  Padding(
-                                    padding: const EdgeInsets.only(right: 10),
-                                    child: Icon(Icons.lock_outline_rounded,
-                                        color: context.textMuted, size: 17),
+                                  CoverArt(
+                                    url: item.track.albumArtUrl,
+                                    artist: item.track.artist,
+                                    album: item.track.album,
+                                    title: item.track.title,
+                                    width: 40,
+                                    height: 40,
+                                    borderRadius: 8,
                                   ),
-                                CoverArt(
-                                  url: item.track.albumArtUrl,
-                                  artist: item.track.artist,
-                                  album: item.track.album,
-                                  title: item.track.title,
-                                  width: 40,
-                                  height: 40,
-                                  borderRadius: 8,
-                                ),
-                                const SizedBox(width: 10),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        item.track.title,
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: TextStyle(
-                                          color: context.textPrimary,
-                                          fontSize: 13,
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                      ),
-                                      Row(
-                                        children: [
-                                          Expanded(
-                                            child: Text(
-                                              item.track.artist,
-                                              maxLines: 1,
-                                              overflow: TextOverflow.ellipsis,
-                                              style: TextStyle(
-                                                  color: context.textMuted,
-                                                  fontSize: 11),
-                                            ),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          item.track.title,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: TextStyle(
+                                            color: context.textPrimary,
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.w600,
                                           ),
-                                          if (isDuplicate) ...[
-                                            const SizedBox(width: 6),
-                                            Container(
-                                              padding:
-                                                  const EdgeInsets.symmetric(
-                                                      horizontal: 5,
-                                                      vertical: 1),
-                                              decoration: BoxDecoration(
-                                                color: context.accent2
-                                                    .withValues(alpha: 0.18),
-                                                borderRadius:
-                                                    BorderRadius.circular(4),
-                                                border: Border.all(
-                                                  color: context.accent2
-                                                      .withValues(alpha: 0.4),
-                                                  width: 0.8,
-                                                ),
-                                              ),
+                                        ),
+                                        if (unavailable)
+                                          Text(
+                                            'No disponible en tu biblioteca',
+                                            style: TextStyle(
+                                                color: context.textMuted,
+                                                fontSize: 10.5,
+                                                fontStyle: FontStyle.italic),
+                                          ),
+                                        Row(
+                                          children: [
+                                            Expanded(
                                               child: Text(
-                                                'Repetida',
+                                                item.track.artist,
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
                                                 style: TextStyle(
-                                                  color: context.accent2,
-                                                  fontSize: 9.5,
-                                                  fontWeight: FontWeight.bold,
-                                                ),
+                                                    color: context.textMuted,
+                                                    fontSize: 11),
                                               ),
                                             ),
+                                            if (isDuplicate) ...[
+                                              const SizedBox(width: 6),
+                                              Container(
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                        horizontal: 5,
+                                                        vertical: 1),
+                                                decoration: BoxDecoration(
+                                                  color: context.accent2
+                                                      .withValues(alpha: 0.18),
+                                                  borderRadius:
+                                                      BorderRadius.circular(4),
+                                                  border: Border.all(
+                                                    color: context.accent2
+                                                        .withValues(alpha: 0.4),
+                                                    width: 0.8,
+                                                  ),
+                                                ),
+                                                child: Text(
+                                                  'Repetida',
+                                                  style: TextStyle(
+                                                    color: context.accent2,
+                                                    fontSize: 9.5,
+                                                    fontWeight: FontWeight.bold,
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
                                           ],
+                                        ),
+                                        if (item.addedBy != null) ...[
+                                          const SizedBox(height: 3),
+                                          _buildAddedByBadge(item.addedBy!),
                                         ],
-                                      ),
-                                      if (item.addedBy != null) ...[
-                                        const SizedBox(height: 3),
-                                        _buildAddedByBadge(item.addedBy!),
                                       ],
-                                    ],
+                                    ),
                                   ),
-                                ),
-                                if (jam.queueMode == JamQueueMode.voting)
-                                  _VoteControls(jam: jam, item: item),
-                                if (jam.isHost)
-                                  IconButton(
-                                    tooltip: item.pinned ? 'Desfijar' : 'Fijar',
-                                    icon: Icon(
-                                        item.pinned
-                                            ? Icons.push_pin_rounded
-                                            : Icons.push_pin_outlined,
-                                        color: item.pinned
-                                            ? context.accent
-                                            : context.textMuted,
-                                        size: 18),
-                                    onPressed: () =>
-                                        jam.pinQueueItem(item.id, !item.pinned),
-                                  )
-                                else if (item.pinned)
-                                  Icon(Icons.push_pin_rounded,
-                                      color: context.accent, size: 16),
-                                if (canRemove)
-                                  IconButton(
-                                    icon: Icon(Icons.close_rounded,
-                                        color: context.textMuted, size: 18),
-                                    onPressed: () => jam.removeTrackFromJam(
-                                        item.id,
-                                        orderIndex: i),
-                                  ),
-                              ],
+                                  if (jam.queueMode == JamQueueMode.voting)
+                                    _VoteControls(jam: jam, item: item),
+                                  if (jam.isHost)
+                                    IconButton(
+                                      tooltip:
+                                          item.pinned ? 'Desfijar' : 'Fijar',
+                                      icon: Icon(
+                                          item.pinned
+                                              ? Icons.push_pin_rounded
+                                              : Icons.push_pin_outlined,
+                                          color: item.pinned
+                                              ? context.accent
+                                              : context.textMuted,
+                                          size: 18),
+                                      onPressed: () => jam.pinQueueItem(
+                                          item.id, !item.pinned),
+                                    )
+                                  else if (item.pinned)
+                                    Icon(Icons.push_pin_rounded,
+                                        color: context.accent, size: 16),
+                                  if (canRemove)
+                                    IconButton(
+                                      icon: Icon(Icons.close_rounded,
+                                          color: context.textMuted, size: 18),
+                                      onPressed: () => jam.removeTrackFromJam(
+                                          item.id,
+                                          orderIndex: i),
+                                    ),
+                                ],
+                              ),
                             ),
                           );
                         },

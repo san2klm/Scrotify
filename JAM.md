@@ -592,3 +592,7 @@ El historial (`JamHistory`) vive solo en la RAM del host; el servidor no guarda 
 
 - Reloj: `time_ping{clientTs}` → `time_pong{clientTs,serverNowMs}` (relay: `action`/`status`; LAN: `op`). `refTs` en el estado remoto = hora del relay. Umbrales en `jam_clock.dart` (`kJamDrift*`).
 - `next_track_hint{track,startAtServerMs}` (LAN) / `nextHint{track,startAtMs}` (relay).
+
+## Anexo: matching (Roadmap Fase 6)
+
+Las pistas viajan con `mbid`, `isrc`, `trackNumber`, `durationSec` opcionales. El invitado (modo sincronizado) resuelve cada pista contra su biblioteca con `JamTrackResolver`; en modo altavoz no aplica.

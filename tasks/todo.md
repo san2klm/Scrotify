@@ -176,3 +176,9 @@
 - [x] 5.2 Corrección suave: ≤50 ms nada, 50–450 ms `setPlaybackSpeed(1±0.02)` con histéresis, >450 ms seek (`kJamDrift*`). `PlayerController.setPlaybackSpeed` (A/B).
 - [x] 5.3 `next_track_hint` (LAN op / remoto `nextHint`) ~10 s antes del final: el invitado precarga la pista siguiente tras la actual (el motor A/B la prepara). `startAtServerMs` se envía pero el arranque lo marca el fin natural de la pista (+ corrección de deriva), no un temporizador.
 - [ ] Pendiente de prueba manual: 2 dispositivos, deriva media <100 ms en 10 min.
+
+## Jam Roadmap — Fase 6 (2026-10-06): matching de pistas por metadatos
+- [x] `Track` canónico ampliado (`mbid`, `isrc`, `trackNumber`; opcionales), `NavidromeService.getSong`, protocolo (`trackToJamJson`/`trackFromJamJson`, +`durationSec`), whitelist del relay.
+- [x] `jam_track_matcher.dart` (normalización, MBID > ISRC > título+artista+duración ±3 s; live/remix no equivalen al estudio; sin falsos positivos por homónimos; 10 tests) y `JamTrackResolver` (caché incl. negativos, fast path por ID verificado, errores de red no cacheados, lotes que ceden el hilo; 7 tests).
+- [x] Invitado en modo sincronizado reproduce la pista local equivalente; si no existe, la omite con aviso y la cola la muestra atenuada ("No disponible en tu biblioteca"). Error de red del resolver → comportamiento anterior.
+- Nota: la precarga `next_track_hint` también resuelve la pista local antes de encolarla.

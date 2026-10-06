@@ -79,6 +79,11 @@ function normalizeState(value, limits, existingState = null) {
   if (typeof artist === 'string') res.artist = artist.slice(0, 256);
   if (typeof album === 'string') res.album = album.slice(0, 256);
   if (typeof albumArtUrl === 'string') res.albumArtUrl = albumArtUrl.slice(0, 1024);
+  // Metadatos de la pista actual: se toman del mensaje actual, no del merge,
+  // para que no sobrevivan al cambio de pista.
+  if (typeof value.mbid === 'string') res.mbid = value.mbid.slice(0, 64);
+  if (typeof value.isrc === 'string') res.isrc = value.isrc.slice(0, 32);
+  if (Number.isInteger(value.trackNumber)) res.trackNumber = value.trackNumber;
   if (typeof duration === 'number' && Number.isFinite(duration)) {
     res.duration = Math.max(0, Math.floor(duration));
   } else if (typeof duration === 'string' && duration.trim().length > 0) {

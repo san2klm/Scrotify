@@ -34,6 +34,12 @@ class Track {
   final ReplayGainMetadata? replayGain;
   final int userRating;
 
+  /// Identificadores/metadatos para emparejar la pista entre servidores
+  /// distintos (Jam). Opcionales: OpenSubsonic los expone si están etiquetados.
+  final String? mbid;
+  final String? isrc;
+  final int? trackNumber;
+
   int get rating => userRating;
 
   Track({
@@ -51,6 +57,9 @@ class Track {
     this.createdAt,
     this.replayGain,
     this.userRating = 0,
+    this.mbid,
+    this.isrc,
+    this.trackNumber,
   });
 
   Track copyWith({
@@ -68,6 +77,9 @@ class Track {
     DateTime? createdAt,
     ReplayGainMetadata? replayGain,
     int? userRating,
+    String? mbid,
+    String? isrc,
+    int? trackNumber,
   }) {
     return Track(
       id: id ?? this.id,
@@ -84,6 +96,9 @@ class Track {
       createdAt: createdAt ?? this.createdAt,
       replayGain: replayGain ?? this.replayGain,
       userRating: userRating ?? this.userRating,
+      mbid: mbid ?? this.mbid,
+      isrc: isrc ?? this.isrc,
+      trackNumber: trackNumber ?? this.trackNumber,
     );
   }
 
@@ -139,7 +154,21 @@ class Track {
       createdAt: createdAt,
       replayGain: replayGain,
       userRating: rating,
+      mbid: (json['musicBrainzId'] ?? json['mbid']) as String?,
+      isrc: _firstIsrc(json['isrc']),
+      trackNumber: (json['track'] ?? json['trackNumber']) is num
+          ? ((json['track'] ?? json['trackNumber']) as num).toInt()
+          : null,
     );
+  }
+
+  /// OpenSubsonic devuelve `isrc` como lista; nuestro protocolo, como texto.
+  static String? _firstIsrc(dynamic raw) {
+    if (raw is String && raw.isNotEmpty) return raw;
+    if (raw is List && raw.isNotEmpty && raw.first is String) {
+      return raw.first as String;
+    }
+    return null;
   }
 }
 
@@ -740,6 +769,29 @@ class NavidromeService with ChangeNotifier {
   (String, String) _auth() {
     final salt = _randomSalt();
     return (salt, _md5('$_pass$salt'));
+  }
+
+  /// Una canción por ID (`getSong.view`); `null` si no existe en este servidor.
+  Future<Track?> getSong(String id) async {
+    if (!_connected) throw Exception('Not connected');
+    final (salt, token) = _auth();
+    final uri = Uri.parse('$_url/rest/getSong.view').replace(queryParameters: {
+      'id': id,
+      'u': _user!,
+      's': salt,
+      't': token,
+      'v': '1.16.1',
+      'c': 'Psysonic',
+      'f': 'json',
+    });
+    final response = await _client.get(uri);
+    final resp = jsonDecode(response.body)['subsonic-response'];
+    final song = resp?['song'];
+    if (resp?['status'] == 'failed' || song is! Map<String, dynamic>) {
+      return null;
+    }
+    return Track.fromJson(song,
+        albumArtUrl: _coverArtUrl(song['coverArt'], salt, token));
   }
 
   Future<SearchResults> search(String query) async {

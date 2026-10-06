@@ -139,6 +139,12 @@ class TestJamController extends ChangeNotifier implements JamController {
   int myVoteFor(String itemId) => 0;
 
   @override
+  bool isUnavailableForMe(String remoteTrackId) => false;
+
+  @override
+  String? get unavailableNotice => null;
+
+  @override
   JamConnectionState get connectionState => JamConnectionState.connected;
 
   @override
