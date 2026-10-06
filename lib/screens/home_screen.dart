@@ -12,6 +12,7 @@ import '../widgets/global_top_bar.dart';
 import '../widgets/explore_tracks_view.dart';
 import '../services/home_navigation_controller.dart';
 import '../widgets/track_context_menu.dart';
+import '../widgets/local_download_button.dart';
 import 'liked_songs_screen.dart';
 import 'playlist_detail_screen.dart';
 import 'album_detail_screen.dart';
@@ -1025,6 +1026,7 @@ class _HomeScreenState extends State<HomeScreen> {
               trailing: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
+                  LocalDownloadButton(tracks: [track], compact: true),
                   IconButton(
                     icon: Icon(Icons.more_horiz, color: context.textMuted),
                     onPressed: () => TrackContextMenu.show(context, track),

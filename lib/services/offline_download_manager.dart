@@ -406,6 +406,10 @@ class OfflineDownloadManager extends ChangeNotifier {
   Completer<void>? _currentWriteCompleter;
   Completer<void>? _nextWriteCompleter;
 
+  Future<void> Function()? beforeInitialize;
+  Future<String> Function(DownloadTask task)? destinationResolver;
+  Future<void> Function(OfflineCacheEntry entry)? onFileRegistered;
+
   final Map<String, DownloadTask> _tasks = {};
   final Map<String, _CancellationToken> _activeCancellations = {};
   bool _initialized = false;
@@ -471,6 +475,7 @@ class OfflineDownloadManager extends ChangeNotifier {
   /// converts any previously downloading tasks to paused, cleans temp files, and starts queue processing.
   Future<void> initialize() async {
     if (_initialized) return;
+    await beforeInitialize?.call();
     await _cacheService.initialize();
     await _cleanOrphanedTempFiles();
     await _loadPersistedTasks();
@@ -514,12 +519,25 @@ class OfflineDownloadManager extends ChangeNotifier {
       return existing;
     }
 
-    // If already completed and verified cache entry exists, return completed task
-    if (existing != null && existing.status == DownloadTaskStatus.completed) {
-      final cachedEntry = await _cacheService.lookup(canonicalScope, track.id);
-      if (cachedEntry != null) {
-        return existing;
-      }
+    // Consultar siempre el archivo, aunque la tarea no sobreviviera al reinicio.
+    final cachedEntry = await _cacheService.lookup(canonicalScope, track.id);
+    // Otra solicitud puede haber encolado la canción durante la consulta.
+    final concurrent = _tasks[key];
+    if (concurrent != null && concurrent.isNonTerminal) return concurrent;
+    if (cachedEntry != null) {
+      final completed = DownloadTask(
+        serverScope: canonicalScope,
+        trackId: track.id,
+        status: DownloadTaskStatus.completed,
+        title: track.title,
+        artist: track.artist,
+        album: track.album,
+        downloadedBytes: cachedEntry.byteSize,
+        totalBytes: cachedEntry.byteSize,
+      );
+      _tasks[key] = completed;
+      notifyListeners();
+      return completed;
     }
 
     final effectiveMarker = sourceMarker ?? quality?.name;
@@ -768,7 +786,9 @@ class OfflineDownloadManager extends ChangeNotifier {
 
       // Safe transfer: target file atomically replaced with rollback
       final targetPath =
-          await _cacheService.getAudioFilePath(task.serverScope, task.trackId);
+          destinationResolver != null
+              ? await destinationResolver!(task)
+              : await _cacheService.getAudioFilePath(task.serverScope, task.trackId);
       final targetFile = File(targetPath);
       final targetDir = targetFile.parent;
       if (!await targetDir.exists()) {
@@ -827,6 +847,8 @@ class OfflineDownloadManager extends ChangeNotifier {
                 durationSeconds: task.durationSeconds,
                 sourceMarker: task.sourceMarker,
               ));
+
+        await onFileRegistered?.call(entry);
 
         // Delete backup upon successful registration
         if (hadExistingTarget && await backupFile.exists()) {

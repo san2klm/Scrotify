@@ -5,6 +5,7 @@ import '../utils/app_colors.dart';
 import 'cover_art.dart';
 import 'interactive_artist_text.dart';
 import 'track_context_menu.dart';
+import 'local_download_button.dart';
 
 /// Listado existente de Explorar, compartido por ambos diseños responsive.
 class ExploreTracksView extends StatelessWidget {
@@ -118,6 +119,7 @@ class ExploreTracksView extends StatelessWidget {
                     ],
                   ),
                 ),
+                LocalDownloadButton(tracks: [track], compact: true),
                 IconButton(
                   icon: Icon(Icons.more_horiz, color: context.textMuted),
                   onPressed: () => TrackContextMenu.show(context, track),

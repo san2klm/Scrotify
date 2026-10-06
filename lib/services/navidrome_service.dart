@@ -1491,6 +1491,25 @@ class NavidromeService with ChangeNotifier {
     }
   }
 
+  /// Total exacto reportado por el servidor, independiente de la paginación.
+  Future<int?> getServerSongCount() async {
+    if (!_connected) return null;
+    final salt = _randomSalt();
+    final token = _md5('$_pass$salt');
+    final uri = Uri.parse('$_url/rest/getScanStatus.view').replace(queryParameters: {
+      'u': _user!, 's': salt, 't': token, 'v': '1.16.1',
+      'c': 'Scrotify', 'f': 'json',
+    });
+    try {
+      final response = await _client.get(uri).timeout(const Duration(seconds: 20));
+      if (response.statusCode != 200) return null;
+      final body = jsonDecode(response.body)['subsonic-response'];
+      if (body?['status'] != 'ok') return null;
+      final count = (body?['scanStatus']?['count'] as num?)?.toInt();
+      return count != null && count >= 0 ? count : null;
+    } catch (_) { return null; }
+  }
+
   Future<List<Track>> getTracks({
     String? artist,
     String? album,

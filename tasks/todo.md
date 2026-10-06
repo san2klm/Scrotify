@@ -196,3 +196,10 @@
 - Limitación: los mensajes sociales no se reenvían entre invitados LAN y de nube de la misma sala (cada transporte ve los suyos + el host).
 
 ## Backlog de la app (sección 10 del roadmap): NO abordado en esta tanda.
+
+
+## Instalación Android desde main (2026-10-06)
+
+- [x] Regenerar la base Android omitida por Git y compilar APK release del commit `35ade76`.
+- [x] Instalar por ADB (`install -r`) en Motorola edge 50 fusion: `Success`; versión `1.0.0+2002`.
+- [x] Verificar arranque (`Status: ok`), proceso activo y registro sin errores graves. Análisis limpio y 497 pruebas aprobadas en esta sesión, sin cambios posteriores de código.

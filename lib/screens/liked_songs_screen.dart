@@ -9,6 +9,7 @@ import '../widgets/persistent_player_bar.dart';
 import '../widgets/global_top_bar.dart';
 import '../widgets/playlist_actions_panel.dart';
 import '../widgets/track_context_menu.dart';
+import '../widgets/local_download_button.dart';
 import '../utils/app_colors.dart';
 import '../widgets/material_surface.dart';
 
@@ -145,6 +146,7 @@ class _LikedSongsScreenState extends State<LikedSongsScreen> {
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis),
                               ),
+                              LocalDownloadButton(tracks: tracks, collection: 'likes'),
                               IconButton(
                                 visualDensity: VisualDensity.compact,
                                 tooltip: 'Acciones de favoritos',
@@ -272,6 +274,7 @@ class _LikedSongsScreenState extends State<LikedSongsScreen> {
                                       },
                                     ),
                                     // Menú contextual ⋮
+                                    LocalDownloadButton(tracks: [track], compact: true),
                                     IconButton(
                                       visualDensity: VisualDensity.compact,
                                       tooltip: 'Acciones de la canción',

@@ -9,6 +9,7 @@ import '../widgets/playlist_actions_panel.dart';
 import '../widgets/persistent_player_bar.dart';
 import '../widgets/global_top_bar.dart';
 import '../widgets/track_context_menu.dart';
+import '../widgets/local_download_button.dart';
 import '../utils/app_colors.dart';
 import '../widgets/material_surface.dart';
 
@@ -276,6 +277,7 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis),
                               ),
+                              LocalDownloadButton(tracks: tracks, collection: 'playlist(${_playlist.name})'),
                               IconButton(
                                 visualDensity: VisualDensity.compact,
                                 tooltip: 'Acciones de playlist',
@@ -412,6 +414,7 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
                                       },
                                     ),
                                     // Tres puntitos → menú contextual
+                                    LocalDownloadButton(tracks: [track], compact: true),
                                     IconButton(
                                       visualDensity: VisualDensity.compact,
                                       tooltip: 'Acciones de la canción',

@@ -79,6 +79,7 @@ class MostPlayedItem {
 /// cola es manual: `_order` es el orden de reproducción (índices de `_queue`,
 /// barajados si el shuffle está activo) y `_pos` la posición en ese orden.
 class PlayerController extends ChangeNotifier {
+  String? Function(String trackId)? localFileResolver;
   final NavidromeService _service;
   final SettingsController _settings;
   final WaveformService _waveformService = AudioWaveformService();
@@ -994,8 +995,11 @@ class PlayerController extends ChangeNotifier {
   // Carga de fuentes
   // ---------------------------------------------------------------------------
 
-  AudioSource _sourceFor(Track t) => AudioSource.uri(Uri.parse(
-      _service.getStreamUrl(t.id, quality: _settings.effectiveQuality)));
+  AudioSource _sourceFor(Track t) {
+    final path = localFileResolver?.call(t.id);
+    return AudioSource.uri(path != null ? Uri.file(path) : Uri.parse(
+        _service.getStreamUrl(t.id, quality: _settings.effectiveQuality)));
+  }
 
   Future<void> _loadTrackOn(AudioPlayer p, int realIndex) async {
     final track = _queue[realIndex];

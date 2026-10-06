@@ -20,6 +20,7 @@ import 'services/jam_controller.dart';
 import 'services/listening_stats_service.dart';
 import 'services/navidrome_service.dart';
 import 'services/offline_cache_service.dart';
+import 'services/local_music_service.dart';
 import 'services/offline_download_manager.dart';
 import 'services/server_profiles_controller.dart';
 import 'services/home_navigation_controller.dart';
@@ -130,8 +131,14 @@ class MyApp extends StatelessWidget {
           ),
         ),
         Provider<OfflineCacheService>(
-          create: (_) => OfflineCacheService(),
+          create: (_) => OfflineCacheService(
+            metadataStore: Platform.isLinux || Platform.isWindows
+                ? InMemoryOfflineCacheMetadataStore() : null,
+          ),
           dispose: (_, service) => service.close(),
+        ),
+        ChangeNotifierProvider<LocalMusicService>(
+          create: (ctx) => LocalMusicService(ctx.read<OfflineCacheService>()),
         ),
         ChangeNotifierProvider<OfflineDownloadManager>(
           create: (ctx) => OfflineDownloadManager(
@@ -139,7 +146,13 @@ class MyApp extends StatelessWidget {
             transport: NavidromeDownloadTransport(
               ctx.read<NavidromeService>(),
             ),
-          )..initialize(),
+          )
+            ..beforeInitialize = ctx.read<LocalMusicService>().initialize
+            ..destinationResolver = ctx.read<LocalMusicService>().destination
+            ..onFileRegistered = ctx.read<LocalMusicService>().completed
+            ..initialize().catchError((Object _) {
+              debugPrint('No se pudo inicializar la biblioteca local.');
+            }),
         ),
         ChangeNotifierProvider<PlayerController>(
           create: (ctx) {
@@ -149,6 +162,11 @@ class MyApp extends StatelessWidget {
               statsService: ctx.read<ListeningStatsService>(),
               audioHandler: audioHandler,
             );
+            final music = ctx.read<LocalMusicService>();
+            player.localFileResolver = (id) {
+              final scope = ctx.read<NavidromeService>().serverScope;
+              return scope == null ? null : music.localPath(scope, id);
+            };
             // Widget de pantalla de inicio (solo Android).
             if (HomeWidgetService.isSupported) {
               HomeWidgetService(player).start();
