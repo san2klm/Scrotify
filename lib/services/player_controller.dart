@@ -79,6 +79,7 @@ class MostPlayedItem {
 /// cola es manual: `_order` es el orden de reproducción (índices de `_queue`,
 /// barajados si el shuffle está activo) y `_pos` la posición en ese orden.
 class PlayerController extends ChangeNotifier {
+  String? Function(String trackId)? localFileResolver;
   final NavidromeService _service;
   final SettingsController _settings;
   final WaveformService _waveformService = AudioWaveformService();
@@ -454,6 +455,7 @@ class PlayerController extends ChangeNotifier {
       }
     }
   }
+
   bool get gapless => _settings.gapless;
   ProcessingState get processingState => _karaokeMode
       ? (_karaokePlayer != null && (_karaokePlayer?.state.buffering ?? false)
@@ -772,9 +774,8 @@ class PlayerController extends ChangeNotifier {
     try {
       final dir = await getAppDataDirectory();
       final session = _mostPlayedSession;
-      final fileName = session != null
-          ? _historyFileName(session)
-          : 'recently_played.json';
+      final fileName =
+          session != null ? _historyFileName(session) : 'recently_played.json';
       final file = File('${dir.path}/$fileName');
       await file.writeAsString(
           jsonEncode(_recentlyPlayed.map(_trackToJson).toList()));
@@ -994,8 +995,13 @@ class PlayerController extends ChangeNotifier {
   // Carga de fuentes
   // ---------------------------------------------------------------------------
 
-  AudioSource _sourceFor(Track t) => AudioSource.uri(Uri.parse(
-      _service.getStreamUrl(t.id, quality: _settings.effectiveQuality)));
+  AudioSource _sourceFor(Track t) {
+    final path = localFileResolver?.call(t.id);
+    return AudioSource.uri(path != null
+        ? Uri.file(path)
+        : Uri.parse(
+            _service.getStreamUrl(t.id, quality: _settings.effectiveQuality)));
+  }
 
   Future<void> _loadTrackOn(AudioPlayer p, int realIndex) async {
     final track = _queue[realIndex];
@@ -1497,7 +1503,9 @@ class PlayerController extends ChangeNotifier {
     final crossfade = _crossfade;
     final repeatOne = _repeatMode == LoopMode.one;
     // Cambios de configuración en caliente: anular un fundido/a medio preparar.
-    if ((crossfade ?? Duration.zero) <= Duration.zero || repeatOne || _sleepEndsAtEndOfTrack) {
+    if ((crossfade ?? Duration.zero) <= Duration.zero ||
+        repeatOne ||
+        _sleepEndsAtEndOfTrack) {
       if (_fading || _preloaded) _cancelFade();
       return;
     }

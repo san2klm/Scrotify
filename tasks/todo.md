@@ -196,3 +196,59 @@
 - Limitación: los mensajes sociales no se reenvían entre invitados LAN y de nube de la misma sala (cada transporte ve los suyos + el host).
 
 ## Backlog de la app (sección 10 del roadmap): NO abordado en esta tanda.
+
+
+## Instalación Android desde main (2026-10-06)
+
+- [x] Regenerar la base Android omitida por Git y compilar APK release del commit `35ade76`.
+- [x] Instalar por ADB (`install -r`) en Motorola edge 50 fusion: `Success`; versión `1.0.0+2002`.
+- [x] Verificar arranque (`Status: ok`), proceso activo y registro sin errores graves. Análisis limpio y 497 pruebas aprobadas en esta sesión, sin cambios posteriores de código.
+
+## Música local (2026-10-06)
+
+- [x] Sustituir «Sesión» en Ajustes por carpeta configurable, cambiar carpeta, reescanear y contadores del servidor/locales.
+- [x] Añadir descargas y estado visible a playlists, likes y canciones en biblioteca, álbumes, artistas y reproductor.
+- [x] Guardar en raíz, `likes` y `playlist(Nombre)`; persistir identidad y huellas para saltar duplicados entre carpetas y tras reiniciar.
+- [x] Reconocer archivos movidos/copias, permitir recuperar canciones borradas y conservar archivos ajenos; comprobar rutas antes de escribir.
+- [x] Reproducción desde archivo local cuando está disponible; inicializar la biblioteca al arrancar.
+- [x] Validación: 512 pruebas aprobadas y análisis sin problemas; 10 pruebas de biblioteca y 5 del total del servidor.
+- [x] Compilación Linux release terminada correctamente; ejecutable actualizado en la ruta del acceso del escritorio.
+- [ ] Verificar selección de carpeta y descargas en un dispositivo Android real; su ubicación predeterminada usa almacenamiento de la aplicación.
+
+## Corrección de biblioteca sin internet (2026-10-06)
+
+- [x] Persistir metadatos, orden y pertenencia de playlists/likes por cuenta; no guardar portadas autenticadas ni credenciales en el índice.
+- [x] Recuperar canciones y colecciones desde disco al fallar la red, incluidas carpetas de descargas anteriores.
+- [x] Restaurar la cuenta activa en modo local al arrancar sin internet con audio disponible; conservar el login para errores de autenticación y cierres de sesión.
+- [x] Añadir «Descargadas» en Inicio y una pantalla para abrir y reproducir los archivos locales; ofrecer Reconectar.
+- [x] Evitar mostrar el formulario de login durante la transición a Inicio tras restaurar la sesión.
+- [x] Verificar pérdida de red, reinicio, orden, canciones borradas, separación de cuentas, colecciones vacías y recuperación de la conexión: 524 pruebas aprobadas y análisis limpio.
+- [x] Compilación Linux release de la corrección terminada; el acceso del escritorio apunta al ejecutable actualizado.
+
+## Ajuste de Inicio (2026-10-06)
+
+- [x] Retirar la tarjeta «Descargadas» por preferencia del usuario; conservar el aviso de conexión y las canciones, likes y playlists sin internet.
+- [x] Validar el ajuste: análisis limpio y 54 pruebas de biblioteca sin internet, Inicio y diseño adaptativo aprobadas.
+
+## Carpeta predeterminada Android (2026-10-06)
+
+- [x] Usar `/storage/emulated/0/Music` sin subcarpeta Scrotify; conservar descargas anteriores y rutas personalizadas.
+- [x] Pedir acceso al almacenamiento compartido al descargar o reescanear; análisis limpio, pruebas aprobadas y APK release compilado.
+
+## Portadas sin conexión (2026-10-06)
+
+- [x] Persistir portadas y metadatos completos de las descargas; completar las anteriores al consultar la biblioteca con conexión.
+- [x] Usar imágenes locales en canciones, playlists y reproductor, sin búsquedas de red en modo local.
+- [x] Verificar reinicio, aislamiento, imágenes inválidas, deduplicación y continuidad de la descarga de audio; compilaciones Linux y Android release terminadas.
+
+- [x] Verificación: 527 pruebas completas aprobadas; tras el último ajuste de descarga en paralelo, 68 pruebas relevantes aprobadas y análisis limpio.
+
+## Zona fija de letras en el reproductor (2026-10-06)
+
+- [x] Fijar el ancho del panel y el borde izquierdo durante los cambios de frase y la animación.
+- [x] Reservar espacios estables para la línea anterior, actual y siguiente, adaptados a la escala de texto.
+- [x] Validación: análisis sin problemas y 5 pruebas relevantes aprobadas.
+
+## Entrega en GitHub (2026-10-06)
+
+- [x] Preparar los cambios del proyecto para la rama `PC123` de `PC123PC123/Scrotify`; análisis limpio y 527 pruebas aprobadas en el estado actual.

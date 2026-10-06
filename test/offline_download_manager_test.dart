@@ -192,8 +192,10 @@ void main() {
       await manager.queueTrack(t4, serverScope: serverScope);
 
       // Wait for downloads to enter downloading status
-      await waitForStatus(serverScope, 'track-1', DownloadTaskStatus.downloading);
-      await waitForStatus(serverScope, 'track-2', DownloadTaskStatus.downloading);
+      await waitForStatus(
+          serverScope, 'track-1', DownloadTaskStatus.downloading);
+      await waitForStatus(
+          serverScope, 'track-2', DownloadTaskStatus.downloading);
 
       // With maxConcurrency=2, exactly 2 should be downloading, 2 queued
       expect(manager.activeCount, 2);
@@ -212,7 +214,8 @@ void main() {
       // Release gate 1 -> track 1 finishes, freeing a slot for track 3
       gate1.complete();
       await waitForStatus(serverScope, 'track-1', DownloadTaskStatus.completed);
-      await waitForStatus(serverScope, 'track-3', DownloadTaskStatus.downloading);
+      await waitForStatus(
+          serverScope, 'track-3', DownloadTaskStatus.downloading);
 
       expect(manager.getTask(serverScope, 'track-1')!.status,
           DownloadTaskStatus.completed);
@@ -870,42 +873,17 @@ void main() {
     });
 
     test(
-        'atomic replacement: C1 registration failure rolls back audio file and preserves existing verified bytes and lookup entry',
+        'Un fallo de registro restaura un archivo que apareció durante la transferencia',
         () async {
       const serverScope = 'https://server-atomic-rollback.local';
       const trackId = 'rollback-track-1';
-
-      // 1. Establish an existing verified cached audio file and metadata in C1
       final initialAudioPath =
           await cacheService.getAudioFilePath(serverScope, trackId);
       final initialFile = File(initialAudioPath);
-      await initialFile.parent.create(recursive: true);
-      final initialBytes = List<int>.generate(200, (i) => 42);
-      await initialFile.writeAsBytes(initialBytes, flush: true);
-
-      final originalEntry = await cacheService.registerFile(
-        serverScope: serverScope,
-        trackId: trackId,
-        localPath: initialAudioPath,
-        title: 'Original Verified Song',
-        artist: 'Original Verified Artist',
-        album: 'Original Verified Album',
-        durationSeconds: 180,
-        sourceMarker: 'lossless',
-      );
-      expect(originalEntry.byteSize, 200);
-
-      final initialLookup = await cacheService.lookup(serverScope, trackId);
-      expect(initialLookup, isNotNull);
-      expect(initialLookup!.byteSize, 200);
-      expect(initialLookup.title, 'Original Verified Song');
-      expect(initialFile.readAsBytesSync(), initialBytes);
-
-      // 2. Configure replacement download with DIFFERENT payload (500 bytes) and metadata
-      final replacementBytes = List<int>.generate(500, (i) => 99);
+      final initialBytes = List<int>.filled(200, 42);
+      final replacementBytes = List<int>.filled(500, 99);
       fakeTransport.setPayload(trackId, replacementBytes);
-
-      // Inject C1 registration failure via controlled seam
+      fakeTransport.gate(trackId);
       manager.c1RegisterSeam = ({
         required String serverScope,
         required String trackId,
@@ -916,54 +894,53 @@ void main() {
         int? durationSeconds,
         String? sourceMarker,
       }) async {
-        throw const FileSystemException(
-            'Injected C1 database registration failure');
+        throw const FileSystemException('Fallo de registro simulado');
       };
-
-      final replacementTrack = createTestTrack(
-        id: trackId,
-        title: 'New Malformed Song',
-        artist: 'New Artist',
-        album: 'New Album',
-      );
-
-      // Queue replacement download
+      final replacementTrack =
+          createTestTrack(id: trackId, title: 'Nueva canción');
       final task =
           await manager.queueTrack(replacementTrack, serverScope: serverScope);
       expect(task.status,
           anyOf(DownloadTaskStatus.queued, DownloadTaskStatus.downloading));
-
-      // Wait for download attempt, atomic swap attempt, and rollback
-      await Future<void>.delayed(const Duration(milliseconds: 60));
-
-      final failedTask = manager.getTask(serverScope, trackId)!;
-      expect(failedTask.status, DownloadTaskStatus.failed);
-      expect(failedTask.failureCategory, DownloadFailureCategory.storage);
-
-      // 3. PROVE existing verified audio bytes and lookup entry remain completely unchanged
-      expect(initialFile.existsSync(), isTrue);
-      final bytesOnDisk = initialFile.readAsBytesSync();
-      expect(bytesOnDisk, equals(initialBytes));
-      expect(bytesOnDisk, isNot(equals(replacementBytes)));
-
-      final lookupAfterRollback =
-          await cacheService.lookup(serverScope, trackId);
-      expect(lookupAfterRollback, isNotNull);
-      expect(lookupAfterRollback!.byteSize, 200);
-      expect(lookupAfterRollback.title, 'Original Verified Song');
-      expect(lookupAfterRollback.artist, 'Original Verified Artist');
-
-      // 4. Verify temporary and backup artifacts were cleaned up
-      final backupFile = File('$initialAudioPath.bak');
-      expect(backupFile.existsSync(), isFalse);
-
-      final tempFile = await manager.getTempFile(serverScope, trackId);
-      expect(tempFile.existsSync(), isFalse);
-
-      final tmpDir = Directory(p.join(tempDir.path, 'download_tmp'));
-      if (tmpDir.existsSync()) {
-        expect(tmpDir.listSync(), isEmpty);
+      // La consulta inicial no encuentra audio; aparece mientras la red está detenida.
+      while (fakeTransport.callCounts[trackId] == null) {
+        await Future<void>.delayed(const Duration(milliseconds: 1));
       }
+      await initialFile.parent.create(recursive: true);
+      await initialFile.writeAsBytes(initialBytes, flush: true);
+      await cacheService.registerFile(
+        serverScope: serverScope,
+        trackId: trackId,
+        localPath: initialAudioPath,
+        title: 'Canción original',
+        artist: 'Artista original',
+        album: 'Álbum original',
+        durationSeconds: 180,
+        sourceMarker: 'lossless',
+      );
+      final finished = Completer<void>();
+      void listener() {
+        if (manager.getTask(serverScope, trackId)?.status ==
+                DownloadTaskStatus.failed &&
+            !finished.isCompleted) {
+          finished.complete();
+        }
+      }
+
+      manager.addListener(listener);
+      fakeTransport.releaseGate(trackId);
+      await finished.future.timeout(const Duration(seconds: 5));
+      manager.removeListener(listener);
+      final failedTask = manager.getTask(serverScope, trackId)!;
+      expect(failedTask.failureCategory, DownloadFailureCategory.storage);
+      expect(await initialFile.readAsBytes(), initialBytes);
+      final lookup = await cacheService.lookup(serverScope, trackId);
+      expect(lookup?.byteSize, 200);
+      expect(lookup?.title, 'Canción original');
+      expect(lookup?.artist, 'Artista original');
+      expect(await File('$initialAudioPath.bak').exists(), isFalse);
+      expect(await (await manager.getTempFile(serverScope, trackId)).exists(),
+          isFalse);
     });
 
     test(

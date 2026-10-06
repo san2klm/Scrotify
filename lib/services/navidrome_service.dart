@@ -11,6 +11,7 @@ import 'package:crypto/crypto.dart';
 import '../models/jam_models.dart';
 import '../models/server_profile.dart';
 import 'offline_cache_service.dart';
+import 'local_music_service.dart';
 import 'offline_download_manager.dart';
 import 'replay_gain.dart';
 import 'server_profiles_controller.dart';
@@ -359,7 +360,10 @@ class StructuredLyricBlock {
 }
 
 class NavidromeService with ChangeNotifier {
-  NavidromeService({SettingsController? settings, http.Client? httpClient, ServerProfilesController? profilesController}) {
+  NavidromeService(
+      {SettingsController? settings,
+      http.Client? httpClient,
+      ServerProfilesController? profilesController}) {
     _injectedClient = httpClient;
     _client = httpClient ?? http.Client();
     if (settings != null) {
@@ -387,11 +391,12 @@ class NavidromeService with ChangeNotifier {
     final activeProfile = _profilesController?.activeProfile;
     if (activeProfile != null &&
         (activeProfile.url != _url ||
-         activeProfile.username != _user ||
-         activeProfile.password != _pass)) {
-      debugPrint('Active profile changed, reconnecting to ${activeProfile.url} as ${activeProfile.username}');
+            activeProfile.username != _user ||
+            activeProfile.password != _pass)) {
+      debugPrint(
+          'Active profile changed, reconnecting to ${activeProfile.url} as ${activeProfile.username}');
       unawaited(_disconnectAndReconnect(activeProfile));
-    } else if (activeProfile == null && _connected) {
+    } else if (activeProfile == null && (_connected || _offlineMode)) {
       // No active profile, disconnect
       debugPrint('No active profile, disconnecting');
       disconnect();
@@ -402,24 +407,33 @@ class NavidromeService with ChangeNotifier {
     final activeProfile = _profilesController?.activeProfile;
     if (activeProfile != null) {
       debugPrint('Loading initial profile: ${activeProfile.url}');
-      connectByUrl(activeProfile.url, activeProfile.username, activeProfile.password);
+      connectByUrl(
+              activeProfile.url, activeProfile.username, activeProfile.password)
+          .catchError((Object _) {});
     }
   }
 
   Future<void> _disconnectAndReconnect(ServerProfile profile) async {
-    if (_connected) {
+    if (_connected || _offlineMode) {
       disconnect();
     }
     try {
       await connectByUrl(profile.url, profile.username, profile.password);
     } catch (e) {
-      debugPrint('NavidromeService reconnect error: $e');
+      if (isNetworkFailure(e)) {
+        await openOfflineLibrary(
+            profile.url, profile.username, profile.password);
+      }
+      debugPrint('No se pudo reconectar con el servidor.');
     }
   }
 
   String? _url;
   String? _user;
   String? _pass;
+  LocalMusicService? localMusic;
+  bool _offlineMode = false;
+  bool get offlineMode => _offlineMode;
   bool _connected = false;
   http.Client? _injectedClient;
   late http.Client _client;
@@ -429,7 +443,9 @@ class NavidromeService with ChangeNotifier {
 
   /// Clave única representativa de la sesión y usuario actual conectado.
   String? get currentSessionKey =>
-      _connected && _url != null && _user != null ? '$_url|$_user#$_sessionVersion' : null;
+      (_connected || _offlineMode) && _url != null && _user != null
+          ? '$_url|$_user#$_sessionVersion'
+          : null;
 
   /// Opaque cache scope segment identifying the current connected server.
   /// Never exposes URLs, usernames, passwords, or tokens.
@@ -451,7 +467,8 @@ class NavidromeService with ChangeNotifier {
     if (scope == null) return name;
     final parts = name.split('.');
     final ext = parts.length > 1 ? '.${parts.last}' : '';
-    final base = parts.length > 1 ? parts.sublist(0, parts.length - 1).join('.') : name;
+    final base =
+        parts.length > 1 ? parts.sublist(0, parts.length - 1).join('.') : name;
     return '${base}_$scope$ext';
   }
 
@@ -466,7 +483,9 @@ class NavidromeService with ChangeNotifier {
       if (sScope != null) {
         final parts = name.split('.');
         final ext = parts.length > 1 ? '.${parts.last}' : '';
-        final base = parts.length > 1 ? parts.sublist(0, parts.length - 1).join('.') : name;
+        final base = parts.length > 1
+            ? parts.sublist(0, parts.length - 1).join('.')
+            : name;
         final legacyFile = File('${dir.path}/${base}_$sScope$ext');
         if (await legacyFile.exists()) {
           return legacyFile;
@@ -514,6 +533,7 @@ class NavidromeService with ChangeNotifier {
     _pass = password;
     _resetCoverAuth();
     _connected = true;
+    _offlineMode = false;
     _sessionVersion++;
     _starredIds.clear();
     _starredSongOrder.clear();
@@ -613,7 +633,8 @@ class NavidromeService with ChangeNotifier {
         'f': 'json',
       });
 
-      final response = await _client.get(uri);
+      final response =
+          await _client.get(uri).timeout(const Duration(seconds: 8));
 
       debugPrint('Auth response status: ${response.statusCode}');
 
@@ -628,6 +649,7 @@ class NavidromeService with ChangeNotifier {
 
         if (data['subsonic-response']['status'] == 'ok') {
           _connected = true;
+          _offlineMode = false;
           _sessionVersion++;
           _starredIds.clear();
           _starredSongOrder.clear();
@@ -656,6 +678,110 @@ class NavidromeService with ChangeNotifier {
     } catch (e) {
       rethrow;
     }
+  }
+
+  static bool isNetworkFailure(Object error) =>
+      error is SocketException ||
+      error is TimeoutException ||
+      error is http.ClientException;
+
+  /// Solo restaura una cuenta guardada con audio disponible; no autentica contra el servidor.
+  Future<bool> openOfflineLibrary(
+      String url, String username, String password) async {
+    final music = localMusic;
+    if (music == null) return false;
+    await music.initialize();
+    var normalized = url.endsWith('/') ? url.substring(0, url.length - 1) : url;
+    if (!normalized.startsWith('http://') &&
+        !normalized.startsWith('https://')) {
+      normalized = 'https://$normalized';
+    }
+    final scope = OfflineCacheService.safeScopeSegment(normalized);
+    if (music.count(scope) == 0) return false;
+    _url = normalized;
+    _user = username;
+    _pass = password;
+    _connected = false;
+    _offlineMode = true;
+    _sessionVersion++;
+    _resetCoverAuth();
+    _starredIds.clear();
+    _starredSongOrder.clear();
+    _pinnedPlaylistIds.clear();
+    _followedArtistIds.clear();
+    _excludedArtistIds.clear();
+    _artistCache.clear();
+    _trackRatings.clear();
+    _cachedGenres = null;
+    await music.bindLegacyCollections(scope, userScope!);
+    await _loadPins();
+    await _loadStarredOrder();
+    _starredIds
+        .addAll(music.offlineLikes(scope, userScope!).map((track) => track.id));
+    notifyListeners();
+    return true;
+  }
+
+  Future<void> reconnect() async {
+    if (_url == null || _user == null || _pass == null) return;
+    await connectByUrl(_url!, _user!, _pass!);
+  }
+
+  /// Conserva datos por cuenta y recurre a los archivos locales al perder la red.
+  Future<T> _readLibrary<T>(Future<T> Function() fetch,
+      T Function(LocalMusicService music, String scope, String user) fallback,
+      {Future<void> Function(LocalMusicService music, String user, T data)?
+          remember}) async {
+    final music = localMusic;
+    final scope = serverScope;
+    final user = userScope;
+    if (music == null || scope == null || user == null) return fetch();
+    try {
+      await music.initialize();
+    } catch (_) {
+      if (_connected && !_offlineMode) return fetch();
+      rethrow;
+    }
+    await music.bindLegacyCollections(scope, user);
+    if (!_connected || _offlineMode) return fallback(music, scope, user);
+    final session = currentSessionKey;
+    T data;
+    try {
+      data = await fetch().timeout(const Duration(seconds: 8));
+    } catch (error) {
+      if (currentSessionKey != session) rethrow;
+      if (isNetworkFailure(error)) {
+        _connected = false;
+        _offlineMode = true;
+        notifyListeners();
+      }
+      return fallback(music, scope, user);
+    }
+    // Una respuesta atrasada no debe guardarse bajo una cuenta nueva.
+    if (currentSessionKey == session && remember != null) {
+      try {
+        await remember(music, user, data);
+      } catch (_) {
+        debugPrint('No se pudo guardar la biblioteca sin conexión.');
+      }
+    }
+    if (currentSessionKey == session) {
+      Future<void> cacheArtwork() async {
+        if (data is List<Track>) {
+          await music.cacheDownloadedArtwork(scope, data);
+        } else if (data is List<Playlist>) {
+          for (final playlist in data) {
+            await music.cachePlaylistArtwork(scope, playlist);
+          }
+        } else if (data is Playlist) {
+          await music.cachePlaylistArtwork(scope, data);
+        }
+      }
+
+      // Las portadas se completan sin bloquear la apertura de la biblioteca.
+      unawaited(cacheArtwork().catchError((Object _) {}));
+    }
+    return data;
   }
 
   Future<List<dynamic>> getMusicFolders() async {
@@ -717,7 +843,8 @@ class NavidromeService with ChangeNotifier {
         artist['coverArt'] = _coverArtUrl(artist['coverArt'], salt, token);
         allArtists.add(artist);
         try {
-          final model = Artist.fromJson(artist, coverArtUrl: artist['coverArt'] as String?);
+          final model = Artist.fromJson(artist,
+              coverArtUrl: artist['coverArt'] as String?);
           _artistCache[model.id] = model;
         } catch (err) {
           debugPrint('navidrome_service:688 ignorado: $err');
@@ -850,7 +977,11 @@ class NavidromeService with ChangeNotifier {
   // ---------------------------------------------------------------------------
   // Playlists
   // ---------------------------------------------------------------------------
-  Future<List<Playlist>> getPlaylists() async {
+  Future<List<Playlist>> getPlaylists() => _readLibrary(_fetchPlaylists,
+      (music, scope, user) => music.offlinePlaylists(scope, user),
+      remember: (music, user, data) => music.rememberPlaylists(user, data));
+
+  Future<List<Playlist>> _fetchPlaylists() async {
     if (!_connected) throw Exception('Not connected');
     final (salt, token) = _auth();
 
@@ -865,8 +996,8 @@ class NavidromeService with ChangeNotifier {
     });
 
     final response = await _client.get(uri);
-    final data = jsonDecode(response.body);
-    final list = data['subsonic-response']?['playlists']?['playlist'] as List?;
+    final body = _playlistResponse(response);
+    final list = body['playlists']?['playlist'] as List?;
 
     if (list == null) return [];
 
@@ -1081,7 +1212,16 @@ class NavidromeService with ChangeNotifier {
     await _client.get(uri);
   }
 
-  Future<Playlist?> getPlaylist(String playlistId) async {
+  Future<Playlist?> getPlaylist(String playlistId) => _readLibrary(
+      () => _fetchPlaylist(playlistId),
+      (music, scope, user) => music
+          .offlinePlaylists(scope, user)
+          .where((playlist) => playlist.id == playlistId)
+          .firstOrNull,
+      remember: (music, user, data) =>
+          data == null ? Future.value() : music.rememberPlaylist(user, data));
+
+  Future<Playlist?> _fetchPlaylist(String playlistId) async {
     if (!_connected) throw Exception('Not connected');
     final (salt, token) = _auth();
     final uri =
@@ -1102,7 +1242,14 @@ class NavidromeService with ChangeNotifier {
         coverArtUrl: _coverArtUrl(p['coverArt'], salt, token));
   }
 
-  Future<List<Track>> getPlaylistTracks(String playlistId) async {
+  Future<List<Track>> getPlaylistTracks(String playlistId) => _readLibrary(
+      () => _fetchPlaylistTracks(playlistId),
+      (music, scope, user) =>
+          music.offlinePlaylistTracks(scope, user, playlistId),
+      remember: (music, user, data) =>
+          music.rememberPlaylistTracks(user, playlistId, data));
+
+  Future<List<Track>> _fetchPlaylistTracks(String playlistId) async {
     if (!_connected) throw Exception('Not connected');
     final (salt, token) = _auth();
     final uri =
@@ -1166,7 +1313,11 @@ class NavidromeService with ChangeNotifier {
     }
   }
 
-  Future<List<Track>> getStarred() async {
+  Future<List<Track>> getStarred() => _readLibrary(_fetchStarred,
+      (music, scope, user) => _offlineStarred(music, scope, user),
+      remember: (music, user, data) => music.rememberLikes(user, data));
+
+  Future<List<Track>> _fetchStarred() async {
     if (!_connected) throw Exception('Not connected');
     final (salt, token) = _auth();
     final uri =
@@ -1179,8 +1330,8 @@ class NavidromeService with ChangeNotifier {
       'f': 'json',
     });
     final response = await _client.get(uri);
-    final data = jsonDecode(response.body);
-    final songs = data['subsonic-response']?['starred2']?['song'] as List?;
+    final body = _playlistResponse(response);
+    final songs = body['starred2']?['song'] as List?;
     if (songs == null) return [];
     final tracks = songs
         .map((j) => Track.fromJson(j as Map<String, dynamic>,
@@ -1189,6 +1340,15 @@ class NavidromeService with ChangeNotifier {
     _starredIds
       ..clear()
       ..addAll(tracks.map((t) => t.id));
+    return _applyStarredOrder(tracks);
+  }
+
+  List<Track> _offlineStarred(
+      LocalMusicService music, String scope, String user) {
+    final tracks = music.offlineLikes(scope, user);
+    _starredIds
+      ..clear()
+      ..addAll(tracks.map((track) => track.id));
     return _applyStarredOrder(tracks);
   }
 
@@ -1248,7 +1408,8 @@ class NavidromeService with ChangeNotifier {
   Future<void> _saveStarredOrder() async {
     try {
       final dir = await getAppDataDirectory();
-      final file = File('${dir.path}/${_scopedName("starred_track_order.json")}');
+      final file =
+          File('${dir.path}/${_scopedName("starred_track_order.json")}');
       await file.writeAsString(jsonEncode(_starredSongOrder));
     } catch (_) {
       // El cambio ya está aplicado en memoria aunque no pueda persistirse.
@@ -1419,8 +1580,10 @@ class NavidromeService with ChangeNotifier {
   List<Track> sortByRating(List<Track> tracks) {
     final sorted = List<Track>.from(tracks);
     sorted.sort((a, b) {
-      final ratingA = getTrackRating(a.id) != 0 ? getTrackRating(a.id) : a.userRating;
-      final ratingB = getTrackRating(b.id) != 0 ? getTrackRating(b.id) : b.userRating;
+      final ratingA =
+          getTrackRating(a.id) != 0 ? getTrackRating(a.id) : a.userRating;
+      final ratingB =
+          getTrackRating(b.id) != 0 ? getTrackRating(b.id) : b.userRating;
       return ratingB.compareTo(ratingA);
     });
     return sorted;
@@ -1491,7 +1654,55 @@ class NavidromeService with ChangeNotifier {
     }
   }
 
-  Future<List<Track>> getTracks({
+  /// Total exacto reportado por el servidor, independiente de la paginación.
+  Future<int?> getServerSongCount() async {
+    if (!_connected) return null;
+    final salt = _randomSalt();
+    final token = _md5('$_pass$salt');
+    final uri =
+        Uri.parse('$_url/rest/getScanStatus.view').replace(queryParameters: {
+      'u': _user!,
+      's': salt,
+      't': token,
+      'v': '1.16.1',
+      'c': 'Scrotify',
+      'f': 'json',
+    });
+    try {
+      final response =
+          await _client.get(uri).timeout(const Duration(seconds: 20));
+      if (response.statusCode != 200) return null;
+      final body = jsonDecode(response.body)['subsonic-response'];
+      if (body?['status'] != 'ok' || body?['scanStatus']?['scanning'] == true) {
+        return null;
+      }
+      final count = (body?['scanStatus']?['count'] as num?)?.toInt();
+      return count != null && count >= 0 ? count : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<List<Track>> getTracks(
+          {String? artist, String? album, int limit = 500, int offset = 0}) =>
+      _readLibrary(
+          () => _fetchTracks(
+              artist: artist,
+              album: album,
+              limit: limit,
+              offset: offset), (music, scope, user) {
+        final tracks = music
+            .downloadedTracks(scope)
+            .where((track) =>
+                (artist == null || track.artist == artist) &&
+                (album == null || track.album == album))
+            .toList()
+          ..sort(
+              (a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()));
+        return tracks.skip(offset).take(limit).toList();
+      });
+
+  Future<List<Track>> _fetchTracks({
     String? artist,
     String? album,
     int limit = 500,
@@ -2037,7 +2248,8 @@ class NavidromeService with ChangeNotifier {
     _lastSelectedGenreSuggestion = genre;
     try {
       final dir = await getAppDataDirectory();
-      final file = File('${dir.path}/${_scopedName("last_genre_suggestion.json")}');
+      final file =
+          File('${dir.path}/${_scopedName("last_genre_suggestion.json")}');
       await file.writeAsString(jsonEncode({'genre': genre}));
     } catch (err) {
       debugPrint('navidrome_service:1948 ignorado: $err');
@@ -2084,7 +2296,13 @@ class NavidromeService with ChangeNotifier {
   /// consulta. Se expanden álbumes en orden y se detiene al alcanzar [limit].
   /// Protegido contra desconexiones para mantener seguro el montaje de Home.
   Future<List<Track>> getRecentlyAddedTracks({int limit = 20}) async {
-    if (!_connected || limit <= 0) return [];
+    if (limit <= 0) return [];
+    if (!_connected || _offlineMode) {
+      await localMusic?.initialize();
+      return (localMusic?.downloadedTracks(serverScope) ?? [])
+          .take(limit)
+          .toList();
+    }
     try {
       final albums = await getAlbums(type: 'newest', limit: limit);
       final tracks = <Track>[];
@@ -2096,7 +2314,10 @@ class NavidromeService with ChangeNotifier {
       return tracks;
     } catch (e) {
       debugPrint('NavidromeService.getRecentlyAddedTracks error: $e');
-      return [];
+      await localMusic?.initialize();
+      return (localMusic?.downloadedTracks(serverScope) ?? [])
+          .take(limit)
+          .toList();
     }
   }
 
@@ -2509,6 +2730,7 @@ class NavidromeService with ChangeNotifier {
 
   void disconnect() {
     _connected = false;
+    _offlineMode = false;
     _url = null;
     _user = null;
     _pass = null;

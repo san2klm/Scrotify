@@ -5,12 +5,11 @@ import '../models/jam_models.dart';
 import '../services/navidrome_service.dart';
 import '../services/remote_jam_service.dart';
 import '../services/pairing_server.dart';
-import '../services/secure_storage.dart';
 import '../services/settings_controller.dart';
 import '../widgets/pairing_panel.dart';
 import '../widgets/theme_grid.dart';
+import '../widgets/local_music_settings.dart';
 import 'equalizer_screen.dart';
-import 'login_screen.dart';
 import 'stats_screen.dart';
 import '../utils/app_colors.dart';
 import '../utils/responsive.dart';
@@ -321,26 +320,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   const _PlaylistsManager(),
 
                   // ---------------------------------------------------------------
-                  // Cierre de sesión; las cuentas se gestionan desde el avatar.
+                  // Música descargada y ubicación de la biblioteca local.
                   // ---------------------------------------------------------------
-                  _sectionTitle('Sesión'),
-                  _card(
-                    children: [
-                      SizedBox(
-                        width: double.infinity,
-                        child: OutlinedButton.icon(
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: context.danger,
-                            side: BorderSide(color: context.danger),
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                          ),
-                          icon: const Icon(Icons.logout, size: 18),
-                          label: const Text('Cerrar sesión plana'),
-                          onPressed: () => _confirmLogout(context),
-                        ),
-                      ),
-                    ],
-                  ),
+                  _sectionTitle('Música local'),
+                  _card(children: const [LocalMusicSettings()]),
 
                   // ---------------------------------------------------------------
                   // Vincular con el teléfono
@@ -376,45 +359,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
         },
       ),
     );
-  }
-
-  void _confirmLogout(BuildContext context) {
-    final nav = context.read<NavidromeService>();
-    final server = context.read<PairingServer>();
-    final navigator = Navigator.of(context);
-    showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: context.bgCard,
-        title: Text('¿Cerrar sesión?',
-            style: TextStyle(color: context.textPrimary)),
-        content: Text(
-          'Se eliminarán las credenciales guardadas en este dispositivo y volverás a la pantalla de inicio de sesión.',
-          style: TextStyle(color: context.textSecondary),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: Text('Cancelar',
-                style: TextStyle(color: context.textSecondary)),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(true),
-            child:
-                Text('Cerrar sesión', style: TextStyle(color: context.danger)),
-          ),
-        ],
-      ),
-    ).then((confirmed) async {
-      if (confirmed != true) return;
-      await server.stop();
-      await SecureStorage.clearCredentials();
-      nav.disconnect();
-      navigator.pushAndRemoveUntil(
-        MaterialPageRoute(builder: (_) => const LoginScreen()),
-        (route) => false,
-      );
-    });
   }
 
   // ---------------------------------------------------------------------------

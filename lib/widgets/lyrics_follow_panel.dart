@@ -9,7 +9,7 @@ import '../utils/app_colors.dart';
 /// Panel lateral de karaoke para pantalla grande.
 ///
 /// No muestra la letra completa: muestra la línea que sigue la canción
-/// (anterior atenuada + actual destacada + siguientes).
+/// (anterior atenuada + actual destacada + siguiente).
 class LyricsFollowPanel extends StatefulWidget {
   final Track track;
 
@@ -60,6 +60,7 @@ class _LyricsFollowPanelState extends State<LyricsFollowPanel> {
           end: Offset.zero,
         ).animate(curved),
         child: ScaleTransition(
+          alignment: Alignment.centerLeft,
           scale: Tween<double>(begin: 0.97, end: 1.0).animate(curved),
           child: child,
         ),
@@ -112,8 +113,7 @@ class _LyricsFollowPanelState extends State<LyricsFollowPanel> {
           return Center(
             child: Text(
               'Sin letra disponible',
-              style:
-                  TextStyle(color: context.textSecondary, fontSize: 14),
+              style: TextStyle(color: context.textSecondary, fontSize: 14),
             ),
           );
         }
@@ -132,8 +132,7 @@ class _LyricsFollowPanelState extends State<LyricsFollowPanel> {
         // Sin tiempos no se puede seguir: scroll manual como fallback.
         if (!result.synced) {
           return SingleChildScrollView(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
             child: Text(
               result.plainText,
               textAlign: TextAlign.left,
@@ -156,14 +155,10 @@ class _LyricsFollowPanelState extends State<LyricsFollowPanel> {
                 final index = _indexFor(result.lines, pos);
 
                 String prev = '';
-                String current = index >= 0
-                    ? result.lines[index].text
-                    : '♪ ♪ ♪';
+                String current =
+                    index >= 0 ? result.lines[index].text : '♪ ♪ ♪';
                 String next1 = (index + 1) < result.lines.length
                     ? result.lines[index + 1].text
-                    : '';
-                String next2 = (index + 2) < result.lines.length
-                    ? result.lines[index + 2].text
                     : '';
                 if (index > 0) {
                   prev = result.lines[index - 1].text;
@@ -176,81 +171,48 @@ class _LyricsFollowPanelState extends State<LyricsFollowPanel> {
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       mainAxisAlignment: MainAxisAlignment.center,
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                      // El ancho depende del panel, nunca del largo de la frase.
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        _sourcePill(result.source),
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: _sourcePill(result.source),
+                        ),
                         const SizedBox(height: 12),
-                        if (prev.isNotEmpty)
-                          _fluidSwitcher(
-                            keySuffix: 'prev:$index',
-                            duration:
-                                const Duration(milliseconds: 450),
-                            child: Text(
-                              prev,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                color: context.textMuted,
-                                fontSize: 14,
-                                height: 1.4,
-                              ),
-                            ),
-                          ),
-                        if (prev.isNotEmpty)
-                          const SizedBox(height: 10),
-                        // Línea actual: la que sigue la canción.
-                        _fluidSwitcher(
-                          keySuffix: 'current:$index',
-                          duration:
-                              const Duration(milliseconds: 550),
-                          child: Text(
-                            current,
-                            maxLines: 3,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              color: context.textPrimary,
-                              fontSize: 24,
-                              fontWeight: FontWeight.bold,
-                              height: 1.25,
-                            ),
+                        _lineSlot(
+                          keySuffix: 'prev:$index',
+                          text: prev,
+                          maxLines: 2,
+                          style: TextStyle(
+                            color: context.textMuted,
+                            fontSize: 14,
+                            height: 1.4,
                           ),
                         ),
                         const SizedBox(height: 10),
-                      if (next1.isNotEmpty)
-                        _fluidSwitcher(
+                        _lineSlot(
+                          keySuffix: 'current:$index',
+                          text: current,
+                          maxLines: 3,
+                          duration: const Duration(milliseconds: 550),
+                          style: TextStyle(
+                            color: context.textPrimary,
+                            fontSize: 24,
+                            fontWeight: FontWeight.bold,
+                            height: 1.25,
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        _lineSlot(
                           keySuffix: 'next1:$index',
-                          duration:
-                              const Duration(milliseconds: 450),
-                          child: Text(
-                            next1,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              color: context.textSecondary,
-                              fontSize: 16,
-                              height: 1.4,
-                            ),
+                          text: next1,
+                          maxLines: 2,
+                          style: TextStyle(
+                            color: context.textSecondary,
+                            fontSize: 16,
+                            height: 1.4,
                           ),
                         ),
-                      if (next2.isNotEmpty) ...[
-                        const SizedBox(height: 8),
-                        _fluidSwitcher(
-                          keySuffix: 'next2:$index',
-                          duration:
-                              const Duration(milliseconds: 450),
-                          child: Text(
-                            next2,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              color: context.textMuted
-                                  .withValues(alpha: 0.7),
-                              fontSize: 14,
-                              height: 1.4,
-                            ),
-                          ),
-                        ),
-                      ],
                       ],
                     ),
                   ),
@@ -260,6 +222,38 @@ class _LyricsFollowPanelState extends State<LyricsFollowPanel> {
           },
         );
       },
+    );
+  }
+
+  /// Reserva cada zona incluso al principio o al final de la canción.
+  Widget _lineSlot({
+    required String keySuffix,
+    required String text,
+    required int maxLines,
+    required TextStyle style,
+    Duration duration = const Duration(milliseconds: 450),
+  }) {
+    final lineHeight =
+        MediaQuery.textScalerOf(context).scale(style.fontSize!) * style.height!;
+    return SizedBox(
+      height: lineHeight * maxLines,
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: _fluidSwitcher(
+          keySuffix: keySuffix,
+          duration: duration,
+          child: SizedBox(
+            width: double.infinity,
+            child: Text(
+              text,
+              textAlign: TextAlign.left,
+              maxLines: maxLines,
+              overflow: TextOverflow.ellipsis,
+              style: style,
+            ),
+          ),
+        ),
+      ),
     );
   }
 
