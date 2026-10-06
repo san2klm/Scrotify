@@ -18,6 +18,8 @@ El panel (`/admin`) edita límites (participantes, salas, cola, tamaño de mensa
 
 `GET /api/capabilities` devuelve `protocolVersion`, funciones habilitadas y límites para que el cliente adapte su UI.
 
+**Funciones del relay (todas configurables sin reiniciar):** rate limit por IP y bloqueo progresivo, IPs bloqueadas, contraseña de sala (solo su hash scrypt en RAM), transferencia/failover de anfitrión (`hostFailoverMs`), salas persistentes (solo con `persistentRoomsEnabled`; guarda únicamente configuración), enlaces `/j/<PIN>` y `/.well-known/{assetlinks.json,apple-app-site-association}` (con `webLinkEnabled`), reloj de referencia `time_ping`, reacciones y chat opcional. Ver `JAM.md` para el protocolo.
+
 **Backups:** `tar czf data-$(date +%F).tgz data/` antes de cada despliegue.
 
 ## Desplegar con Portainer
