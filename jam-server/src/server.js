@@ -361,7 +361,19 @@ export function createJamServer({
           return reply(400, { error: 'Datos de mensaje inválidos.' });
         }
         if (!lobby.has(body.channel) && lobby.size >= LOBBY_MAX_CHANNELS) lobby.delete(lobby.keys().next().value);
-        const list = prune(lobby.get(body.channel) ?? []);
+        let list = prune(lobby.get(body.channel) ?? []);
+        // Los anuncios de Jam se refrescan a menudo: se conserva solo el último por sesión.
+        if (message.startsWith('[JAM_LIVE]:')) {
+          try {
+            const sid = JSON.parse(message.slice('[JAM_LIVE]:'.length)).sessionId;
+            if (typeof sid === 'string') {
+              list = list.filter((m) => {
+                if (!m.message.startsWith('[JAM_LIVE]:')) return true;
+                try { return JSON.parse(m.message.slice('[JAM_LIVE]:'.length)).sessionId !== sid; } catch { return true; }
+              });
+            }
+          } catch { /* mensaje malformado: se guarda tal cual */ }
+        }
         // time estrictamente creciente para que `since` no pierda mensajes.
         const time = Math.max(now, (list.at(-1)?.time ?? 0) + 1);
         list.push({ username, time, message });

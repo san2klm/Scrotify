@@ -2374,8 +2374,17 @@ class NavidromeService with ChangeNotifier {
 
   /// Publica o anuncia una sesión Jam activa en el servidor Navidrome para que
   /// cualquier usuario conectado a la misma instancia pueda descubrirla y unirse.
+  DateTime? _lastJamAnnounce;
+
   Future<void> publishServerJam(JamSessionState session) async {
     if (!_connected || !session.isPublic) return;
+    // Se llama en cada cambio de estado: máximo un anuncio cada 30 s.
+    final last = _lastJamAnnounce;
+    if (last != null &&
+        DateTime.now().difference(last) < const Duration(seconds: 30)) {
+      return;
+    }
+    _lastJamAnnounce = DateTime.now();
     try {
       final payload = jsonEncode({
         'tag': 'SCROTIFY_JAM',

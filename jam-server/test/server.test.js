@@ -904,3 +904,18 @@ test('lobby chat is off when chat is disabled and rate limited when on', async (
   }
   assert.ok(limited >= 3);
 });
+
+test('lobby: JAM_LIVE announcements are deduplicated per session', async () => {
+  const server = await startServer({ chatEnabled: true });
+  const live = (sid, track) => `[JAM_LIVE]:${JSON.stringify({ sessionId: sid, trackTitle: track })}`;
+  const post = (message) => http(server, 'POST', '/api/lobby/messages', { body: { channel: 'c', username: 'u', message } });
+  await post(live('s1', 'a'));
+  await post('hola');
+  await post(live('s1', 'b'));
+  await post(live('s2', 'x'));
+  const msgs = (await http(server, 'GET', '/api/lobby/messages?channel=c')).json.messages.map((m) => m.message);
+  assert.equal(msgs.filter((m) => m.startsWith('[JAM_LIVE]')).length, 2);
+  assert.ok(msgs.includes('hola'));
+  assert.ok(msgs.some((m) => m.includes('"trackTitle":"b"')));
+  assert.ok(!msgs.some((m) => m.includes('"trackTitle":"a"')));
+});

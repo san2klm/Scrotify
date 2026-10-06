@@ -643,6 +643,11 @@ class PlayerController extends ChangeNotifier {
 
   void _onPositionChanged(AudioPlayer player, Duration pos) {
     if (!identical(player, _lead) || !player.playing) return;
+    final last = _lastNowPlayingAt;
+    if (last != null &&
+        DateTime.now().difference(last) > const Duration(minutes: 2)) {
+      _reportNowPlaying();
+    }
     _checkPlayQualification(pos, player.duration);
   }
 
@@ -664,8 +669,6 @@ class PlayerController extends ChangeNotifier {
     if (_currentlyTrackedId != track.id) {
       _currentlyTrackedId = track.id;
       _currentTrackPlayCounted = false;
-      // "Ahora sonando" para los demás usuarios del servidor.
-      unawaited(_service.reportNowPlaying(track.id));
     }
 
     if (_currentTrackPlayCounted) return;
@@ -703,6 +706,18 @@ class PlayerController extends ChangeNotifier {
   void _resetPlayTracking() {
     _currentlyTrackedId = currentTrack?.id;
     _currentTrackPlayCounted = false;
+    _reportNowPlaying();
+  }
+
+  DateTime? _lastNowPlayingAt;
+
+  /// "Ahora sonando" para los demás usuarios del servidor (se renueva cada
+  /// ~2 min mientras suena, porque Navidrome lo hace caducar).
+  void _reportNowPlaying() {
+    final track = currentTrack;
+    if (track == null) return;
+    _lastNowPlayingAt = DateTime.now();
+    unawaited(_service.reportNowPlaying(track.id));
   }
 
   // ---------------------------------------------------------------------------
