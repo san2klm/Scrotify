@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
 import '../models/jam_models.dart';
+import 'jam_clock.dart';
 
 typedef OnRemoteStateSync = void Function(Map<String, dynamic> state);
 typedef OnRemoteGuestJoined = void Function(String guestName, int totalParticipants);
@@ -133,11 +134,13 @@ class RemoteJamService {
           try {
             final text = data is List<int> ? utf8.decode(data) : data.toString();
             final json = jsonDecode(text) as Map<String, dynamic>;
+            if (_handleClockMessage(json)) return;
 
             if (json['status'] == 'room_created') {
               _isConnected = true;
               _isHost = true;
               _pin = normalizedPin;
+              _startClockSync();
               timeoutTimer?.cancel();
               if (!completer.isCompleted) completer.complete(true);
               debugPrint('RemoteJamService: Sala creada exitosamente en $targetEndpoint con PIN $normalizedPin');
@@ -268,11 +271,13 @@ class RemoteJamService {
           try {
             final text = data is List<int> ? utf8.decode(data) : data.toString();
             final json = jsonDecode(text) as Map<String, dynamic>;
+            if (_handleClockMessage(json)) return;
 
             if (json['status'] == 'joined') {
               _isConnected = true;
               _isHost = false;
               _pin = normalizedPin;
+              _startClockSync();
               timeoutTimer?.cancel();
               final state = json['state'] as Map<String, dynamic>? ?? {};
               if (!completer.isCompleted) completer.complete(state);
@@ -380,6 +385,7 @@ class RemoteJamService {
           try {
             final text = data is List<int> ? utf8.decode(data) : data.toString();
             final json = jsonDecode(text) as Map<String, dynamic>;
+            if (_handleClockMessage(json)) return;
 
             if (json['status'] == 'room_found') {
               timeoutTimer?.cancel();
@@ -473,7 +479,54 @@ class RemoteJamService {
   // Desconexión
   // ---------------------------------------------------------------------------
 
+  // ---------------------------------------------------------------------------
+  // Reloj de referencia (el relay): `time_ping` / `time_pong`
+  // ---------------------------------------------------------------------------
+
+  /// Offset local→relay estimado. Sin muestras (relay antiguo o sin pong) los
+  /// consumidores degradan al comportamiento previo.
+  final ClockOffsetEstimator clock = ClockOffsetEstimator();
+  Timer? _clockTimer;
+
+  void _sendTimePing() {
+    try {
+      _channel?.sink.add(jsonEncode({
+        'action': 'time_ping',
+        'clientTs': DateTime.now().millisecondsSinceEpoch,
+      }));
+    } catch (_) {}
+  }
+
+  void _startClockSync() {
+    _clockTimer?.cancel();
+    clock.clear();
+    for (var i = 0; i < kJamClockSamples; i++) {
+      Future.delayed(Duration(milliseconds: 150 * i), () {
+        if (_isConnected) _sendTimePing();
+      });
+    }
+    _clockTimer = Timer.periodic(kJamClockResync, (_) {
+      if (_isConnected) _sendTimePing();
+    });
+  }
+
+  bool _handleClockMessage(Map<String, dynamic> json) {
+    if (json['status'] != 'time_pong') return false;
+    final sent = (json['clientTs'] as num?)?.toInt();
+    final server = (json['serverNowMs'] as num?)?.toInt();
+    if (sent != null && server != null) {
+      clock.add(JamClockSample.fromExchange(
+        sentAt: sent,
+        receivedAt: DateTime.now().millisecondsSinceEpoch,
+        serverNow: server,
+      ));
+    }
+    return true;
+  }
+
   Future<void> disconnect() async {
+    _clockTimer?.cancel();
+    _clockTimer = null;
     _isConnected = false;
     _isHost = false;
     _pin = null;

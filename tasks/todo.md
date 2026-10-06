@@ -170,3 +170,9 @@
 - [x] Cliente: contraseña de sala (crear/unirse, LAN y nube), `JamFailureBlocker` en el host LAN, reconexión rechazada para IDs expulsados.
 - Desvío: el relay recibe la contraseña en claro por TLS y guarda solo su hash (el roadmap decía que el host enviaba el hash; así no hay que compartir sal con los invitados).
 - Límite documentado: el ban por nombre/ID es evadible; el ban por IP es solo del admin.
+
+## Jam Roadmap — Fase 5 (2026-10-06): sincronización avanzada
+- [x] 5.1 `jam_clock.dart` (`ClockOffsetEstimator`: mediana de las muestras de menor RTT; 9 tests). `time_ping`/`time_pong` en relay y host LAN; 5 muestras al unirse y re-medición cada 60 s. El host de nube sella `refTs` (hora del relay); el invitado convierte con su offset. Sin pong → cálculo anterior (clamp 0–5 s).
+- [x] 5.2 Corrección suave: ≤50 ms nada, 50–450 ms `setPlaybackSpeed(1±0.02)` con histéresis, >450 ms seek (`kJamDrift*`). `PlayerController.setPlaybackSpeed` (A/B).
+- [x] 5.3 `next_track_hint` (LAN op / remoto `nextHint`) ~10 s antes del final: el invitado precarga la pista siguiente tras la actual (el motor A/B la prepara). `startAtServerMs` se envía pero el arranque lo marca el fin natural de la pista (+ corrección de deriva), no un temporizador.
+- [ ] Pendiente de prueba manual: 2 dispositivos, deriva media <100 ms en 10 min.

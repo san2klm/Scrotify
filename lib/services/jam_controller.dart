@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import '../models/jam_models.dart';
 import 'jam_guest_service.dart';
+import 'jam_clock.dart';
 import 'jam_history.dart';
 import 'jam_host_service.dart';
 import 'jam_queue_logic.dart';
@@ -56,6 +57,8 @@ class JamController extends ChangeNotifier {
   final Map<String, int> _myVotes = {}; // lado invitado (optimista)
   static const int _maxPendingRequests = 50;
   bool _hasRoomPassword = false;
+  String? _hintSentForTrackId;
+  String? _hintPreloadedTrackId;
   bool get hasRoomPassword => _hasRoomPassword;
 
   // Historial (solo en RAM del host).
@@ -659,6 +662,8 @@ class JamController extends ChangeNotifier {
       }
     };
 
+    _guestService.onNextTrackHint = _handleNextHint;
+
     _guestService.onKicked = (reason) {
       leaveOrEndSession();
     };
@@ -914,12 +919,25 @@ class JamController extends ChangeNotifier {
       );
     }
 
+    final refTs = (state['refTs'] as num?)?.toInt();
+    final useRef = refTs != null && _remoteService.clock.isReady;
     _syncGuestAudioIfApplicable(
       track: currentTrack,
       isPlaying: isPlaying,
       positionMs: positionMs,
-      serverTs: now,
+      serverTs: useRef ? refTs : now,
+      tsIsLocal: !useRef,
     );
+
+    final hint = state['nextHint'];
+    if (hint is Map && hint['track'] is Map) {
+      try {
+        _handleNextHint(
+          Track.fromJson(Map<String, dynamic>.from(hint['track'] as Map)),
+          (hint['startAtMs'] as num?)?.toInt() ?? 0,
+        );
+      } catch (_) {}
+    }
 
     notifyListeners();
   }
@@ -1034,6 +1052,17 @@ class JamController extends ChangeNotifier {
       'mode': _hostService.mode.name,
       'allowGuestControls': _hostService.allowGuestControls,
       'allowGuestQueueManage': _hostService.allowGuestQueueManage,
+      if (_remoteService.clock.isReady)
+        'refTs': _remoteService.clock
+            .toReference(DateTime.now().millisecondsSinceEpoch),
+      'nextHint': () {
+        final hint = _nextTrackHint();
+        if (hint == null) return null;
+        return {
+          'track': _trackHintJson(hint.track),
+          'startAtMs': _remoteService.clock.toReference(hint.startAtLocalMs),
+        };
+      }(),
       'queueMode': _queueMode.name,
       'fairTurnsPerPerson': _fairTurnsPerPerson,
       'requireApproval': _requireApproval,
@@ -1165,6 +1194,18 @@ class JamController extends ChangeNotifier {
     final curTrack = _player.currentTrack;
     final pos = _player.position.inMilliseconds;
     final playing = _player.playing;
+
+    final hint = _nextTrackHint();
+    if (hint != null && _hintSentForTrackId != curTrack?.id) {
+      _hintSentForTrackId = curTrack?.id;
+      _hostService.broadcastMessage({
+        'op': 'next_track_hint',
+        'track': _trackHintJson(hint.track),
+        'startAtServerMs': hint.startAtLocalMs,
+      });
+    } else if (hint == null && _hintSentForTrackId != curTrack?.id) {
+      _hintSentForTrackId = null;
+    }
 
     _hostService.broadcastPlaybackUpdate(
       track: curTrack,
@@ -1529,11 +1570,18 @@ class JamController extends ChangeNotifier {
   // Sincronización de Audio para Invitados (Escucha Sincronizada)
   // ---------------------------------------------------------------------------
 
+  /// Reloj de referencia activo: el host en LAN o el relay en nube.
+  ClockOffsetEstimator get _activeClock =>
+      _guestService.isConnected ? _guestService.clock : _remoteService.clock;
+
+  /// [serverTs] está en la hora de referencia (host/relay) salvo que
+  /// [tsIsLocal] indique que ya es hora local (hosts antiguos sin sello).
   Future<void> _syncGuestAudioIfApplicable({
     Track? track,
     required bool isPlaying,
     required int positionMs,
     required int serverTs,
+    bool tsIsLocal = false,
   }) async {
     if (_role != JamRole.guest || _session == null) return;
 
@@ -1558,17 +1606,35 @@ class JamController extends ChangeNotifier {
         if (_syncGeneration != currentGen || _role != JamRole.guest) return;
       }
 
-      // Compensación de latencia de red
+      // Compensación de latencia con el offset estimado respecto al reloj de
+      // referencia. Sin muestras (o hora ya local) degrada al cálculo previo;
+      // el clamp se mantiene como salvaguarda.
       final now = DateTime.now().millisecondsSinceEpoch;
-      final transitDelayMs = (now - serverTs).clamp(0, 5000);
+      final clock = _activeClock;
+      final sentLocal = tsIsLocal || !clock.isReady
+          ? serverTs
+          : clock.toLocal(serverTs);
+      final transitDelayMs = (now - sentLocal).clamp(0, 5000);
       final targetPositionMs = positionMs + (isPlaying ? transitDelayMs : 0);
 
-      final currentPosMs = _player.position.inMilliseconds;
-      final drift = (targetPositionMs - currentPosMs).abs();
-
-      if (drift > 450) {
-        await _player.seek(Duration(milliseconds: targetPositionMs));
-        if (_syncGeneration != currentGen || _role != JamRole.guest) return;
+      final drift = targetPositionMs - _player.position.inMilliseconds;
+      final decision = decideDriftCorrection(
+        drift,
+        currentSpeed: _player.playbackSpeed,
+      );
+      switch (decision.action) {
+        case JamDriftAction.seek:
+          await _player.setPlaybackSpeed(1.0);
+          await _player.seek(Duration(milliseconds: targetPositionMs));
+          if (_syncGeneration != currentGen || _role != JamRole.guest) return;
+        case JamDriftAction.nudge:
+          if (isPlaying) {
+            await _player.setPlaybackSpeed(decision.speed);
+          } else {
+            await _player.setPlaybackSpeed(1.0);
+          }
+        case JamDriftAction.none:
+          await _player.setPlaybackSpeed(1.0);
       }
 
       if (isPlaying && !_player.playing) {
@@ -1580,6 +1646,54 @@ class JamController extends ChangeNotifier {
       }
     }
   }
+
+  /// Pista siguiente a punto de empezar: el invitado la precarga añadiéndola
+  /// justo tras la actual para que el motor A/B la prepare y el cambio sea
+  /// continuo. Si el host cambia de otra forma, el sync normal recarga.
+  void _handleNextHint(Track next, int startAtServerMs) {
+    if (_role != JamRole.guest ||
+        _session?.mode != JamMode.synchronizedListening) {
+      return;
+    }
+    if (_hintPreloadedTrackId == next.id) return;
+    final ordered = _player.orderedQueue;
+    final pos = _player.currentOrderPos;
+    if (pos < 0) return;
+    if (pos + 1 < ordered.length && ordered[pos + 1].id == next.id) {
+      _hintPreloadedTrackId = next.id;
+      return;
+    }
+    _hintPreloadedTrackId = next.id;
+    unawaited(_player.addNextInQueue(next));
+  }
+
+  /// Pista siguiente si faltan ≤10 s para terminar la actual.
+  ({Track track, int startAtLocalMs})? _nextTrackHint() {
+    final duration = _player.duration;
+    final current = _player.currentTrack;
+    if (duration == null || current == null || !_player.playing) return null;
+    final remaining = duration - _player.position;
+    if (remaining <= Duration.zero || remaining > const Duration(seconds: 10)) {
+      return null;
+    }
+    final ordered = _player.orderedQueue;
+    final pos = _player.currentOrderPos;
+    if (pos < 0 || pos + 1 >= ordered.length) return null;
+    return (
+      track: ordered[pos + 1],
+      startAtLocalMs:
+          DateTime.now().millisecondsSinceEpoch + remaining.inMilliseconds,
+    );
+  }
+
+  Map<String, dynamic> _trackHintJson(Track t) => {
+        'id': t.id,
+        'title': t.title,
+        'artist': t.artist,
+        'album': t.album,
+        'duration': t.duration,
+        'albumArtUrl': sanitizeArtUrl(t.albumArtUrl),
+      };
 
   // ---------------------------------------------------------------------------
   // Acciones Compartidas (Cola y Reproducción)
@@ -1763,6 +1877,9 @@ class JamController extends ChangeNotifier {
     if (_role == JamRole.host) _trackHistory(finalize: true);
     _guestService.roomPassword = null;
     _remoteService.roomPassword = null;
+    _hintSentForTrackId = null;
+    _hintPreloadedTrackId = null;
+    if (_role == JamRole.guest) unawaited(_player.setPlaybackSpeed(1.0));
     _hasRoomPassword = false;
     _remoteCreateFailures = 0;
     _nextRemoteCreateAt = null;

@@ -436,6 +436,24 @@ class PlayerController extends ChangeNotifier {
   Duration? get duration =>
       _karaokeMode ? _karaokePlayer?.state.duration : _lead.duration;
   double get volume => _volume;
+
+  double _playbackSpeed = 1.0;
+  double get playbackSpeed => _playbackSpeed;
+
+  /// Velocidad de reproducción (la usa Jam para corregir deriva suavemente).
+  /// Se aplica a ambos reproductores A/B; si el motor no la soporta, se ignora.
+  Future<void> setPlaybackSpeed(double speed) async {
+    final v = speed.clamp(0.5, 2.0).toDouble();
+    if (v == _playbackSpeed) return;
+    _playbackSpeed = v;
+    for (final p in [_a, _b]) {
+      try {
+        await p.setSpeed(v);
+      } catch (e) {
+        debugPrint('PlayerController.setPlaybackSpeed no soportado: $e');
+      }
+    }
+  }
   bool get gapless => _settings.gapless;
   ProcessingState get processingState => _karaokeMode
       ? (_karaokePlayer != null && (_karaokePlayer?.state.buffering ?? false)

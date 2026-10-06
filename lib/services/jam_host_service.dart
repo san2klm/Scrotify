@@ -368,6 +368,15 @@ class JamHostService {
               // Inbound liveness ya actualizada
               break;
 
+            case 'time_ping':
+              // Reloj de referencia en LAN: la hora del host.
+              socket.add(jsonEncode({
+                'op': 'time_pong',
+                'clientTs': msg['clientTs'],
+                'serverNowMs': DateTime.now().millisecondsSinceEpoch,
+              }));
+              break;
+
             case 'guest_ready':
               if (participantId != null) {
                 _lastInboundActivity[participantId!] = DateTime.now();

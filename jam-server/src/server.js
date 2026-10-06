@@ -49,6 +49,8 @@ function normalizeState(value, limits, existingState = null) {
     requireApproval,
     pendingRequests,
   } = merged;
+  // Estos dos son efímeros: se toman solo del mensaje actual (no del merge).
+  const { nextHint, refTs } = value;
 
   if (trackId !== null && trackId !== undefined &&
       (typeof trackId !== 'string' || trackId.trim().length === 0)) {
@@ -93,6 +95,8 @@ function normalizeState(value, limits, existingState = null) {
   if (typeof queueMode === 'string' && QUEUE_MODES.has(queueMode)) res.queueMode = queueMode;
   if (Number.isInteger(fairTurnsPerPerson)) res.fairTurnsPerPerson = Math.min(10, Math.max(1, fairTurnsPerPerson));
   if (typeof requireApproval === 'boolean') res.requireApproval = requireApproval;
+  if (Number.isFinite(refTs)) res.refTs = Math.floor(refTs);
+  if (nextHint && typeof nextHint === 'object' && !Array.isArray(nextHint)) res.nextHint = nextHint;
   if (Array.isArray(pendingRequests)) {
     res.pendingRequests = pendingRequests.filter((r) => r && typeof r === 'object').slice(0, 50);
   }
@@ -456,6 +460,12 @@ export function createJamServer({
         case 'guest_action': return relayGuestAction(socket, message);
         case 'kick_guest': return kickGuest(socket, message);
         case 'check_room': return checkRoom(socket, message);
+        case 'time_ping':
+          return send(socket, {
+            status: 'time_pong',
+            clientTs: Number.isFinite(message.clientTs) ? message.clientTs : null,
+            serverNowMs: Date.now(),
+          });
         default: return serverError(socket, 'Acción no permitida.');
       }
     });

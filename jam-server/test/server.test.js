@@ -581,3 +581,41 @@ test('admin-blocked IPs are refused and management needs auth/CSRF', async () =>
     host.close();
   }
 });
+
+// --- Fase 5: reloj de referencia ---------------------------------------------
+
+test('time_ping returns the server clock and echoes clientTs', async () => {
+  const server = await startServer();
+  const socket = await connect(`ws://127.0.0.1:${server.port}`);
+  try {
+    const before = Date.now();
+    const pong = await ask(socket, { action: 'time_ping', clientTs: 12345 });
+    assert.equal(pong.status, 'time_pong');
+    assert.equal(pong.clientTs, 12345);
+    assert.ok(pong.serverNowMs >= before && pong.serverNowMs <= Date.now());
+  } finally {
+    socket.close();
+  }
+});
+
+test('refTs/nextHint are ephemeral: not carried over by partial updates', async () => {
+  const server = await startServer();
+  const endpoint = `ws://127.0.0.1:${server.port}`;
+  const host = await makeRoom(endpoint, 'EPH123');
+  const guest = await connect(endpoint);
+  try {
+    await ask(guest, { action: 'join_room', pin: 'EPH123', guestName: 'g' });
+    const a = nextMessage(guest);
+    host.send(JSON.stringify({ action: 'update_state', pin: 'EPH123', state: { trackId: 't', position: 1, isPlaying: true, queue: [], refTs: 99, nextHint: { track: { id: 'n' }, startAtMs: 5 } } }));
+    const first = (await a).state;
+    assert.equal(first.refTs, 99);
+    assert.equal(first.nextHint.track.id, 'n');
+    const b = nextMessage(guest);
+    host.send(JSON.stringify({ action: 'update_state', pin: 'EPH123', state: { position: 2, nextHint: null } }));
+    const second = (await b).state;
+    assert.equal(second.refTs, undefined);
+    assert.equal(second.nextHint, undefined);
+  } finally {
+    host.close(); guest.close();
+  }
+});

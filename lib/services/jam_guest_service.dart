@@ -9,6 +9,7 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 
 import '../models/jam_models.dart';
 import 'jam_network_platform.dart';
+import 'jam_clock.dart';
 import 'jam_tls_identity.dart';
 import 'navidrome_service.dart';
 
@@ -23,6 +24,7 @@ typedef OnGuestQueueUpdated = void Function(List<JamQueueItem> queue);
 typedef OnGuestKicked = void Function(String reason);
 typedef OnGuestSessionClosed = void Function(String reason);
 typedef OnGuestError = void Function(String message);
+typedef OnGuestNextTrackHint = void Function(Track track, int startAtServerMs);
 
 /// Servicio de cliente Jam para unirse a sesiones como Invitado (Guest).
 ///
@@ -65,6 +67,34 @@ class JamGuestService {
   OnGuestKicked? onKicked;
   OnGuestSessionClosed? onSessionClosed;
   OnGuestError? onError;
+  OnGuestNextTrackHint? onNextTrackHint;
+
+  /// Offset local→host (la hora de referencia en LAN es la del host).
+  final ClockOffsetEstimator clock = ClockOffsetEstimator();
+  Timer? _clockTimer;
+
+  void _startClockSync() {
+    _clockTimer?.cancel();
+    clock.clear();
+    for (var i = 0; i < kJamClockSamples; i++) {
+      Future.delayed(Duration(milliseconds: 150 * i), () {
+        if (_isConnected) {
+          _send({
+            'op': 'time_ping',
+            'clientTs': DateTime.now().millisecondsSinceEpoch,
+          });
+        }
+      });
+    }
+    _clockTimer = Timer.periodic(kJamClockResync, (_) {
+      if (_isConnected) {
+        _send({
+          'op': 'time_ping',
+          'clientTs': DateTime.now().millisecondsSinceEpoch,
+        });
+      }
+    });
+  }
   void Function(JamConnectionState state)? onConnectionStateChanged;
 
   bool get isConnected => _isConnected;
@@ -450,6 +480,31 @@ class JamGuestService {
               case 'pong':
                 break;
 
+              case 'time_pong':
+                final sent = (msg['clientTs'] as num?)?.toInt();
+                final server = (msg['serverNowMs'] as num?)?.toInt();
+                if (sent != null && server != null) {
+                  clock.add(JamClockSample.fromExchange(
+                    sentAt: sent,
+                    receivedAt: DateTime.now().millisecondsSinceEpoch,
+                    serverNow: server,
+                  ));
+                }
+                break;
+
+              case 'next_track_hint':
+                final rawTrack = msg['track'];
+                final startAt = (msg['startAtServerMs'] as num?)?.toInt();
+                if (rawTrack is Map && startAt != null) {
+                  try {
+                    onNextTrackHint?.call(
+                      Track.fromJson(Map<String, dynamic>.from(rawTrack)),
+                      startAt,
+                    );
+                  } catch (_) {}
+                }
+                break;
+
               case 'join_response':
                 final accepted = msg['accepted'] as bool? ?? false;
                 if (accepted) {
@@ -492,6 +547,7 @@ class JamGuestService {
                   _reconnectAttempts = 0;
                   _updateConnectionState(JamConnectionState.connected);
                   _startSilenceDetection();
+                  _startClockSync();
 
                   if (!completer.isCompleted) {
                     completer.complete(true);
@@ -538,6 +594,7 @@ class JamGuestService {
                   _reconnectAttempts = 0;
                   _updateConnectionState(JamConnectionState.connected);
                   _startSilenceDetection();
+                  _startClockSync();
 
                   if (!completer.isCompleted) {
                     completer.complete(true);
@@ -808,6 +865,8 @@ class JamGuestService {
     unawaited(_channel?.sink.close());
     _channel = null;
     _isConnected = false;
+    _clockTimer?.cancel();
+    _clockTimer = null;
   }
 
   void _handleUnexpectedDisconnect() {

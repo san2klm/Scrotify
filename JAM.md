@@ -587,3 +587,8 @@ El historial (`JamHistory`) vive solo en la RAM del host; el servidor no guarda 
 
 - Relay: `joinRateMax/joinRateWindowMs/pinFailMax` (panel `/admin` → Seguridad), bloqueo progresivo por IP, IPs bloqueadas, `TRUST_PROXY` para `CF-Connecting-IP`. `create_room.roomPassword` / `join_room.roomPassword`; `/rooms` y `check_room` exponen `hasPassword`.
 - LAN: `join_request.password`; fallos limitados por `JamFailureBlocker` (10/min).
+
+## Anexo: sincronización (Roadmap Fase 5)
+
+- Reloj: `time_ping{clientTs}` → `time_pong{clientTs,serverNowMs}` (relay: `action`/`status`; LAN: `op`). `refTs` en el estado remoto = hora del relay. Umbrales en `jam_clock.dart` (`kJamDrift*`).
+- `next_track_hint{track,startAtServerMs}` (LAN) / `nextHint{track,startAtMs}` (relay).
