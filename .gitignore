@@ -90,3 +90,9 @@ build/
 # Jam server
 jam-server/data/
 jam-server/.env
+
+# Local/IDE artifacts
+*.iml
+*.AppImage
+temp/
+resultados.txt
