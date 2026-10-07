@@ -664,6 +664,7 @@ class NavidromeService with ChangeNotifier {
         if (data['subsonic-response']['status'] == 'ok') {
           _connected = true;
           _offlineMode = false;
+          _stopAutoReconnect();
           _sessionVersion++;
           _starredIds.clear();
           _starredSongOrder.clear();
@@ -717,6 +718,7 @@ class NavidromeService with ChangeNotifier {
     _pass = password;
     _connected = false;
     _offlineMode = true;
+    _startAutoReconnect();
     _sessionVersion++;
     _resetCoverAuth();
     _starredIds.clear();
@@ -739,6 +741,64 @@ class NavidromeService with ChangeNotifier {
   Future<void> reconnect() async {
     if (_url == null || _user == null || _pass == null) return;
     await connectByUrl(_url!, _user!, _pass!);
+  }
+
+  Timer? _reconnectTimer;
+  bool _autoReconnecting = false;
+
+  /// Un fallo de red puntual no debe dejar la app en modo sin conexión para
+  /// siempre: mientras esté offline se sondea el servidor y, en cuanto
+  /// responde, se vuelve a conectar sin intervención del usuario.
+  void _startAutoReconnect() {
+    _reconnectTimer ??= Timer.periodic(
+        const Duration(seconds: 15), (_) => unawaited(_tryAutoReconnect()));
+  }
+
+  void _stopAutoReconnect() {
+    _reconnectTimer?.cancel();
+    _reconnectTimer = null;
+  }
+
+  Future<void> _tryAutoReconnect() async {
+    if (!_offlineMode || _url == null || _user == null || _pass == null) {
+      _stopAutoReconnect();
+      return;
+    }
+    if (_autoReconnecting) return;
+    _autoReconnecting = true;
+    final session = currentSessionKey;
+    try {
+      final salt = _randomSalt();
+      final uri = Uri.parse('$_url/rest/ping.view').replace(queryParameters: {
+        'u': _user!,
+        's': salt,
+        't': _md5('$_pass$salt'),
+        'v': '1.16.1',
+        'c': 'Psysonic',
+        'f': 'json',
+      });
+      final probe = _injectedClient ?? http.Client();
+      try {
+        final response =
+            await probe.get(uri).timeout(const Duration(seconds: 6));
+        if (response.statusCode != 200) return;
+      } finally {
+        if (_injectedClient == null) probe.close();
+      }
+      if (!_offlineMode || currentSessionKey != session) return;
+      await reconnect();
+      debugPrint('Conexión con el servidor restablecida automáticamente.');
+    } catch (_) {
+      // Sigue sin red: se reintenta en el próximo ciclo.
+    } finally {
+      _autoReconnecting = false;
+    }
+  }
+
+  @override
+  void dispose() {
+    _stopAutoReconnect();
+    super.dispose();
   }
 
   /// Conserva datos por cuenta y recurre a los archivos locales al perder la red.
@@ -767,6 +827,7 @@ class NavidromeService with ChangeNotifier {
       if (isNetworkFailure(error)) {
         _connected = false;
         _offlineMode = true;
+        _startAutoReconnect();
         notifyListeners();
       }
       return fallback(music, scope, user);
@@ -2764,6 +2825,7 @@ class NavidromeService with ChangeNotifier {
   }
 
   void disconnect() {
+    _stopAutoReconnect();
     _connected = false;
     _offlineMode = false;
     _url = null;

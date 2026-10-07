@@ -340,6 +340,7 @@ void main() {
     expect(find.text('Descargadas'), findsNothing);
     expect(find.text('Sin conexión · Música del dispositivo'), findsOneWidget);
     expect(tester.takeException(), isNull);
+    nav.disconnect(); // detiene el sondeo de reconexión automática
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pumpAndSettle();
   });
