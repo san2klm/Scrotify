@@ -7,6 +7,7 @@ import { createAdmin } from './admin.js';
 import { openStore, SETTING_DEFS } from './config.js';
 import { createConnectHub } from './connect.js';
 import { createGuard } from './guard.js';
+import { createNavidromeAuth } from './navidrome-auth.js';
 import { createSyncHandler, isSyncPath } from './sync.js';
 
 export const PROTOCOL_VERSION = 2;
@@ -182,6 +183,7 @@ export function createJamServer({
   adminPassword,
   trustProxy = 'none',
   loginMaxFailures,
+  navidromeAuth,
   ...overrides
 } = {}) {
   const store = openStore(dbPath, overrides);
@@ -219,6 +221,7 @@ export function createJamServer({
   });
   const connectHub = createConnectHub({
     store, limits, guard, send, ipOf: (socket) => socketIps.get(socket) ?? 'unknown',
+    auth: navidromeAuth ?? createNavidromeAuth({ getBaseUrl: () => limits.navidromeUrl }),
   });
   const handleSync = createSyncHandler({ store, limits, guard, clientIp, trustProxy });
   const httpServer = http.createServer(async (request, response) => {
@@ -276,6 +279,7 @@ export function createJamServer({
           persistentRooms: limits.persistentRoomsEnabled,
           webLink: limits.webLinkEnabled,
           sync: limits.syncEnabled,
+          connect: !!limits.navidromeUrl,
         },
         limits: {
           maxParticipants: limits.maxParticipants,

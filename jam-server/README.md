@@ -134,11 +134,11 @@ Límites editables: tamaño por documento (4 MB), documentos por bóveda (64) y 
 
 ## Scrotify Connect (control remoto entre tus dispositivos)
 
-Usa el mismo ajuste `syncEnabled` y la misma bóveda de sincronización como "cuenta": solo los dispositivos con la misma clave se ven entre sí. Por el WebSocket normal:
+Cada **usuario de Navidrome** forma su grupo: los dispositivos de `admin` solo ven a los de `admin`. Se activa configurando `navidromeUrl` en `/admin` (URL de tu Navidrome; vacío = desactivado). El servidor verifica al usuario llamando a `ping` en esa URL con el token de Subsonic (`md5(clave + salt)`): nunca recibe la clave ni consulta URLs enviadas por el cliente. Por el WebSocket normal:
 
 | Mensaje | Respuesta / efecto |
 |---|---|
-| `{"action":"connect_join","vaultId","token","deviceId","name","kind"}` | `{"status":"connect_joined","devices":[…]}` y `{"event":"connect_devices"}` a los demás (`kind`: `phone`, `tablet`, `desktop`, `other`) |
+| `{"action":"connect_join","user","token","salt","deviceId","name","kind"}` | `{"status":"connect_joined","devices":[…]}` y `{"event":"connect_devices"}` a los demás del mismo usuario (`kind`: `phone`, `tablet`, `desktop`, `other`) |
 | `{"action":"connect_send","to":"<deviceId>"\|"*","blob":"…"}` | El destinatario recibe `{"event":"connect_msg","from","blob"}` |
 
-El servidor solo reenvía `blob` (cifrado de extremo a extremo por los clientes, máx. 64 KB); hasta 16 dispositivos por grupo y 100 mensajes/s por dispositivo. Una segunda conexión del mismo `deviceId` reemplaza a la anterior.
+El servidor solo reenvía `blob`, cifrado de extremo a extremo por los clientes con una clave derivada de la clave del usuario (máx. 64 KB). Hasta 16 dispositivos por usuario y 100 mensajes/s por dispositivo. La verificación correcta se recuerda 5 minutos y los fallos cuentan para el bloqueo por IP. Una segunda conexión del mismo `deviceId` reemplaza a la anterior.

@@ -281,3 +281,12 @@ Como Spotify Connect: ver los dispositivos del usuario por LAN y por el servidor
 - [x] **13.4** Validación: relé probado contra el servidor Node real; `flutter analyze` limpio y 600 pruebas aprobadas.
 - [x] **13.6** Sincronización completa: `PlayerController` en modo espejo (`RemotePlayback`/`ConnectMirror`). Mientras se controla otro dispositivo, la cola, la canción actual, el progreso, el volumen, mezcla y repetición son los del remoto y reproducir, encolar, reordenar o vaciar la cola se ejecutan allá (comandos `play_queue`, `queue_*`, `shuffle`, `repeat`). La cola viaja como ventana de 40 canciones solo cuando cambia. Pruebas en `test/player_mirror_test.dart` y `test/connect_service_test.dart`.
 - [ ] **13.5** Pendiente: probar entre PC y teléfono reales (LAN y por internet); nombre de dispositivo editable; solo se transfieren las 40 canciones siguientes de la cola; solo entre dispositivos del mismo servidor Navidrome.
+
+## Connect por usuario de Navidrome (2026-10-07)
+
+Cambio: Connect ya no depende de la clave de sincronización. Cada usuario de Navidrome forma su grupo (admin solo ve a admin) y la detección ocurre directamente en el servidor Jam.
+
+- [x] **14.1** `jam-server`: `connect_join` con `user` + token Subsonic; el servidor verifica con `ping` en el Navidrome fijado por `navidromeUrl` (ajuste de `/admin`, sin SSRF) y agrupa por usuario (sin distinguir mayúsculas). Caché de verificación de 5 min. 52 pruebas.
+- [x] **14.2** Cliente: `ConnectAccount` (token Subsonic y clave E2E derivada con PBKDF2 de la clave del usuario). Connect arranca solo al iniciar sesión; el panel ya no pide sincronización. LAN y relé usan la misma clave derivada.
+- [x] **14.3** Servidor de producción actualizado (backup previo de `data/`) con `navidromeUrl = https://navidrome.templo.cloud`; verificado el rechazo de claves falsas contra Navidrome real. APK instalado en el teléfono y AppImage regenerado.
+- [ ] **14.4** Pendiente: probar PC + teléfono con el mismo usuario. Cambiar la clave en Navidrome cambia la clave de cifrado: hay que volver a iniciar sesión en los demás dispositivos.

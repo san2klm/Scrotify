@@ -33,6 +33,7 @@ import 'services/pairing_server.dart';
 import 'services/player_controller.dart';
 import 'services/settings_controller.dart';
 import 'services/connect/connect_protocol.dart';
+import 'services/connect/connect_account.dart';
 import 'services/connect/connect_mirror.dart';
 import 'services/connect/connect_service.dart';
 import 'services/connect/lan_transport.dart';
@@ -299,13 +300,13 @@ class MyApp extends StatelessWidget {
           lazy: false,
           create: (ctx) {
             final settings = ctx.read<SettingsController>();
-            final sync = ctx.read<SyncService>();
+            final nav = ctx.read<NavidromeService>();
             final identity = connectIdentity ??
                 const ConnectIdentity(
                     'scrotify-device', 'Esta computadora', ConnectKind.desktop);
+            ConnectAccount? account;
             final connect = ConnectService(
-              port: PlayerConnectPort(
-                  ctx.read<PlayerController>(), ctx.read<NavidromeService>()),
+              port: PlayerConnectPort(ctx.read<PlayerController>(), nav),
               selfId: identity.id,
               transportsFor: (crypto) {
                 final endpoint = JamServerEndpoint.parse(settings.jamServerUrl);
@@ -317,9 +318,9 @@ class MyApp extends StatelessWidget {
                     selfName: identity.name,
                     selfKind: identity.kind,
                   ),
-                  if (endpoint.isValid)
+                  if (endpoint.isValid && account != null)
                     RelayTransport(
-                      crypto: crypto,
+                      account: account!,
                       serverUrl: Uri.parse(endpoint.url!),
                       selfId: identity.id,
                       selfName: identity.name,
@@ -329,22 +330,31 @@ class MyApp extends StatelessWidget {
               },
             );
             // Mientras se controla otro dispositivo, el reproductor lo refleja.
-            final navidrome = ctx.read<NavidromeService>();
             ctx.read<PlayerController>().remote =
-                ConnectMirror(connect, scope: () => navidrome.serverScope);
-            // Connect sigue a la sincronización: misma clave = mismo grupo.
+                ConnectMirror(connect, scope: () => nav.serverScope);
+            // Connect sigue a la sesión de Navidrome: mismo usuario = mismo
+            // grupo (admin solo ve a admin). Sin sesión no hay dispositivos.
             String? applied;
-            void refresh() {
-              final crypto = sync.enabled ? sync.crypto : null;
-              final key = crypto == null
+            var generation = 0;
+            Future<void> refresh() async {
+              final creds = nav.currentCredentials;
+              final key = creds == null
                   ? null
-                  : '${crypto.vaultId}|${settings.jamServerUrl}';
+                  : '${creds.username}\n${creds.password}\n${settings.jamServerUrl}';
               if (key == applied) return;
               applied = key;
-              connect.configure(null).then((_) => connect.configure(crypto));
+              final mine = ++generation;
+              await connect.configure(null);
+              if (creds == null) return;
+              final next = ConnectAccount(
+                  user: creds.username, password: creds.password);
+              final crypto = await next.deriveCrypto();
+              if (mine != generation) return; // Llegó un cambio más nuevo.
+              account = next;
+              await connect.configure(crypto);
             }
 
-            sync.addListener(refresh);
+            nav.addListener(refresh);
             settings.addListener(refresh);
             settings.ready.then((_) => refresh());
             return connect;

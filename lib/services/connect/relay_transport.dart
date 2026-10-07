@@ -4,16 +4,17 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
-import '../sync/sync_crypto.dart';
+import 'connect_account.dart';
 import 'connect_protocol.dart';
 import 'connect_transport.dart';
 
 /// Conecta con el servidor Jam (`connect_join` / `connect_send`) para ver y
-/// controlar dispositivos fuera de la red local. El servidor solo reenvía
+/// controlar los dispositivos del mismo usuario de Navidrome, también fuera de
+/// la red local. El servidor verifica al usuario con Navidrome y solo reenvía
 /// blobs cifrados.
 class RelayTransport implements ConnectTransport {
   RelayTransport({
-    required this.crypto,
+    required this.account,
     required this.serverUrl,
     required this.selfId,
     required this.selfName,
@@ -22,7 +23,7 @@ class RelayTransport implements ConnectTransport {
     this.retryDelay = const Duration(seconds: 5),
   }) : _connect = connect ?? WebSocketChannel.connect;
 
-  final SyncCrypto crypto;
+  final ConnectAccount account;
   final Uri serverUrl;
   final String selfId;
   final String selfName;
@@ -82,10 +83,12 @@ class RelayTransport implements ConnectTransport {
         onError: (_) => _onClosed(),
         cancelOnError: true,
       );
+      final auth = account.authToken();
       channel.sink.add(jsonEncode({
         'action': 'connect_join',
-        'vaultId': crypto.vaultId,
-        'token': crypto.authToken,
+        'user': account.user,
+        'token': auth.token,
+        'salt': auth.salt,
         'deviceId': selfId,
         'name': selfName,
         'kind': selfKind.name,

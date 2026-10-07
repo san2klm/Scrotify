@@ -3,8 +3,8 @@ import 'package:provider/provider.dart';
 
 import '../services/connect/connect_protocol.dart';
 import '../services/connect/connect_service.dart';
+import '../services/navidrome_service.dart';
 import '../services/player_controller.dart';
-import '../services/sync/sync_service.dart';
 import '../services/theme_controller.dart';
 import '../utils/app_colors.dart';
 import '../utils/responsive.dart';
@@ -58,7 +58,7 @@ class ConnectPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final connect = context.watch<ConnectService>();
-    final sync = context.watch<SyncService>();
+    final signedIn = context.watch<NavidromeService>().connected;
     final player = context.watch<PlayerController>();
     final here = connect.controlled == null;
     return Padding(
@@ -94,7 +94,7 @@ class ConnectPanel extends StatelessWidget {
               style: TextStyle(color: context.warning, fontSize: 13)),
         ],
         const SizedBox(height: 12),
-        Expanded(child: _devices(context, connect, sync)),
+        Expanded(child: _devices(context, connect, signedIn)),
       ]),
     );
   }
@@ -104,13 +104,13 @@ class ConnectPanel extends StatelessWidget {
       Theme.of(context).platform == TargetPlatform.iOS;
 
   Widget _devices(
-      BuildContext context, ConnectService connect, SyncService sync) {
-    if (!sync.enabled) {
+      BuildContext context, ConnectService connect, bool signedIn) {
+    if (!signedIn) {
       return const _Hint(
-        icon: Icons.sync_disabled,
+        icon: Icons.login,
         title: 'Conecta tus dispositivos',
-        body: 'Activa la sincronización en Ajustes → Servidor Jam y usa la '
-            'misma clave en tus otros dispositivos para verlos aquí.',
+        body: 'Inicia sesión para ver los otros dispositivos con tu mismo '
+            'usuario.',
       );
     }
     if (connect.devices.isEmpty) {
@@ -129,8 +129,8 @@ class ConnectPanel extends StatelessWidget {
         const _Tip(
             Icons.wifi,
             'Verifica tu conexión',
-            'Abre Scrotify en el otro dispositivo con la misma clave de '
-                'sincronización, en la misma red o con internet.'),
+            'Abre Scrotify en el otro dispositivo con tu mismo usuario, en la '
+                'misma red o con internet.'),
         const _Tip(Icons.devices_other, 'Reproduce desde otro dispositivo',
             'Va a aparecer aquí de forma automática.'),
       ]);

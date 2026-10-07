@@ -1,18 +1,15 @@
 import 'dart:async';
-import 'dart:io';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:http/http.dart' as http;
-import 'package:http/testing.dart';
 import 'package:navidrome_client/services/app_theme.dart';
 import 'package:navidrome_client/services/connect/connect_protocol.dart';
 import 'package:navidrome_client/services/connect/connect_service.dart';
 import 'package:navidrome_client/services/connect/connect_transport.dart';
+import 'package:navidrome_client/services/navidrome_service.dart';
 import 'package:navidrome_client/services/player_controller.dart';
 import 'package:navidrome_client/services/sync/sync_crypto.dart';
-import 'package:navidrome_client/services/sync/sync_service.dart';
 import 'package:navidrome_client/services/theme_controller.dart';
 import 'package:navidrome_client/widgets/connect_panel.dart';
 import 'package:provider/provider.dart';
@@ -26,6 +23,13 @@ class _Themes extends ThemeController {
   bool get loading => false;
   @override
   Future<void> rescan() async {}
+}
+
+class _Nav extends FakeNavidrome {
+  _Nav(this.signedIn);
+  final bool signedIn;
+  @override
+  bool get connected => signedIn;
 }
 
 class _Net implements ConnectTransport {
@@ -50,28 +54,16 @@ class _Net implements ConnectTransport {
 void main() {
   late _Net net;
   late ConnectService connect;
-  late SyncService sync;
 
-  Future<void> pump(WidgetTester tester, {required bool synced}) async {
+  Future<void> pump(WidgetTester tester, {required bool signedIn}) async {
     net = _Net();
     connect = ConnectService(
         port: IdleConnectPort(),
         selfId: 'me-000001',
         transportsFor: (_) => [net]);
-    sync = SyncService(
-      dataDir: () async => Directory.systemTemp,
-      themeImportsDir: () async => Directory.systemTemp,
-      serverBase: () => null,
-      client: MockClient((_) async => http.Response('{}', 404)),
-      readKey: () async =>
-          synced ? SyncKey.format(SyncKey.generate(Random(2))) : null,
-      writeKey: (_) async {},
-    );
-    addTearDown(sync.dispose);
     addTearDown(connect.dispose);
     // La criptografía usa futuros reales: fuera del reloj simulado del test.
     await tester.runAsync(() async {
-      await sync.initialize();
       await connect
           .configure(await SyncCrypto.fromSecret(SyncKey.generate(Random(2))));
     });
@@ -79,7 +71,7 @@ void main() {
       providers: [
         ChangeNotifierProvider<ThemeController>.value(value: _Themes()),
         ChangeNotifierProvider<ConnectService>.value(value: connect),
-        ChangeNotifierProvider<SyncService>.value(value: sync),
+        ChangeNotifierProvider<NavidromeService>.value(value: _Nav(signedIn)),
         ChangeNotifierProvider<PlayerController>(create: (_) => IdlePlayer()),
       ],
       child: MaterialApp(
@@ -91,21 +83,20 @@ void main() {
     await tester.pump();
   }
 
-  testWidgets('sin sincronización explica cómo conectar dispositivos',
-      (tester) async {
-    await pump(tester, synced: false);
-    expect(find.textContaining('Activa la sincronización'), findsOneWidget);
+  testWidgets('sin sesión explica cómo ver los dispositivos', (tester) async {
+    await pump(tester, signedIn: false);
+    expect(find.textContaining('Inicia sesión'), findsOneWidget);
     expect(find.text('Esta computadora'), findsOneWidget);
   });
 
   testWidgets('sin otros dispositivos muestra el estado vacío', (tester) async {
-    await pump(tester, synced: true);
+    await pump(tester, signedIn: true);
     expect(find.text('No se encontraron otros dispositivos'), findsOneWidget);
   });
 
   testWidgets('lista dispositivos por LAN e Internet y distingue iguales',
       (tester) async {
-    await pump(tester, synced: true);
+    await pump(tester, signedIn: true);
     net.show(const [
       ConnectDevice(
           id: 'aaaa1111',

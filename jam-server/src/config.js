@@ -18,6 +18,7 @@ export const SETTING_DEFS = {
   syncMaxDocBytes: { type: 'int', default: 4 * 1024 * 1024, min: 1024, max: 32 * 1024 * 1024, group: 'limits' },
   syncMaxDocs: { type: 'int', default: 64, min: 1, max: 1000, group: 'limits' },
   syncMaxVaults: { type: 'int', default: 100, min: 1, max: 100000, group: 'limits' },
+  navidromeUrl: { type: 'url', default: '', group: 'general' },
   publicUrl: { type: 'url', default: '', group: 'general' },
   assetLinksJson: { type: 'json', default: '', group: 'links' },
   appleAppSiteAssociation: { type: 'json', default: '', group: 'links' },
