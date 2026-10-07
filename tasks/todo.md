@@ -268,7 +268,7 @@ Origen: carpeta `Eculiza/` (paquete `scrotify_eq` + `EQUALIZER.md`). Estado prev
 - [x] **12.1** Datos de escritorio en la carpeta oculta de soporte de la app (migración desde `~/Documentos/Scrotify`); la carpeta de temas por defecto muestra la real (carpeta de importados). Las descargas finales ya iban a la carpeta de música del usuario; solo los temporales quedan privados.
 - [x] **12.2** `jam-server`: `/api/sync/v1` (bóvedas de blobs cifrados, last-write-wins, límites en `/admin`, desactivado por defecto). 43 pruebas del servidor.
 - [x] **12.3** Cliente: `SyncCrypto` (HKDF + AES-GCM), `SyncService` (ciclo cada 5 min, push/pull por documento) y sección en Ajustes → Servidor Jam. Sincroniza temas importados, ajustes (sin `jamServerUrl`), seguidos/excluidos, playlists fijadas, orden de favoritos, valoraciones y ecualizador.
-- [ ] **12.4** Redesplegar `jam-server` en 192.168.1.21 y activar `syncEnabled` en `/admin`; probar con dos dispositivos reales.
+- [x] **12.4** `jam-server` redesplegado en 192.168.1.21 (backup previo de `data/` en `/root`) y `syncEnabled` activado (2026-10-07). Falta probar con dos dispositivos reales.
 - [ ] **12.5** Pendiente/limitaciones: no se propagan borrados; solo `settings.json` y los temas se recargan al instante, el resto se aplica al reiniciar; vincular escaneando QR (hoy se escribe la clave).
 
 ## Scrotify Connect: controlar tus dispositivos (2026-10-07)
