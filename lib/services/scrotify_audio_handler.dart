@@ -4,6 +4,7 @@ import 'package:audio_service/audio_service.dart';
 import 'package:flutter/foundation.dart';
 import 'package:just_audio/just_audio.dart' show LoopMode, ProcessingState;
 
+import 'navidrome_service.dart' show Track;
 import 'player_controller.dart';
 
 /// Controlador del servicio de medios en segundo plano para Scrotify.
@@ -11,10 +12,26 @@ import 'player_controller.dart';
 /// bloqueo, botones de auriculares/Bluetooth) con la única instancia
 /// activa de [PlayerController], sin crear motores de audio secundarios.
 class ScrotifyAudioHandler extends BaseAudioHandler with SeekHandler {
+  /// [coverFetcher] guarda la carátula de una pista en un archivo local y
+  /// devuelve su ruta. Las URLs remotas llevan credenciales y nunca se
+  /// publican; una copia local (`file://`) sí es segura para la notificación.
+  ScrotifyAudioHandler({this.coverFetcher});
+
+  final Future<String?> Function(Track track)? coverFetcher;
+
+  /// Acción del botón de favorito del widget (se envía como acción
+  /// personalizada de la sesión de medios).
+  Future<void> Function()? onToggleLike;
+  final Map<String, Uri> _localCovers = {};
+  final Set<String> _coversRequested = {};
+
   PlayerController? _player;
   VoidCallback? _removeListener;
 
   PlayerController? get player => _player;
+
+  /// Nombre de la acción personalizada que envía el widget para marcar favorito.
+  static const customActionToggleLike = 'toggleLike';
 
   static final _credentialQueryParams = <String>{
     'u',
@@ -67,6 +84,37 @@ class ScrotifyAudioHandler extends BaseAudioHandler with SeekHandler {
     }
 
     return uri;
+  }
+
+  /// Carátula publicable de [track]: la URI local segura si ya está en caché
+  /// y, si no, la pide en segundo plano y vuelve a sincronizar al tenerla.
+  Uri? _coverUriFor(Track track) {
+    final safe = sanitizeArtUri(track.albumArtUrl);
+    if (safe != null) return safe;
+    final cached = _localCovers[track.id];
+    if (cached != null) return cached;
+    final fetcher = coverFetcher;
+    final url = track.albumArtUrl;
+    if (fetcher != null &&
+        url != null &&
+        url.isNotEmpty &&
+        _coversRequested.add(track.id)) {
+      unawaited(() async {
+        try {
+          final path = await fetcher(track);
+          if (path == null) {
+            _coversRequested.remove(track.id); // reintentar en la próxima sync
+            return;
+          }
+          _localCovers[track.id] = Uri.file(path);
+          final player = _player;
+          if (player != null) syncFromPlayer(player);
+        } catch (_) {
+          _coversRequested.remove(track.id);
+        }
+      }());
+    }
+    return null;
   }
 
   /// Enlaza este handler con el [PlayerController] activo de la aplicación.
@@ -140,7 +188,7 @@ class ScrotifyAudioHandler extends BaseAudioHandler with SeekHandler {
     // 1. Metadatos del lead actual
     final duration = player.duration ?? _parseDuration(track.duration);
     final currentItem = mediaItem.value;
-    final artUri = sanitizeArtUri(track.albumArtUrl);
+    final artUri = _coverUriFor(track);
 
     if (currentItem == null ||
         currentItem.id != track.id ||
@@ -171,7 +219,7 @@ class ScrotifyAudioHandler extends BaseAudioHandler with SeekHandler {
               artist: t.artist,
               genre: t.genre,
               duration: _parseDuration(t.duration),
-              artUri: sanitizeArtUri(t.albumArtUrl),
+              artUri: sanitizeArtUri(t.albumArtUrl) ?? _localCovers[t.id],
             ))
         .toList();
     queue.add(newQueue);
@@ -220,6 +268,15 @@ class ScrotifyAudioHandler extends BaseAudioHandler with SeekHandler {
       updatePosition: position,
       bufferedPosition: position,
     ));
+  }
+
+  @override
+  Future<dynamic> customAction(String name,
+      [Map<String, dynamic>? extras]) async {
+    if (name == customActionToggleLike) {
+      await onToggleLike?.call();
+    }
+    return super.customAction(name, extras);
   }
 
   @override

@@ -85,10 +85,25 @@
             </intent-filter>
         </receiver>
 
+        <!-- Botón de favorito del widget. -->
+        <receiver
+            android:name=".WidgetActionReceiver"
+            android:exported="false" />
+
+        <activity
+            android:name=".WidgetConfigActivity"
+            android:exported="true"
+            android:excludeFromRecents="true"
+            android:theme="@android:style/Theme.Material.NoActionBar">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />
+            </intent-filter>
+        </activity>
+
         <!-- Widgets de pantalla de inicio (carátula + controles): tres diseños. -->
         <receiver
             android:name=".ScrotifyWidgetProvider"
-            android:label="Scrotify · Clásico"
+            android:label="Scrotify · Personalizable"
             android:exported="false">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />

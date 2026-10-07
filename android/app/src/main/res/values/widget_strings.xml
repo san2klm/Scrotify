@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="widget_description_classic">Clásico: carátula grande y controles</string>
+    <string name="widget_description_classic">Personalizable: colores a tu gusto, estilo AIMP</string>
     <string name="widget_description_compact">Compacto: una fila con los controles</string>
     <string name="widget_description_cover">Carátula: la portada a todo el widget</string>
     <string name="widget_cover_description">Carátula</string>
@@ -9,4 +9,31 @@
     <string name="widget_next">Siguiente</string>
     <string name="widget_nothing_playing">Nada en reproducción</string>
     <string name="widget_open_app">Abrí Scrotify para empezar</string>
+    <string name="widget_like">Favorito</string>
+    <string name="widget_settings">Ajustes del widget</string>
+    <string name="widget_config_title">Personalizar widget</string>
+    <string name="widget_config_hint">Mantén pulsado el widget en el escritorio para cambiar su tamaño; aquí ajustas el resto.</string>
+    <string name="widget_color_background">Color de fondo</string>
+    <string name="widget_color_primary">Color primario (título y botones)</string>
+    <string name="widget_color_secondary">Color secundario (artista y álbum)</string>
+    <string name="widget_hide_cover">Ocultar siempre el área de la carátula del álbum</string>
+    <string name="widget_auto_colors">Ajuste automático a los colores de la carátula del álbum</string>
+    <string name="widget_reset">Reiniciar</string>
+    <string name="widget_accept">Aceptar</string>
+    <string name="widget_section_colors">Colores</string>
+    <string name="widget_section_size">Tamaño</string>
+    <string name="widget_section_style">Estilo</string>
+    <string name="widget_section_show">Mostrar</string>
+    <string name="widget_size_general">Tamaño de textos y botones</string>
+    <string name="widget_size_cover">Tamaño de la carátula</string>
+    <string name="widget_opacity">Opacidad del fondo</string>
+    <string name="widget_radius">Redondeo de esquinas</string>
+    <string name="widget_radius_none">Sin redondeo</string>
+    <string name="widget_radius_pill">Píldora</string>
+    <string name="widget_show_album">Mostrar el álbum junto al artista</string>
+    <string name="widget_show_heart">Mostrar el botón de favorito</string>
+    <string name="widget_show_settings">Mostrar el engranaje de ajustes</string>
+    <string name="widget_sample_title">Título de ejemplo</string>
+    <string name="widget_sample_artist">Artista</string>
+    <string name="widget_sample_album">Álbum</string>
 </resources>

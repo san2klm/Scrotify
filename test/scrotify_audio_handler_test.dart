@@ -238,6 +238,72 @@ void main() {
         'https://navidrome.example.com/rest/getCoverArt.view?id=al-auth2&u=fakeAdminUser&s=fakeSaltSalt999&t=fakeTokenSecret888&v=1.16.1&c=ScrotifyClient',
   );
 
+  test('la acción personalizada toggleLike llama al callback del widget',
+      () async {
+    final handler = ScrotifyAudioHandler();
+    var calls = 0;
+    handler.onToggleLike = () async => calls++;
+    await handler.customAction(ScrotifyAudioHandler.customActionToggleLike);
+    await handler.customAction('otra');
+    expect(calls, 1);
+  });
+
+  group('ScrotifyAudioHandler - carátula local en la notificación', () {
+    test('publica solo la copia local, nunca la URL con credenciales',
+        () async {
+      final fetched = <String>[];
+      final handler = ScrotifyAudioHandler(coverFetcher: (track) async {
+        fetched.add(track.id);
+        return '/cache/media_art/${track.id}.img';
+      });
+      final player = FakePlayerController();
+      player.setAudioHandler(handler);
+      handler.attachPlayerController(player);
+      addTearDown(handler.detachPlayerController);
+
+      player.setTrack(sampleTrack1,
+          queue: [sampleTrack1, sampleTrack2],
+          pos: 0,
+          duration: const Duration(seconds: 254),
+          playing: true);
+      // Mientras se descarga no se publica nada remoto.
+      expect(handler.mediaItem.value!.artUri, isNull);
+
+      await pumpEventQueue();
+      expect(fetched, ['track-42']);
+      final art = handler.mediaItem.value!.artUri;
+      expect(art, Uri.file('/cache/media_art/track-42.img'));
+      expect(art.toString(), isNot(contains('token')));
+
+      // Una nueva sincronización no vuelve a pedir la misma carátula.
+      player.notifyListeners();
+      await pumpEventQueue();
+      expect(fetched, ['track-42']);
+    });
+
+    test('si la descarga falla se reintenta en la siguiente sincronización',
+        () async {
+      var calls = 0;
+      final handler = ScrotifyAudioHandler(coverFetcher: (track) async {
+        calls++;
+        return calls == 1 ? null : '/cache/media_art/ok.img';
+      });
+      final player = FakePlayerController();
+      player.setAudioHandler(handler);
+      handler.attachPlayerController(player);
+      addTearDown(handler.detachPlayerController);
+
+      player.setTrack(sampleTrack1,
+          queue: [sampleTrack1], pos: 0, playing: true);
+      await pumpEventQueue();
+      expect(handler.mediaItem.value!.artUri, isNull);
+      player.notifyListeners();
+      await pumpEventQueue();
+      expect(
+          handler.mediaItem.value!.artUri, Uri.file('/cache/media_art/ok.img'));
+    });
+  });
+
   group('ScrotifyAudioHandler - FASE B1 Android media controls', () {
     late ScrotifyAudioHandler handler;
     late FakePlayerController player;

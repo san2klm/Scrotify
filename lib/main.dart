@@ -11,6 +11,7 @@ import 'package:provider/provider.dart';
 import 'package:window_manager/window_manager.dart';
 
 import 'services/home_widget_service.dart';
+import 'services/notification_cover_cache.dart';
 import 'services/cover_fallback_service.dart';
 import 'services/mini_player_controller.dart';
 import 'services/scrotify_audio_handler.dart';
@@ -72,7 +73,8 @@ Future<void> main() async {
   if (!kIsWeb && Platform.isAndroid) {
     try {
       audioHandler = await AudioService.init(
-        builder: () => ScrotifyAudioHandler(),
+        builder: () =>
+            ScrotifyAudioHandler(coverFetcher: NotificationCoverCache().fetch),
         config: const AudioServiceConfig(
           androidNotificationChannelId:
               'com.example.navidrome_client.channel.audio',
@@ -184,7 +186,12 @@ class MyApp extends StatelessWidget {
             };
             // Widget de pantalla de inicio (solo Android).
             if (HomeWidgetService.isSupported) {
-              HomeWidgetService(player).start();
+              final library = ctx.read<NavidromeService>();
+              HomeWidgetService(player, library: library).start();
+              audioHandler?.onToggleLike = () async {
+                final track = player.currentTrack;
+                if (track != null) await library.toggleStar(track);
+              };
             }
             return player;
           },

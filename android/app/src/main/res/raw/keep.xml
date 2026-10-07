@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- audio_service referencia los iconos de los botones de la notificación por
+     nombre. Sin esta regla, R8 los elimina en release: el servicio lanza
+     "You must specify an icon resource id to build a CustomAction", nunca
+     pasa a primer plano y Android mata la música al salir de la app. -->
+<resources xmlns:tools="http://schemas.android.com/tools"
+    tools:keep="@drawable/audio_service_*" />
