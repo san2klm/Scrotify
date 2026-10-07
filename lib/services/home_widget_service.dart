@@ -16,9 +16,12 @@ import 'player_controller.dart';
 /// cambios rápidos (p. ej. saltar varias pistas seguidas) con un debounce, así
 /// no despierta al lanzador del sistema en cada notificación del reproductor.
 class HomeWidgetService {
-  /// Nombre calificado del `AppWidgetProvider` nativo.
-  static const String androidProvider =
-      'com.example.navidrome_client.ScrotifyWidgetProvider';
+  /// Nombres calificados de los `AppWidgetProvider` nativos (un diseño cada uno).
+  static const List<String> androidProviders = [
+    'com.example.navidrome_client.ScrotifyWidgetProvider',
+    'com.example.navidrome_client.ScrotifyCompactWidgetProvider',
+    'com.example.navidrome_client.ScrotifyCoverWidgetProvider',
+  ];
 
   // Claves compartidas con ScrotifyWidgetProvider.kt
   static const String keyTitle = 'widget_title';
@@ -95,8 +98,11 @@ class HomeWidgetService {
   static Future<void> _defaultSave(String key, Object? value) =>
       HomeWidget.saveWidgetData<dynamic>(key, value);
 
-  static Future<void> _defaultRefresh() =>
-      HomeWidget.updateWidget(qualifiedAndroidName: androidProvider);
+  static Future<void> _defaultRefresh() async {
+    for (final provider in androidProviders) {
+      await HomeWidget.updateWidget(qualifiedAndroidName: provider);
+    }
+  }
 
   /// Descarga la carátula a un archivo estable que lee el código nativo.
   static String? _coverTrackId;

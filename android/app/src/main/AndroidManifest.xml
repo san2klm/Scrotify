@@ -85,9 +85,10 @@
             </intent-filter>
         </receiver>
 
-        <!-- Widget de pantalla de inicio (carátula + controles). -->
+        <!-- Widgets de pantalla de inicio (carátula + controles): tres diseños. -->
         <receiver
             android:name=".ScrotifyWidgetProvider"
+            android:label="Scrotify · Clásico"
             android:exported="false">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
@@ -95,6 +96,28 @@
             <meta-data
                 android:name="android.appwidget.provider"
                 android:resource="@xml/scrotify_widget_info" />
+        </receiver>
+        <receiver
+            android:name=".ScrotifyCompactWidgetProvider"
+            android:label="Scrotify · Compacto"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/scrotify_widget_compact_info" />
+        </receiver>
+        <receiver
+            android:name=".ScrotifyCoverWidgetProvider"
+            android:label="Scrotify · Carátula"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/scrotify_widget_cover_info" />
         </receiver>
 
         <!-- Don't delete the meta-data below.

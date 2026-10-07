@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="widget_description">Controla Scrotify desde la pantalla de inicio</string>
+    <string name="widget_description_classic">Clásico: carátula grande y controles</string>
+    <string name="widget_description_compact">Compacto: una fila con los controles</string>
+    <string name="widget_description_cover">Carátula: la portada a todo el widget</string>
     <string name="widget_cover_description">Carátula</string>
     <string name="widget_previous">Anterior</string>
     <string name="widget_play_pause">Reproducir o pausar</string>
