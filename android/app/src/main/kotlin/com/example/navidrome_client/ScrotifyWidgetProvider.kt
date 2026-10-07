@@ -46,6 +46,15 @@ class ScrotifyWidgetProvider : ScrotifyBaseWidget() {
         views.setTextViewTextSize(R.id.widget_title, TypedValue.COMPLEX_UNIT_SP, 12f * s)
         views.setTextViewTextSize(R.id.widget_artist, TypedValue.COMPLEX_UNIT_SP, 9.5f * s)
 
+        // Tamaño del recuadro dentro de su celda (más chico que la celda si se pide)
+        val (cellW, cellH) = WidgetSupport.widgetSizeDp(context, id)
+        val insetX = WidgetSupport.dp(context, cellW * (100 - config.widthPct) / 200f).toInt()
+        val insetY = WidgetSupport.dp(context, cellH * (100 - config.heightPct) / 200f).toInt()
+        views.setViewPadding(R.id.widget_root, insetX, insetY, insetX, insetY)
+        val textVisibility = if (config.showText) View.VISIBLE else View.GONE
+        views.setViewVisibility(R.id.widget_title, textVisibility)
+        views.setViewVisibility(R.id.widget_artist, textVisibility)
+
         // Fondo: color, opacidad y redondeo
         val radiusStep = config.radiusStep.coerceIn(0, WidgetConfig.RADIUS_DP.size - 1)
         views.setImageViewResource(R.id.widget_bg, BACKGROUNDS[radiusStep])

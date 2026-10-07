@@ -142,6 +142,16 @@ object WidgetSupport {
         return Pair(w.toInt().coerceAtLeast(64), h.toInt().coerceAtLeast(64))
     }
 
+    /** Tamaño actual (dp) de la celda del widget; un 3x1 típico si aún no se conoce. */
+    fun widgetSizeDp(context: Context, id: Int): Pair<Int, Int> = try {
+        val o = AppWidgetManager.getInstance(context).getAppWidgetOptions(id)
+        val w = o.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 0)
+        val h = o.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT, 0)
+        if (w > 0 && h > 0) Pair(w, h) else Pair(250, 72)
+    } catch (e: Throwable) {
+        Pair(250, 72)
+    }
+
     fun openAppIntent(context: Context): PendingIntent {
         val launch = context.packageManager.getLaunchIntentForPackage(context.packageName) ?: Intent()
         return PendingIntent.getActivity(

@@ -39,4 +39,7 @@
     <string name="widget_preview_caption">Vista previa a tamaño real: %1$d × %2$d dp</string>
     <string name="widget_preview_hint">Si los textos no caben, estira el widget desde el escritorio.</string>
     <string name="widget_preview_too_small">Con este tamaño el widget necesita al menos %1$d dp de alto: estíralo desde el escritorio o reduce el tamaño.</string>
+    <string name="widget_size_width">Ancho del widget</string>
+    <string name="widget_size_height">Alto del widget</string>
+    <string name="widget_show_text">Mostrar título y artista</string>
 </resources>

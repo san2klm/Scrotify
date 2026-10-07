@@ -114,6 +114,10 @@ class WidgetConfigActivity : Activity() {
             WidgetConfig.MIN_SCALE, WidgetConfig.MAX_SCALE, { config.scale }, { "$it %" }) {
             config = config.copy(scale = it)
         })
+        root.addView(slider("widthPct", getString(R.string.widget_size_width),
+            30, 100, { config.widthPct }, { "$it %" }) { config = config.copy(widthPct = it) })
+        root.addView(slider("heightPct", getString(R.string.widget_size_height),
+            40, 100, { config.heightPct }, { "$it %" }) { config = config.copy(heightPct = it) })
         root.addView(slider("coverScale", getString(R.string.widget_size_cover),
             WidgetConfig.MIN_SCALE, WidgetConfig.MAX_SCALE, { config.coverScale }, { "$it %" }) {
             config = config.copy(coverScale = it)
@@ -130,6 +134,9 @@ class WidgetConfigActivity : Activity() {
         root.addView(section(getString(R.string.widget_section_show)))
         root.addView(check("hideCover", getString(R.string.widget_hide_cover)) {
             config = config.copy(hideCover = it)
+        })
+        root.addView(check("text", getString(R.string.widget_show_text)) {
+            config = config.copy(showText = it)
         })
         root.addView(check("album", getString(R.string.widget_show_album)) {
             config = config.copy(showAlbum = it)
@@ -346,6 +353,7 @@ class WidgetConfigActivity : Activity() {
             checkBoxes["auto"]?.isChecked = config.autoColors
             checkBoxes["hideCover"]?.isChecked = config.hideCover
             checkBoxes["album"]?.isChecked = config.showAlbum
+            checkBoxes["text"]?.isChecked = config.showText
             checkBoxes["heart"]?.isChecked = config.showHeart
             checkBoxes["gear"]?.isChecked = config.showSettings
         } finally {
@@ -355,17 +363,7 @@ class WidgetConfigActivity : Activity() {
 
     // ---- Vista previa ----------------------------------------------------
 
-    /** Tamaño real (dp) del widget colocado; si aún no existe, un 3x1 típico. */
-    private fun widgetSizeDp(): Pair<Int, Int> {
-        return try {
-            val o = AppWidgetManager.getInstance(this).getAppWidgetOptions(widgetId)
-            val w = o.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 0)
-            val h = o.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 0)
-            if (w > 0 && h > 0) Pair(w, h) else Pair(DEFAULT_W_DP, DEFAULT_H_DP)
-        } catch (e: Throwable) {
-            Pair(DEFAULT_W_DP, DEFAULT_H_DP)
-        }
-    }
+    private fun widgetSizeDp() = WidgetSupport.widgetSizeDp(this, widgetId)
 
     private fun refreshPreview() {
         if (!::previewHolder.isInitialized) return
@@ -378,8 +376,9 @@ class WidgetConfigActivity : Activity() {
             previewCaption.text = getString(R.string.widget_preview_caption, widthDp, hDp)
             // Alto aproximado que necesita el contenido con el tamaño elegido.
             val needed = (8 + 61.6f * config.scale / 100f).toInt()
-            if (needed > hDp) {
-                previewHint.text = getString(R.string.widget_preview_too_small, needed)
+            val effectiveH = hDp * config.heightPct / 100
+            if (needed > effectiveH) {
+                previewHint.text = getString(R.string.widget_preview_too_small, needed * 100 / config.heightPct)
                 previewHint.setTextColor(0xFFFFAB40.toInt())
             } else {
                 previewHint.text = getString(R.string.widget_preview_hint)
@@ -414,8 +413,4 @@ class WidgetConfigActivity : Activity() {
         finish()
     }
 
-    private companion object {
-        const val DEFAULT_W_DP = 250
-        const val DEFAULT_H_DP = 72
-    }
 }

@@ -20,12 +20,16 @@ data class WidgetConfig(
     val showHeart: Boolean = true,
     val showSettings: Boolean = true,
     val showAlbum: Boolean = true,
+    val showText: Boolean = true,
+    /** Ancho y alto del widget dentro de su celda, en % (reduce el recuadro visible). */
+    val widthPct: Int = 100,
+    val heightPct: Int = 100,
 ) {
     companion object {
         const val DEFAULT_BACKGROUND = 0xFF121212.toInt()
         const val DEFAULT_PRIMARY = 0xFFFFFFFF.toInt()
         const val DEFAULT_SECONDARY = 0xFFB3B3B3.toInt()
-        const val MIN_SCALE = 60
+        const val MIN_SCALE = 40
         const val MAX_SCALE = 180
         /** Radios disponibles (dp); el último es una "píldora". */
         val RADIUS_DP = intArrayOf(0, 12, 24, 36, 100)
@@ -50,6 +54,9 @@ data class WidgetConfig(
                 showHeart = p.getBoolean("heart_$id", d.showHeart),
                 showSettings = p.getBoolean("gear_$id", d.showSettings),
                 showAlbum = p.getBoolean("album_$id", d.showAlbum),
+                showText = p.getBoolean("text_$id", d.showText),
+                widthPct = p.getInt("widthPct_$id", d.widthPct).coerceIn(30, 100),
+                heightPct = p.getInt("heightPct_$id", d.heightPct).coerceIn(40, 100),
             )
         }
 
@@ -67,13 +74,16 @@ data class WidgetConfig(
                 .putBoolean("heart_$id", c.showHeart)
                 .putBoolean("gear_$id", c.showSettings)
                 .putBoolean("album_$id", c.showAlbum)
+                .putBoolean("text_$id", c.showText)
+                .putInt("widthPct_$id", c.widthPct)
+                .putInt("heightPct_$id", c.heightPct)
                 .apply()
         }
 
         fun delete(context: Context, id: Int) {
             val e = prefs(context).edit()
             for (k in listOf("bg", "primary", "secondary", "hideCover", "auto", "scale",
-                "coverScale", "bgAlpha", "radius", "heart", "gear", "album")) e.remove("${k}_$id")
+                "coverScale", "bgAlpha", "radius", "heart", "gear", "album", "text", "widthPct", "heightPct")) e.remove("${k}_$id")
             e.apply()
         }
     }
