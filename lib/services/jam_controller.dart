@@ -1404,6 +1404,7 @@ class JamController extends ChangeNotifier {
       'mode': _hostService.mode.name,
       'allowGuestControls': _hostService.allowGuestControls,
       'allowGuestQueueManage': _hostService.allowGuestQueueManage,
+      'isPublic': isPublic,
       if (_remoteService.clock.isReady)
         'refTs': _remoteService.clock
             .toReference(DateTime.now().millisecondsSinceEpoch),
@@ -1444,6 +1445,7 @@ class JamController extends ChangeNotifier {
         hostName: _localParticipant?.name ?? 'Host',
         initialState: _remoteStatePayload(),
         resume: resuming,
+        isPublic: isPublic,
       );
       if (resuming && !ok) {
         _remoteService.hostToken = null;
@@ -1451,6 +1453,7 @@ class JamController extends ChangeNotifier {
           pin: pin,
           hostName: _localParticipant?.name ?? 'Host',
           initialState: _remoteStatePayload(),
+          isPublic: isPublic,
         );
       }
       debugPrint('JamController: Creación en servidor remoto: $ok');
@@ -1687,6 +1690,7 @@ class JamController extends ChangeNotifier {
         pin: normalizedPin,
         customName: name,
         customColor: color,
+        password: password,
       );
     }
 

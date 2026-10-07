@@ -1233,6 +1233,34 @@ class _JamDialogState extends State<JamDialog>
   // ---------------------------------------------------------------------------
   // Pestaña 2: Unirse a un Jam (Radar / PIN / QR)
   // ---------------------------------------------------------------------------
+  Future<String?> _askRoomPassword(BuildContext context) {
+    final controller = TextEditingController();
+    return showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: ctx.bgElevated,
+        title: Text('Sala con contraseña',
+            style: TextStyle(color: ctx.textPrimary, fontSize: 16)),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          obscureText: true,
+          style: TextStyle(color: ctx.textPrimary, fontSize: 13),
+          decoration: const InputDecoration(labelText: 'Contraseña'),
+          onSubmitted: (v) => Navigator.pop(ctx, v),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancelar')),
+          FilledButton(
+              onPressed: () => Navigator.pop(ctx, controller.text),
+              child: const Text('Entrar')),
+        ],
+      ),
+    ).whenComplete(controller.dispose);
+  }
+
   Widget _buildJoinJamTab(JamController jam) {
     if (_isCameraActive) {
       return _buildCameraScanner(jam);
@@ -1467,7 +1495,13 @@ class _JamDialogState extends State<JamDialog>
                           ),
                           FilledButton.tonal(
                             onPressed: () async {
-                              final ok = await jam.joinDiscovered(d);
+                              String? password;
+                              if (d.hasPassword) {
+                                password = await _askRoomPassword(context);
+                                if (password == null) return;
+                              }
+                              final ok =
+                                  await jam.joinDiscovered(d, password: password);
                               if (!ok && mounted) {
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   SnackBar(

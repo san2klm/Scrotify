@@ -293,6 +293,7 @@ export function createJamServer({
         publicPort = parsed.port ? Number(parsed.port) : (parsed.protocol === 'https:' ? 443 : 80);
       }
       for (const room of limits.publicListingEnabled ? rooms.values() : []) {
+        if (!room.isPublic) continue;
         publicRooms.push({
           pin: room.pin,
           hostName: room.hostName,
@@ -507,7 +508,8 @@ export function createJamServer({
     const hostToken = newToken();
     const room = {
       pin, host: socket, hostName, state, guests: new Set(), updatedAt: Date.now(),
-      password, banned: new Set(), hostTokenHash: sha256(hostToken), hostGone: false,
+      password, isPublic: message.isPublic !== false,
+      banned: new Set(), hostTokenHash: sha256(hostToken), hostGone: false,
       failover: message.failover === true, failoverTimer: null,
       persistent: !!persistent,
     };
@@ -616,6 +618,7 @@ export function createJamServer({
     const state = normalizeState(message.state, limits, room.state);
     if (!state) return serverError(socket, 'Estado de reproducción inválido.');
     room.state = state;
+    if (typeof message.state?.isPublic === 'boolean') room.isPublic = message.state.isPublic;
     room.updatedAt = Date.now();
     persistRoomConfig(room);
     for (const guest of room.guests) send(guest.socket, { event: 'sync_state', state });

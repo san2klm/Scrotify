@@ -757,6 +757,7 @@ class DiscoveredJamSession {
   final String? remoteHost;
   final int? remotePort;
   final String? tlsFingerprint;
+  final bool hasPassword;
 
   const DiscoveredJamSession({
     required this.host,
@@ -772,6 +773,7 @@ class DiscoveredJamSession {
     this.remoteHost,
     this.remotePort,
     this.tlsFingerprint,
+    this.hasPassword = false,
   });
 
   /// Construye una sesión descubierta. Para una respuesta que llega por UDP se
@@ -811,6 +813,7 @@ class DiscoveredJamSession {
       remotePort: (json['remotePort'] as num?)?.toInt(),
       tlsFingerprint:
           json['transport'] == 'wss' ? json['tlsFingerprint'] as String? : null,
+      hasPassword: json['hasPassword'] == true,
     );
   }
 
