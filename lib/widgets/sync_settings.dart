@@ -52,6 +52,11 @@ class SyncSettings extends StatelessWidget {
             icon: const Icon(Icons.key_outlined, size: 18),
             label: const Text('Ver clave'),
           ),
+          OutlinedButton.icon(
+            onPressed: sync.syncing ? null : () => _randomKey(context, sync),
+            icon: const Icon(Icons.shield_outlined, size: 18),
+            label: const Text('Usar clave aleatoria'),
+          ),
         ]),
       ] else ...[
         const SizedBox(height: 4),
@@ -74,6 +79,32 @@ class SyncSettings extends StatelessWidget {
   }
 
   Future<void> _enable(BuildContext context, SyncService sync) async {
+    final key = await sync.enableNew();
+    if (context.mounted) await _showKey(context, key, firstTime: true);
+  }
+
+  /// Alternativa más segura a la clave de la cuenta: una clave aleatoria que
+  /// no depende de la contraseña, pero que hay que copiar a cada dispositivo.
+  Future<void> _randomKey(BuildContext context, SyncService sync) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Usar clave aleatoria'),
+        content: const Text(
+            'Se generará una clave nueva que no depende de tu contraseña. '
+            'Los demás dispositivos dejarán de recibir datos hasta que '
+            'introduzcas esta clave en ellos.'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancelar')),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Generar clave')),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
     final key = await sync.enableNew();
     if (context.mounted) await _showKey(context, key, firstTime: true);
   }
