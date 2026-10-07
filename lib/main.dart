@@ -118,7 +118,7 @@ class MyApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => MiniPlayerController()),
         ChangeNotifierProvider(create: (_) => SettingsController()),
         ChangeNotifierProvider(create: (_) => ServerProfilesController()),
-        ChangeNotifierProvider(create: (_) => EqualizerService()),
+        ChangeNotifierProvider(create: (_) => EqualizerService()..initialize()),
         ChangeNotifierProvider(create: (_) => ListeningStatsService()),
         ChangeNotifierProvider(
             create: (_) => ThemeController(initial: initialTheme)),

@@ -252,3 +252,13 @@
 ## Entrega en GitHub (2026-10-06)
 
 - [x] Preparar los cambios del proyecto para la rama `PC123` de `PC123PC123/Scrotify`; análisis limpio y 527 pruebas aprobadas en el estado actual.
+
+## Ecualizador de tres niveles y modos Hi-Fi (2026-10-07)
+
+Origen: carpeta `Eculiza/` (paquete `scrotify_eq` + `EQUALIZER.md`). Estado previo: el EQ de 10 bandas solo guardaba ajustes; no estaba conectado al reproductor.
+
+- [x] **11.1** Incorporar modelos, matemática biquad, presets, import/export AutoEQ, backends, `EqualizerService` v2, curva y pantalla; retirar el EQ antiguo y sus pruebas; documentación en `docs/equalizer.md`.
+- [ ] **11.2** Android: `AndroidEqualizer` en el `AudioPipeline` de los reproductores A y B del crossfade; verificar en el teléfono.
+- [ ] **11.3** Escritorio: copia parcheada de `just_audio_media_kit` (acceso al `Player` de mpv) para aplicar el filtro `af`.
+- [ ] **11.4** Hi-Fi: `HifiPlanner`, plugin nativo Android (bit-perfect USB), ajuste de modo en Ajustes y `PlayerController.applyHifi`. Modo Estándar = comportamiento actual.
+- [ ] **11.5** Validación: `flutter analyze` limpio, `flutter test`, APK y AppImage.
