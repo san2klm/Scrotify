@@ -13,6 +13,7 @@ import io.flutter.plugin.common.MethodChannel
 
 class MainActivity : AudioServiceFragmentActivity() {
     private val storageRequest = 30174
+    private val notificationRequest = 30175
     private var pendingStorage: MethodChannel.Result? = null
 
     private fun hasStorageAccess(): Boolean =
@@ -24,6 +25,20 @@ class MainActivity : AudioServiceFragmentActivity() {
                 checkSelfPermission(Manifest.permission.READ_EXTERNAL_STORAGE) ==
                 PackageManager.PERMISSION_GRANTED
         }
+
+    override fun onCreate(savedInstanceState: android.os.Bundle?) {
+        super.onCreate(savedInstanceState)
+        // Android 13+: la notificación de reproducción necesita este permiso.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) !=
+            PackageManager.PERMISSION_GRANTED
+        ) {
+            requestPermissions(
+                arrayOf(Manifest.permission.POST_NOTIFICATIONS),
+                notificationRequest
+            )
+        }
+    }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
