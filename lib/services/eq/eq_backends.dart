@@ -13,6 +13,9 @@
 // La UI consulta `capabilities` para avisar al usuario cuando su curva se
 // aproxima (Android) en vez de aplicarse exacta.
 
+import 'dart:async';
+
+import 'package:flutter/foundation.dart';
 import 'package:just_audio/just_audio.dart';
 
 import '../../models/eq_models.dart';
@@ -156,6 +159,15 @@ class AndroidEqBackend extends EqBackend {
     engineLabel: 'Ecualizador del sistema Android',
   );
 
+  // Último estado pedido. `AndroidEqualizer.parameters` solo se resuelve
+  // cuando el reproductor carga su primera pista (el B del crossfade puede
+  // tardar), así que no se espera aquí: cada ecualizador aplica, en cuanto
+  // está listo, siempre el estado MÁS RECIENTE y no uno ya obsoleto.
+  List<EqBand> _bands = const [];
+  double _preampDb = 0;
+  bool _active = false;
+  final Map<AndroidEqualizer, int> _generation = {};
+
   AndroidEqBackend(this.equalizers);
 
   @override
@@ -163,42 +175,83 @@ class AndroidEqBackend extends EqBackend {
 
   @override
   Future<void> apply(List<EqBand> bands, double preampDb) async {
-    for (final eq in equalizers) {
-      final params = await eq.parameters;
-      final centers = [for (final b in params.bands) b.centerFrequency];
-      _caps = EqCapabilities(
-        exact: false,
-        maxBands: centers.length,
-        engineLabel:
-            'Ecualizador del sistema Android (${centers.length} bandas)',
-        note:
-            'Tu dispositivo ofrece ${centers.length} bandas fijas: la curva se aproxima. '
-            'Para un ecualizador paramétrico exacto activá el motor mpv en Ajustes > Audio.',
-      );
-      // Q menor que la ISO: las bandas de Android son anchas (~2 octavas).
-      final fitted = EqMath.fitToGraphic(
-        bands,
-        centers,
-        q: centers.length <= 5 ? 0.6 : kOneOctaveQ,
-        minDb: params.minDecibels,
-        maxDb: params.maxDecibels,
-      );
-      for (var i = 0; i < params.bands.length; i++) {
-        // El preamp negativo se reparte en todas las bandas (Android no tiene
-        // ganancia previa); así se evita el clipping igual que en desktop.
-        final g = (fitted[i].gainDb + preampDb)
-            .clamp(params.minDecibels, params.maxDecibels);
-        await params.bands[i].setGain(g);
-      }
-      await eq.setEnabled(true);
-    }
+    _bands = bands;
+    _preampDb = preampDb;
+    _active = true;
+    _syncAll();
   }
 
   @override
   Future<void> bypass() async {
+    _active = false;
+    _syncAll();
+  }
+
+  void _syncAll() {
     for (final eq in equalizers) {
-      await eq.setEnabled(false);
+      unawaited(_sync(eq).catchError((Object e) {
+        debugPrint('AndroidEqBackend: no se pudo aplicar ($e)');
+      }));
     }
+  }
+
+  Future<void> _sync(AndroidEqualizer eq) async {
+    final generation = (_generation[eq] ?? 0) + 1;
+    _generation[eq] = generation;
+    final params = await eq.parameters;
+    // Una petición posterior ya se encarga: evita aplicar un estado viejo.
+    if (_generation[eq] != generation) return;
+
+    final centers = [for (final b in params.bands) b.centerFrequency];
+    _caps = EqCapabilities(
+      exact: false,
+      maxBands: centers.length,
+      engineLabel: 'Ecualizador del sistema Android (${centers.length} bandas)',
+      note: 'Tu dispositivo ofrece ${centers.length} bandas fijas: la curva se '
+          'aproxima. Para un ecualizador paramétrico exacto activá el motor mpv '
+          'en Ajustes > Audio.',
+    );
+
+    if (!_active) {
+      await eq.setEnabled(false);
+      return;
+    }
+    // Q menor que la ISO: las bandas de Android son anchas (~2 octavas).
+    final fitted = EqMath.fitToGraphic(
+      _bands,
+      centers,
+      q: centers.length <= 5 ? 0.6 : kOneOctaveQ,
+      minDb: params.minDecibels,
+      maxDb: params.maxDecibels,
+    );
+    for (var i = 0; i < params.bands.length; i++) {
+      // El preamp negativo se reparte en todas las bandas (Android no tiene
+      // ganancia previa); así se evita el clipping igual que en desktop.
+      final g = (fitted[i].gainDb + _preampDb)
+          .clamp(params.minDecibels, params.maxDecibels);
+      await params.bands[i].setGain(g);
+      if (_generation[eq] != generation) return;
+    }
+    await eq.setEnabled(true);
+  }
+}
+
+/// Los dos reproductores A/B del crossfade, cada uno con su propio ecualizador
+/// del sistema (un mismo efecto no puede estar en dos reproductores).
+class AndroidEqSetup {
+  final AudioPlayer playerA;
+  final AudioPlayer playerB;
+  final AndroidEqBackend backend;
+  AndroidEqSetup._(this.playerA, this.playerB, this.backend);
+
+  factory AndroidEqSetup.create() {
+    final eqA = AndroidEqualizer();
+    final eqB = AndroidEqualizer();
+    return AndroidEqSetup._(
+      AudioPlayer(audioPipeline: AudioPipeline(androidAudioEffects: [eqA])),
+      AudioPlayer(audioPipeline: AudioPipeline(androidAudioEffects: [eqB])),
+      AndroidEqBackend([eqA, eqB]),
+    );
   }
 }
 

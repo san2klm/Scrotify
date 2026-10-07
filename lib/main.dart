@@ -1,4 +1,5 @@
 import 'widgets/jam_deep_link_listener.dart';
+import 'dart:async' show unawaited;
 import 'dart:io' show Platform;
 
 import 'package:flutter/foundation.dart'
@@ -16,6 +17,8 @@ import 'services/cover_fallback_service.dart';
 import 'services/mini_player_controller.dart';
 import 'services/scrotify_audio_handler.dart';
 
+import 'services/eq/eq_backends.dart';
+import 'services/eq/eq_mpv_setup.dart';
 import 'services/equalizer_service.dart';
 import 'services/jam_controller.dart';
 import 'services/listening_stats_service.dart';
@@ -97,6 +100,9 @@ Future<void> main() async {
   // inmediato; el reproductor se prepara mientras el usuario ve el inicio.
   if (!kIsWeb && (Platform.isLinux || Platform.isWindows || Platform.isMacOS)) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      // `pitch` instala su propio filtro `af` (scaletempo) y pisaría el del
+      // ecualizador; mpv sigue conservando el tono al cambiar la velocidad.
+      JustAudioMediaKit.pitch = false;
       JustAudioMediaKit.ensureInitialized();
     });
   }
@@ -173,12 +179,30 @@ class MyApp extends StatelessWidget {
         ),
         ChangeNotifierProvider<PlayerController>(
           create: (ctx) {
+            // Android: cada reproductor A/B lleva su ecualizador del sistema.
+            final androidEq =
+                !kIsWeb && Platform.isAndroid ? AndroidEqSetup.create() : null;
             final player = PlayerController(
               ctx.read<NavidromeService>(),
               ctx.read<SettingsController>(),
               statsService: ctx.read<ListeningStatsService>(),
               audioHandler: audioHandler,
+              playerA: androidEq?.playerA,
+              playerB: androidEq?.playerB,
             );
+            if (androidEq != null) {
+              unawaited(ctx
+                  .read<EqualizerService>()
+                  .attachBackend(androidEq.backend));
+            }
+            // Escritorio: el filtro `af` de mpv en los reproductores A/B.
+            if (!kIsWeb &&
+                (Platform.isLinux || Platform.isWindows || Platform.isMacOS)) {
+              final equalizer = ctx.read<EqualizerService>();
+              unawaited(equalizer.attachBackend(createDesktopEqBackend()));
+              JustAudioMediaKit.onPlayerReady =
+                  () => unawaited(equalizer.reapply());
+            }
             final music = ctx.read<LocalMusicService>();
             player.localFileResolver = (id) {
               final scope = ctx.read<NavidromeService>().serverScope;

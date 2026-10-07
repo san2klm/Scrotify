@@ -270,6 +270,10 @@ class EqualizerService extends ChangeNotifier {
 
   Future<void> reset() => selectProfile(EqPresets.defaultFor(_mode));
 
+  /// Vuelve a aplicar la curva actual. Se usa cuando aparece un reproductor
+  /// nuevo (just_audio crea el motor al cargar la primera pista).
+  Future<void> reapply() => _applyNow();
+
   // ───────────── Hi-Fi ─────────────
 
   /// Llamado por PlayerController cuando cambia el plan de fidelidad.
