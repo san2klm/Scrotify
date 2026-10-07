@@ -34,6 +34,8 @@ class WidgetConfigActivity : Activity() {
     private var widgetId = AppWidgetManager.INVALID_APPWIDGET_ID
     private var config = WidgetConfig()
     private lateinit var previewHolder: FrameLayout
+    private lateinit var previewCaption: TextView
+    private lateinit var previewHint: TextView
     private val swatchViews = mutableMapOf<String, List<Pair<Int, View>>>()
     private val hexFields = mutableMapOf<String, EditText>()
     private val checkBoxes = mutableMapOf<String, CheckBox>()
@@ -68,15 +70,15 @@ class WidgetConfigActivity : Activity() {
     // ---- UI --------------------------------------------------------------
 
     private fun buildUi(): View {
-        val root = LinearLayout(this).apply {
+        // Cabecera fija: así la vista previa se ve siempre mientras ajustas.
+        val header = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(20), dp(24), dp(20), dp(24))
+            setBackgroundColor(0xFF0B0B10.toInt())
+            setPadding(dp(20), dp(20), dp(20), dp(10))
         }
-        root.addView(text(getString(R.string.widget_config_title), 20f, Color.WHITE, bold = true))
-        root.addView(text(getString(R.string.widget_config_hint), 13f, 0xFFB3B3B3.toInt()).apply {
-            setPadding(0, dp(6), 0, dp(12))
-        })
-
+        header.addView(text(getString(R.string.widget_config_title), 20f, Color.WHITE, bold = true))
+        previewCaption = text("", 12f, 0xFFB3B3B3.toInt()).apply { setPadding(0, dp(4), 0, dp(8)) }
+        header.addView(previewCaption)
         previewHolder = object : FrameLayout(this) {
             // La vista previa es solo para mirar: no debe disparar los botones.
             override fun onInterceptTouchEvent(ev: MotionEvent?) = true
@@ -84,8 +86,17 @@ class WidgetConfigActivity : Activity() {
             setBackgroundColor(0xFF2A2A33.toInt())
             setPadding(dp(10), dp(10), dp(10), dp(10))
         }
-        root.addView(previewHolder, LinearLayout.LayoutParams(
+        header.addView(previewHolder, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
+        previewHint = text(getString(R.string.widget_preview_hint), 11f, 0xFF8A8A94.toInt()).apply {
+            setPadding(0, dp(6), 0, 0)
+        }
+        header.addView(previewHint)
+
+        val root = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(20), dp(0), dp(20), dp(16))
+        }
 
         root.addView(section(getString(R.string.widget_section_colors)))
         root.addView(colorRow("bg", getString(R.string.widget_color_background), backgrounds,
@@ -132,7 +143,8 @@ class WidgetConfigActivity : Activity() {
 
         val buttons = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
-            setPadding(0, dp(20), 0, 0)
+            setBackgroundColor(0xFF0B0B10.toInt())
+            setPadding(dp(20), dp(10), dp(20), dp(14))
         }
         buttons.addView(button(getString(R.string.widget_reset)) {
             config = WidgetConfig()
@@ -141,13 +153,19 @@ class WidgetConfigActivity : Activity() {
         }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply { marginEnd = dp(8) })
         buttons.addView(button(getString(R.string.widget_accept)) { accept() },
             LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply { marginStart = dp(8) })
-        root.addView(buttons)
 
         syncControls()
-        return ScrollView(this).apply {
+        val scroll = ScrollView(this).apply {
             setBackgroundColor(0xFF0B0B10.toInt())
-            isFillViewport = true
             addView(root)
+        }
+        return LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setBackgroundColor(0xFF0B0B10.toInt())
+            addView(header)
+            addView(scroll, LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f))
+            addView(buttons)
         }
     }
 
@@ -337,15 +355,39 @@ class WidgetConfigActivity : Activity() {
 
     // ---- Vista previa ----------------------------------------------------
 
+    /** Tamaño real (dp) del widget colocado; si aún no existe, un 3x1 típico. */
+    private fun widgetSizeDp(): Pair<Int, Int> {
+        return try {
+            val o = AppWidgetManager.getInstance(this).getAppWidgetOptions(widgetId)
+            val w = o.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 0)
+            val h = o.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 0)
+            if (w > 0 && h > 0) Pair(w, h) else Pair(DEFAULT_W_DP, DEFAULT_H_DP)
+        } catch (e: Throwable) {
+            Pair(DEFAULT_W_DP, DEFAULT_H_DP)
+        }
+    }
+
     private fun refreshPreview() {
         if (!::previewHolder.isInitialized) return
         try {
             val state = previewState(this)
             val views = ScrotifyWidgetProvider().buildWith(this, widgetId, config, state)
-            val heightDp = (72 * (config.scale / 100f).coerceAtLeast(1f)).toInt()
+            val (wDp, hDp) = widgetSizeDp()
+            val maxW = (resources.displayMetrics.widthPixels / resources.displayMetrics.density - 60).toInt()
+            val widthDp = minOf(wDp, maxW)
+            previewCaption.text = getString(R.string.widget_preview_caption, widthDp, hDp)
+            // Alto aproximado que necesita el contenido con el tamaño elegido.
+            val needed = (8 + 61.6f * config.scale / 100f).toInt()
+            if (needed > hDp) {
+                previewHint.text = getString(R.string.widget_preview_too_small, needed)
+                previewHint.setTextColor(0xFFFFAB40.toInt())
+            } else {
+                previewHint.text = getString(R.string.widget_preview_hint)
+                previewHint.setTextColor(0xFF8A8A94.toInt())
+            }
             previewHolder.removeAllViews()
             previewHolder.addView(views.apply(this, previewHolder),
-                FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, dp(heightDp)))
+                FrameLayout.LayoutParams(dp(widthDp), dp(hDp), Gravity.CENTER_HORIZONTAL))
         } catch (e: Throwable) {
             android.util.Log.w(WidgetSupport.TAG, "No se pudo dibujar la vista previa", e)
         }
@@ -370,5 +412,10 @@ class WidgetConfigActivity : Activity() {
         })
         setResult(RESULT_OK, Intent().putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, widgetId))
         finish()
+    }
+
+    private companion object {
+        const val DEFAULT_W_DP = 250
+        const val DEFAULT_H_DP = 72
     }
 }

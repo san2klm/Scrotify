@@ -71,7 +71,6 @@ class ScrotifyWidgetProvider : ScrotifyBaseWidget() {
             size(R.id.widget_next, 28f)
             size(R.id.widget_like, 28f)
             size(R.id.widget_play, 32f)
-            size(R.id.widget_settings, 20f)
         }
         views.setViewVisibility(R.id.widget_like, if (config.showHeart) View.VISIBLE else View.GONE)
         views.setViewVisibility(R.id.widget_settings, if (config.showSettings) View.VISIBLE else View.GONE)
