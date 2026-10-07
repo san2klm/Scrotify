@@ -9,6 +9,7 @@ import 'package:navidrome_client/screens/home_screen.dart';
 import 'package:navidrome_client/screens/liked_songs_screen.dart';
 import 'package:navidrome_client/screens/mobile_home_screen.dart';
 import 'package:navidrome_client/services/home_navigation_controller.dart';
+import 'package:navidrome_client/services/connect/connect_service.dart';
 import 'package:navidrome_client/services/jam_controller.dart';
 import 'package:navidrome_client/services/navidrome_service.dart';
 import 'package:navidrome_client/services/player_controller.dart';
@@ -195,6 +196,7 @@ void main() {
             ChangeNotifierProvider<PlayerController>.value(value: player),
             ChangeNotifierProvider<ThemeController>.value(value: theme),
             ChangeNotifierProvider<SettingsController>.value(value: settings),
+            ChangeNotifierProvider<ConnectService>(create: (_) => idleConnectService()),
             ChangeNotifierProvider<JamController>(create: (_) => IdleJam()),
           ],
           child: const MaterialApp(
@@ -288,6 +290,7 @@ void main() {
             ChangeNotifierProvider<ThemeController>.value(value: theme),
             ChangeNotifierProvider<SettingsController>.value(value: settings),
             ChangeNotifierProvider<HomeNavigationController>.value(value: homeNav),
+            ChangeNotifierProvider<ConnectService>(create: (_) => idleConnectService()),
             ChangeNotifierProvider<JamController>(create: (_) => IdleJam()),
           ],
           child: const MaterialApp(
@@ -378,6 +381,7 @@ void main() {
             ChangeNotifierProvider<ThemeController>.value(value: theme),
             ChangeNotifierProvider<SettingsController>.value(value: settings),
             ChangeNotifierProvider<HomeNavigationController>.value(value: homeNav),
+            ChangeNotifierProvider<ConnectService>(create: (_) => idleConnectService()),
             ChangeNotifierProvider<JamController>(create: (_) => IdleJam()),
           ],
           child: const MaterialApp(

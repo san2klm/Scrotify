@@ -16,6 +16,7 @@ import 'package:navidrome_client/screens/settings_screen.dart';
 import 'package:navidrome_client/screens/stats_screen.dart';
 import 'package:navidrome_client/services/app_theme.dart';
 import 'package:navidrome_client/services/equalizer_service.dart';
+import 'package:navidrome_client/services/connect/connect_service.dart';
 import 'package:navidrome_client/services/jam_controller.dart';
 import 'package:navidrome_client/services/listening_stats_service.dart';
 import 'package:navidrome_client/services/navidrome_service.dart';
@@ -168,6 +169,7 @@ Future<void> _pump(WidgetTester tester, Widget screen, _Themes themes,
         ChangeNotifierProvider<ThemeController>.value(value: themes),
         ChangeNotifierProvider<NavidromeService>(create: (_) => _Library()),
         ChangeNotifierProvider<PlayerController>(create: (_) => IdlePlayer()),
+        ChangeNotifierProvider<ConnectService>(create: (_) => idleConnectService()),
         ChangeNotifierProvider<JamController>(create: (_) => IdleJam()),
         ChangeNotifierProvider<SettingsController>(
             create: (_) => SettingsController()),

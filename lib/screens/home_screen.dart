@@ -277,7 +277,7 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ],
       ),
-      bottomNavigationBar: PersistentPlayerBar(showQueue: !showSidePanel),
+      bottomNavigationBar: const PersistentPlayerBar(),
     );
   }
 

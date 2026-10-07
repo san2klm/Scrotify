@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:provider/provider.dart';
 
+import '../services/connect/connect_protocol.dart';
+import '../services/connect/connect_service.dart';
 import '../services/jam_controller.dart';
 import '../services/navidrome_service.dart';
 import '../services/player_controller.dart';
@@ -10,7 +12,7 @@ import 'cover_art.dart';
 import 'player_position_builder.dart';
 import 'waveform_progress_bar.dart';
 import 'jam_dialog.dart';
-import 'jam_queue_panel.dart';
+import 'connect_panel.dart';
 import 'track_context_menu.dart';
 import 'interactive_artist_text.dart';
 import '../utils/app_colors.dart';
@@ -28,23 +30,28 @@ import '../utils/playback_time.dart';
 /// delgada en el borde superior de la barra, controles y texto compactos.
 class PersistentPlayerBar extends StatelessWidget {
   final bool compact;
-  final bool showQueue;
 
   const PersistentPlayerBar({
     super.key,
     this.compact = false,
-    this.showQueue = true,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Consumer2<PlayerController, JamController>(
-      builder: (context, player, jam, _) {
+    return Consumer3<PlayerController, JamController, ConnectService>(
+      builder: (context, player, jam, connect, _) {
         // En modo Party Speaker el invitado no reproduce audio local, pero la
         // barra debe reflejar fielmente lo que está sonando en el anfitrión.
         final remoteState = jam.isGuest ? jam.session : null;
-        final track = remoteState?.currentTrack ?? player.currentTrack;
-        final playing = remoteState?.isPlaying ?? player.playing;
+        // Con Connect, la barra muestra y controla el dispositivo remoto.
+        final remote =
+            connect.controlled != null ? connect.controlledState : null;
+        final track = connect.controlled != null
+            ? _remoteTrack(remote)
+            : remoteState?.currentTrack ?? player.currentTrack;
+        final playing = connect.controlled != null
+            ? (remote?.playing ?? false)
+            : remoteState?.isPlaying ?? player.playing;
 
         if (compact) {
           return _buildMobileBar(context, player, jam, track, playing);
@@ -52,6 +59,12 @@ class PersistentPlayerBar extends StatelessWidget {
         return _buildDesktopBar(context, player, jam, track, playing);
       },
     );
+  }
+
+  static Track? _remoteTrack(ConnectRemoteState? state) {
+    final json = state?.track?.json;
+    if (json == null) return null;
+    return Track.fromJson(json, albumArtUrl: json['albumArtUrl'] as String?);
   }
 
   // ---------------------------------------------------------------------------
@@ -68,6 +81,9 @@ class PersistentPlayerBar extends StatelessWidget {
     final showJam = w >= 880;
     final showFull = w >= 800;
     final infoWidth = w < 900 ? 130.0 : (w < 1100 ? 180.0 : 240.0);
+    final connect = context.watch<ConnectService>();
+    final remoteControlled = connect.controlled != null;
+    final remoteState = connect.controlledState;
 
     return Container(
       height: 90,
@@ -100,21 +116,24 @@ class PersistentPlayerBar extends StatelessWidget {
                               ? context.accent
                               : context.textSecondary,
                         ),
-                        onPressed: jam.isGuest ? null : player.toggleShuffle,
+                        onPressed: jam.isGuest || remoteControlled
+                            ? null
+                            : player.toggleShuffle,
                       ),
                       IconButton(
                         visualDensity: VisualDensity.compact,
                         icon: Icon(Icons.skip_previous,
                             color: context.textPrimary, size: 26),
-                        onPressed:
-                            _playbackHandler(jam, player, 'skip_previous'),
+                        onPressed: _playbackHandler(
+                            context, jam, player, 'skip_previous'),
                       ),
                       _playButton(context, player, jam, playing),
                       IconButton(
                         visualDensity: VisualDensity.compact,
                         icon: Icon(Icons.skip_next,
                             color: context.textPrimary, size: 26),
-                        onPressed: _playbackHandler(jam, player, 'skip_next'),
+                        onPressed:
+                            _playbackHandler(context, jam, player, 'skip_next'),
                       ),
                       IconButton(
                         visualDensity: VisualDensity.compact,
@@ -127,7 +146,9 @@ class PersistentPlayerBar extends StatelessWidget {
                               ? context.accent
                               : context.textSecondary,
                         ),
-                        onPressed: jam.isGuest ? null : player.toggleRepeat,
+                        onPressed: jam.isGuest || remoteControlled
+                            ? null
+                            : player.toggleRepeat,
                       ),
                     ],
                   ),
@@ -136,7 +157,9 @@ class PersistentPlayerBar extends StatelessWidget {
                     constraints: const BoxConstraints(maxWidth: 560),
                     child: _DesktopProgressBar(
                       player,
-                      onSeek: (target) => _seek(jam, player, target),
+                      remote: remoteControlled ? remoteState : null,
+                      remoteActive: remoteControlled,
+                      onSeek: (target) => _seek(context, jam, player, target),
                     ),
                   ),
                 ],
@@ -148,10 +171,10 @@ class PersistentPlayerBar extends StatelessWidget {
               _jamButton(context),
               const SizedBox(width: 6),
             ],
-            if (showQueue) _queueButton(context),
+            _connectButton(context),
             if (showVolume) ...[
               const SizedBox(width: 8),
-              _VolumeBar(player),
+              _VolumeBar(player, connect: remoteControlled ? connect : null),
             ],
             if (showFull) ...[
               const SizedBox(width: 8),
@@ -179,7 +202,11 @@ class PersistentPlayerBar extends StatelessWidget {
           // Thin progress bar at the very top (Spotify mobile style)
           _MobileProgressBar(
             player,
-            onSeek: (target) => _seek(jam, player, target),
+            remote: context.watch<ConnectService>().controlled != null
+                ? context.watch<ConnectService>().controlledState
+                : null,
+            remoteActive: context.watch<ConnectService>().controlled != null,
+            onSeek: (target) => _seek(context, jam, player, target),
           ),
           // Content row
           Expanded(
@@ -219,24 +246,17 @@ class PersistentPlayerBar extends StatelessWidget {
       _compactControlIcon(
         context,
         Icons.skip_previous,
-        _playbackHandler(jam, player, 'skip_previous'),
+        _playbackHandler(context, jam, player, 'skip_previous'),
         size: 24,
       ),
       _playButton(context, player, jam, playing, compact: true),
       _compactControlIcon(
         context,
         Icons.skip_next,
-        _playbackHandler(jam, player, 'skip_next'),
+        _playbackHandler(context, jam, player, 'skip_next'),
         size: 24,
       ),
-      if (showQueue) IconButton(
-        visualDensity: VisualDensity.compact,
-        padding: EdgeInsets.zero,
-        constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-        icon: Icon(Icons.queue_music_rounded,
-            color: context.textSecondary, size: 20),
-        onPressed: () => JamQueuePanel.show(context),
-      ),
+      _connectButton(context, compact: true),
       _threeDotsMenu(context, track),
     ];
   }
@@ -294,13 +314,21 @@ class PersistentPlayerBar extends StatelessWidget {
     );
   }
 
-  Widget _queueButton(BuildContext context) {
+  /// Selector de dispositivos de Connect. Se resalta mientras se controla otro.
+  Widget _connectButton(BuildContext context, {bool compact = false}) {
+    final connect = context.watch<ConnectService>();
+    final remote = connect.controlled;
+    final color = remote != null ? context.accent : context.textSecondary;
     return IconButton(
-      tooltip: 'Cola de reproducción',
+      tooltip: remote != null
+          ? 'Reproduciendo en ${remote.name}'
+          : 'Conectarse a un dispositivo',
       visualDensity: VisualDensity.compact,
-      icon: Icon(Icons.queue_music_rounded,
-          color: context.textSecondary, size: 21),
-      onPressed: () => JamQueuePanel.show(context),
+      padding: compact ? EdgeInsets.zero : const EdgeInsets.all(8),
+      constraints:
+          compact ? const BoxConstraints(minWidth: 32, minHeight: 32) : null,
+      icon: Icon(Icons.devices_rounded, color: color, size: compact ? 20 : 21),
+      onPressed: () => ConnectPanel.show(context),
     );
   }
 
@@ -416,15 +444,26 @@ class PersistentPlayerBar extends StatelessWidget {
         playing ? Icons.pause_circle_filled : Icons.play_circle_filled,
         color: context.textPrimary,
       ),
-      onPressed: _playbackHandler(jam, player, 'toggle'),
+      onPressed: _playbackHandler(context, jam, player, 'toggle'),
     );
   }
 
   VoidCallback? _playbackHandler(
+    BuildContext context,
     JamController jam,
     PlayerController player,
     String action,
   ) {
+    final connect = context.read<ConnectService>();
+    if (connect.controlled != null) {
+      final command = switch (action) {
+        'toggle' => ConnectCommand.toggle,
+        'skip_next' => ConnectCommand.next,
+        'skip_previous' => ConnectCommand.previous,
+        _ => null,
+      };
+      return command == null ? null : () => connect.command(command);
+    }
     if (jam.isGuest && !(jam.localParticipant?.canControlPlayback ?? false)) {
       return null;
     }
@@ -441,7 +480,13 @@ class PersistentPlayerBar extends StatelessWidget {
     };
   }
 
-  void _seek(JamController jam, PlayerController player, Duration target) {
+  void _seek(BuildContext context, JamController jam, PlayerController player,
+      Duration target) {
+    final connect = context.read<ConnectService>();
+    if (connect.controlled != null) {
+      connect.command(ConnectCommand.seek, target.inMilliseconds);
+      return;
+    }
     if (jam.isGuest && !(jam.localParticipant?.canControlPlayback ?? false)) {
       return;
     }
@@ -493,7 +538,12 @@ class _DesktopProgressBar extends StatefulWidget {
   final PlayerController player;
   final ValueChanged<Duration>? onSeek;
 
-  const _DesktopProgressBar(this.player, {this.onSeek});
+  /// Estado del dispositivo remoto cuando Connect controla otro equipo.
+  final ConnectRemoteState? remote;
+  final bool remoteActive;
+
+  const _DesktopProgressBar(this.player,
+      {this.onSeek, this.remote, this.remoteActive = false});
 
   @override
   State<_DesktopProgressBar> createState() => _DesktopProgressBarState();
@@ -507,9 +557,13 @@ class _DesktopProgressBarState extends State<_DesktopProgressBar> {
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<Duration>(
-      stream: widget.player.positionStream,
+      stream: widget.remoteActive
+          ? _remotePositions(widget.remote)
+          : widget.player.positionStream,
       builder: (context, snapshot) {
-        final duration = widget.player.duration ?? Duration.zero;
+        final duration = widget.remoteActive
+            ? Duration(milliseconds: widget.remote?.durationMs ?? 0)
+            : widget.player.duration ?? Duration.zero;
         final position = snapshot.data ?? Duration.zero;
 
         final maxMs = duration.inMilliseconds == 0
@@ -565,37 +619,41 @@ class _DesktopProgressBarState extends State<_DesktopProgressBar> {
                             );
                           }
                           return SizedBox(
-                        height: 14,
-                        child: SliderTheme(
-                          data: SliderThemeData(
-                            trackHeight: _hovering ? 4 : 3,
-                            activeTrackColor: context.waveformPlayed,
-                            inactiveTrackColor: context.waveformUnplayed,
-                            thumbColor: context.sliderThumb,
-                            thumbShape: RoundSliderThumbShape(
-                              enabledThumbRadius: _hovering ? 6 : 0,
+                            height: 14,
+                            child: SliderTheme(
+                              data: SliderThemeData(
+                                trackHeight: _hovering ? 4 : 3,
+                                activeTrackColor: context.waveformPlayed,
+                                inactiveTrackColor: context.waveformUnplayed,
+                                thumbColor: context.sliderThumb,
+                                thumbShape: RoundSliderThumbShape(
+                                  enabledThumbRadius: _hovering ? 6 : 0,
+                                ),
+                                overlayColor: context.accentDim,
+                                overlayShape: const RoundSliderOverlayShape(
+                                    overlayRadius: 14),
+                              ),
+                              child: Slider(
+                                min: 0,
+                                max: maxMs,
+                                value: currentMs,
+                                onChanged: (v) =>
+                                    setState(() => _dragValue = v),
+                                onChangeEnd: (v) async {
+                                  final target =
+                                      Duration(milliseconds: v.round());
+                                  if (widget.onSeek != null) {
+                                    widget.onSeek!(target);
+                                  } else {
+                                    await widget.player.seek(target);
+                                  }
+                                  if (mounted) {
+                                    setState(() => _dragValue = null);
+                                  }
+                                },
+                              ),
                             ),
-                            overlayColor: context.accentDim,
-                            overlayShape: const RoundSliderOverlayShape(
-                                overlayRadius: 14),
-                          ),
-                          child: Slider(
-                            min: 0,
-                            max: maxMs,
-                            value: currentMs,
-                            onChanged: (v) => setState(() => _dragValue = v),
-                            onChangeEnd: (v) async {
-                              final target = Duration(milliseconds: v.round());
-                              if (widget.onSeek != null) {
-                                widget.onSeek!(target);
-                              } else {
-                                await widget.player.seek(target);
-                              }
-                              if (mounted) setState(() => _dragValue = null);
-                            },
-                          ),
-                        ),
-                      );
+                          );
                         },
                       ),
                     ),
@@ -660,8 +718,11 @@ class _DesktopProgressBarState extends State<_DesktopProgressBar> {
 class _MobileProgressBar extends StatefulWidget {
   final PlayerController player;
   final ValueChanged<Duration>? onSeek;
+  final ConnectRemoteState? remote;
+  final bool remoteActive;
 
-  const _MobileProgressBar(this.player, {this.onSeek});
+  const _MobileProgressBar(this.player,
+      {this.onSeek, this.remote, this.remoteActive = false});
 
   @override
   State<_MobileProgressBar> createState() => _MobileProgressBarState();
@@ -672,50 +733,68 @@ class _MobileProgressBarState extends State<_MobileProgressBar> {
 
   @override
   Widget build(BuildContext context) {
-    final duration = widget.player.duration ?? Duration.zero;
+    final duration = widget.remoteActive
+        ? Duration(milliseconds: widget.remote?.durationMs ?? 0)
+        : widget.player.duration ?? Duration.zero;
+    if (widget.remoteActive) {
+      return StreamBuilder<Duration>(
+        stream: _remotePositions(widget.remote),
+        builder: (context, snapshot) =>
+            _line(context, snapshot.data ?? Duration.zero, duration),
+      );
+    }
     // Posición interpolada a 250 ms: en Android el backend emite ~1 Hz y
     // la línea delgada se vería congelada con solo el StreamBuilder.
     return PlayerPositionBuilder(
       player: widget.player,
       duration: duration,
-      builder: (context, position) {
-        final maxMs = duration.inMilliseconds == 0
-            ? 1.0
-            : duration.inMilliseconds.toDouble();
-        final currentMs = (_dragValue ?? position.inMilliseconds.toDouble())
-            .clamp(0.0, maxMs);
-
-        return SizedBox(
-          height: 6,
-          child: SliderTheme(
-            data: SliderThemeData(
-              trackHeight: 3,
-              activeTrackColor: context.waveformPlayed,
-              inactiveTrackColor: context.waveformUnplayed,
-              thumbColor: context.waveformPlayed,
-              thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 0),
-              overlayColor: Colors.transparent,
-              overlayShape: const RoundSliderOverlayShape(overlayRadius: 0),
-            ),
-            child: Slider(
-              min: 0,
-              max: maxMs,
-              value: currentMs,
-              onChanged: (v) => setState(() => _dragValue = v),
-              onChangeEnd: (v) async {
-                final target = Duration(milliseconds: v.round());
-                if (widget.onSeek != null) {
-                  widget.onSeek!(target);
-                } else {
-                  await widget.player.seek(target);
-                }
-                if (mounted) setState(() => _dragValue = null);
-              },
-            ),
-          ),
-        );
-      },
+      builder: (context, position) => _line(context, position, duration),
     );
+  }
+
+  Widget _line(BuildContext context, Duration position, Duration duration) {
+    final maxMs =
+        duration.inMilliseconds == 0 ? 1.0 : duration.inMilliseconds.toDouble();
+    final currentMs =
+        (_dragValue ?? position.inMilliseconds.toDouble()).clamp(0.0, maxMs);
+
+    return SizedBox(
+      height: 6,
+      child: SliderTheme(
+        data: SliderThemeData(
+          trackHeight: 3,
+          activeTrackColor: context.waveformPlayed,
+          inactiveTrackColor: context.waveformUnplayed,
+          thumbColor: context.waveformPlayed,
+          thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 0),
+          overlayColor: Colors.transparent,
+          overlayShape: const RoundSliderOverlayShape(overlayRadius: 0),
+        ),
+        child: Slider(
+          min: 0,
+          max: maxMs,
+          value: currentMs,
+          onChanged: (v) => setState(() => _dragValue = v),
+          onChangeEnd: (v) async {
+            final target = Duration(milliseconds: v.round());
+            if (widget.onSeek != null) {
+              widget.onSeek!(target);
+            } else {
+              await widget.player.seek(target);
+            }
+            if (mounted) setState(() => _dragValue = null);
+          },
+        ),
+      ),
+    );
+  }
+}
+
+/// Posición estimada del dispositivo remoto, refrescada cada 500 ms.
+Stream<Duration> _remotePositions(ConnectRemoteState? state) async* {
+  while (true) {
+    yield state?.estimatedPosition(DateTime.now()) ?? Duration.zero;
+    await Future<void>.delayed(const Duration(milliseconds: 500));
   }
 }
 
@@ -725,7 +804,10 @@ class _MobileProgressBarState extends State<_MobileProgressBar> {
 
 class _VolumeBar extends StatefulWidget {
   final PlayerController player;
-  const _VolumeBar(this.player);
+
+  /// Si se controla otro dispositivo, el volumen es el de ese dispositivo.
+  final ConnectService? connect;
+  const _VolumeBar(this.player, {this.connect});
 
   @override
   State<_VolumeBar> createState() => _VolumeBarState();
@@ -736,8 +818,14 @@ class _VolumeBarState extends State<_VolumeBar> {
 
   @override
   Widget build(BuildContext context) {
+    final remote = widget.connect;
+    void apply(double v) => remote != null
+        ? remote.command(ConnectCommand.volume, v)
+        : widget.player.setVolume(v);
     return StreamBuilder<double>(
-      stream: widget.player.volumeStream,
+      stream: remote != null
+          ? Stream.value(remote.controlledState?.volume ?? 1)
+          : widget.player.volumeStream,
       builder: (context, snapshot) {
         final volume = (_dragValue ?? snapshot.data ?? widget.player.volume)
             .clamp(0.0, 1.0)
@@ -764,9 +852,11 @@ class _VolumeBarState extends State<_VolumeBar> {
                   activeTrackColor: context.volumeAccent,
                   inactiveTrackColor: context.themeBorder,
                   thumbColor: context.sliderThumb,
-                  thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 5),
+                  thumbShape:
+                      const RoundSliderThumbShape(enabledThumbRadius: 5),
                   overlayColor: context.accentDim,
-                  overlayShape: const RoundSliderOverlayShape(overlayRadius: 12),
+                  overlayShape:
+                      const RoundSliderOverlayShape(overlayRadius: 12),
                 ),
                 child: Slider(
                   min: 0,
@@ -776,10 +866,10 @@ class _VolumeBarState extends State<_VolumeBar> {
                   // mismo tiempo que el pulgar, sin esperar a soltar.
                   onChanged: (v) {
                     setState(() => _dragValue = v);
-                    widget.player.setVolume(v);
+                    apply(v);
                   },
                   onChangeEnd: (v) {
-                    widget.player.setVolume(v);
+                    apply(v);
                     if (mounted) setState(() => _dragValue = null);
                   },
                 ),

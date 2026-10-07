@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:navidrome_client/models/jam_models.dart';
+import 'package:navidrome_client/services/connect/connect_protocol.dart';
+import 'package:navidrome_client/services/connect/connect_service.dart';
 import 'package:navidrome_client/services/jam_controller.dart';
 import 'package:navidrome_client/services/navidrome_service.dart';
 import 'package:navidrome_client/services/player_controller.dart';
@@ -109,3 +111,26 @@ class IdleJam extends ChangeNotifier implements JamController {
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
+
+/// Puerto de Connect sin reproductor, para pantallas que solo necesitan el
+/// servicio presente.
+class IdleConnectPort extends ChangeNotifier implements ConnectPlayerPort {
+  @override
+  String? get scope => null;
+  @override
+  Map<String, dynamic>? snapshot() => null;
+  @override
+  ConnectTransfer? exportTransfer() => null;
+  @override
+  Future<void> adopt(ConnectTransfer transfer) async {}
+  @override
+  Future<void> apply(String command, num? value) async {}
+  @override
+  Future<void> pauseLocal() async {}
+}
+
+ConnectService idleConnectService() => ConnectService(
+      port: IdleConnectPort(),
+      selfId: 'test-device',
+      transportsFor: (_) => const [],
+    );

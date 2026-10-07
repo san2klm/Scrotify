@@ -32,6 +32,10 @@ import 'services/home_navigation_controller.dart';
 import 'services/pairing_server.dart';
 import 'services/player_controller.dart';
 import 'services/settings_controller.dart';
+import 'services/connect/connect_protocol.dart';
+import 'services/connect/connect_service.dart';
+import 'services/connect/player_connect_port.dart';
+import 'services/connect/relay_transport.dart';
 import 'services/sync/sync_service.dart';
 import 'models/jam_models.dart';
 import 'services/theme_controller.dart';
@@ -75,6 +79,7 @@ Future<void> main() async {
   // Limpia caché de portadas externas por si quedó null de versión anterior.
   CoverFallbackService.instance.clearCache();
   final initialTheme = await ThemeController.readInitial();
+  final connectIdentity = await ConnectIdentity.load();
 
   ScrotifyAudioHandler? audioHandler;
   if (!kIsWeb && Platform.isAndroid) {
@@ -98,7 +103,11 @@ Future<void> main() async {
     }
   }
 
-  runApp(MyApp(initialTheme: initialTheme, audioHandler: audioHandler));
+  runApp(MyApp(
+    initialTheme: initialTheme,
+    audioHandler: audioHandler,
+    connectIdentity: connectIdentity,
+  ));
 
   // Mostrar el primer frame antes de iniciar mpv. Así la ventana aparece de
   // inmediato; el reproductor se prepara mientras el usuario ve el inicio.
@@ -117,8 +126,14 @@ final GlobalKey<NavigatorState> rootNavigatorKey = GlobalKey<NavigatorState>();
 class MyApp extends StatelessWidget {
   final Map<String, dynamic> initialTheme;
   final ScrotifyAudioHandler? audioHandler;
+  final ConnectIdentity? connectIdentity;
 
-  const MyApp({super.key, this.initialTheme = const {}, this.audioHandler});
+  const MyApp({
+    super.key,
+    this.initialTheme = const {},
+    this.audioHandler,
+    this.connectIdentity,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -276,6 +291,51 @@ class MyApp extends StatelessWidget {
             ctx.read<NavidromeService>(),
             settings: ctx.read<SettingsController>(),
           ),
+        ),
+        // Scrotify Connect: ver y controlar tus otros dispositivos.
+        ChangeNotifierProvider<ConnectService>(
+          lazy: false,
+          create: (ctx) {
+            final settings = ctx.read<SettingsController>();
+            final sync = ctx.read<SyncService>();
+            final identity = connectIdentity ??
+                const ConnectIdentity(
+                    'scrotify-device', 'Esta computadora', ConnectKind.desktop);
+            final connect = ConnectService(
+              port: PlayerConnectPort(
+                  ctx.read<PlayerController>(), ctx.read<NavidromeService>()),
+              selfId: identity.id,
+              transportsFor: (crypto) {
+                final endpoint = JamServerEndpoint.parse(settings.jamServerUrl);
+                if (!endpoint.isValid) return const [];
+                return [
+                  RelayTransport(
+                    crypto: crypto,
+                    serverUrl: Uri.parse(endpoint.url!),
+                    selfId: identity.id,
+                    selfName: identity.name,
+                    selfKind: identity.kind,
+                  ),
+                ];
+              },
+            );
+            // Connect sigue a la sincronización: misma clave = mismo grupo.
+            String? applied;
+            void refresh() {
+              final crypto = sync.enabled ? sync.crypto : null;
+              final key = crypto == null
+                  ? null
+                  : '${crypto.vaultId}|${settings.jamServerUrl}';
+              if (key == applied) return;
+              applied = key;
+              connect.configure(null).then((_) => connect.configure(crypto));
+            }
+
+            sync.addListener(refresh);
+            settings.addListener(refresh);
+            settings.ready.then((_) => refresh());
+            return connect;
+          },
         ),
       ],
       child: Consumer<ThemeController>(

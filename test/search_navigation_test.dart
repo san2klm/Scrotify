@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 import 'package:navidrome_client/screens/home_shell.dart';
 import 'package:navidrome_client/services/home_navigation_controller.dart';
+import 'package:navidrome_client/services/connect/connect_service.dart';
 import 'package:navidrome_client/services/jam_controller.dart';
 import 'package:navidrome_client/services/navidrome_service.dart';
 import 'package:navidrome_client/services/player_controller.dart';
@@ -32,6 +33,7 @@ void main() {
             ChangeNotifierProvider(create: (_) => ThemeController()),
             ChangeNotifierProvider(create: (_) => HomeNavigationController()),
             ChangeNotifierProvider<PlayerController>.value(value: IdlePlayer()),
+            ChangeNotifierProvider<ConnectService>(create: (_) => idleConnectService()),
             ChangeNotifierProvider<JamController>.value(value: IdleJam()),
           ],
           child: const MaterialApp(home: HomeShell()),

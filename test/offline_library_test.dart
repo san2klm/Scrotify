@@ -11,6 +11,7 @@ import 'package:navidrome_client/screens/home_shell.dart';
 import 'package:navidrome_client/models/server_profile.dart';
 import 'package:navidrome_client/services/server_profiles_controller.dart';
 import 'package:navidrome_client/services/local_music_service.dart';
+import 'package:navidrome_client/services/connect/connect_service.dart';
 import 'package:navidrome_client/services/jam_controller.dart';
 import 'package:navidrome_client/services/navidrome_service.dart';
 import 'package:navidrome_client/services/offline_cache_service.dart';
@@ -321,6 +322,7 @@ void main() {
       ChangeNotifierProvider<NavidromeService>.value(value: nav),
       ChangeNotifierProvider<LocalMusicService>.value(value: music),
       ChangeNotifierProvider<PlayerController>(create: (_) => IdlePlayer()),
+      ChangeNotifierProvider<ConnectService>(create: (_) => idleConnectService()),
       ChangeNotifierProvider<JamController>(create: (_) => IdleJam()),
       ChangeNotifierProvider<ThemeController>(create: (_) => ThemeController()),
       ChangeNotifierProvider<ServerProfilesController>(

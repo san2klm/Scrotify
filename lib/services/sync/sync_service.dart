@@ -67,6 +67,9 @@ class SyncService extends ChangeNotifier {
   Map<String, Map<String, dynamic>> _state = {};
 
   bool get enabled => _enabled;
+
+  /// Claves derivadas de la clave de sincronización (para Connect).
+  SyncCrypto? get crypto => _crypto;
   bool get syncing => _syncing;
   DateTime? get lastSync => _lastSync;
   String? get error => _error;
