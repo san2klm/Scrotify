@@ -399,7 +399,9 @@ class MyApp extends StatelessWidget {
                   child: child ?? const SizedBox.shrink(),
                 ),
               );
-              return TvMode.isTv ? TvFocusRing(child: app) : app;
+              return TvMode.isTv
+                  ? TvFocusRing(child: TvTextFieldNavigation(child: app))
+                  : app;
             },
             home: const LoginScreen(),
           );

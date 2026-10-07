@@ -314,7 +314,8 @@ class _PairingSharePanelState extends State<PairingSharePanel> {
             const SizedBox(height: 8),
 
             // Chips del código 3 + 3 con opción de copiar
-            GestureDetector(
+            InkWell(
+              borderRadius: BorderRadius.circular(8),
               onTap: () => _copyToClipboard(code, 'Código $code'),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -347,7 +348,8 @@ class _PairingSharePanelState extends State<PairingSharePanel> {
                 spacing: 6,
                 runSpacing: 4,
                 children: widget.server.allLocalIps.map((ip) {
-                  return GestureDetector(
+                  return InkWell(
+                    borderRadius: BorderRadius.circular(8),
                     onTap: () => _copyToClipboard('$ip:${widget.server.port}',
                         'IP $ip:${widget.server.port}'),
                     child: Container(
@@ -990,7 +992,8 @@ class _PairingJoinPanelState extends State<PairingJoinPanel> {
   Widget _buildSubTab(int index, IconData icon, String label) {
     final isSelected = _activeTab == index;
     return Expanded(
-      child: GestureDetector(
+      child: InkWell(
+        borderRadius: BorderRadius.circular(8),
         onTap: () => setState(() => _activeTab = index),
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 7),

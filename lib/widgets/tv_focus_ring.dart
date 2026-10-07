@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
+import 'package:flutter/services.dart';
 
 import '../utils/app_colors.dart';
 
@@ -89,6 +90,45 @@ class _TvFocusRingState extends State<TvFocusRing>
             ),
           ),
       ],
+    );
+  }
+}
+
+/// Con el control remoto, arriba/abajo dentro de un campo de texto deben mover
+/// el foco al elemento vecino (como en cualquier formulario de tele), no el
+/// cursor del texto: sin esto el foco queda atrapado en el campo y Flutter
+/// lanza una aserción al intentar mover el cursor en vertical.
+class TvTextFieldNavigation extends StatelessWidget {
+  const TvTextFieldNavigation({super.key, required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Focus(
+      canRequestFocus: false,
+      skipTraversal: true,
+      onKeyEvent: (node, event) {
+        if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
+          return KeyEventResult.ignored;
+        }
+        final key = event.logicalKey;
+        final direction = key == LogicalKeyboardKey.arrowDown
+            ? TraversalDirection.down
+            : key == LogicalKeyboardKey.arrowUp
+                ? TraversalDirection.up
+                : null;
+        final focused = FocusManager.instance.primaryFocus;
+        final inText =
+            focused?.context?.findAncestorWidgetOfExactType<EditableText>() !=
+                null;
+        if (direction == null || focused == null || !inText) {
+          return KeyEventResult.ignored;
+        }
+        focused.focusInDirection(direction);
+        return KeyEventResult.handled;
+      },
+      child: child,
     );
   }
 }

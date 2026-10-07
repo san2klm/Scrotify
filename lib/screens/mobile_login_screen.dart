@@ -366,7 +366,9 @@ class _MobileLoginScreenState extends State<MobileLoginScreen> {
   Widget _buildTabItem(int index, IconData icon, String label) {
     final isSelected = _selectedTab == index;
     return Expanded(
-      child: GestureDetector(
+      // InkWell (y no GestureDetector): así el control remoto lo puede enfocar.
+      child: InkWell(
+        borderRadius: BorderRadius.circular(10),
         onTap: () => setState(() => _selectedTab = index),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 180),

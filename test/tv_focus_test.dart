@@ -61,4 +61,43 @@ void main() {
     expect(second.top, greaterThan(first.top));
     expect(second.overlaps(tester.getRect(find.text('Dos'))), isTrue);
   });
+
+  testWidgets('en un formulario, abajo/arriba salen del campo de texto',
+      (tester) async {
+    final first = FocusNode();
+    final second = FocusNode();
+    final button = FocusNode();
+    addTearDown(first.dispose);
+    addTearDown(second.dispose);
+    addTearDown(button.dispose);
+    await tester.pumpWidget(MaterialApp(
+      home: TvTextFieldNavigation(
+        child: Scaffold(
+          body: Column(children: [
+            TextField(focusNode: first, autofocus: true),
+            TextField(focusNode: second),
+            TextButton(
+                focusNode: button,
+                onPressed: () {},
+                child: const Text('Entrar')),
+          ]),
+        ),
+      ),
+    ));
+    await tester.pump();
+    expect(first.hasPrimaryFocus, isTrue);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+    await tester.pump();
+    expect(second.hasPrimaryFocus, isTrue);
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+    await tester.pump();
+    expect(button.hasPrimaryFocus, isTrue);
+    // Y se puede volver hacia arriba hasta el primer campo.
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
+    await tester.pump();
+    expect(first.hasPrimaryFocus, isTrue);
+    expect(tester.takeException(), isNull);
+  });
 }
