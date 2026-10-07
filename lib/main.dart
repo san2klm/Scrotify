@@ -182,7 +182,22 @@ class MyApp extends StatelessWidget {
               if (files.any((f) => f.endsWith('.zip'))) themes.rescan();
             };
             // Hasta tener los ajustes cargados no se sabe a qué servidor hablar.
-            settings.ready.then((_) => sync.initialize());
+            // Con una cuenta activa se sincroniza sola, sin pedir ninguna clave.
+            final profiles = ctx.read<ServerProfilesController>();
+            void autoEnable() {
+              final profile = profiles.activeProfile;
+              if (profile == null) return;
+              unawaited(sync.enableForAccount(
+                  url: profile.url,
+                  username: profile.username,
+                  password: profile.password));
+            }
+
+            settings.ready.then((_) async {
+              await sync.initialize();
+              autoEnable();
+              profiles.addListener(autoEnable);
+            });
             return sync;
           },
         ),

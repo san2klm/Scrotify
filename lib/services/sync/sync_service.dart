@@ -1,8 +1,11 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:isolate';
 
 import 'package:crypto/crypto.dart';
+import 'package:cryptography/cryptography.dart' hide Hmac;
+import 'package:cryptography/cryptography.dart' as cg show Hmac;
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:path/path.dart' as p;
@@ -27,12 +30,17 @@ class SyncService extends ChangeNotifier {
     DateTime Function()? now,
     Future<String?> Function()? readKey,
     Future<void> Function(String?)? writeKey,
-  })  : _client = client ?? http.Client(),
+    Future<bool> Function()? readOptOut,
+    Future<void> Function(bool)? writeOptOut,
+  })  : _readOptOut = readOptOut ?? _defaultReadOptOut,
+        _writeOptOut = writeOptOut ?? _defaultWriteOptOut,
+        _client = client ?? http.Client(),
         _now = now ?? DateTime.now,
         _readKey = readKey ?? (() => SecureStorage.secureRead(_keyName)),
         _writeKey = writeKey ?? _defaultWriteKey;
 
   static const _keyName = 'scrotify.sync_key';
+  static const _optOutName = 'scrotify.sync_opt_out';
   static const _stateFile = 'sync_state.json';
 
   /// Documentos JSON de la app que se sincronizan (con o sin sufijo de servidor).
@@ -52,6 +60,8 @@ class SyncService extends ChangeNotifier {
   final DateTime Function() _now;
   final Future<String?> Function() _readKey;
   final Future<void> Function(String?) _writeKey;
+  final Future<bool> Function() _readOptOut;
+  final Future<void> Function(bool) _writeOptOut;
 
   /// Se llama tras escribir archivos traídos de otro dispositivo, con sus
   /// nombres, para que los controladores recarguen lo que puedan.
@@ -77,6 +87,13 @@ class SyncService extends ChangeNotifier {
   /// Clave legible para mostrar en la UI (solo si la sincronización está activa).
   String? get keyText => _secret == null ? null : SyncKey.format(_secret!);
 
+  static Future<bool> _defaultReadOptOut() async =>
+      await SecureStorage.secureRead(_optOutName) == '1';
+
+  static Future<void> _defaultWriteOptOut(bool value) => value
+      ? SecureStorage.secureWrite(_optOutName, '1')
+      : SecureStorage.secureDelete(_optOutName);
+
   static Future<void> _defaultWriteKey(String? value) => value == null
       ? SecureStorage.secureDelete(_keyName)
       : SecureStorage.secureWrite(_keyName, value);
@@ -95,6 +112,47 @@ class SyncService extends ChangeNotifier {
     _start();
   }
 
+  bool _autoEnabling = false;
+
+  /// Sincronización automática: la clave sale de la propia cuenta de
+  /// Navidrome, así que todos los dispositivos con la misma cuenta comparten
+  /// datos sin copiar ninguna clave. No hace nada si ya hay sincronización o si
+  /// el usuario la desactivó a propósito.
+  Future<void> enableForAccount({
+    required String url,
+    required String username,
+    required String password,
+  }) async {
+    if (_enabled || _autoEnabling) return;
+    _autoEnabling = true;
+    try {
+      if (await _readOptOut()) return;
+      final secret = await deriveAccountSecret(url, username, password);
+      if (_enabled) return;
+      await link(SyncKey.format(secret));
+    } finally {
+      _autoEnabling = false;
+    }
+  }
+
+  /// Clave determinista de 256 bits a partir de la cuenta (PBKDF2). Se calcula
+  /// en otro isolate: es deliberadamente lenta.
+  static Future<Uint8List> deriveAccountSecret(
+      String url, String username, String password) {
+    final server = url.trim().toLowerCase().replaceAll(RegExp(r'/+$'), '');
+    return Isolate.run(() async {
+      final key = await Pbkdf2(
+        macAlgorithm: cg.Hmac.sha256(),
+        iterations: 100000,
+        bits: 256,
+      ).deriveKey(
+        secretKey: SecretKey(utf8.encode(password)),
+        nonce: utf8.encode('scrotify-sync-account-v1|$server|$username'),
+      );
+      return Uint8List.fromList(await key.extractBytes());
+    });
+  }
+
   /// Primer dispositivo: crea una clave nueva y empieza a subir sus datos.
   Future<String> enableNew() async {
     final secret = SyncKey.generate();
@@ -107,6 +165,7 @@ class SyncService extends ChangeNotifier {
   Future<bool> link(String keyText) async {
     final secret = SyncKey.parse(keyText);
     if (secret == null) return false;
+    await _writeOptOut(false);
     await _useSecret(secret);
     await _writeKey(SyncKey.format(secret));
     _state = {};
@@ -126,6 +185,7 @@ class SyncService extends ChangeNotifier {
     _secret = null;
     _error = null;
     _state = {};
+    await _writeOptOut(true);
     await _writeKey(null);
     try {
       final file = File(p.join((await dataDir()).path, _stateFile));

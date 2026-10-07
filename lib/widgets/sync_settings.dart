@@ -22,9 +22,9 @@ class SyncSettings extends StatelessWidget {
         title: Text('Sincronizar entre dispositivos',
             style: TextStyle(color: context.textPrimary, fontSize: 14)),
         subtitle: Text(
-            'Temas, ajustes, artistas seguidos, valoraciones y orden de '
-            'favoritos, cifrados de extremo a extremo. La música descargada '
-            'no se sincroniza.',
+            'Activada por defecto con tu cuenta: temas, ajustes, artistas '
+            'seguidos, valoraciones y orden de favoritos, cifrados de extremo '
+            'a extremo. La música descargada no se sincroniza.',
             style: secondary),
         activeTrackColor: context.accent,
         activeThumbColor: context.textPrimary,

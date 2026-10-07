@@ -61,6 +61,7 @@ class Device {
     themes = Directory(p.join(root.path, 'themes'))
       ..createSync(recursive: true);
     String? stored;
+    var optOut = false;
     service = SyncService(
       dataDir: () async => data,
       themeImportsDir: () async => themes,
@@ -69,6 +70,8 @@ class Device {
       interval: const Duration(days: 1),
       readKey: () async => stored,
       writeKey: (value) async => stored = value,
+      readOptOut: () async => optOut,
+      writeOptOut: (value) async => optOut = value,
     )..onApplied = applied.addAll;
   }
 
@@ -96,6 +99,37 @@ void main() {
     key = SyncKey.format(SyncKey.generate());
   });
   tearDown(() => tmp.deleteSync(recursive: true));
+
+  test('la cuenta genera la misma clave en cada dispositivo, sin copiarla',
+      () async {
+    final a = Device(vault, Directory(p.join(tmp.path, 'a')));
+    final b = Device(vault, Directory(p.join(tmp.path, 'b')));
+    a.write('settings.json', '{"x":1}');
+    await a.service.enableForAccount(
+        url: 'https://musica.test/', username: 'ana', password: 'clave');
+    await b.service.enableForAccount(
+        url: 'https://MUSICA.test', username: 'ana', password: 'clave');
+    expect(a.service.enabled, isTrue);
+    expect(a.service.keyText, b.service.keyText);
+    await a.service.syncNow();
+    await b.service.syncNow();
+    expect(b.file('settings.json').readAsStringSync(), '{"x":1}');
+  });
+
+  test('otra cuenta no comparte clave y desactivar a mano no se revierte',
+      () async {
+    final a = Device(vault, Directory(p.join(tmp.path, 'a')));
+    final b = Device(vault, Directory(p.join(tmp.path, 'b')));
+    await a.service.enableForAccount(
+        url: 'https://musica.test', username: 'ana', password: 'clave');
+    await b.service.enableForAccount(
+        url: 'https://musica.test', username: 'luis', password: 'clave');
+    expect(a.service.keyText, isNot(b.service.keyText));
+    await a.service.disable();
+    await a.service.enableForAccount(
+        url: 'https://musica.test', username: 'ana', password: 'clave');
+    expect(a.service.enabled, isFalse);
+  });
 
   Device device(String name) =>
       Device(vault, Directory(p.join(tmp.path, name))..createSync());
