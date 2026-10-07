@@ -87,6 +87,8 @@ Future<void> main() async {
   final initialTheme = await ThemeController.readInitial();
   final connectIdentity = await ConnectIdentity.load();
   await TvMode.init();
+  // En una tele el teclado del sistema pide conectar el teléfono: se usa el propio.
+  if (TvMode.isTv) TextInput.setInputControl(NoSystemKeyboard());
 
   ScrotifyAudioHandler? audioHandler;
   if (!kIsWeb && Platform.isAndroid) {

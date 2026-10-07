@@ -100,4 +100,95 @@ void main() {
     expect(first.hasPrimaryFocus, isTrue);
     expect(tester.takeException(), isNull);
   });
+
+  Widget app(Widget body) => ChangeNotifierProvider<ThemeController>.value(
+        value: _Themes(),
+        child: MaterialApp(
+          home: TvTextFieldNavigation(child: Scaffold(body: body)),
+        ),
+      );
+
+  testWidgets('OK en un campo abre el teclado en pantalla y escribe el texto',
+      (tester) async {
+    final controller = TextEditingController();
+    String? changed;
+    addTearDown(controller.dispose);
+    await tester.pumpWidget(app(TextField(
+      controller: controller,
+      autofocus: true,
+      decoration: const InputDecoration(labelText: 'Usuario'),
+      onChanged: (v) => changed = v,
+    )));
+    await tester.pump();
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.select);
+    await tester.pumpAndSettle();
+    expect(find.text('Usuario'), findsWidgets);
+    expect(find.text('Listo'), findsOneWidget);
+
+    await tester.tap(find.text('h'));
+    await tester.tap(find.text('ABC')); // mayúsculas
+    await tester.pump();
+    await tester.tap(find.text('I'));
+    await tester.tap(find.text('.com'));
+    await tester.tap(find.text('Borrar'));
+    await tester.pump();
+    await tester.tap(find.text('Listo'));
+    await tester.pumpAndSettle();
+
+    expect(controller.text, 'hI.co');
+    expect(changed, 'hI.co');
+    expect(find.text('Listo'), findsNothing);
+  });
+
+  testWidgets(
+      'el teclado en pantalla parte del texto actual y se puede cancelar',
+      (tester) async {
+    final controller = TextEditingController(text: 'admin');
+    addTearDown(controller.dispose);
+    await tester.pumpWidget(app(
+        TextField(controller: controller, autofocus: true, obscureText: true)));
+    await tester.pump();
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pumpAndSettle();
+    expect(find.text('•••••▏'), findsOneWidget); // clave oculta
+    await tester.tap(find.text('Mostrar'));
+    await tester.pump();
+    expect(find.text('admin▏'), findsOneWidget);
+    await tester.tap(find.text('x'));
+    await tester.tap(find.text('Cancelar'));
+    await tester.pumpAndSettle();
+    expect(controller.text, 'admin'); // cancelar no cambia nada
+  });
+
+  testWidgets('un campo numérico solo ofrece dígitos', (tester) async {
+    final controller = TextEditingController();
+    addTearDown(controller.dispose);
+    await tester.pumpWidget(app(TextField(
+        controller: controller,
+        autofocus: true,
+        keyboardType: TextInputType.number)));
+    await tester.pump();
+    await tester.sendKeyEvent(LogicalKeyboardKey.select);
+    await tester.pumpAndSettle();
+    expect(find.text('q'), findsNothing);
+    await tester.tap(find.text('4'));
+    await tester.tap(find.text('2'));
+    await tester.tap(find.text('Listo'));
+    await tester.pumpAndSettle();
+    expect(controller.text, '42');
+  });
+
+  testWidgets('un teclado físico sigue escribiendo sin teclado del sistema',
+      (tester) async {
+    final controller = TextEditingController(text: 'ab');
+    addTearDown(controller.dispose);
+    await tester
+        .pumpWidget(app(TextField(controller: controller, autofocus: true)));
+    await tester.pump();
+    await simulateKeyDownEvent(LogicalKeyboardKey.keyZ, character: 'z');
+    await simulateKeyUpEvent(LogicalKeyboardKey.keyZ);
+    await tester.pump();
+    expect(controller.text.contains('z'), isTrue);
+  });
 }

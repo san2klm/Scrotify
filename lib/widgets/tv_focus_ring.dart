@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 
 import '../utils/app_colors.dart';
+import 'tv_keyboard.dart';
 
 /// Marco de foco para manejar la app con el control remoto: dibuja un borde
 /// bien visible alrededor del elemento enfocado, sea del tipo que sea (botón,
@@ -94,41 +97,107 @@ class _TvFocusRingState extends State<TvFocusRing>
   }
 }
 
-/// Con el control remoto, arriba/abajo dentro de un campo de texto deben mover
-/// el foco al elemento vecino (como en cualquier formulario de tele), no el
-/// cursor del texto: sin esto el foco queda atrapado en el campo y Flutter
-/// lanza una aserción al intentar mover el cursor en vertical.
+/// Teclas del control remoto dentro de los campos de texto en una tele:
+///
+/// - Arriba/abajo mueven el foco al elemento vecino (no el cursor): sin esto el
+///   foco queda atrapado y Flutter lanza una aserción al mover el cursor en
+///   vertical.
+/// - OK/Enter abre el teclado en pantalla propio ([showTvKeyboard]); el
+///   teclado del sistema de Google TV pide conectar el teléfono.
+/// - Un teclado físico sigue funcionando: sin teclado del sistema, los
+///   caracteres se insertan desde el propio evento de tecla.
 class TvTextFieldNavigation extends StatelessWidget {
   const TvTextFieldNavigation({super.key, required this.child});
 
   final Widget child;
+
+  static final _activate = {
+    LogicalKeyboardKey.select,
+    LogicalKeyboardKey.enter,
+    LogicalKeyboardKey.numpadEnter,
+    LogicalKeyboardKey.gameButtonA,
+  };
 
   @override
   Widget build(BuildContext context) {
     return Focus(
       canRequestFocus: false,
       skipTraversal: true,
-      onKeyEvent: (node, event) {
-        if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
-          return KeyEventResult.ignored;
-        }
-        final key = event.logicalKey;
-        final direction = key == LogicalKeyboardKey.arrowDown
-            ? TraversalDirection.down
-            : key == LogicalKeyboardKey.arrowUp
-                ? TraversalDirection.up
-                : null;
-        final focused = FocusManager.instance.primaryFocus;
-        final inText =
-            focused?.context?.findAncestorWidgetOfExactType<EditableText>() !=
-                null;
-        if (direction == null || focused == null || !inText) {
-          return KeyEventResult.ignored;
-        }
-        focused.focusInDirection(direction);
-        return KeyEventResult.handled;
-      },
+      onKeyEvent: _onKey,
       child: child,
     );
   }
+
+  static KeyEventResult _onKey(FocusNode node, KeyEvent event) {
+    if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
+      return KeyEventResult.ignored;
+    }
+    final focused = FocusManager.instance.primaryFocus;
+    final state =
+        focused?.context?.findAncestorStateOfType<EditableTextState>();
+    if (focused == null || state == null) return KeyEventResult.ignored;
+    final key = event.logicalKey;
+
+    if (key == LogicalKeyboardKey.arrowDown ||
+        key == LogicalKeyboardKey.arrowUp) {
+      focused.focusInDirection(key == LogicalKeyboardKey.arrowDown
+          ? TraversalDirection.down
+          : TraversalDirection.up);
+      return KeyEventResult.handled;
+    }
+    if (event is KeyDownEvent && _activate.contains(key)) {
+      if (state.widget.readOnly) return KeyEventResult.ignored;
+      unawaited(_openKeyboard(state));
+      return KeyEventResult.handled;
+    }
+    // Teclado físico: inserta el carácter tecleado.
+    final char = event.character;
+    final keyboard = HardwareKeyboard.instance;
+    if (char != null &&
+        char.isNotEmpty &&
+        char.codeUnitAt(0) >= 0x20 &&
+        char.codeUnitAt(0) != 0x7f &&
+        !keyboard.isControlPressed &&
+        !keyboard.isMetaPressed &&
+        !keyboard.isAltPressed &&
+        !state.widget.readOnly) {
+      final value = state.textEditingValue;
+      final sel = value.selection.isValid
+          ? value.selection
+          : TextSelection.collapsed(offset: value.text.length);
+      final text = value.text.replaceRange(sel.start, sel.end, char);
+      state.userUpdateTextEditingValue(
+        TextEditingValue(
+            text: text,
+            selection:
+                TextSelection.collapsed(offset: sel.start + char.length)),
+        SelectionChangedCause.keyboard,
+      );
+      return KeyEventResult.handled;
+    }
+    return KeyEventResult.ignored;
+  }
+
+  static Future<void> _openKeyboard(EditableTextState state) async {
+    final decoration = state.context
+        .findAncestorWidgetOfExactType<InputDecorator>()
+        ?.decoration;
+    final result = await showTvKeyboard(
+      state.context,
+      initial: state.textEditingValue.text,
+      label: decoration?.labelText ?? decoration?.hintText,
+      obscure: state.widget.obscureText,
+      numeric: state.widget.keyboardType == TextInputType.number,
+    );
+    if (result == null || !state.mounted) return;
+    state.userUpdateTextEditingValue(
+      TextEditingValue(
+          text: result,
+          selection: TextSelection.collapsed(offset: result.length)),
+      SelectionChangedCause.keyboard,
+    );
+  }
 }
+
+/// Sustituye el teclado del sistema por nada: la tele usa [showTvKeyboard].
+class NoSystemKeyboard with TextInputControl {}
