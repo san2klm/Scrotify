@@ -80,8 +80,11 @@ class SettingsController extends ChangeNotifier {
   // Para detectar transiciones WiFi ↔ móvil y notificar solo cuando cambia.
   bool? _wasMobile;
 
+  /// Termina cuando los ajustes guardados ya se leyeron del disco.
+  late final Future<void> ready;
+
   SettingsController() {
-    _load();
+    ready = _load();
     _listenConnectivity();
   }
 
@@ -294,6 +297,9 @@ class SettingsController extends ChangeNotifier {
   // ---------------------------------------------------------------------------
   // Persistencia
   // ---------------------------------------------------------------------------
+
+  /// Vuelve a leer `settings.json` (p. ej. tras recibirlo de otro dispositivo).
+  Future<void> reload() => _load();
 
   Future<void> _load() async {
     try {

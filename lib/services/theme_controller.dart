@@ -111,6 +111,8 @@ class ThemeController extends ChangeNotifier {
   /// “Añadir .zip”. En Android es lo único confiable para escribir:
   /// las carpetas compartidas (Download, etc.) rechazan la copia
   /// con `Permission denied` (almacenamiento con alcance).
+  Future<Directory> importsDirectory() => _importsDir();
+
   Future<Directory> _importsDir() async {
     final dir = await getApplicationSupportDirectory();
     final imports = Directory('${dir.path}/theme_imports');

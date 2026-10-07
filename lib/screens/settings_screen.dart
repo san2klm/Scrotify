@@ -9,6 +9,7 @@ import '../services/hifi/hifi_coordinator.dart';
 import '../services/hifi/hifi_profiles.dart';
 import '../services/settings_controller.dart';
 import '../widgets/pairing_panel.dart';
+import '../widgets/sync_settings.dart';
 import '../widgets/theme_grid.dart';
 import '../widgets/local_music_settings.dart';
 import 'equalizer_screen.dart';
@@ -396,6 +397,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return [
       _sectionTitle('Servidor Jam'),
       _card(children: [_JamServerField(settings: settings)]),
+      _sectionTitle('Sincronización'),
+      _card(children: const [SyncSettings()]),
       if (nav.connected) ...[
         _sectionTitle('Vincular teléfono'),
         _card(children: [

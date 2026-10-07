@@ -32,7 +32,10 @@ import 'services/home_navigation_controller.dart';
 import 'services/pairing_server.dart';
 import 'services/player_controller.dart';
 import 'services/settings_controller.dart';
+import 'services/sync/sync_service.dart';
+import 'models/jam_models.dart';
 import 'services/theme_controller.dart';
+import 'utils/app_data_dir.dart';
 import 'screens/login_screen.dart';
 import 'widgets/desktop_window_frame.dart';
 
@@ -129,6 +132,28 @@ class MyApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => ListeningStatsService()),
         ChangeNotifierProvider(
             create: (_) => ThemeController(initial: initialTheme)),
+        ChangeNotifierProvider(
+          lazy: false,
+          create: (ctx) {
+            final settings = ctx.read<SettingsController>();
+            final themes = ctx.read<ThemeController>();
+            final sync = SyncService(
+              dataDir: getAppDataDirectory,
+              themeImportsDir: themes.importsDirectory,
+              serverBase: () {
+                final endpoint = JamServerEndpoint.parse(settings.jamServerUrl);
+                return endpoint.isValid ? endpoint.httpBase : null;
+              },
+            );
+            sync.onApplied = (files) {
+              if (files.contains('settings.json')) settings.reload();
+              if (files.any((f) => f.endsWith('.zip'))) themes.rescan();
+            };
+            // Hasta tener los ajustes cargados no se sabe a qué servidor hablar.
+            settings.ready.then((_) => sync.initialize());
+            return sync;
+          },
+        ),
         Provider<PairingServer>(
           create: (_) => PairingServer(),
           dispose: (_, server) => server.stop(),
