@@ -25,21 +25,40 @@ class _TvFocusRingState extends State<TvFocusRing>
   final _stackKey = GlobalKey();
   Rect? _rect;
 
+  /// Fotogramas seguidos sin cambios tras los que se apaga el ticker. Un
+  /// ticker permanente obligaba a la tele a renderizar a 60 fps siempre.
+  static const _quietFrames = 45;
+  int _quiet = 0;
+
   @override
   void initState() {
     super.initState();
-    _ticker = createTicker((_) => _sync())..start();
+    _ticker = createTicker((_) => _sync());
+    FocusManager.instance.addListener(_wake);
+    _wake();
   }
 
   @override
   void dispose() {
+    FocusManager.instance.removeListener(_wake);
     _ticker.dispose();
     super.dispose();
   }
 
+  /// Despierta el seguimiento: cambió el foco o se está desplazando.
+  void _wake() {
+    _quiet = 0;
+    if (!_ticker.isActive) _ticker.start();
+  }
+
   void _sync() {
     final next = _focusedRect();
-    if (next != _rect) setState(() => _rect = next);
+    if (next != _rect) {
+      _quiet = 0;
+      setState(() => _rect = next);
+    } else if (++_quiet >= _quietFrames) {
+      _ticker.stop();
+    }
   }
 
   Rect? _focusedRect() {
@@ -73,7 +92,13 @@ class _TvFocusRingState extends State<TvFocusRing>
       key: _stackKey,
       fit: StackFit.expand,
       children: [
-        widget.child,
+        NotificationListener<ScrollNotification>(
+          onNotification: (_) {
+            _wake();
+            return false;
+          },
+          child: widget.child,
+        ),
         if (rect != null)
           Positioned.fromRect(
             rect: rect.inflate(3),
