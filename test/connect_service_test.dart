@@ -85,6 +85,10 @@ class FakePort extends ChangeNotifier implements ConnectPlayerPort {
   int positionMs = 0;
   double volume = 1;
   final applied = <String>[];
+  final appliedData = <Map<String, dynamic>>[];
+  List<Map<String, dynamic>> queue = [];
+  int queueIndex = 0;
+  int queueSerial = 0;
   bool pausedLocal = false;
   bool failAdopt = false;
 
@@ -98,6 +102,12 @@ class FakePort extends ChangeNotifier implements ConnectPlayerPort {
           'positionMs': positionMs,
           'durationMs': 200000,
           'volume': volume,
+          'queue': queue,
+          'queueSig': '$queueSerial',
+          'offset': 3,
+          'index': queueIndex,
+          'shuffle': false,
+          'repeat': 'off',
         };
 
   @override
@@ -121,8 +131,10 @@ class FakePort extends ChangeNotifier implements ConnectPlayerPort {
   }
 
   @override
-  Future<void> apply(String command, num? value) async {
+  Future<void> apply(
+      String command, num? value, Map<String, dynamic> data) async {
     applied.add(value == null ? command : '$command:$value');
+    if (data.isNotEmpty) appliedData.add(data);
     if (command == ConnectCommand.toggle) playing = !playing;
     notifyListeners();
   }
@@ -299,6 +311,70 @@ void main() {
     await settle();
     expect(phone.service.controlled, isNull);
     expect(phone.service.lastError, contains('Se perdió'));
+  });
+
+  test('la cola viaja solo cuando cambia y se conserva en el controlador',
+      () async {
+    pc.port
+      ..track = {...song}
+      ..playing = true
+      ..queue = [
+        {'id': 'q1', 'title': 'Uno'},
+        {'id': 'q2', 'title': 'Dos'},
+      ]
+      ..queueIndex = 1;
+    phone.port
+      ..track = {...song}
+      ..playing = true;
+    await phone.service.transferTo('desktop-001');
+    await settle();
+    final first = phone.service.controlledState!;
+    expect(first.queue.map((t) => t['id']), ['q1', 'q2']);
+    expect(first.queueOffset, 3);
+    expect(first.index, 1);
+
+    // Mismo contenido: el estado siguiente no trae la cola pero se conserva.
+    pc.port
+      ..positionMs = 5000
+      ..queueIndex = 0;
+    pc.port.notifyListeners();
+    await settle();
+    final second = phone.service.controlledState!;
+    expect(second.queue.map((t) => t['id']), ['q1', 'q2']);
+    expect(second.index, 0);
+    expect(second.positionMs, 5000);
+
+    // Cola nueva: reemplaza la anterior.
+    pc.port
+      ..queue = [
+        {'id': 'q9', 'title': 'Nueve'}
+      ]
+      ..queueSerial = 1;
+    pc.port.notifyListeners();
+    await settle();
+    expect(phone.service.controlledState!.queue.single['id'], 'q9');
+  });
+
+  test('los comandos de cola llegan con sus datos al dispositivo remoto',
+      () async {
+    phone.port
+      ..track = {...song}
+      ..playing = true;
+    await phone.service.transferTo('desktop-001');
+    await settle();
+    phone.service
+      ..command(ConnectCommand.playQueue, null, {
+        'scope': 'srv-1',
+        'tracks': [song],
+        'index': 0
+      })
+      ..command(ConnectCommand.queueMove, null, {'from': 4, 'to': 6})
+      ..command(ConnectCommand.queueRemove, 7)
+      ..command(ConnectCommand.shuffle);
+    await settle();
+    expect(pc.port.applied,
+        ['play_queue', 'queue_move', 'queue_remove:7', 'shuffle']);
+    expect(pc.port.appliedData[1], {'from': 4, 'to': 6});
   });
 
   test('un dispositivo por LAN y por relé aparece una sola vez', () async {

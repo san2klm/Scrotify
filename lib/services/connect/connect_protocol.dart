@@ -54,10 +54,25 @@ class ConnectRemoteState {
     required this.volume,
     this.track,
     required this.receivedAt,
+    this.queue = const [],
+    this.queueOffset = 0,
+    this.index = -1,
+    this.shuffle = false,
+    this.repeat = 'off',
   });
 
   final String? scope;
   final ConnectTrack? track;
+
+  /// Ventana de la cola del dispositivo (en orden de reproducción), el
+  /// índice absoluto de su primer elemento y la posición de la actual en ella.
+  final List<Map<String, dynamic>> queue;
+  final int queueOffset;
+  final int index;
+  final bool shuffle;
+
+  /// `off`, `all` o `one`.
+  final String repeat;
   final bool playing;
   final int positionMs;
   final int durationMs;
@@ -72,8 +87,21 @@ class ConnectRemoteState {
     return Duration(milliseconds: ms);
   }
 
-  static ConnectRemoteState fromJson(Map<String, dynamic> m, DateTime now) =>
+  static ConnectRemoteState fromJson(Map<String, dynamic> m, DateTime now,
+          {ConnectRemoteState? previous}) =>
       ConnectRemoteState(
+        // La cola solo viaja cuando cambia: si no llega, se conserva la anterior.
+        queue: m['queue'] is List
+            ? [
+                for (final t in m['queue'] as List)
+                  if (t is Map) Map<String, dynamic>.from(t),
+              ]
+            : (previous?.queue ?? const []),
+        queueOffset: (m['offset'] as num?)?.toInt() ??
+            (m['queue'] is List ? 0 : previous?.queueOffset ?? 0),
+        index: (m['index'] as num?)?.toInt() ?? -1,
+        shuffle: m['shuffle'] == true,
+        repeat: (m['repeat'] as String?) ?? 'off',
         scope: m['scope'] as String?,
         track: m['track'] is Map
             ? ConnectTrack(Map<String, dynamic>.from(m['track'] as Map))
@@ -140,7 +168,31 @@ class ConnectCommand {
   static const previous = 'previous';
   static const seek = 'seek'; // value: milisegundos
   static const volume = 'volume'; // value: 0.0 – 1.0
-  static const all = {toggle, play, pause, next, previous, seek, volume};
+  static const shuffle = 'shuffle'; // alterna
+  static const repeat = 'repeat'; // alterna off → all → one
+  static const playQueue = 'play_queue'; // data: scope, tracks, index, shuffle
+  static const queueAdd = 'queue_add'; // data: track
+  static const queueNext = 'queue_next'; // data: track
+  static const queueRemove = 'queue_remove'; // value: índice absoluto
+  static const queueMove = 'queue_move'; // data: from, to (absolutos)
+  static const queueClear = 'queue_clear';
+  static const all = {
+    toggle,
+    play,
+    pause,
+    next,
+    previous,
+    seek,
+    volume,
+    shuffle,
+    repeat,
+    playQueue,
+    queueAdd,
+    queueNext,
+    queueRemove,
+    queueMove,
+    queueClear,
+  };
 }
 
 /// Mensajes cifrados entre dispositivos. `t` es el tipo y `n` un contador

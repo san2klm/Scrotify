@@ -33,6 +33,7 @@ import 'services/pairing_server.dart';
 import 'services/player_controller.dart';
 import 'services/settings_controller.dart';
 import 'services/connect/connect_protocol.dart';
+import 'services/connect/connect_mirror.dart';
 import 'services/connect/connect_service.dart';
 import 'services/connect/lan_transport.dart';
 import 'services/connect/player_connect_port.dart';
@@ -327,6 +328,10 @@ class MyApp extends StatelessWidget {
                 ];
               },
             );
+            // Mientras se controla otro dispositivo, el reproductor lo refleja.
+            final navidrome = ctx.read<NavidromeService>();
+            ctx.read<PlayerController>().remote =
+                ConnectMirror(connect, scope: () => navidrome.serverScope);
             // Connect sigue a la sincronización: misma clave = mismo grupo.
             String? applied;
             void refresh() {

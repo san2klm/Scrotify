@@ -124,7 +124,8 @@ class IdleConnectPort extends ChangeNotifier implements ConnectPlayerPort {
   @override
   Future<void> adopt(ConnectTransfer transfer) async {}
   @override
-  Future<void> apply(String command, num? value) async {}
+  Future<void> apply(
+      String command, num? value, Map<String, dynamic> data) async {}
   @override
   Future<void> pauseLocal() async {}
 }

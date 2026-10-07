@@ -15,7 +15,8 @@ abstract class ConnectPlayerPort implements Listenable {
   String? get scope;
 
   /// Estado a publicar (`scope`, `track`, `playing`, `positionMs`,
-  /// `durationMs`, `volume`), o `null` si no hay nada cargado.
+  /// `durationMs`, `volume`, `queue`, `queueSig`, `offset`, `index`,
+  /// `shuffle`, `repeat`), o `null` si no hay nada cargado.
   Map<String, dynamic>? snapshot();
 
   /// Cola y posición actuales, o `null` si no hay nada que transferir.
@@ -25,7 +26,7 @@ abstract class ConnectPlayerPort implements Listenable {
   Future<void> adopt(ConnectTransfer transfer);
 
   /// Ejecuta un comando de [ConnectCommand] en este dispositivo.
-  Future<void> apply(String command, num? value);
+  Future<void> apply(String command, num? value, Map<String, dynamic> data);
 
   /// Pausa la reproducción local (tras transferirla a otro dispositivo).
   Future<void> pauseLocal();
@@ -68,6 +69,9 @@ class ConnectService extends ChangeNotifier {
   Timer? _stateDebounce;
   Timer? _stateTimer;
   bool _listening = false;
+  String? _lastQueueSig;
+  bool _forceQueue = true;
+  int _publishes = 0;
 
   /// Dispositivos del mismo usuario visibles ahora mismo.
   List<ConnectDevice> get devices => _devices;
@@ -196,7 +200,10 @@ class ConnectService extends ChangeNotifier {
     }
     notifyListeners();
     // Un dispositivo nuevo debe enterarse de lo que está sonando aquí.
-    if (_devices.any((d) => !before.contains(d.id))) _publishState();
+    if (_devices.any((d) => !before.contains(d.id))) {
+      _forceQueue = true;
+      _publishState();
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -255,11 +262,14 @@ class ConnectService extends ChangeNotifier {
   }
 
   /// Envía un comando al dispositivo controlado (si lo hay).
-  void command(String command, [num? value]) {
+  void command(String command, [num? value, Map<String, dynamic>? data]) {
     final id = _controlledId;
     if (id == null || !ConnectCommand.all.contains(command)) return;
-    unawaited(_send(id, ConnectMessage.command,
-        {'cmd': command, if (value != null) 'value': value}));
+    unawaited(_send(id, ConnectMessage.command, {
+      'cmd': command,
+      if (value != null) 'value': value,
+      if (data != null) 'data': data,
+    }));
   }
 
   void _fail(String message) {
@@ -309,6 +319,17 @@ class ConnectService extends ChangeNotifier {
     if (_crypto == null || _devices.isEmpty) return;
     final snapshot = port.snapshot();
     if (snapshot == null) return;
+    // La cola solo viaja cuando cambia, a un dispositivo nuevo y cada ~15 s
+    // por si algún mensaje se perdió.
+    final sig = snapshot['queueSig'];
+    _publishes++;
+    if (!_forceQueue && sig == _lastQueueSig && _publishes % 5 != 0) {
+      snapshot.remove('queue');
+    } else {
+      _lastQueueSig = sig as String?;
+      _forceQueue = false;
+    }
+    snapshot.remove('queueSig');
     unawaited(_send(null, ConnectMessage.state, snapshot));
   }
 
@@ -329,13 +350,16 @@ class ConnectService extends ChangeNotifier {
     _lastCounter[message.from] = message.counter;
     switch (message.type) {
       case ConnectMessage.state:
-        _states[message.from] =
-            ConnectRemoteState.fromJson(message.body, _now());
+        _states[message.from] = ConnectRemoteState.fromJson(
+            message.body, _now(),
+            previous: _states[message.from]);
         notifyListeners();
       case ConnectMessage.command:
         final cmd = message.body['cmd'];
         if (cmd is String && ConnectCommand.all.contains(cmd)) {
-          await port.apply(cmd, message.body['value'] as num?);
+          final data = message.body['data'];
+          await port.apply(cmd, message.body['value'] as num?,
+              data is Map ? Map<String, dynamic>.from(data) : const {});
           _publishState();
         }
       case ConnectMessage.transfer:
