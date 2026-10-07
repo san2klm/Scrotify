@@ -11,6 +11,9 @@ import { createNavidromeAuth } from './navidrome-auth.js';
 import { createSyncHandler, isSyncPath } from './sync.js';
 
 export const PROTOCOL_VERSION = 2;
+/// Tamaño máximo de una trama WebSocket. Las salas Jam se limitan además a
+/// `maxMessageBytes`; Connect necesita más (cola de reproducción cifrada).
+const MAX_FRAME_BYTES = 128 * 1024;
 const MAX_NAME_LENGTH = 48;
 const REACTIONS = new Set(['👍', '❤️', '🔥', '😂', '🎉', '👏', '😮', '🎶']);
 const MAX_CHAT_LENGTH = 280;
@@ -232,7 +235,6 @@ export function createJamServer({
     }
     if (path === '/admin' || path?.startsWith('/admin/')) {
       await admin.handle(request, response, clientIp(request, trustProxy));
-      websocketServer.options.maxPayload = limits.maxMessageBytes;
       return;
     }
     if (request.method === 'GET' && path === '/.well-known/assetlinks.json' && limits.assetLinksJson) {
@@ -403,7 +405,7 @@ export function createJamServer({
 
   const websocketServer = new WebSocketServer({
     server: httpServer,
-    maxPayload: limits.maxMessageBytes,
+    maxPayload: Math.max(MAX_FRAME_BYTES, limits.maxMessageBytes),
   });
   logs.push('Servidor iniciado');
 
@@ -769,6 +771,10 @@ export function createJamServer({
       }
       if (!message || typeof message !== 'object' || Array.isArray(message)) {
         return serverError(socket, 'Mensaje inválido.');
+      }
+      // Solo Connect puede superar maxMessageBytes (su relé limita el blob aparte).
+      if (!String(message.action).startsWith('connect_') && raw.length > limits.maxMessageBytes) {
+        return serverError(socket, 'Mensaje demasiado grande.');
       }
       switch (message.action) {
         case 'create_room': return createRoom(socket, message);

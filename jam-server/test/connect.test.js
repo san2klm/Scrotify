@@ -183,3 +183,27 @@ test('una segunda conexión del mismo dispositivo reemplaza a la anterior', asyn
   await closed;
   assert.equal(second.messages.find((m) => m.status === 'connect_joined').devices.length, 1);
 });
+
+test('un mensaje de Connect grande (cola de reproducción) no corta la conexión', async () => {
+  const navidrome = await fakeNavidrome();
+  const server = await startServer({ navidromeUrl: navidrome.url });
+  const a = await open(server);
+  const b = await open(server);
+  a.send(hello('device-aaaa', 'A'));
+  b.send(hello('device-bbbb', 'B'));
+  for (const s of [a, b]) await waitFor(s, (m) => m.status === 'connect_joined');
+  const big = 'x'.repeat(60 * 1024); // supera maxMessageBytes (16 KB) de las salas
+  let closed = false;
+  a.once('close', () => { closed = true; });
+  a.send(JSON.stringify({ action: 'connect_send', to: 'device-bbbb', blob: big }));
+  const received = await waitFor(b, (m) => m.event === 'connect_msg');
+  assert.equal(received.blob.length, big.length);
+  assert.equal(closed, false);
+});
+
+test('las acciones de sala siguen limitadas por maxMessageBytes', async () => {
+  const server = await startServer();
+  const a = await open(server);
+  a.send(JSON.stringify({ action: 'chat_message', text: 'x'.repeat(40 * 1024) }));
+  assert.match((await waitFor(a, (m) => m.status === 'error')).message, /demasiado grande/);
+});

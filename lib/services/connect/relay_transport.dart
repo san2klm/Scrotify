@@ -100,6 +100,11 @@ class RelayTransport implements ConnectTransport {
   }
 
   void _onClosed() {
+    final channel = _channel;
+    if (_running) {
+      debugPrint('connect/relay: conexión cerrada '
+          '(${channel?.closeCode}: ${channel?.closeReason})');
+    }
     _subscription?.cancel();
     _subscription = null;
     _channel = null;
@@ -109,6 +114,15 @@ class RelayTransport implements ConnectTransport {
       _devices.add(const []);
     }
     if (!_running) return;
+    // 4000: otra ventana de este mismo dispositivo tomó la conexión. Reintentar
+    // solo provocaría una pelea sin fin entre las dos.
+    if (channel?.closeCode == 4000) {
+      _problem =
+          'Scrotify ya está abierto en otra ventana de este dispositivo.';
+      _running = false;
+      _devices.add(const []);
+      return;
+    }
     _problem ??= 'Sin conexión con el servidor Jam.';
     _retry?.cancel();
     _retry = Timer(retryDelay, _open);

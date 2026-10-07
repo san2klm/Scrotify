@@ -16,7 +16,7 @@ Map<String, dynamic> trackToConnectJson(Track t) => {
       'trackNumber': t.trackNumber,
       'samplingRate': t.samplingRate,
       'bitDepth': t.bitDepth,
-    };
+    }..removeWhere((_, v) => v == null); // mensajes más cortos
 
 Track trackFromConnectJson(Map<String, dynamic> json) =>
     Track.fromJson(json, albumArtUrl: json['albumArtUrl'] as String?);
