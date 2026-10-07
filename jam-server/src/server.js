@@ -6,6 +6,7 @@ import { WebSocketServer, WebSocket } from 'ws';
 import { createAdmin } from './admin.js';
 import { openStore, SETTING_DEFS } from './config.js';
 import { createGuard } from './guard.js';
+import { createSyncHandler, isSyncPath } from './sync.js';
 
 export const PROTOCOL_VERSION = 2;
 const MAX_NAME_LENGTH = 48;
@@ -215,8 +216,13 @@ export function createJamServer({
       };
     },
   });
+  const handleSync = createSyncHandler({ store, limits, guard, clientIp, trustProxy });
   const httpServer = http.createServer(async (request, response) => {
     const path = request.url?.split('?')[0];
+    if (isSyncPath(path)) {
+      await handleSync(request, response);
+      return;
+    }
     if (path === '/admin' || path?.startsWith('/admin/')) {
       await admin.handle(request, response, clientIp(request, trustProxy));
       websocketServer.options.maxPayload = limits.maxMessageBytes;
@@ -265,6 +271,7 @@ export function createJamServer({
           reactions: limits.reactionsEnabled,
           persistentRooms: limits.persistentRoomsEnabled,
           webLink: limits.webLinkEnabled,
+          sync: limits.syncEnabled,
         },
         limits: {
           maxParticipants: limits.maxParticipants,

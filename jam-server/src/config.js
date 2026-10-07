@@ -14,6 +14,10 @@ export const SETTING_DEFS = {
   chatEnabled: { type: 'bool', default: false, group: 'features' },
   persistentRoomsEnabled: { type: 'bool', default: false, group: 'features' },
   webLinkEnabled: { type: 'bool', default: false, group: 'features' },
+  syncEnabled: { type: 'bool', default: false, group: 'features' },
+  syncMaxDocBytes: { type: 'int', default: 4 * 1024 * 1024, min: 1024, max: 32 * 1024 * 1024, group: 'limits' },
+  syncMaxDocs: { type: 'int', default: 64, min: 1, max: 1000, group: 'limits' },
+  syncMaxVaults: { type: 'int', default: 100, min: 1, max: 100000, group: 'limits' },
   publicUrl: { type: 'url', default: '', group: 'general' },
   assetLinksJson: { type: 'json', default: '', group: 'links' },
   appleAppSiteAssociation: { type: 'json', default: '', group: 'links' },
@@ -71,8 +75,16 @@ export function openStore(path = ':memory:', overrides = {}) {
       idle_expiry_ms INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL, last_used_at INTEGER NOT NULL,
       config TEXT NOT NULL DEFAULT '{}'
     );
+    CREATE TABLE IF NOT EXISTS sync_vaults (
+      id TEXT PRIMARY KEY, auth_hash TEXT NOT NULL, created_at INTEGER NOT NULL, last_used_at INTEGER NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS sync_docs (
+      vault_id TEXT NOT NULL REFERENCES sync_vaults(id) ON DELETE CASCADE, key TEXT NOT NULL,
+      updated_at INTEGER NOT NULL, blob TEXT NOT NULL, PRIMARY KEY (vault_id, key)
+    );
     CREATE TABLE IF NOT EXISTS admin (id INTEGER PRIMARY KEY CHECK (id = 1), salt TEXT NOT NULL, hash TEXT NOT NULL);
   `);
+  db.exec('PRAGMA foreign_keys = ON');
   const getRow = db.prepare('SELECT value FROM settings WHERE key = ?');
   const setRow = db.prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value');
   const cache = new Map();
@@ -138,6 +150,24 @@ export function openStore(path = ':memory:', overrides = {}) {
     purgeExpiredPersistentRooms: () => db.prepare(
       'DELETE FROM persistent_rooms WHERE idle_expiry_ms > 0 AND last_used_at + idle_expiry_ms < ?',
     ).run(Date.now()),
+    /// Almacén de sincronización: solo guarda blobs ya cifrados por el cliente.
+    getSyncVault: (id) => db.prepare('SELECT id, auth_hash AS authHash FROM sync_vaults WHERE id = ?').get(id) ?? null,
+    countSyncVaults: () => db.prepare('SELECT COUNT(*) AS n FROM sync_vaults').get().n,
+    addSyncVault: (id, authHash) => {
+      const now = Date.now();
+      db.prepare('INSERT INTO sync_vaults (id, auth_hash, created_at, last_used_at) VALUES (?, ?, ?, ?)').run(id, authHash, now, now);
+    },
+    touchSyncVault: (id) => db.prepare('UPDATE sync_vaults SET last_used_at = ? WHERE id = ?').run(Date.now(), id),
+    deleteSyncVault: (id) => db.prepare('DELETE FROM sync_vaults WHERE id = ?').run(id),
+    listSyncDocs: (id) => db.prepare(
+      'SELECT key, updated_at AS updatedAt, length(blob) AS size FROM sync_docs WHERE vault_id = ? ORDER BY key',
+    ).all(id),
+    getSyncDoc: (id, key) => db.prepare('SELECT key, updated_at AS updatedAt, blob FROM sync_docs WHERE vault_id = ? AND key = ?').get(id, key) ?? null,
+    countSyncDocs: (id) => db.prepare('SELECT COUNT(*) AS n FROM sync_docs WHERE vault_id = ?').get(id).n,
+    putSyncDoc: (id, key, updatedAt, blob) => db.prepare(
+      'INSERT INTO sync_docs (vault_id, key, updated_at, blob) VALUES (?, ?, ?, ?) ON CONFLICT(vault_id, key) DO UPDATE SET updated_at = excluded.updated_at, blob = excluded.blob',
+    ).run(id, key, updatedAt, blob),
+    deleteSyncDoc: (id, key) => db.prepare('DELETE FROM sync_docs WHERE vault_id = ? AND key = ?').run(id, key),
     close: () => db.close(),
   };
 }

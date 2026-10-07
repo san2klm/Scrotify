@@ -116,3 +116,18 @@ npx wscat -c wss://jam.templo.cloud/
 ```
 
 Nunca pegues tokens, contraseñas ni credenciales de Navidrome en los mensajes WebSocket: el servicio sólo recibe PIN, nombres de sala y estado de reproducción.
+
+## Sincronización de datos entre dispositivos (`/api/sync/v1`)
+
+Desactivada por defecto (`syncEnabled` en `/admin` → Funciones). El servidor solo guarda **blobs cifrados en el cliente**: no puede leer temas, ajustes ni la clave de sincronización.
+
+Todas las rutas llevan `Authorization: Bearer <64 hex>`. `vaultId` (64 hex) y el token salen de derivaciones distintas de la clave; el servidor guarda solo el SHA-256 del token. El primer `PUT` a una bóveda nueva la crea.
+
+| Método y ruta | Uso |
+|---|---|
+| `GET /api/sync/v1/<vaultId>` | Lista `{key, updatedAt, size}` |
+| `GET /api/sync/v1/<vaultId>/<key>` | Devuelve `{key, updatedAt, blob}` |
+| `PUT /api/sync/v1/<vaultId>/<key>` | Cuerpo `{updatedAt, blob}`; `409` si hay una versión más reciente (gana el último cambio) |
+| `DELETE /api/sync/v1/<vaultId>[/<key>]` | Borra un documento o toda la bóveda |
+
+Límites editables: tamaño por documento (4 MB), documentos por bóveda (64) y bóvedas (100). Credenciales erróneas cuentan para el bloqueo progresivo por IP.
