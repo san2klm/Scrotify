@@ -12,17 +12,19 @@ import 'theme_validation.dart';
 ///
 /// - Temas fijos ([AppTheme.fixedThemes]): nunca desinstalables.
 /// - Comunidad: `.zip` con `manifest.json` + `theme.css` en una carpeta
-///   configurable (por defecto `/home/pc/Proyectos/themes/pc-web/`).
+///   configurable (por defecto la carpeta privada de importados de la app).
 ///   Cada zip se valida antes de aceptarse (manifest + CSS seguro).
 /// - Persiste todo en `themes.json` (versión 2, con migración).
 class ThemeController extends ChangeNotifier {
-  static const defaultThemesDir = '/home/pc/Proyectos/themes/pc-web';
+  /// Ruta de desarrollo que versiones anteriores guardaban como valor por
+  /// defecto; hoy se trata como "sin elegir".
+  static const _legacyThemesDir = '/home/pc/Proyectos/themes/pc-web';
   static const _configVersion = 2;
 
   static Set<String> get fixedIds =>
       AppTheme.fixedThemes.map((t) => t.id).toSet();
 
-  String _themesDir = defaultThemesDir;
+  String _themesDir = '';
   String? _selectedId;
   List<AppTheme> _installed = const [];
   bool _loading = false;
@@ -44,8 +46,7 @@ class ThemeController extends ChangeNotifier {
   String get themesDir => _themesDir;
 
   /// Fijos primero, luego instalados.
-  List<AppTheme> get themes =>
-      [...AppTheme.fixedThemes, ..._installed];
+  List<AppTheme> get themes => [...AppTheme.fixedThemes, ..._installed];
   List<AppTheme> get installedThemes => _installed;
   List<AppTheme> get fixedThemeList => AppTheme.fixedThemes;
 
@@ -81,15 +82,21 @@ class ThemeController extends ChangeNotifier {
       final dir = await getApplicationSupportDirectory();
       final file = File('${dir.path}/themes.json');
       if (!await file.exists()) return {};
-      return jsonDecode(await file.readAsString())
-          as Map<String, dynamic>;
+      return jsonDecode(await file.readAsString()) as Map<String, dynamic>;
     } catch (_) {
       return {};
     }
   }
 
+  /// Sin carpeta elegida, se muestra y usa la carpeta real de importados.
+  Future<void> _resolveDefaultDir() async {
+    if (_themesDir.isNotEmpty) return;
+    _themesDir = (await _importsDir()).path;
+  }
+
   void _applyConfig(Map<String, dynamic> data) {
-    _themesDir = (data['themesDir'] as String?) ?? defaultThemesDir;
+    final dir = data['themesDir'] as String?;
+    _themesDir = dir == null || dir == _legacyThemesDir ? '' : dir;
     _selectedId = data['selectedId'] as String?;
   }
 
@@ -154,6 +161,9 @@ class ThemeController extends ChangeNotifier {
     } catch (_) {
       // Sin config previa: usar valores por defecto.
     }
+    try {
+      await _resolveDefaultDir();
+    } catch (_) {}
     notifyListeners();
     await rescan();
   }
@@ -265,8 +275,7 @@ class ThemeController extends ChangeNotifier {
             lower.endsWith('preview.png')) {
           final content = file.content as List<int>;
           // Nombre estable por hash del contenido para no duplicar.
-          final hash = content.length.hashCode.abs() +
-              file.name.hashCode.abs();
+          final hash = content.length.hashCode.abs() + file.name.hashCode.abs();
           final ext = lower.split('.').last;
           final out = File('${thumbs.path}/thumb_$hash.$ext');
           if (!await out.exists()) {
