@@ -5,6 +5,7 @@ import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart'
     show FlutterError, PlatformDispatcher, debugPrint, kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:audio_service/audio_service.dart';
 import 'package:audio_session/audio_session.dart';
 import 'package:just_audio_media_kit/just_audio_media_kit.dart';
@@ -33,6 +34,8 @@ import 'services/pairing_server.dart';
 import 'services/player_controller.dart';
 import 'services/settings_controller.dart';
 import 'services/connect/connect_protocol.dart';
+import 'utils/tv_mode.dart';
+import 'widgets/tv_focus_ring.dart';
 import 'services/connect/connect_account.dart';
 import 'services/connect/connect_mirror.dart';
 import 'services/connect/connect_service.dart';
@@ -83,6 +86,7 @@ Future<void> main() async {
   CoverFallbackService.instance.clearCache();
   final initialTheme = await ThemeController.readInitial();
   final connectIdentity = await ConnectIdentity.load();
+  await TvMode.init();
 
   ScrotifyAudioHandler? audioHandler;
   if (!kIsWeb && Platform.isAndroid) {
@@ -123,6 +127,14 @@ Future<void> main() async {
     });
   }
 }
+
+/// Ajustes para verla a distancia con el control remoto: el foco debe notarse
+/// y los objetivos táctiles/de foco son más grandes.
+ThemeData _tvTheme(ThemeData base, Color accent) => base.copyWith(
+      focusColor: accent.withValues(alpha: 0.45),
+      hoverColor: accent.withValues(alpha: 0.2),
+      visualDensity: VisualDensity.standard,
+    );
 
 final GlobalKey<NavigatorState> rootNavigatorKey = GlobalKey<NavigatorState>();
 
@@ -368,13 +380,27 @@ class MyApp extends StatelessWidget {
             title: 'Scrotify',
             debugShowCheckedModeBanner: false,
             navigatorKey: rootNavigatorKey,
-            theme: appTheme.toThemeData(),
-            builder: (context, child) => DesktopWindowFrame(
-              child: JamDeepLinkListener(
-                navigatorKey: rootNavigatorKey,
-                child: child ?? const SizedBox.shrink(),
-              ),
-            ),
+            theme: TvMode.isTv
+                ? _tvTheme(appTheme.toThemeData(), appTheme.accent)
+                : appTheme.toThemeData(),
+            // El botón A de los mandos de juego también "pulsa" (Enter/OK ya
+            // lo hace Flutter por defecto).
+            shortcuts: TvMode.isTv
+                ? {
+                    ...WidgetsApp.defaultShortcuts,
+                    const SingleActivator(LogicalKeyboardKey.gameButtonA):
+                        const ActivateIntent(),
+                  }
+                : null,
+            builder: (context, child) {
+              final app = DesktopWindowFrame(
+                child: JamDeepLinkListener(
+                  navigatorKey: rootNavigatorKey,
+                  child: child ?? const SizedBox.shrink(),
+                ),
+              );
+              return TvMode.isTv ? TvFocusRing(child: app) : app;
+            },
             home: const LoginScreen(),
           );
         },

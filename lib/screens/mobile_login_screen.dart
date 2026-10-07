@@ -8,6 +8,7 @@ import '../services/secure_storage.dart';
 import '../widgets/pairing_panel.dart';
 import 'home_shell.dart';
 import '../utils/app_colors.dart';
+import '../utils/tv_mode.dart';
 import '../services/biometric_auth_service.dart';
 
 /// Pantalla de inicio de sesión optimizada exclusivamente para Teléfonos móviles (Android, iOS).
@@ -39,7 +40,9 @@ class _MobileLoginScreenState extends State<MobileLoginScreen> {
 
   bool _obscurePass = true;
   bool _loading = false;
-  int _selectedTab = 0; // 0 = Cuenta (Servidor), 1 = Vincular con PC
+  // 0 = Cuenta (Servidor), 1 = Vincular con PC. En una tele (sin teclado
+  // cómodo) se empieza vinculando con el teléfono.
+  int _selectedTab = TvMode.isTv ? 1 : 0;
 
   late final BiometricAuthService _biometricAuth;
   bool _canUseBiometrics = false;

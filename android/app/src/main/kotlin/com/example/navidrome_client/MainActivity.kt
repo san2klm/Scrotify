@@ -2,7 +2,9 @@ package com.example.navidrome_client
 
 import android.Manifest
 import android.content.Intent
+import android.app.UiModeManager
 import android.content.pm.PackageManager
+import android.content.res.Configuration
 import android.net.Uri
 import android.os.Build
 import android.os.Environment
@@ -45,6 +47,20 @@ class MainActivity : AudioServiceFragmentActivity() {
         // Salida bit-perfect por USB (Android 14+) para los modos de alta fidelidad.
         HifiAudioPlugin(applicationContext)
             .register(flutterEngine.dartExecutor.binaryMessenger)
+        // ¿Corre en un Android TV? La UI usa navegación con control remoto.
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "scrotify/device")
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "isTelevision" -> {
+                        val modes = getSystemService(UI_MODE_SERVICE) as? UiModeManager
+                        result.success(
+                            modes?.currentModeType == Configuration.UI_MODE_TYPE_TELEVISION ||
+                                packageManager.hasSystemFeature(PackageManager.FEATURE_LEANBACK)
+                        )
+                    }
+                    else -> result.notImplemented()
+                }
+            }
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "scrotify/music_storage")
             .setMethodCallHandler { call, result ->
                 when (call.method) {

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../utils/responsive.dart';
+import '../utils/tv_mode.dart';
 import 'home_screen.dart';
 import 'mobile_home_screen.dart';
 
@@ -22,8 +23,11 @@ class _HomeShellState extends State<HomeShell> {
 
   @override
   Widget build(BuildContext context) {
+    // La tele siempre usa la interfaz amplia (se maneja con el control remoto).
+    if (TvMode.isTv) return const HomeScreen();
     final width = MediaQuery.sizeOf(context).width;
-    _mobile = Responsive.isMobileWidth(width, wasMobile: _mobile ?? width < Responsive.mobileBreakpoint);
+    _mobile = Responsive.isMobileWidth(width,
+        wasMobile: _mobile ?? width < Responsive.mobileBreakpoint);
     return _mobile! ? const MobileHomeScreen() : const HomeScreen();
   }
 }

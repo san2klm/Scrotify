@@ -291,3 +291,12 @@ Cambio: Connect ya no depende de la clave de sincronización. Cada usuario de Na
 - [x] **14.3** Servidor de producción actualizado (backup previo de `data/`) con `navidromeUrl = https://navidrome.templo.cloud`; verificado el rechazo de claves falsas contra Navidrome real. APK instalado en el teléfono y AppImage regenerado.
 - [x] **14.5** Corregido: el servidor cortaba el WebSocket (1009) con tramas de más de `maxMessageBytes` (16 KB) y los mensajes de Connect con la cola lo superaban; ahora la trama admite hasta 128 KB y solo las salas Jam siguen limitadas. Una instancia desplazada por otra con el mismo id de dispositivo ya no reintenta en bucle.
 - [ ] **14.4** Pendiente: probar PC + teléfono con el mismo usuario. Cambiar la clave en Navidrome cambia la clave de cifrado: hay que volver a iniciar sesión en los demás dispositivos.
+
+## Versión para Android TV (2026-10-07)
+
+El mismo APK sirve para teléfono y tele. En una tele se activa un modo con la interfaz amplia, navegación con el control remoto y un anillo de foco visible.
+
+- [x] **15.1** Manifiesto: `LEANBACK_LAUNCHER`, banner 320x180, y `uses-feature` sin exigir pantalla táctil, cámara, micrófono ni leanback (verificado con `aapt2 dump badging`).
+- [x] **15.2** `TvMode` (canal `scrotify/device` → `UiModeManager`/`FEATURE_LEANBACK`; `--dart-define=FORCE_TV=true` para probar en un emulador). En TV: interfaz de escritorio siempre, login empieza en "Vincular" con el teléfono (sin cámara, sin botón de QR), tema con foco marcado y botón A de mandos de juego.
+- [x] **15.3** `TvFocusRing`: borde visible alrededor del elemento enfocado (botones, tarjetas, listas, campos, sliders) y desplazamiento automático. Probado en emulador 1920x1080 con teclas direccionales: navegar, abrir álbum, reproducir, atrás, volumen y pausa con tecla multimedia.
+- [ ] **15.4** Pendiente: probar en una tele real; el foco inicial al abrir una pantalla cae en la barra superior; no se tocó la pantalla completa del reproductor ni Ajustes con el control remoto; Jam (cámara/QR) no está pensado para tele. La tele funciona como destino de Connect (se controla desde el teléfono).

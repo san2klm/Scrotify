@@ -7,6 +7,7 @@ import '../models/pairing_models.dart';
 import '../services/pairing_client.dart';
 import '../services/pairing_server.dart';
 import '../utils/app_colors.dart';
+import '../utils/tv_mode.dart';
 import 'material_surface.dart';
 import 'pairing_qr_code.dart';
 
@@ -889,23 +890,24 @@ class _PairingJoinPanelState extends State<PairingJoinPanel> {
 
         const SizedBox(height: 14),
 
-        // Botón Escanear QR
-        OutlinedButton.icon(
-          onPressed: _loading ? null : _openQrScanner,
-          style: OutlinedButton.styleFrom(
-            foregroundColor: context.textPrimary,
-            side: BorderSide(color: context.bgElevated),
-            padding: const EdgeInsets.symmetric(vertical: 12),
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        // Botón Escanear QR (una tele no tiene cámara)
+        if (!TvMode.isTv)
+          OutlinedButton.icon(
+            onPressed: _loading ? null : _openQrScanner,
+            style: OutlinedButton.styleFrom(
+              foregroundColor: context.textPrimary,
+              side: BorderSide(color: context.bgElevated),
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
+            ),
+            icon: Icon(Icons.qr_code_scanner_rounded,
+                size: 19, color: context.accent),
+            label: const Text(
+              'Escanear código QR con la cámara',
+              style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12.5),
+            ),
           ),
-          icon: Icon(Icons.qr_code_scanner_rounded,
-              size: 19, color: context.accent),
-          label: const Text(
-            'Escanear código QR con la cámara',
-            style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12.5),
-          ),
-        ),
 
         // Desplegable conexión manual por IP
         Center(

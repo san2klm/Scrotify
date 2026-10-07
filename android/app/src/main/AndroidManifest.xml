@@ -19,11 +19,21 @@
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="29" />
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="29" />
 
+    <!-- Android TV: se instala y aparece en el launcher de la tele sin exigir
+         pantalla táctil ni cámara (el escáner QR solo es para móviles). -->
+    <uses-feature android:name="android.software.leanback" android:required="false" />
+    <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+    <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />
+    <uses-feature android:name="android.hardware.wifi" android:required="false" />
+    <uses-feature android:name="android.hardware.microphone" android:required="false" />
+
     <application
         android:requestLegacyExternalStorage="true"
         android:label="Scrotify"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
+        android:banner="@drawable/tv_banner"
         android:usesCleartextTraffic="true">
         <activity
             android:name=".MainActivity"
@@ -45,6 +55,11 @@
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+            <!-- Launcher de Android TV. -->
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN"/>
+                <category android:name="android.intent.category.LEANBACK_LAUNCHER"/>
             </intent-filter>
 
             <!-- Enlaces de invitación Jam: scrotify://join?code=ABC234&server=host -->
