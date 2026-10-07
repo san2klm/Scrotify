@@ -6,6 +6,7 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/foundation.dart';
 
 import '../models/jam_models.dart';
+import 'hifi/hifi_profiles.dart' show AudioFidelityMode;
 import 'replay_gain.dart';
 
 /// Calidad de streaming. `lossless` transmite el archivo original (sin
@@ -70,6 +71,8 @@ class SettingsController extends ChangeNotifier {
   double _replayGainPreamp = 0.0;
   bool _replayGainPreventClipping = true;
   String _jamServerUrl = kDefaultRemoteJamEndpoint;
+  AudioFidelityMode _fidelityMode = AudioFidelityMode.standard;
+  bool _losslessOnMobileData = false;
 
   // Red actual detectada. Si no se puede saber (sin NetworkManager, etc.) se
   // asume "casa" para no degradar la calidad sin motivo.
@@ -92,6 +95,13 @@ class SettingsController extends ChangeNotifier {
   int get coverArtSize => _coverArtSize;
   double get initialVolume => _initialVolume;
   bool get gapless => _gapless;
+
+  /// Modo de fidelidad: Estándar (el comportamiento de siempre), Alta
+  /// fidelidad o Bit-perfect.
+  AudioFidelityMode get fidelityMode => _fidelityMode;
+
+  /// En Alta fidelidad/Bit-perfect, pedir el archivo original también con datos móviles.
+  bool get losslessOnMobileData => _losslessOnMobileData;
   Duration get crossfade => _crossfade;
   bool get isMobileData => _network == ConnectivityResult.mobile;
   String get networkLabel =>
@@ -211,6 +221,20 @@ class SettingsController extends ChangeNotifier {
     notifyListeners();
   }
 
+  void setFidelityMode(AudioFidelityMode mode) {
+    if (mode == _fidelityMode) return;
+    _fidelityMode = mode;
+    _save();
+    notifyListeners();
+  }
+
+  void setLosslessOnMobileData(bool value) {
+    if (value == _losslessOnMobileData) return;
+    _losslessOnMobileData = value;
+    _save();
+    notifyListeners();
+  }
+
   void setGapless(bool value) {
     if (value == _gapless) return;
     _gapless = value;
@@ -296,6 +320,11 @@ class SettingsController extends ChangeNotifier {
           rawPreamp == null ? 0.0 : rawPreamp.clamp(-12.0, 12.0);
       _replayGainPreventClipping =
           data['replayGainPreventClipping'] as bool? ?? true;
+      _fidelityMode = AudioFidelityMode.values.firstWhere(
+        (m) => m.name == data['fidelityMode'],
+        orElse: () => AudioFidelityMode.standard,
+      );
+      _losslessOnMobileData = data['losslessOnMobileData'] as bool? ?? false;
       final jamUrl =
           JamServerEndpoint.parse(data['jamServerUrl'] as String? ?? '');
       _jamServerUrl = jamUrl.url ?? kDefaultRemoteJamEndpoint;
@@ -323,6 +352,8 @@ class SettingsController extends ChangeNotifier {
         'replayGainPreamp': _replayGainPreamp,
         'replayGainPreventClipping': _replayGainPreventClipping,
         'jamServerUrl': _jamServerUrl,
+        'fidelityMode': _fidelityMode.name,
+        'losslessOnMobileData': _losslessOnMobileData,
       }));
     } catch (err) {
       debugPrint('settings_controller:304 ignorado: $err');

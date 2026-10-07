@@ -7,6 +7,8 @@ import 'package:just_audio/just_audio.dart';
 import 'package:just_audio_media_kit/just_audio_media_kit.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:navidrome_client/services/eq/eq_mpv_setup.dart';
+import 'package:navidrome_client/services/hifi/hifi_coordinator.dart';
+import 'package:navidrome_client/services/hifi/hifi_profiles.dart';
 import 'package:navidrome_client/services/eq/eq_presets.dart';
 import 'package:navidrome_client/services/equalizer_service.dart';
 
@@ -81,6 +83,42 @@ void main() {
     await eq.setEnabled(true);
     await player.play();
     await Future<void>.delayed(const Duration(milliseconds: 800));
+    expect(player.position, greaterThan(Duration.zero));
+  },
+      skip: libmpv == null ? 'libmpv no está instalada' : false,
+      timeout: const Timeout(Duration(seconds: 60)));
+
+  test('mpv acepta todas las propiedades de los modos de fidelidad', () async {
+    JustAudioMediaKit.pitch = false;
+    JustAudioMediaKit.ensureInitialized(libmpv: libmpv);
+    final dir = await Directory.systemTemp.createTemp('scrotify-hifi-mpv-');
+    addTearDown(() => dir.delete(recursive: true));
+    final file = File('${dir.path}/tono.wav')..writeAsBytesSync(_tone(2));
+    final player = AudioPlayer();
+    addTearDown(player.dispose);
+    await player.setFilePath(file.path);
+    final mpv = JustAudioMediaKit.mpvPlayers.first.platform as NativePlayer;
+
+    for (final mode in AudioFidelityMode.values) {
+      final plan = HifiPlanner.plan(
+        mode: mode,
+        platform: HifiPlatform.linux,
+        network: NetworkKind.wifiOrEthernet,
+        mpvEngine: true,
+      );
+      final props = {
+        ...HifiCoordinator.mpvDefaults,
+        for (final e in plan.mpvProperties.entries)
+          if (!plan.mpvInitOnly.contains(e.key)) e.key: e.value,
+      };
+      for (final e in props.entries) {
+        // Una propiedad inexistente lanzaría: así se detecta una versión de mpv incompatible.
+        await mpv.setProperty(e.key, e.value);
+      }
+    }
+    await mpv.setProperty('af', '');
+    await player.play();
+    await Future<void>.delayed(const Duration(milliseconds: 500));
     expect(player.position, greaterThan(Duration.zero));
   },
       skip: libmpv == null ? 'libmpv no está instalada' : false,

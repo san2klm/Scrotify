@@ -11,6 +11,7 @@ import 'package:just_audio_media_kit/just_audio_media_kit.dart';
 import 'package:provider/provider.dart';
 import 'package:window_manager/window_manager.dart';
 
+import 'services/hifi/hifi_coordinator.dart';
 import 'services/home_widget_service.dart';
 import 'services/notification_cover_cache.dart';
 import 'services/cover_fallback_service.dart';
@@ -218,6 +219,30 @@ class MyApp extends StatelessWidget {
               };
             }
             return player;
+          },
+        ),
+        // Modos de fidelidad (Estándar / Alta fidelidad / Bit-perfect). Se crea al
+        // arrancar para aplicar el modo guardado antes de la primera canción.
+        ChangeNotifierProvider<HifiCoordinator>(
+          lazy: false,
+          create: (ctx) {
+            final player = ctx.read<PlayerController>();
+            final equalizer = ctx.read<EqualizerService>();
+            final hifi = HifiCoordinator(
+              settings: ctx.read<SettingsController>(),
+              applyToPlayer: player.applyHifi,
+              setEqAllowed: equalizer.setHifiAllowsEq,
+              setMpvProperty: HifiCoordinator.isDesktop ? setMpvProperty : null,
+            )..start();
+            if (HifiCoordinator.isDesktop) {
+              // Un reproductor mpv nuevo también debe recibir las propiedades.
+              final previous = JustAudioMediaKit.onPlayerReady;
+              JustAudioMediaKit.onPlayerReady = () {
+                previous?.call();
+                unawaited(hifi.reapplyMpv());
+              };
+            }
+            return hifi;
           },
         ),
         ChangeNotifierProvider<JamController>(

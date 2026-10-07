@@ -52,6 +52,8 @@ class HifiNative {
           false;
     } on PlatformException {
       return false;
+    } on MissingPluginException {
+      return false;
     }
   }
 
@@ -59,7 +61,11 @@ class HifiNative {
     if (!Platform.isAndroid) return;
     try {
       await _ch.invokeMethod('disableBitPerfect');
-    } on PlatformException {/* sin efecto */}
+    } on PlatformException {
+      /* sin efecto */
+    } on MissingPluginException {
+      /* sin plugin nativo */
+    }
   }
 
   /// iOS: pide a AVAudioSession que trabaje a la frecuencia de la pista.
@@ -70,6 +76,8 @@ class HifiNative {
           'setPreferredSampleRate', {'sampleRate': sampleRate});
     } on PlatformException {
       return null;
+    } on MissingPluginException {
+      return null;
     }
   }
 
@@ -79,6 +87,8 @@ class HifiNative {
       final m = await _ch.invokeMethod<Map<dynamic, dynamic>>('currentOutput');
       return m == null ? null : HifiOutputInfo.fromMap(m);
     } on PlatformException {
+      return null;
+    } on MissingPluginException {
       return null;
     }
   }

@@ -5,6 +5,8 @@ import '../models/jam_models.dart';
 import '../services/navidrome_service.dart';
 import '../services/remote_jam_service.dart';
 import '../services/pairing_server.dart';
+import '../services/hifi/hifi_coordinator.dart';
+import '../services/hifi/hifi_profiles.dart';
 import '../services/settings_controller.dart';
 import '../widgets/pairing_panel.dart';
 import '../widgets/theme_grid.dart';
@@ -162,6 +164,62 @@ class _SettingsScreenState extends State<SettingsScreen> {
             'Las demás opciones se transcodifican a MP3 en el servidor, '
             'ahorrando datos móviles.',
           ),
+        ]),
+        _sectionTitle('Fidelidad'),
+        _card(children: [
+          _choiceTiles<AudioFidelityMode>(
+            title: 'Modo de reproducción',
+            value: settings.fidelityMode,
+            options: const [
+              (
+                value: AudioFidelityMode.standard,
+                label: 'Estándar',
+                subtitle: 'Como siempre: sonido seguro y compatible',
+              ),
+              (
+                value: AudioFidelityMode.highFidelity,
+                label: 'Alta fidelidad',
+                subtitle: 'Archivo original y procesado en coma flotante',
+              ),
+              (
+                value: AudioFidelityMode.bitPerfect,
+                label: 'Bit-perfect',
+                subtitle: 'Sin procesar: sin ecualizador, crossfade ni '
+                    'ReplayGain; volumen fijo al 100 %',
+              ),
+            ],
+            onChanged: settings.setFidelityMode,
+          ),
+          if (settings.fidelityMode != AudioFidelityMode.standard) ...[
+            const SizedBox(height: 8),
+            _switchTile(
+              title: 'Sin pérdida también con datos móviles',
+              subtitle: 'Gasta más datos; si no, se usa Opus con datos móviles',
+              value: settings.losslessOnMobileData,
+              onChanged: settings.setLosslessOnMobileData,
+            ),
+          ],
+          Builder(builder: (context) {
+            final notes = context.watch<HifiCoordinator?>()?.plan?.notes ??
+                const <String>[];
+            if (settings.fidelityMode == AudioFidelityMode.standard ||
+                notes.isEmpty) {
+              return const SizedBox.shrink();
+            }
+            return Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  for (final note in notes)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 6),
+                      child: _InfoText(note),
+                    ),
+                ],
+              ),
+            );
+          }),
         ]),
       ];
 

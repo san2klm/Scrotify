@@ -13,6 +13,7 @@ import '../models/server_profile.dart';
 import 'offline_cache_service.dart';
 import 'local_music_service.dart';
 import 'offline_download_manager.dart';
+import 'hifi/hifi_profiles.dart' show StreamQuality;
 import 'replay_gain.dart';
 import 'server_profiles_controller.dart';
 import 'settings_controller.dart';
@@ -41,6 +42,11 @@ class Track {
   final String? isrc;
   final int? trackNumber;
 
+  /// Frecuencia (Hz) y profundidad (bits) del archivo original, si el servidor
+  /// las informa (OpenSubsonic). El modo Bit-perfect las necesita.
+  final int? samplingRate;
+  final int? bitDepth;
+
   int get rating => userRating;
 
   Track({
@@ -61,6 +67,8 @@ class Track {
     this.mbid,
     this.isrc,
     this.trackNumber,
+    this.samplingRate,
+    this.bitDepth,
   });
 
   Track copyWith({
@@ -81,6 +89,8 @@ class Track {
     String? mbid,
     String? isrc,
     int? trackNumber,
+    int? samplingRate,
+    int? bitDepth,
   }) {
     return Track(
       id: id ?? this.id,
@@ -100,6 +110,8 @@ class Track {
       mbid: mbid ?? this.mbid,
       isrc: isrc ?? this.isrc,
       trackNumber: trackNumber ?? this.trackNumber,
+      samplingRate: samplingRate ?? this.samplingRate,
+      bitDepth: bitDepth ?? this.bitDepth,
     );
   }
 
@@ -160,6 +172,8 @@ class Track {
       trackNumber: (json['track'] ?? json['trackNumber']) is num
           ? ((json['track'] ?? json['trackNumber']) as num).toInt()
           : null,
+      samplingRate: (json['samplingRate'] as num?)?.toInt(),
+      bitDepth: (json['bitDepth'] as num?)?.toInt(),
     );
   }
 
@@ -1958,7 +1972,22 @@ class NavidromeService with ChangeNotifier {
         .toList();
   }
 
-  String getStreamUrl(String trackId, {AudioQuality? quality}) {
+  /// Calidad de reproducción impuesta por el modo de fidelidad (Alta fidelidad
+  /// o Bit-perfect). `null` = la calidad elegida en los ajustes. No afecta a
+  /// las descargas.
+  StreamQuality? hifiStream;
+
+  /// URL de reproducción: igual que [getStreamUrl] salvo que el modo de
+  /// fidelidad imponga el archivo original (`format=raw`).
+  String getPlaybackStreamUrl(String trackId, {AudioQuality? quality}) {
+    final override = hifiStream;
+    if (override == null) return getStreamUrl(trackId, quality: quality);
+    return getStreamUrl(trackId,
+        quality: AudioQuality.lossless, extraQuery: override.toQuery());
+  }
+
+  String getStreamUrl(String trackId,
+      {AudioQuality? quality, Map<String, String>? extraQuery}) {
     final salt = _randomSalt();
     final token = _md5('$_pass$salt');
     var url = '$_url/rest/stream.view'
@@ -1970,6 +1999,12 @@ class NavidromeService with ChangeNotifier {
     final q = quality;
     if (q != null && q != AudioQuality.lossless) {
       url += '&format=mp3&maxBitRate=${q.kbps}';
+    }
+    if (extraQuery != null) {
+      for (final e in extraQuery.entries) {
+        url += '&${Uri.encodeQueryComponent(e.key)}='
+            '${Uri.encodeQueryComponent(e.value)}';
+      }
     }
     return url;
   }

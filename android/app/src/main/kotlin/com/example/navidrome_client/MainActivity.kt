@@ -42,6 +42,9 @@ class MainActivity : AudioServiceFragmentActivity() {
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        // Salida bit-perfect por USB (Android 14+) para los modos de alta fidelidad.
+        HifiAudioPlugin(applicationContext)
+            .register(flutterEngine.dartExecutor.binaryMessenger)
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "scrotify/music_storage")
             .setMethodCallHandler { call, result ->
                 when (call.method) {

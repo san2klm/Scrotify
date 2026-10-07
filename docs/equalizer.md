@@ -7,6 +7,23 @@
 
 ---
 
+## 0. Estado de la integración en Scrotify (2026-10-07)
+
+Lo que difiere del paquete original `Eculiza/scrotify_eq`:
+
+* **Cableado automático.** La sección 8 es la referencia original; en el código ya está resuelto en `lib/main.dart`:
+  * Android: `AndroidEqSetup.create()` crea los reproductores A/B con su `AndroidEqualizer`. `AndroidEqBackend` aplica siempre el último estado cuando el motor está listo (`parameters` solo se resuelve al cargar la primera pista).
+  * Escritorio: `createDesktopEqBackend()` fija `af` en todos los reproductores mpv.
+  * Hi-Fi: `HifiCoordinator` calcula el `HifiPlan` y lo reparte a `PlayerController.applyHifi`, al EQ y a mpv.
+* **`just_audio_media_kit` parcheado** en `third_party/just_audio_media_kit` (ver `SCROTIFY_PATCH.md`): el `Player` de mpv era privado. Además `JustAudioMediaKit.pitch = false`, porque su modo de tono instala un `af` propio (`scaletempo`) que pisaba el del ecualizador; mpv sigue conservando el tono al cambiar la velocidad.
+* **Modo Estándar = comportamiento anterior.** No cambia el origen del stream ni toca mpv. Alta fidelidad y Bit-perfect piden `format=raw` solo para **reproducción** (`NavidromeService.getPlaybackStreamUrl`); las descargas no cambian.
+* **Bit-perfect:** volumen digital fijo al 100 %, sin EQ, ReplayGain ni crossfade. En Android 14+ con DAC USB se pide el mezclador bit-perfect por pista (`HifiAudioPlugin.kt`, con `samplingRate`/`bitDepth` que ahora lee `Track`).
+* **No incluido:** el plugin de iOS (`HifiAudioPlugin.swift`; el proyecto no tiene carpeta `ios/`), la opción de motor mpv en móvil, y las propiedades de inicio de mpv (`ao`), que requerirían recrear el reproductor.
+* Pruebas: `test/equalizer_test.dart`, `test/equalizer_service_test.dart`, `test/hifi_modes_test.dart` y `test/eq_mpv_integration_test.dart` (usa el libmpv del sistema; se omite si no existe).
+* Pendiente de comprobar a oído en un dispositivo Android real.
+
+---
+
 ## 1. Visión General
 
 El ecualizador reemplaza al EQ fijo de 10 bandas por un **único motor paramétrico** con **tres interfaces** según el nivel del usuario. El audio siempre pasa por la misma cadena de filtros biquad; lo que cambia es cuánto de esa cadena se muestra.
@@ -161,7 +178,7 @@ android/app/src/main/kotlin/.../HifiAudioPlugin.kt
 ios/Runner/HifiAudioPlugin.swift
 test/equalizer_test.dart
 ```
-No requiere dependencias nuevas (usa `just_audio`, `media_kit`, `provider` y `path_provider`, ya presentes).
+No requiere dependencias nuevas del registro (usa `just_audio`, `media_kit`, `provider` y `path_provider`), pero sí la copia local de `just_audio_media_kit` (ver sección 0).
 
 ### 8.2. `main.dart`
 ```dart

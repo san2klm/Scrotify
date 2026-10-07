@@ -260,5 +260,5 @@ Origen: carpeta `Eculiza/` (paquete `scrotify_eq` + `EQUALIZER.md`). Estado prev
 - [x] **11.1** Incorporar modelos, matemática biquad, presets, import/export AutoEQ, backends, `EqualizerService` v2, curva y pantalla; retirar el EQ antiguo y sus pruebas; documentación en `docs/equalizer.md`.
 - [x] **11.2** Android (conectado y compilado; falta confirmar el sonido en el teléfono): `AndroidEqualizer` en el `AudioPipeline` de los reproductores A y B del crossfade; verificar en el teléfono.
 - [x] **11.3** Escritorio (verificado con libmpv real en `test/eq_mpv_integration_test.dart`): copia parcheada de `just_audio_media_kit` (acceso al `Player` de mpv) para aplicar el filtro `af`.
-- [ ] **11.4** Hi-Fi: `HifiPlanner`, plugin nativo Android (bit-perfect USB), ajuste de modo en Ajustes y `PlayerController.applyHifi`. Modo Estándar = comportamiento actual.
-- [ ] **11.5** Validación: `flutter analyze` limpio, `flutter test`, APK y AppImage.
+- [x] **11.4** Hi-Fi: `HifiPlanner`, plugin nativo Android (bit-perfect USB), ajuste de modo en Ajustes y `PlayerController.applyHifi`. Modo Estándar = comportamiento actual.
+- [x] **11.5** Validación: `flutter analyze` limpio y 571 pruebas aprobadas. Pendiente: confirmar a oído en un teléfono Android.

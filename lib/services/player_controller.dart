@@ -8,6 +8,8 @@ import 'package:flutter/foundation.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:media_kit/media_kit.dart' as mk;
 
+import 'hifi/hifi_native.dart';
+import 'hifi/hifi_profiles.dart';
 import 'navidrome_service.dart';
 import 'settings_controller.dart';
 import 'listening_stats_service.dart';
@@ -533,7 +535,10 @@ class PlayerController extends ChangeNotifier {
   ReplayGainResult _computeTrackReplayGain(Track? track) {
     return computeReplayGain(
       replayGain: track?.replayGain,
-      mode: _settings.replayGainMode,
+      // Bit-perfect: ningún procesamiento de volumen.
+      mode: (_hifiPlan?.allowReplayGain ?? true)
+          ? _settings.replayGainMode
+          : ReplayGainMode.off,
       preampDb: _settings.replayGainPreamp,
       preventClipping: _settings.replayGainPreventClipping,
     );
@@ -999,14 +1004,15 @@ class PlayerController extends ChangeNotifier {
     final path = localFileResolver?.call(t.id);
     return AudioSource.uri(path != null
         ? Uri.file(path)
-        : Uri.parse(
-            _service.getStreamUrl(t.id, quality: _settings.effectiveQuality)));
+        : Uri.parse(_service.getPlaybackStreamUrl(t.id,
+            quality: _settings.effectiveQuality)));
   }
 
   Future<void> _loadTrackOn(AudioPlayer p, int realIndex) async {
     final track = _queue[realIndex];
     final isPlayerA = identical(p, _a);
     _applyReplayGainForTrack(onPlayerA: isPlayerA, track: track);
+    await _requestHifiOutputFor(track);
     await p.setAudioSource(_sourceFor(track));
     final gainResult = isPlayerA ? _gainA : _gainB;
     final targetVol = _computeEffectivePlayerVolume(
@@ -1339,8 +1345,8 @@ class PlayerController extends ChangeNotifier {
     if (_karaokeMode && _karaokePlayer != null) {
       final t = currentTrack;
       if (t != null) {
-        final url =
-            _service.getStreamUrl(t.id, quality: _settings.effectiveQuality);
+        final url = _service.getPlaybackStreamUrl(t.id,
+            quality: _settings.effectiveQuality);
         unawaited(_applyKaraokeVolume());
         unawaited(_karaokePlayer!.open(mk.Media(url), play: true));
         _recordRecent(t);
@@ -1396,7 +1402,8 @@ class PlayerController extends ChangeNotifier {
   // Crossfade
   // ---------------------------------------------------------------------------
 
-  Duration? get _crossfade => _settings.crossfade;
+  Duration? get _crossfade =>
+      (_hifiPlan?.allowCrossfade ?? true) ? _settings.crossfade : null;
 
   void _ensureWatchdog() {
     _watchdog ??= Timer.periodic(
@@ -1706,7 +1713,7 @@ class PlayerController extends ChangeNotifier {
       await _initKaraokePlayer();
       _karaokeMode = true;
       if (currentTr != null) {
-        final streamUrl = _service.getStreamUrl(currentTr.id,
+        final streamUrl = _service.getPlaybackStreamUrl(currentTr.id,
             quality: _settings.effectiveQuality);
         await _applyVocalFilter(_vocalReduction);
         await _applyKaraokeVolume();
@@ -1818,8 +1825,8 @@ class PlayerController extends ChangeNotifier {
     if (_karaokeMode && _karaokePlayer != null) {
       final t = currentTrack;
       if (t != null) {
-        final url =
-            _service.getStreamUrl(t.id, quality: _settings.effectiveQuality);
+        final url = _service.getPlaybackStreamUrl(t.id,
+            quality: _settings.effectiveQuality);
         await _applyKaraokeVolume();
         await _karaokePlayer!.open(mk.Media(url), play: true);
         _recordRecent(t);
@@ -1846,8 +1853,8 @@ class PlayerController extends ChangeNotifier {
       if (_karaokeMode && _karaokePlayer != null) {
         final t = currentTrack;
         if (t != null) {
-          final url =
-              _service.getStreamUrl(t.id, quality: _settings.effectiveQuality);
+          final url = _service.getPlaybackStreamUrl(t.id,
+              quality: _settings.effectiveQuality);
           await _applyKaraokeVolume();
           await _karaokePlayer!.open(mk.Media(url), play: true);
           _recordRecent(t);
@@ -1875,6 +1882,8 @@ class PlayerController extends ChangeNotifier {
   }
 
   Future<void> setVolume(double v) async {
+    // Bit-perfect: el volumen digital queda fijo al 100 %.
+    if (volumeLocked) return;
     _volume = v.clamp(0.0, 1.0).toDouble();
     if (_karaokeMode && _karaokePlayer != null) {
       await _applyKaraokeVolume();
@@ -1895,6 +1904,72 @@ class PlayerController extends ChangeNotifier {
   // Cambios de configuración (calidad, volumen)
   // ---------------------------------------------------------------------------
 
+  // ---------------------------------------------------------------------------
+  // Modos de alta fidelidad (Estándar / Alta fidelidad / Bit-perfect)
+  // ---------------------------------------------------------------------------
+
+  HifiPlan? _hifiPlan;
+  double? _volumeBeforeLock;
+
+  /// Plan de fidelidad vigente (`null` hasta que el coordinador lo calcule).
+  HifiPlan? get hifiPlan => _hifiPlan;
+
+  /// En Bit-perfect el volumen digital queda fijo al 100 %.
+  bool get volumeLocked => _hifiPlan?.lockVolumeAt100 ?? false;
+
+  /// Aplica un [HifiPlan]: origen del stream, volumen, crossfade, ReplayGain y
+  /// salida nativa. Lo llama `HifiCoordinator` al cambiar el modo o la red.
+  Future<void> applyHifi(HifiPlan plan) async {
+    final previous = _hifiPlan;
+    _hifiPlan = plan;
+
+    // Origen del stream: el archivo original en Alta fidelidad/Bit-perfect.
+    final streamBefore = _service.hifiStream?.toQuery();
+    _service.hifiStream =
+        plan.mode == AudioFidelityMode.standard ? null : plan.stream;
+    final streamChanged =
+        !mapEquals(streamBefore, _service.hifiStream?.toQuery());
+
+    // Volumen digital fijo (y recuperación del anterior al salir).
+    if (plan.lockVolumeAt100 && previous?.lockVolumeAt100 != true) {
+      _volumeBeforeLock = _volume;
+      _volume = 1.0;
+    } else if (!plan.lockVolumeAt100 && previous?.lockVolumeAt100 == true) {
+      _volume = _volumeBeforeLock ?? _volume;
+      _volumeBeforeLock = null;
+    }
+
+    if (!plan.allowCrossfade && (_fading || _preloaded)) _cancelFade();
+    _reapplyReplayGainToCurrentPlayers(); // vuelve a calcular volumen y ganancia
+
+    if (plan.requestAndroidBitPerfect) {
+      final track = currentTrack;
+      if (track != null) unawaited(_requestHifiOutputFor(track));
+    } else if (previous?.requestAndroidBitPerfect == true) {
+      unawaited(HifiNative.disableAndroidBitPerfect());
+    }
+
+    // Cambió el origen del audio: recarga la pista en curso sin perder la posición.
+    if (streamChanged && _currentIndex >= 0) await _reloadAtQuality();
+    notifyListeners();
+  }
+
+  /// Bit-perfect (Android 14+) e iOS necesitan la frecuencia/profundidad de cada pista.
+  Future<void> _requestHifiOutputFor(Track track) async {
+    final plan = _hifiPlan;
+    if (plan == null) return;
+    if (plan.requestAndroidBitPerfect) {
+      await HifiNative.enableAndroidBitPerfect(
+        sampleRate: track.samplingRate ?? 44100,
+        bitDepth: track.bitDepth ?? 16,
+      );
+    }
+    final rate = track.samplingRate;
+    if (plan.matchIosSampleRate && rate != null) {
+      await HifiNative.setIosPreferredSampleRate(rate);
+    }
+  }
+
   void _onSettingsChanged() {
     final q = _settings.effectiveQuality;
     if (q != _lastAppliedQuality) {
@@ -1905,6 +1980,11 @@ class PlayerController extends ChangeNotifier {
     // arrastrar el slider de crossfade u otros ajustes resetee el volumen).
     if (_settings.initialVolume != _lastAppliedVolume) {
       _lastAppliedVolume = _settings.initialVolume;
+      if (volumeLocked) {
+        // Se recordará al salir de Bit-perfect.
+        _volumeBeforeLock = _settings.initialVolume;
+        return;
+      }
       _volume = _settings.initialVolume;
       if (_karaokeMode && _karaokePlayer != null) {
         unawaited(_applyKaraokeVolume());
@@ -1940,8 +2020,8 @@ class PlayerController extends ChangeNotifier {
       if (t != null) {
         final pos = _karaokePlayer!.state.position;
         final wasPlaying = _karaokePlayer!.state.playing;
-        final url =
-            _service.getStreamUrl(t.id, quality: _settings.effectiveQuality);
+        final url = _service.getPlaybackStreamUrl(t.id,
+            quality: _settings.effectiveQuality);
         await _applyKaraokeVolume();
         await _karaokePlayer!.open(mk.Media(url), play: wasPlaying);
         if (pos > Duration.zero) {
