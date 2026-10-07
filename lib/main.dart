@@ -34,6 +34,7 @@ import 'services/player_controller.dart';
 import 'services/settings_controller.dart';
 import 'services/connect/connect_protocol.dart';
 import 'services/connect/connect_service.dart';
+import 'services/connect/lan_transport.dart';
 import 'services/connect/player_connect_port.dart';
 import 'services/connect/relay_transport.dart';
 import 'services/sync/sync_service.dart';
@@ -307,15 +308,22 @@ class MyApp extends StatelessWidget {
               selfId: identity.id,
               transportsFor: (crypto) {
                 final endpoint = JamServerEndpoint.parse(settings.jamServerUrl);
-                if (!endpoint.isValid) return const [];
                 return [
-                  RelayTransport(
+                  // Por LAN primero (más rápido y sin internet).
+                  LanTransport(
                     crypto: crypto,
-                    serverUrl: Uri.parse(endpoint.url!),
                     selfId: identity.id,
                     selfName: identity.name,
                     selfKind: identity.kind,
                   ),
+                  if (endpoint.isValid)
+                    RelayTransport(
+                      crypto: crypto,
+                      serverUrl: Uri.parse(endpoint.url!),
+                      selfId: identity.id,
+                      selfName: identity.name,
+                      selfKind: identity.kind,
+                    ),
                 ];
               },
             );

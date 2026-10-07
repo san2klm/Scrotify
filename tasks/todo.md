@@ -270,3 +270,13 @@ Origen: carpeta `Eculiza/` (paquete `scrotify_eq` + `EQUALIZER.md`). Estado prev
 - [x] **12.3** Cliente: `SyncCrypto` (HKDF + AES-GCM), `SyncService` (ciclo cada 5 min, push/pull por documento) y sección en Ajustes → Servidor Jam. Sincroniza temas importados, ajustes (sin `jamServerUrl`), seguidos/excluidos, playlists fijadas, orden de favoritos, valoraciones y ecualizador.
 - [ ] **12.4** Redesplegar `jam-server` en 192.168.1.21 y activar `syncEnabled` en `/admin`; probar con dos dispositivos reales.
 - [ ] **12.5** Pendiente/limitaciones: no se propagan borrados; solo `settings.json` y los temas se recargan al instante, el resto se aplica al reiniciar; vincular escaneando QR (hoy se escribe la clave).
+
+## Scrotify Connect: controlar tus dispositivos (2026-10-07)
+
+Como Spotify Connect: ver los dispositivos del usuario por LAN y por el servidor Jam, pasarles la reproducción y controlarlos a distancia. El "grupo" es la clave de sincronización (sección 12): solo se ven dispositivos con la misma clave y todo viaja cifrado de extremo a extremo.
+
+- [x] **13.1** `jam-server`: `connect_join` / `connect_send` (presencia y relé de blobs cifrados, 16 dispositivos por grupo). 48 pruebas.
+- [x] **13.2** Cliente: `ConnectService` (transferir, traer de vuelta, comandos, estado remoto, anti-repetición), `RelayTransport`, `LanTransport` (baliza UDP 47624 + WebSocket directo, saludo cifrado), `PlayerConnectPort`.
+- [x] **13.3** UI: `ConnectPanel` (selector de dispositivos) y botón Connect en la barra en lugar del botón de la cola (escritorio y móvil); la barra muestra y controla el dispositivo remoto (play/pausa, siguiente, anterior, seek, volumen).
+- [x] **13.4** Validación: relé probado contra el servidor Node real; `flutter analyze` limpio y 600 pruebas aprobadas.
+- [ ] **13.5** Pendiente: probar entre PC y teléfono reales (LAN y por internet) tras redeployar `jam-server`; el reproductor completo (`player_screen`) y la pantalla de cola todavía muestran el estado local; nombre de dispositivo editable; solo se transfieren las 40 canciones siguientes de la cola; solo entre dispositivos del mismo servidor Navidrome.
