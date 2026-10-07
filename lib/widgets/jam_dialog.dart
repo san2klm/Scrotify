@@ -1057,17 +1057,6 @@ class _JamDialogState extends State<JamDialog>
                   onChanged: (value) =>
                       setState(() => _allowGuestQueueManage = value),
                 ),
-                TextField(
-                  controller: _roomPasswordController,
-                  obscureText: true,
-                  style: TextStyle(color: context.textPrimary, fontSize: 13),
-                  decoration: InputDecoration(
-                    labelText: 'Contraseña de la sala (opcional)',
-                    labelStyle: TextStyle(color: context.textMuted),
-                    helperText:
-                        'Se envía solo por conexión cifrada; el servidor guarda su hash.',
-                  ),
-                ),
                 const SizedBox(height: 8),
                 DropdownButtonFormField<JamQueueMode>(
                   initialValue: _queueMode == JamQueueMode.approval
@@ -1154,6 +1143,14 @@ class _JamDialogState extends State<JamDialog>
                       textCapitalization: TextCapitalization.characters,
                       decoration: const InputDecoration(
                           labelText: 'PIN fijo (reservado por el admin)'),
+                    ),
+                    TextField(
+                      controller: _roomPasswordController,
+                      obscureText: true,
+                      decoration: const InputDecoration(
+                          labelText: 'Contraseña de la sala (opcional)',
+                          helperText:
+                              'Solo para salas persistentes; el servidor guarda su hash.'),
                     ),
                     TextField(
                       controller: _ownerTokenController,
@@ -1540,8 +1537,15 @@ class _JamDialogState extends State<JamDialog>
   // ---------------------------------------------------------------------------
   // Lector de Cámara para Código QR
   // ---------------------------------------------------------------------------
+  void _closeScanner() {
+    _scannerController?.dispose();
+    _scannerController = null;
+    if (mounted) setState(() => _isCameraActive = false);
+  }
+
   Widget _buildCameraScanner(JamController jam) {
-    _scannerController ??= MobileScannerController();
+    _scannerController ??=
+        MobileScannerController(formats: const [BarcodeFormat.qrCode]);
 
     return Column(
       children: [
@@ -1556,25 +1560,38 @@ class _JamDialogState extends State<JamDialog>
             IconButton(
               icon: Icon(Icons.close, color: context.textSecondary),
               onPressed: () {
-                _scannerController?.stop();
-                setState(() => _isCameraActive = false);
+                _closeScanner();
               },
             ),
           ],
         ),
         const SizedBox(height: 8),
-        Expanded(
+        SizedBox(
+          height: 320,
           child: ClipRRect(
             borderRadius: BorderRadius.circular(16),
             child: MobileScanner(
               controller: _scannerController,
+              errorBuilder: (context, error, _) => Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Text(
+                    error.errorCode == MobileScannerErrorCode.permissionDenied
+                        ? 'Sin permiso de cámara. Habilitalo en Ajustes del teléfono.'
+                        : 'No se pudo abrir la cámara (${error.errorCode.name}).',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: context.textSecondary),
+                  ),
+                ),
+              ),
               onDetect: (capture) async {
                 final barcodes = capture.barcodes;
                 for (final barcode in barcodes) {
                   final raw = barcode.rawValue;
-                  if (raw != null && raw.startsWith('scrotify://jam')) {
-                    _scannerController?.stop();
-                    setState(() => _isCameraActive = false);
+                  if (raw != null &&
+                      (raw.startsWith('scrotify://jam') ||
+                          JamInviteLink.parse(raw) != null)) {
+                    _closeScanner();
                     final ok = await jam.joinByQr(raw,
                         password: _joinPasswordController.text.isEmpty
                             ? null

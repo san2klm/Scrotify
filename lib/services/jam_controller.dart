@@ -265,7 +265,21 @@ class JamController extends ChangeNotifier {
       (_session?.pinCode.isNotEmpty == true
           ? '${_session!.pinCode.substring(0, 3)}-${_session!.pinCode.substring(3)}'
           : null);
-  String? get qrUri => _hostService.qrDataUri;
+  /// QR de invitación: con el relay (dominio de la Jam) conectado lleva el
+  /// dominio y funciona desde cualquier red; si no, usa la IP local (LAN).
+  String? get qrUri {
+    final pin = _hostService.pinCode?.value;
+    final ep = _remoteEndpoint;
+    if (pin != null && _remoteService.isConnected && ep.isValid) {
+      final server = ep.port == 443 ? ep.host : '${ep.host}:${ep.port}';
+      return Uri(
+        scheme: 'scrotify',
+        host: 'join',
+        queryParameters: {'code': pin, 'server': server},
+      ).toString();
+    }
+    return _hostService.qrDataUri;
+  }
   String? get hostIp => _hostService.hostIp;
   int get port => _hostService.port;
   bool get allowGuestControls => _session?.allowGuestControls ?? true;
@@ -1176,7 +1190,10 @@ class JamController extends ChangeNotifier {
     _remoteParticipants.clear();
     _currentTrackAddedBy = _localParticipant;
 
-    final password = roomPassword?.trim();
+    // La contraseña solo aplica a salas persistentes (PIN fijo).
+    final password = fixedPin?.trim().isNotEmpty == true
+        ? roomPassword?.trim()
+        : null;
     _hasRoomPassword = password != null && password.isNotEmpty;
     _remoteService.roomPassword = _hasRoomPassword ? password : null;
     await _hostService.start(
@@ -1842,6 +1859,10 @@ class JamController extends ChangeNotifier {
     int? customColor,
     String? password,
   }) async {
+    if (JamInviteLink.parse(uri) != null) {
+      return joinByLink(uri,
+          customName: customName, customColor: customColor, password: password);
+    }
     final data = JamQrData.fromUri(uri);
     if (data == null) return false;
     return joinSession(
