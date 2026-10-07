@@ -131,3 +131,14 @@ Todas las rutas llevan `Authorization: Bearer <64 hex>`. `vaultId` (64 hex) y el
 | `DELETE /api/sync/v1/<vaultId>[/<key>]` | Borra un documento o toda la bóveda |
 
 Límites editables: tamaño por documento (4 MB), documentos por bóveda (64) y bóvedas (100). Credenciales erróneas cuentan para el bloqueo progresivo por IP.
+
+## Scrotify Connect (control remoto entre tus dispositivos)
+
+Usa el mismo ajuste `syncEnabled` y la misma bóveda de sincronización como "cuenta": solo los dispositivos con la misma clave se ven entre sí. Por el WebSocket normal:
+
+| Mensaje | Respuesta / efecto |
+|---|---|
+| `{"action":"connect_join","vaultId","token","deviceId","name","kind"}` | `{"status":"connect_joined","devices":[…]}` y `{"event":"connect_devices"}` a los demás (`kind`: `phone`, `tablet`, `desktop`, `other`) |
+| `{"action":"connect_send","to":"<deviceId>"\|"*","blob":"…"}` | El destinatario recibe `{"event":"connect_msg","from","blob"}` |
+
+El servidor solo reenvía `blob` (cifrado de extremo a extremo por los clientes, máx. 64 KB); hasta 16 dispositivos por grupo y 100 mensajes/s por dispositivo. Una segunda conexión del mismo `deviceId` reemplaza a la anterior.

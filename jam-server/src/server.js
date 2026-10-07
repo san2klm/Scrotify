@@ -5,6 +5,7 @@ import { WebSocketServer, WebSocket } from 'ws';
 
 import { createAdmin } from './admin.js';
 import { openStore, SETTING_DEFS } from './config.js';
+import { createConnectHub } from './connect.js';
 import { createGuard } from './guard.js';
 import { createSyncHandler, isSyncPath } from './sync.js';
 
@@ -215,6 +216,9 @@ export function createJamServer({
         memoryMb: Math.round(process.memoryUsage().rss / (1024 * 1024)),
       };
     },
+  });
+  const connectHub = createConnectHub({
+    store, limits, guard, send, ipOf: (socket) => socketIps.get(socket) ?? 'unknown',
   });
   const handleSync = createSyncHandler({ store, limits, guard, clientIp, trustProxy });
   const httpServer = http.createServer(async (request, response) => {
@@ -462,6 +466,7 @@ export function createJamServer({
   }
 
   function removeSocket(socket) {
+    connectHub.leave(socket);
     const membership = socketRooms.get(socket);
     if (!membership) return;
     socketRooms.delete(socket);
@@ -773,6 +778,8 @@ export function createJamServer({
         case 'chat_message': return chat(socket, message);
         case 'set_chat': return setChat(socket, message);
         case 'transfer_host': return transferHost(socket, message);
+        case 'connect_join': return connectHub.join(socket, message);
+        case 'connect_send': return connectHub.relay(socket, message);
         case 'time_ping':
           return send(socket, {
             status: 'time_pong',
@@ -824,8 +831,11 @@ export function createJamServer({
       clearInterval(expiryTimer);
       clearInterval(heartbeatTimer);
       for (const room of [...rooms.values()]) closeRoom(room, 'El servidor Jam se está apagando.');
+      for (const client of websocketServer.clients) client.terminate();
       await new Promise((resolve) => websocketServer.close(() => resolve()));
-      await new Promise((resolve) => httpServer.close(() => resolve()));
+      const closed = new Promise((resolve) => httpServer.close(() => resolve()));
+      httpServer.closeAllConnections(); // keep-alive de clientes HTTP (sync)
+      await closed;
       store.close();
     },
   };
