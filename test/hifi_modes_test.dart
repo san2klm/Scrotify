@@ -62,7 +62,7 @@ void main() {
       expect(props['audio-samplerate'], '0');
     });
 
-    test('Bit-perfect pausa el EQ y omite las propiedades de inicio (ao)',
+    test('Bit-perfect en Linux conserva la salida del sistema sin exclusividad',
         () async {
       settings.setFidelityMode(AudioFidelityMode.bitPerfect);
       await coordinator.refresh();
@@ -71,7 +71,9 @@ void main() {
       expect(eqAllowed.last, isFalse);
       final props = {for (final e in mpv) e.$1: e.$2};
       expect(props.containsKey('ao'), isFalse);
-      expect(props['audio-exclusive'], 'yes');
+      expect(props['audio-exclusive'], 'no');
+      expect(props['af'], '');
+      expect(props['volume'], '100');
     });
 
     test('al volver a Estándar se restauran los valores de mpv', () async {
@@ -101,6 +103,15 @@ void main() {
       await Future<void>.delayed(const Duration(milliseconds: 50));
       expect(applied.last.mode, AudioFidelityMode.bitPerfect);
     });
+  });
+
+  test('WASAPI y CoreAudio mantienen su salida exclusiva', () {
+    for (final platform in [HifiPlatform.windows, HifiPlatform.macos]) {
+      final plan = _plan(AudioFidelityMode.bitPerfect, platform: platform);
+      expect(plan.mpvProperties['audio-exclusive'], 'yes');
+      expect(plan.mpvProperties['ao'],
+          platform == HifiPlatform.windows ? 'wasapi' : 'coreaudio');
+    }
   });
 
   group('PlayerController.applyHifi', () {

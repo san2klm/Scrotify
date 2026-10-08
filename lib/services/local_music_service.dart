@@ -10,6 +10,7 @@ import 'package:path_provider/path_provider.dart';
 
 import 'android_music_storage.dart';
 import 'local_artwork_store.dart';
+import 'local_audio_metadata.dart';
 import 'navidrome_service.dart';
 import 'offline_cache_service.dart';
 import 'offline_download_manager.dart';
@@ -20,8 +21,10 @@ class LocalMusicService extends ChangeNotifier {
       {this.stateFile,
       this.defaultRoot,
       this.artworkClient,
-      this.artworkFallback});
+      this.artworkFallback,
+      this.metadataReader = readLocalAudioMetadata});
 
+  final Future<Map<String, dynamic>?> Function(File) metadataReader;
   final OfflineCacheService cache;
   final File? stateFile;
   final Directory? defaultRoot;
@@ -41,6 +44,10 @@ class LocalMusicService extends ChangeNotifier {
   final Map<String, Map<String, dynamic>> _fingerprints = {};
   final Map<String, Map<String, dynamic>> _libraries = {};
   final Map<String, Map<String, dynamic>> _trackDetails = {};
+  Future<void>? _scanFuture;
+  int recoveredByLastScan = 0;
+  int unidentifiedByLastScan = 0;
+  bool recoveryUnavailable = false;
   bool scanning = false;
   bool _disposed = false;
   String? get folderPath => _root?.path;
@@ -653,8 +660,31 @@ class LocalMusicService extends ChangeNotifier {
         durationSeconds: record['duration'] as int);
   }
 
-  Future<void> rescan({bool requestAccess = true}) async {
-    if (_root == null || scanning) return;
+  Future<void> rescan(
+      {bool requestAccess = true,
+      String? serverScope,
+      Future<List<Track>> Function()? catalogLoader}) async {
+    // Esperar el escaneo inicial antes de recuperar archivos del servidor activo.
+    while (_scanFuture != null) {
+      await _scanFuture;
+    }
+    final pending = _rescan(
+        requestAccess: requestAccess,
+        serverScope: serverScope,
+        catalogLoader: catalogLoader);
+    _scanFuture = pending;
+    try {
+      await pending;
+    } finally {
+      _scanFuture = null;
+    }
+  }
+
+  Future<void> _rescan(
+      {required bool requestAccess,
+      String? serverScope,
+      Future<List<Track>> Function()? catalogLoader}) async {
+    if (_root == null) return;
     if (!await AndroidMusicStorage.ensureAccess(request: requestAccess)) {
       if (requestAccess) {
         throw const FileSystemException(
@@ -663,10 +693,13 @@ class LocalMusicService extends ChangeNotifier {
       return;
     }
     scanning = true;
+    recoveredByLastScan = 0;
+    unidentifiedByLastScan = 0;
+    recoveryUnavailable = false;
     _notify();
     try {
       final hashes = <String, List<String>>{};
-      for (final path in _roots) {
+      for (final path in _roots.toList()) {
         final dir = Directory(path);
         if (!await dir.exists()) continue;
         await for (final entity
@@ -717,6 +750,77 @@ class LocalMusicService extends ChangeNotifier {
           await cache.forget(record['scope'] as String, record['id'] as String);
         }
       }
+      final knownHashes = _records.values.map((r) => r['hash']).toSet();
+      final unknown =
+          hashes.entries.where((e) => !knownHashes.contains(e.key)).toList();
+      unidentifiedByLastScan =
+          unknown.fold<int>(0, (total, entry) => total + entry.value.length);
+      if (unknown.isNotEmpty && serverScope != null && catalogLoader != null) {
+        List<Track>? catalog;
+        try {
+          catalog = await catalogLoader();
+        } catch (_) {
+          recoveryUnavailable = true;
+        }
+        if (catalog != null) {
+          final byTags = <String, List<Track>>{};
+          for (final track in catalog) {
+            byTags
+                .putIfAbsent(_tagKey(track.title, track.artist), () => [])
+                .add(track);
+          }
+          for (final entry in unknown) {
+            Map<String, dynamic>? tags;
+            for (final path in entry.value) {
+              tags = await metadataReader(File(path));
+              if (tags != null) break;
+            }
+            if (tags == null) continue;
+            final title = tags['title']?.toString() ?? '';
+            final artist = tags['artist']?.toString() ?? '';
+            final album = tags['album']?.toString() ?? '';
+            final duration = double.tryParse('${tags['duration']}');
+            if (title.trim().isEmpty ||
+                artist.trim().isEmpty ||
+                duration == null) {
+              continue;
+            }
+            final matches =
+                (byTags[_tagKey(title, artist)] ?? <Track>[]).where((track) {
+              final seconds = double.tryParse(track.duration);
+              return seconds != null &&
+                  (seconds - duration).abs() <= 2 &&
+                  (album.trim().isEmpty ||
+                      _normalizeTag(album) == _normalizeTag(track.album));
+            }).toList();
+            // Un título ambiguo nunca debe marcar otra versión como descargada.
+            if (matches.length != 1) continue;
+            final track = matches.single;
+            final key = _key(serverScope, track.id);
+            final existing = _records[key];
+            if (existing != null && (existing['paths'] as List).isNotEmpty) {
+              continue;
+            }
+            final record = <String, dynamic>{
+              'scope': OfflineCacheService.safeScopeSegment(serverScope),
+              'id': track.id,
+              'title': track.title,
+              'artist': track.artist,
+              'album': track.album,
+              'duration': int.tryParse(track.duration) ?? 0,
+              'hash': entry.key,
+              'paths': entry.value,
+            };
+            await _registerRecord(record, entry.value.first);
+            _records[key] = record;
+            _trackDetails[key] = _trackJson(track);
+            recoveredByLastScan++;
+            unidentifiedByLastScan -= entry.value.length;
+          }
+        }
+      } else if (unknown.isNotEmpty) {
+        recoveryUnavailable = true;
+      }
       // Descartar huellas de archivos que ya no existen.
       _fingerprints.removeWhere((path, _) =>
           FileSystemEntity.typeSync(path, followLinks: false) !=
@@ -727,6 +831,12 @@ class LocalMusicService extends ChangeNotifier {
       _notify();
     }
   }
+
+  String _normalizeTag(String value) =>
+      value.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
+
+  String _tagKey(String title, String artist) =>
+      jsonEncode([_normalizeTag(title), _normalizeTag(artist)]);
 
   Future<void> _save() {
     final contents = jsonEncode({

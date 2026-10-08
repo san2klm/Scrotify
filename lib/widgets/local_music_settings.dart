@@ -17,6 +17,7 @@ class _LocalMusicSettingsState extends State<LocalMusicSettings> {
   Future<int?>? _serverCount;
   String? _session;
   String? _error;
+  String? _scanSummary;
   bool _busy = false;
   Future<void>? _initialization;
 
@@ -84,7 +85,27 @@ class _LocalMusicSettingsState extends State<LocalMusicSettings> {
           initialDirectory: music.folderPath,
           confirmButtonText: 'Usar esta carpeta');
     }
-    if (path != null && path.trim().isNotEmpty) await music.changeFolder(path);
+    if (path != null && path.trim().isNotEmpty) {
+      await music.changeFolder(path);
+      if (mounted) await _rescan(music, context.read<NavidromeService>());
+    }
+  }
+
+  Future<void> _rescan(LocalMusicService music, NavidromeService nav) async {
+    await music.initialize();
+    await music.rescan(
+        serverScope: nav.serverScope,
+        catalogLoader: nav.getDownloadRecoveryCatalog);
+    if (!mounted) return;
+    setState(() {
+      _serverCount = nav.getServerSongCount();
+      _scanSummary = 'Recuperadas: ${music.recoveredByLastScan}. '
+          'Archivos sin identificar: ${music.unidentifiedByLastScan}.';
+      if (music.recoveryUnavailable) {
+        _scanSummary =
+            '$_scanSummary Conecta el servidor para identificar archivos antiguos.';
+      }
+    });
   }
 
   @override
@@ -103,15 +124,7 @@ class _LocalMusicSettingsState extends State<LocalMusicSettings> {
             icon: const Icon(Icons.folder_open_rounded),
             label: const Text('Cambiar carpeta')),
         OutlinedButton.icon(
-            onPressed: busy
-                ? null
-                : () => _run(() async {
-                      await music.initialize();
-                      await music.rescan();
-                      if (mounted) {
-                        setState(() => _serverCount = nav.getServerSongCount());
-                      }
-                    }),
+            onPressed: busy ? null : () => _run(() => _rescan(music, nav)),
             icon: const Icon(Icons.refresh_rounded),
             label: Text(busy ? 'Escaneando…' : 'Reescanear')),
       ]),
@@ -122,6 +135,10 @@ class _LocalMusicSettingsState extends State<LocalMusicSettings> {
               'Canciones totales del servidor: ${snapshot.connectionState == ConnectionState.waiting ? '…' : snapshot.data ?? 'No disponible'}')),
       const SizedBox(height: 8),
       Text('Canciones descargadas localmente: ${music.count(nav.serverScope)}'),
+      if (_scanSummary != null)
+        Padding(
+            padding: const EdgeInsets.only(top: 12),
+            child: Text(_scanSummary!)),
       if (_error != null)
         Padding(padding: const EdgeInsets.only(top: 12), child: Text(_error!)),
       if (Platform.isAndroid)

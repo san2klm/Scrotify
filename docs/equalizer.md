@@ -133,7 +133,7 @@ AVPlayer no permite insertar DSP propio. En lugar de simular un EQ que no hace n
 | :--- | :--- | :--- |
 | **Windows** | mpv + SoXr, frecuencia nativa | `ao=wasapi`, `audio-exclusive=yes` (WASAPI exclusivo) |
 | **macOS** | mpv + SoXr | `ao=coreaudio`, hog mode, `coreaudio-change-physical-format=yes` (el DAC cambia a 44.1/96/192 kHz por pista) |
-| **Linux** | mpv + SoXr | `ao=alsa` con dispositivo `hw:`; en PipeWire configurar `default.clock.allowed-rates` |
+| **Linux** | mpv + SoXr | Sin procesado de Scrotify, usando la salida del sistema sin exclusividad. Bluetooth/PipeWire compartido no garantiza bit-perfect real; la app todavía no ofrece selección ALSA `hw:` directa. |
 | **Android** | Stream original; el sistema mezcla a 48 kHz | Android 14+ con DAC USB: `AudioManager.setPreferredMixerAttributes` con `MIXER_BEHAVIOR_BIT_PERFECT` (`HifiAudioPlugin.kt`). Bluetooth y parlante interno no pueden ser bit-perfect. |
 | **iOS** | `AVAudioSession.setPreferredSampleRate` igual a la pista (`HifiAudioPlugin.swift`) | Igual + sin procesamiento. iOS no ofrece modo exclusivo. |
 
@@ -252,3 +252,14 @@ Cubre: biquads contra valores teóricos, preamp con bandas solapadas, ajuste a 1
 | Remuestreo Hi-Fi (mpv) | SoXr, 28 bits | Sólo si el dispositivo lo exige |
 | Stream original | `format=raw&maxBitRate=0` | Navidrome sin transcodificar |
 | Bit-perfect Android | API 34+, DAC USB | `MIXER_BEHAVIOR_BIT_PERFECT` |
+
+
+### Compatibilidad con PipeWire y Bluetooth en Linux
+
+No solicitar `audio-exclusive=yes` sobre la salida automática: en esta PC,
+PipeWire rechaza el stream con `no target node available` y la pista avanza
+rápidamente sin audio. El modo sin procesado conserva `audio-exclusive=no`,
+sin EQ, ReplayGain ni crossfade, con volumen digital al 100 %.
+La salida compartida no se presenta como bit-perfect garantizado.
+La propiedad `ao=alsa` anterior se omitía por ser de inicio y nunca seleccionaba
+ALSA: no había una salida directa implementada.
