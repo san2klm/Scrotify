@@ -1,0 +1,67 @@
+# Compila Scrotify para iPhone en un Mac de GitHub (gratis en repos públicos)
+# y publica el .ipa sin firmar en la release "ios-latest".
+# El .ipa se firma e instala desde Windows con Sideloadly y un Apple ID gratuito.
+name: iOS (IPA sin firmar)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'lib/**'
+      - 'ios/**'
+      - 'assets/**'
+      - 'third_party/**'
+      - 'pubspec.yaml'
+      - 'pubspec.lock'
+      - '.github/workflows/ios.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ios-build
+  cancel-in-progress: true
+
+jobs:
+  build-ios:
+    runs-on: macos-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.47.4
+          cache: true
+
+      - name: Dependencias
+        run: flutter pub get
+
+      - name: Compilar (sin firma)
+        run: flutter build ios --release --no-codesign
+
+      - name: Empaquetar .ipa
+        run: |
+          mkdir -p Payload
+          cp -R build/ios/iphoneos/Runner.app Payload/
+          zip -qry Scrotify.ipa Payload
+          ls -lh Scrotify.ipa
+
+      - name: Subir como artefacto
+        uses: actions/upload-artifact@v4
+        with:
+          name: Scrotify-iOS
+          path: Scrotify.ipa
+          retention-days: 30
+
+      - name: Publicar en la release ios-latest
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release delete ios-latest --yes --cleanup-tag || true
+          gh release create ios-latest Scrotify.ipa \
+            --target "$GITHUB_SHA" \
+            --title "Scrotify para iPhone (última compilación)" \
+            --notes "IPA sin firmar compilado desde ${GITHUB_SHA::7}. Instalar con Sideloadly usando un Apple ID; con cuenta gratuita hay que reinstalar cada 7 días."
