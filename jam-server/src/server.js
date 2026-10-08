@@ -5,9 +5,15 @@ import { WebSocketServer, WebSocket } from 'ws';
 
 import { createAdmin } from './admin.js';
 import { openStore, SETTING_DEFS } from './config.js';
+import { createConnectHub } from './connect.js';
 import { createGuard } from './guard.js';
+import { createNavidromeAuth } from './navidrome-auth.js';
+import { createSyncHandler, isSyncPath } from './sync.js';
 
 export const PROTOCOL_VERSION = 2;
+/// Tamaño máximo de una trama WebSocket. Las salas Jam se limitan además a
+/// `maxMessageBytes`; Connect necesita más (cola de reproducción cifrada).
+const MAX_FRAME_BYTES = 128 * 1024;
 const MAX_NAME_LENGTH = 48;
 const REACTIONS = new Set(['👍', '❤️', '🔥', '😂', '🎉', '👏', '😮', '🎶']);
 const MAX_CHAT_LENGTH = 280;
@@ -180,6 +186,7 @@ export function createJamServer({
   adminPassword,
   trustProxy = 'none',
   loginMaxFailures,
+  navidromeAuth,
   ...overrides
 } = {}) {
   const store = openStore(dbPath, overrides);
@@ -215,11 +222,19 @@ export function createJamServer({
       };
     },
   });
+  const connectHub = createConnectHub({
+    store, limits, guard, send, ipOf: (socket) => socketIps.get(socket) ?? 'unknown',
+    auth: navidromeAuth ?? createNavidromeAuth({ getBaseUrl: () => limits.navidromeUrl }),
+  });
+  const handleSync = createSyncHandler({ store, limits, guard, clientIp, trustProxy });
   const httpServer = http.createServer(async (request, response) => {
     const path = request.url?.split('?')[0];
+    if (isSyncPath(path)) {
+      await handleSync(request, response);
+      return;
+    }
     if (path === '/admin' || path?.startsWith('/admin/')) {
       await admin.handle(request, response, clientIp(request, trustProxy));
-      websocketServer.options.maxPayload = limits.maxMessageBytes;
       return;
     }
     if (request.method === 'GET' && path === '/.well-known/assetlinks.json' && limits.assetLinksJson) {
@@ -265,6 +280,8 @@ export function createJamServer({
           reactions: limits.reactionsEnabled,
           persistentRooms: limits.persistentRoomsEnabled,
           webLink: limits.webLinkEnabled,
+          sync: limits.syncEnabled,
+          connect: !!limits.navidromeUrl,
         },
         limits: {
           maxParticipants: limits.maxParticipants,
@@ -293,6 +310,7 @@ export function createJamServer({
         publicPort = parsed.port ? Number(parsed.port) : (parsed.protocol === 'https:' ? 443 : 80);
       }
       for (const room of limits.publicListingEnabled ? rooms.values() : []) {
+        if (!room.isPublic) continue;
         publicRooms.push({
           pin: room.pin,
           hostName: room.hostName,
@@ -387,7 +405,7 @@ export function createJamServer({
 
   const websocketServer = new WebSocketServer({
     server: httpServer,
-    maxPayload: limits.maxMessageBytes,
+    maxPayload: Math.max(MAX_FRAME_BYTES, limits.maxMessageBytes),
   });
   logs.push('Servidor iniciado');
 
@@ -454,6 +472,7 @@ export function createJamServer({
   }
 
   function removeSocket(socket) {
+    connectHub.leave(socket);
     const membership = socketRooms.get(socket);
     if (!membership) return;
     socketRooms.delete(socket);
@@ -507,7 +526,8 @@ export function createJamServer({
     const hostToken = newToken();
     const room = {
       pin, host: socket, hostName, state, guests: new Set(), updatedAt: Date.now(),
-      password, banned: new Set(), hostTokenHash: sha256(hostToken), hostGone: false,
+      password, isPublic: message.isPublic !== false,
+      banned: new Set(), hostTokenHash: sha256(hostToken), hostGone: false,
       failover: message.failover === true, failoverTimer: null,
       persistent: !!persistent,
     };
@@ -616,6 +636,7 @@ export function createJamServer({
     const state = normalizeState(message.state, limits, room.state);
     if (!state) return serverError(socket, 'Estado de reproducción inválido.');
     room.state = state;
+    if (typeof message.state?.isPublic === 'boolean') room.isPublic = message.state.isPublic;
     room.updatedAt = Date.now();
     persistRoomConfig(room);
     for (const guest of room.guests) send(guest.socket, { event: 'sync_state', state });
@@ -738,6 +759,8 @@ export function createJamServer({
 
   websocketServer.on('connection', (socket, request) => {
     socketIps.set(socket, clientIp(request, trustProxy));
+    socket.isAlive = true;
+    socket.on('pong', () => { socket.isAlive = true; });
     socket.on('message', (raw, isBinary) => {
       if (isBinary) return serverError(socket, 'Sólo se aceptan mensajes JSON.');
       let message;
@@ -748,6 +771,10 @@ export function createJamServer({
       }
       if (!message || typeof message !== 'object' || Array.isArray(message)) {
         return serverError(socket, 'Mensaje inválido.');
+      }
+      // Solo Connect puede superar maxMessageBytes (su relé limita el blob aparte).
+      if (!String(message.action).startsWith('connect_') && raw.length > limits.maxMessageBytes) {
+        return serverError(socket, 'Mensaje demasiado grande.');
       }
       switch (message.action) {
         case 'create_room': return createRoom(socket, message);
@@ -761,6 +788,8 @@ export function createJamServer({
         case 'chat_message': return chat(socket, message);
         case 'set_chat': return setChat(socket, message);
         case 'transfer_host': return transferHost(socket, message);
+        case 'connect_join': return connectHub.join(socket, message);
+        case 'connect_send': return connectHub.relay(socket, message);
         case 'time_ping':
           return send(socket, {
             status: 'time_pong',
@@ -782,6 +811,17 @@ export function createJamServer({
   }, 5 * 1000);
   expiryTimer.unref();
 
+  // Un anfitrión que se cae sin cerrar el socket (app matada, sin red) no envía
+  // 'close': sin ping, su sala seguiría listada hasta expirar por inactividad.
+  const heartbeatTimer = setInterval(() => {
+    for (const socket of websocketServer.clients) {
+      if (socket.isAlive === false) { socket.terminate(); continue; }
+      socket.isAlive = false;
+      try { socket.ping(); } catch { socket.terminate(); }
+    }
+  }, 15 * 1000);
+  heartbeatTimer.unref();
+
   return {
     get port() {
       const address = httpServer.address();
@@ -799,9 +839,13 @@ export function createJamServer({
     },
     async stop() {
       clearInterval(expiryTimer);
+      clearInterval(heartbeatTimer);
       for (const room of [...rooms.values()]) closeRoom(room, 'El servidor Jam se está apagando.');
+      for (const client of websocketServer.clients) client.terminate();
       await new Promise((resolve) => websocketServer.close(() => resolve()));
-      await new Promise((resolve) => httpServer.close(() => resolve()));
+      const closed = new Promise((resolve) => httpServer.close(() => resolve()));
+      httpServer.closeAllConnections(); // keep-alive de clientes HTTP (sync)
+      await closed;
       store.close();
     },
   };

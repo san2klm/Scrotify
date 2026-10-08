@@ -11,8 +11,16 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
     <uses-permission android:name="android.permission.USE_BIOMETRIC" />
+    <!-- Android 13+: sin este permiso la notificación del reproductor no se muestra. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!-- Biblioteca compartida Music: acceso directo para descargas y reescaneo. -->
+    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="29" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="29" />
 
     <application
+        android:requestLegacyExternalStorage="true"
         android:label="Scrotify"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
@@ -77,9 +85,25 @@
             </intent-filter>
         </receiver>
 
-        <!-- Widget de pantalla de inicio (carátula + controles). -->
+        <!-- Botón de favorito del widget. -->
+        <receiver
+            android:name=".WidgetActionReceiver"
+            android:exported="false" />
+
+        <activity
+            android:name=".WidgetConfigActivity"
+            android:exported="true"
+            android:excludeFromRecents="true"
+            android:theme="@android:style/Theme.Material.NoActionBar">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />
+            </intent-filter>
+        </activity>
+
+        <!-- Widgets de pantalla de inicio (carátula + controles): tres diseños. -->
         <receiver
             android:name=".ScrotifyWidgetProvider"
+            android:label="Scrotify · Personalizable"
             android:exported="false">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
@@ -87,6 +111,28 @@
             <meta-data
                 android:name="android.appwidget.provider"
                 android:resource="@xml/scrotify_widget_info" />
+        </receiver>
+        <receiver
+            android:name=".ScrotifyCompactWidgetProvider"
+            android:label="Scrotify · Compacto"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/scrotify_widget_compact_info" />
+        </receiver>
+        <receiver
+            android:name=".ScrotifyCoverWidgetProvider"
+            android:label="Scrotify · Carátula"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/scrotify_widget_cover_info" />
         </receiver>
 
         <!-- Don't delete the meta-data below.

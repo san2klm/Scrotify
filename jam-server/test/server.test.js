@@ -919,3 +919,15 @@ test('lobby: JAM_LIVE announcements are deduplicated per session', async () => {
   assert.ok(msgs.some((m) => m.includes('"trackTitle":"b"')));
   assert.ok(!msgs.some((m) => m.includes('"trackTitle":"a"')));
 });
+
+test('private rooms are not listed and respect isPublic updates', async () => {
+  const server = await startServer({});
+  const host = await connect(`ws://127.0.0.1:${server.port}`);
+  host.send(JSON.stringify({ action: 'create_room', pin: 'PRV123', hostName: 'H', initialState, isPublic: false }));
+  await nextMessage(host);
+  assert.deepEqual((await http(server, 'GET', '/rooms')).json, []);
+  host.send(JSON.stringify({ action: 'update_state', pin: 'PRV123', state: { ...initialState, isPublic: true } }));
+  await new Promise((r) => setTimeout(r, 100));
+  assert.equal((await http(server, 'GET', '/rooms')).json.length, 1);
+  host.close();
+});

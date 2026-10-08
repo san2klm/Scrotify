@@ -142,6 +142,7 @@ class RemoteJamService {
     required Map<String, dynamic> initialState,
     String? customEndpoint,
     bool resume = false,
+    bool isPublic = true,
   }) async {
     final keepToken = resume ? hostToken : null;
     await disconnect();
@@ -216,6 +217,7 @@ class RemoteJamService {
               'initialState': fitStateToMessageLimit(initialState),
               if (roomPassword != null && roomPassword!.isNotEmpty)
                 'roomPassword': roomPassword,
+              if (!isPublic) 'isPublic': false,
               if (failoverEnabled) 'failover': true,
               if (ownerToken != null && ownerToken!.isNotEmpty)
                 'ownerToken': ownerToken,

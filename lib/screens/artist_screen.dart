@@ -11,6 +11,7 @@ import '../widgets/cover_art.dart';
 import '../widgets/persistent_player_bar.dart';
 import '../widgets/global_top_bar.dart';
 import '../widgets/track_context_menu.dart';
+import '../widgets/local_download_button.dart';
 import 'album_detail_screen.dart';
 import '../widgets/interactive_artist_text.dart';
 import '../utils/app_colors.dart';
@@ -577,6 +578,7 @@ class _ArtistScreenState extends State<ArtistScreen> {
                     setState(() {});
                   },
                 ),
+                LocalDownloadButton(tracks: [track], compact: true),
                 IconButton(
                   icon: Icon(Icons.more_vert, color: context.textMuted),
                   onPressed: () => TrackContextMenu.show(context, track),

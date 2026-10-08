@@ -16,17 +16,24 @@ import 'player_controller.dart';
 /// cambios rápidos (p. ej. saltar varias pistas seguidas) con un debounce, así
 /// no despierta al lanzador del sistema en cada notificación del reproductor.
 class HomeWidgetService {
-  /// Nombre calificado del `AppWidgetProvider` nativo.
-  static const String androidProvider =
-      'com.example.navidrome_client.ScrotifyWidgetProvider';
+  /// Nombres calificados de los `AppWidgetProvider` nativos (un diseño cada uno).
+  static const List<String> androidProviders = [
+    'com.example.navidrome_client.ScrotifyWidgetProvider',
+    'com.example.navidrome_client.ScrotifyCompactWidgetProvider',
+    'com.example.navidrome_client.ScrotifyCoverWidgetProvider',
+  ];
 
   // Claves compartidas con ScrotifyWidgetProvider.kt
   static const String keyTitle = 'widget_title';
   static const String keyArtist = 'widget_artist';
+  static const String keyAlbum = 'widget_album';
+  static const String keyLiked = 'widget_liked';
   static const String keyPlaying = 'widget_playing';
   static const String keyCoverPath = 'widget_cover_path';
 
   final PlayerController _player;
+  final NavidromeService? _library;
+  final bool Function(Track track)? _isLiked;
   final Duration debounce;
 
   // Puntos de inyección (tests): por defecto usan el plugin real.
@@ -40,11 +47,16 @@ class HomeWidgetService {
 
   HomeWidgetService(
     this._player, {
+    NavidromeService? library,
+    bool Function(Track track)? isLiked,
     this.debounce = const Duration(milliseconds: 400),
     Future<void> Function(String key, Object? value)? save,
     Future<void> Function()? refresh,
     Future<String?> Function(Track track)? fetchCover,
-  })  : _save = save ?? _defaultSave,
+  })  : _library = library,
+        _isLiked = isLiked ??
+            (library == null ? null : (t) => library.isStarred(t.id)),
+        _save = save ?? _defaultSave,
         _refresh = refresh ?? _defaultRefresh,
         _fetchCover = fetchCover ?? _defaultFetchCover;
 
@@ -55,23 +67,30 @@ class HomeWidgetService {
     if (_started) return;
     _started = true;
     _player.addListener(_onPlayerChanged);
+    _library?.addListener(_onPlayerChanged);
     _onPlayerChanged();
   }
 
   void dispose() {
     _timer?.cancel();
-    if (_started) _player.removeListener(_onPlayerChanged);
+    if (_started) {
+      _player.removeListener(_onPlayerChanged);
+      _library?.removeListener(_onPlayerChanged);
+    }
     _started = false;
   }
 
   void _onPlayerChanged() {
     final track = _player.currentTrack;
-    final signature = '${track?.id}|${_player.playing}';
+    final signature = '${track?.id}|${_player.playing}|${_liked(track)}';
     if (signature == _lastSignature) return;
     _lastSignature = signature;
     _timer?.cancel();
     _timer = Timer(debounce, push);
   }
+
+  bool _liked(Track? track) =>
+      track != null && (_isLiked?.call(track) ?? false);
 
   /// Escribe el estado actual y pide al sistema que redibuje el widget.
   @visibleForTesting
@@ -84,6 +103,8 @@ class HomeWidgetService {
 
       await _save(keyTitle, track?.title);
       await _save(keyArtist, track?.artist);
+      await _save(keyAlbum, track?.album);
+      await _save(keyLiked, _liked(track));
       await _save(keyPlaying, track != null && playing);
       await _save(keyCoverPath, coverPath);
       await _refresh();
@@ -95,8 +116,11 @@ class HomeWidgetService {
   static Future<void> _defaultSave(String key, Object? value) =>
       HomeWidget.saveWidgetData<dynamic>(key, value);
 
-  static Future<void> _defaultRefresh() =>
-      HomeWidget.updateWidget(qualifiedAndroidName: androidProvider);
+  static Future<void> _defaultRefresh() async {
+    for (final provider in androidProviders) {
+      await HomeWidget.updateWidget(qualifiedAndroidName: provider);
+    }
+  }
 
   /// Descarga la carátula a un archivo estable que lee el código nativo.
   static String? _coverTrackId;

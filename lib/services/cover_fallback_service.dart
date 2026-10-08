@@ -42,7 +42,8 @@ class CoverFallbackService {
       return _pending[key]!;
     }
 
-    final future = _search(cleanArtist, cleanAlbum, cleanTitle, safeSize).then((url) {
+    final future =
+        _search(cleanArtist, cleanAlbum, cleanTitle, safeSize).then((url) {
       if (url != null && url.isNotEmpty) {
         _cache[key] = url;
       }
@@ -51,7 +52,9 @@ class CoverFallbackService {
     }).catchError((e) {
       // No cachear error: permitir reintento
       return null;
-    }).whenComplete(() => _pending.remove(key));
+    }).whenComplete(() {
+      _pending.remove(key);
+    });
 
     _pending[key] = future;
     return future;
@@ -116,12 +119,14 @@ class CoverFallbackService {
   }
 
   Future<String?> _deezerAlbum(String query, int size) => _deezer(
-        Uri.https('api.deezer.com', '/search/album', {'q': query, 'limit': '1'}),
+        Uri.https(
+            'api.deezer.com', '/search/album', {'q': query, 'limit': '1'}),
         size,
       );
 
   Future<String?> _deezerTrack(String query, int size) => _deezer(
-        Uri.https('api.deezer.com', '/search/track', {'q': query, 'limit': '1'}),
+        Uri.https(
+            'api.deezer.com', '/search/track', {'q': query, 'limit': '1'}),
         size,
         albumKey: true,
       );

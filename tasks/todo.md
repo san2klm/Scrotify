@@ -196,3 +196,98 @@
 - Limitación: los mensajes sociales no se reenvían entre invitados LAN y de nube de la misma sala (cada transporte ve los suyos + el host).
 
 ## Backlog de la app (sección 10 del roadmap): NO abordado en esta tanda.
+
+
+## Instalación Android desde main (2026-10-06)
+
+- [x] Regenerar la base Android omitida por Git y compilar APK release del commit `35ade76`.
+- [x] Instalar por ADB (`install -r`) en Motorola edge 50 fusion: `Success`; versión `1.0.0+2002`.
+- [x] Verificar arranque (`Status: ok`), proceso activo y registro sin errores graves. Análisis limpio y 497 pruebas aprobadas en esta sesión, sin cambios posteriores de código.
+
+## Música local (2026-10-06)
+
+- [x] Sustituir «Sesión» en Ajustes por carpeta configurable, cambiar carpeta, reescanear y contadores del servidor/locales.
+- [x] Añadir descargas y estado visible a playlists, likes y canciones en biblioteca, álbumes, artistas y reproductor.
+- [x] Guardar en raíz, `likes` y `playlist(Nombre)`; persistir identidad y huellas para saltar duplicados entre carpetas y tras reiniciar.
+- [x] Reconocer archivos movidos/copias, permitir recuperar canciones borradas y conservar archivos ajenos; comprobar rutas antes de escribir.
+- [x] Reproducción desde archivo local cuando está disponible; inicializar la biblioteca al arrancar.
+- [x] Validación: 512 pruebas aprobadas y análisis sin problemas; 10 pruebas de biblioteca y 5 del total del servidor.
+- [x] Compilación Linux release terminada correctamente; ejecutable actualizado en la ruta del acceso del escritorio.
+- [ ] Verificar selección de carpeta y descargas en un dispositivo Android real; su ubicación predeterminada usa almacenamiento de la aplicación.
+
+## Corrección de biblioteca sin internet (2026-10-06)
+
+- [x] Persistir metadatos, orden y pertenencia de playlists/likes por cuenta; no guardar portadas autenticadas ni credenciales en el índice.
+- [x] Recuperar canciones y colecciones desde disco al fallar la red, incluidas carpetas de descargas anteriores.
+- [x] Restaurar la cuenta activa en modo local al arrancar sin internet con audio disponible; conservar el login para errores de autenticación y cierres de sesión.
+- [x] Añadir «Descargadas» en Inicio y una pantalla para abrir y reproducir los archivos locales; ofrecer Reconectar.
+- [x] Evitar mostrar el formulario de login durante la transición a Inicio tras restaurar la sesión.
+- [x] Verificar pérdida de red, reinicio, orden, canciones borradas, separación de cuentas, colecciones vacías y recuperación de la conexión: 524 pruebas aprobadas y análisis limpio.
+- [x] Compilación Linux release de la corrección terminada; el acceso del escritorio apunta al ejecutable actualizado.
+
+## Ajuste de Inicio (2026-10-06)
+
+- [x] Retirar la tarjeta «Descargadas» por preferencia del usuario; conservar el aviso de conexión y las canciones, likes y playlists sin internet.
+- [x] Validar el ajuste: análisis limpio y 54 pruebas de biblioteca sin internet, Inicio y diseño adaptativo aprobadas.
+
+## Carpeta predeterminada Android (2026-10-06)
+
+- [x] Usar `/storage/emulated/0/Music` sin subcarpeta Scrotify; conservar descargas anteriores y rutas personalizadas.
+- [x] Pedir acceso al almacenamiento compartido al descargar o reescanear; análisis limpio, pruebas aprobadas y APK release compilado.
+
+## Portadas sin conexión (2026-10-06)
+
+- [x] Persistir portadas y metadatos completos de las descargas; completar las anteriores al consultar la biblioteca con conexión.
+- [x] Usar imágenes locales en canciones, playlists y reproductor, sin búsquedas de red en modo local.
+- [x] Verificar reinicio, aislamiento, imágenes inválidas, deduplicación y continuidad de la descarga de audio; compilaciones Linux y Android release terminadas.
+
+- [x] Verificación: 527 pruebas completas aprobadas; tras el último ajuste de descarga en paralelo, 68 pruebas relevantes aprobadas y análisis limpio.
+
+## Zona fija de letras en el reproductor (2026-10-06)
+
+- [x] Fijar el ancho del panel y el borde izquierdo durante los cambios de frase y la animación.
+- [x] Reservar espacios estables para la línea anterior, actual y siguiente, adaptados a la escala de texto.
+- [x] Validación: análisis sin problemas y 5 pruebas relevantes aprobadas.
+
+## Entrega en GitHub (2026-10-06)
+
+- [x] Preparar los cambios del proyecto para la rama `PC123` de `PC123PC123/Scrotify`; análisis limpio y 527 pruebas aprobadas en el estado actual.
+
+## Ecualizador de tres niveles y modos Hi-Fi (2026-10-07)
+
+Origen: carpeta `Eculiza/` (paquete `scrotify_eq` + `EQUALIZER.md`). Estado previo: el EQ de 10 bandas solo guardaba ajustes; no estaba conectado al reproductor.
+
+- [x] **11.1** Incorporar modelos, matemática biquad, presets, import/export AutoEQ, backends, `EqualizerService` v2, curva y pantalla; retirar el EQ antiguo y sus pruebas; documentación en `docs/equalizer.md`.
+- [x] **11.2** Android (conectado y compilado; falta confirmar el sonido en el teléfono): `AndroidEqualizer` en el `AudioPipeline` de los reproductores A y B del crossfade; verificar en el teléfono.
+- [x] **11.3** Escritorio (verificado con libmpv real en `test/eq_mpv_integration_test.dart`): copia parcheada de `just_audio_media_kit` (acceso al `Player` de mpv) para aplicar el filtro `af`.
+- [x] **11.4** Hi-Fi: `HifiPlanner`, plugin nativo Android (bit-perfect USB), ajuste de modo en Ajustes y `PlayerController.applyHifi`. Modo Estándar = comportamiento actual.
+- [x] **11.5** Validación: `flutter analyze` limpio y 571 pruebas aprobadas. Pendiente: confirmar a oído en un teléfono Android.
+
+## Datos ocultos y sincronización entre dispositivos (2026-10-07)
+
+- [x] **12.1** Datos de escritorio en la carpeta oculta de soporte de la app (migración desde `~/Documentos/Scrotify`); la carpeta de temas por defecto muestra la real (carpeta de importados). Las descargas finales ya iban a la carpeta de música del usuario; solo los temporales quedan privados.
+- [x] **12.2** `jam-server`: `/api/sync/v1` (bóvedas de blobs cifrados, last-write-wins, límites en `/admin`, desactivado por defecto). 43 pruebas del servidor.
+- [x] **12.3** Cliente: `SyncCrypto` (HKDF + AES-GCM), `SyncService` (ciclo cada 5 min, push/pull por documento) y sección en Ajustes → Servidor Jam. Sincroniza temas importados, ajustes (sin `jamServerUrl`), seguidos/excluidos, playlists fijadas, orden de favoritos, valoraciones y ecualizador.
+- [x] **12.4** `jam-server` redesplegado en 192.168.1.21 (backup previo de `data/` en `/root`) y `syncEnabled` activado (2026-10-07). Falta probar con dos dispositivos reales.
+- [ ] **12.5** Pendiente/limitaciones: no se propagan borrados; solo `settings.json` y los temas se recargan al instante, el resto se aplica al reiniciar; vincular escaneando QR (hoy se escribe la clave).
+
+## Scrotify Connect: controlar tus dispositivos (2026-10-07)
+
+Como Spotify Connect: ver los dispositivos del usuario por LAN y por el servidor Jam, pasarles la reproducción y controlarlos a distancia. El "grupo" es la clave de sincronización (sección 12): solo se ven dispositivos con la misma clave y todo viaja cifrado de extremo a extremo.
+
+- [x] **13.1** `jam-server`: `connect_join` / `connect_send` (presencia y relé de blobs cifrados, 16 dispositivos por grupo). 48 pruebas.
+- [x] **13.2** Cliente: `ConnectService` (transferir, traer de vuelta, comandos, estado remoto, anti-repetición), `RelayTransport`, `LanTransport` (baliza UDP 47624 + WebSocket directo, saludo cifrado), `PlayerConnectPort`.
+- [x] **13.3** UI: `ConnectPanel` (selector de dispositivos) y botón Connect en la barra en lugar del botón de la cola (escritorio y móvil); la barra muestra y controla el dispositivo remoto (play/pausa, siguiente, anterior, seek, volumen).
+- [x] **13.4** Validación: relé probado contra el servidor Node real; `flutter analyze` limpio y 600 pruebas aprobadas.
+- [x] **13.6** Sincronización completa: `PlayerController` en modo espejo (`RemotePlayback`/`ConnectMirror`). Mientras se controla otro dispositivo, la cola, la canción actual, el progreso, el volumen, mezcla y repetición son los del remoto y reproducir, encolar, reordenar o vaciar la cola se ejecutan allá (comandos `play_queue`, `queue_*`, `shuffle`, `repeat`). La cola viaja como ventana de 40 canciones solo cuando cambia. Pruebas en `test/player_mirror_test.dart` y `test/connect_service_test.dart`.
+- [ ] **13.5** Pendiente: probar entre PC y teléfono reales (LAN y por internet); nombre de dispositivo editable; solo se transfieren las 40 canciones siguientes de la cola; solo entre dispositivos del mismo servidor Navidrome.
+
+## Connect por usuario de Navidrome (2026-10-07)
+
+Cambio: Connect ya no depende de la clave de sincronización. Cada usuario de Navidrome forma su grupo (admin solo ve a admin) y la detección ocurre directamente en el servidor Jam.
+
+- [x] **14.1** `jam-server`: `connect_join` con `user` + token Subsonic; el servidor verifica con `ping` en el Navidrome fijado por `navidromeUrl` (ajuste de `/admin`, sin SSRF) y agrupa por usuario (sin distinguir mayúsculas). Caché de verificación de 5 min. 52 pruebas.
+- [x] **14.2** Cliente: `ConnectAccount` (token Subsonic y clave E2E derivada con PBKDF2 de la clave del usuario). Connect arranca solo al iniciar sesión; el panel ya no pide sincronización. LAN y relé usan la misma clave derivada.
+- [x] **14.3** Servidor de producción actualizado (backup previo de `data/`) con `navidromeUrl = https://navidrome.templo.cloud`; verificado el rechazo de claves falsas contra Navidrome real. APK instalado en el teléfono y AppImage regenerado.
+- [x] **14.5** Corregido: el servidor cortaba el WebSocket (1009) con tramas de más de `maxMessageBytes` (16 KB) y los mensajes de Connect con la cola lo superaban; ahora la trama admite hasta 128 KB y solo las salas Jam siguen limitadas. Una instancia desplazada por otra con el mismo id de dispositivo ya no reintenta en bucle.
+- [ ] **14.4** Pendiente: probar PC + teléfono con el mismo usuario. Cambiar la clave en Navidrome cambia la clave de cifrado: hay que volver a iniciar sesión en los demás dispositivos.

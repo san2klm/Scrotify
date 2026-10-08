@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 import 'package:navidrome_client/screens/home_screen.dart';
 import 'package:navidrome_client/screens/mobile_home_screen.dart';
 import 'package:navidrome_client/services/app_theme.dart';
+import 'package:navidrome_client/services/connect/connect_service.dart';
 import 'package:navidrome_client/services/jam_controller.dart';
 import 'package:navidrome_client/services/navidrome_service.dart';
 import 'package:navidrome_client/services/player_controller.dart';
@@ -112,6 +113,7 @@ void main() {
                   create: (_) => _Reproductor()),
               ChangeNotifierProvider<ThemeController>(
                   create: (_) => _Tema(tema)),
+              ChangeNotifierProvider<ConnectService>(create: (_) => idleConnectService()),
               ChangeNotifierProvider<JamController>(create: (_) => IdleJam()),
             ],
             child: MaterialApp(

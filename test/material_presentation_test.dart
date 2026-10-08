@@ -16,11 +16,13 @@ import 'package:navidrome_client/screens/settings_screen.dart';
 import 'package:navidrome_client/screens/stats_screen.dart';
 import 'package:navidrome_client/services/app_theme.dart';
 import 'package:navidrome_client/services/equalizer_service.dart';
+import 'package:navidrome_client/services/connect/connect_service.dart';
 import 'package:navidrome_client/services/jam_controller.dart';
 import 'package:navidrome_client/services/listening_stats_service.dart';
 import 'package:navidrome_client/services/navidrome_service.dart';
 import 'package:navidrome_client/services/player_controller.dart';
 import 'package:navidrome_client/services/settings_controller.dart';
+import 'package:navidrome_client/services/sync/sync_service.dart';
 import 'package:navidrome_client/services/theme_controller.dart';
 import 'package:navidrome_client/widgets/theme_grid.dart';
 
@@ -167,9 +169,18 @@ Future<void> _pump(WidgetTester tester, Widget screen, _Themes themes,
         ChangeNotifierProvider<ThemeController>.value(value: themes),
         ChangeNotifierProvider<NavidromeService>(create: (_) => _Library()),
         ChangeNotifierProvider<PlayerController>(create: (_) => IdlePlayer()),
+        ChangeNotifierProvider<ConnectService>(create: (_) => idleConnectService()),
         ChangeNotifierProvider<JamController>(create: (_) => IdleJam()),
         ChangeNotifierProvider<SettingsController>(
             create: (_) => SettingsController()),
+        ChangeNotifierProvider<SyncService>(
+            create: (_) => SyncService(
+                  dataDir: () async => Directory.systemTemp,
+                  themeImportsDir: () async => Directory.systemTemp,
+                  serverBase: () => null,
+                  readKey: () async => null,
+                  writeKey: (_) async {},
+                )),
         ChangeNotifierProvider<EqualizerService>(
             create: (_) => EqualizerService()),
         ChangeNotifierProvider<ListeningStatsService>(create: (_) => _Stats()),
@@ -207,6 +218,24 @@ void main() {
   });
   final imported = _imported();
   final themes = [AppTheme.fixedThemes[0], AppTheme.fixedThemes[1], imported];
+  for (final entry in <String, String>{
+    'Audio y calidad': 'Detectar red automáticamente',
+    'Reproducción': 'Crossfade',
+    'Apariencia y temas': 'Resolución de portadas',
+    'Servidor Jam': 'Servidor Jam',
+  }.entries) {
+    testWidgets('ajustes: categoría ${entry.key} abre su subpantalla',
+        (tester) async {
+      await _pump(tester, const SettingsScreen(), _Themes(themes[0], imported),
+          const Size(375, 812), 1.5);
+      await tester.ensureVisible(find.text(entry.key).first);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text(entry.key).first);
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      expect(find.text(entry.value), findsWidgets);
+    });
+  }
   for (final theme in themes) {
     test('Material respeta los tokens del tema ${theme.id}', () {
       final data = theme.toThemeData();

@@ -5,12 +5,14 @@ import '../models/jam_models.dart';
 import '../services/navidrome_service.dart';
 import '../services/remote_jam_service.dart';
 import '../services/pairing_server.dart';
-import '../services/secure_storage.dart';
+import '../services/hifi/hifi_coordinator.dart';
+import '../services/hifi/hifi_profiles.dart';
 import '../services/settings_controller.dart';
 import '../widgets/pairing_panel.dart';
+import '../widgets/sync_settings.dart';
 import '../widgets/theme_grid.dart';
+import '../widgets/local_music_settings.dart';
 import 'equalizer_screen.dart';
-import 'login_screen.dart';
 import 'stats_screen.dart';
 import '../utils/app_colors.dart';
 import '../utils/responsive.dart';
@@ -27,9 +29,9 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   @override
+  @override
   Widget build(BuildContext context) {
     final nav = context.watch<NavidromeService>();
-
     return Scaffold(
       backgroundColor: context.bgApp,
       appBar: AppBar(
@@ -38,383 +40,405 @@ class _SettingsScreenState extends State<SettingsScreen> {
         elevation: 0,
         title: const Text('Ajustes'),
       ),
-      body: Consumer<SettingsController>(
-        builder: (context, settings, _) {
-          return ConstrainedContent(
-              maxWidth: 1000,
-              child: ListView(
-                padding: const EdgeInsets.all(16),
-                children: [
-                  // ---------------------------------------------------------------
-                  // Calidad de audio
-                  // ---------------------------------------------------------------
-                  _sectionTitle('Calidad de audio'),
-                  _card(
-                    children: [
-                      _switchTile(
-                        title: 'Detectar red automáticamente',
-                        subtitle:
-                            'Usa una calidad distinta según estés en casa o en datos móviles',
-                        value: settings.autoSwitch,
-                        onChanged: settings.setAutoSwitch,
-                      ),
-                      if (settings.autoSwitch) ...[
-                        _networkBadge(
-                            settings.networkLabel, settings.isMobileData),
-                        const SizedBox(height: 12),
-                        _qualitySelector(
-                          title: 'En casa (WiFi / conexión fija)',
-                          current: settings.wifiQuality,
-                          onChanged: settings.setWifiQuality,
-                        ),
-                        const SizedBox(height: 12),
-                        _qualitySelector(
-                          title: 'En datos móviles',
-                          current: settings.mobileQuality,
-                          onChanged: settings.setMobileQuality,
-                        ),
-                      ] else
-                        const SizedBox(height: 8),
-                      if (!settings.autoSwitch) ...[
-                        _qualitySelector(
-                          title: 'Calidad de audio',
-                          current: settings.wifiQuality,
-                          onChanged: settings.setWifiQuality,
-                        ),
-                      ],
-                      const SizedBox(height: 12),
-                      const _InfoText(
-                        'Sin pérdida transmite el archivo original (FLAC). '
-                        'Las demás opciones se transcodifican a MP3 en el servidor, '
-                        'ahorrando datos móviles.',
-                      ),
-                    ],
-                  ),
-
-                  // ---------------------------------------------------------------
-                  // Reproducción
-                  // ---------------------------------------------------------------
-                  _sectionTitle('Reproducción'),
-                  _card(
-                    children: [
-                      ListTile(
-                        contentPadding: EdgeInsets.zero,
-                        title: Text('Volumen inicial',
-                            style: TextStyle(
-                                color: context.textPrimary, fontSize: 14)),
-                        subtitle: Slider(
-                          value: settings.initialVolume,
-                          activeColor: context.accent,
-                          inactiveColor: context.themeBorder,
-                          onChanged: settings.setInitialVolume,
-                        ),
-                        trailing: Text(
-                          '${(settings.initialVolume * 100).round()}%',
-                          style: TextStyle(
-                              color: context.textSecondary, fontSize: 13),
-                        ),
-                      ),
-                      _switchTile(
-                        title: 'Reproducción sin cortes',
-                        subtitle:
-                            'Evita silencios entre canciones (depende del backend)',
-                        value: settings.gapless,
-                        onChanged: settings.setGapless,
-                      ),
-                      const SizedBox(height: 8),
-                      _switchTile(
-                        title: 'Crossfade',
-                        subtitle:
-                            'Funde el final de una canción con el inicio de la siguiente',
-                        value: settings.crossfade > Duration.zero,
-                        onChanged: (enabled) => settings.setCrossfade(
-                          enabled ? const Duration(seconds: 5) : Duration.zero,
-                        ),
-                      ),
-                      if (settings.crossfade > Duration.zero) ...[
-                        const SizedBox(height: 4),
-                        ListTile(
-                          contentPadding: EdgeInsets.zero,
-                          title: Text('Duración del fundido',
-                              style: TextStyle(
-                                  color: context.textPrimary, fontSize: 14)),
-                          subtitle: Slider(
-                            value: settings.crossfade.inSeconds
-                                .clamp(1, 10)
-                                .toDouble(),
-                            min: 1,
-                            max: 10,
-                            activeColor: context.accent,
-                            inactiveColor: context.themeBorder,
-                            onChanged: (v) => settings
-                                .setCrossfade(Duration(seconds: v.round())),
-                          ),
-                          trailing: Text(
-                            '${settings.crossfade.inSeconds} s',
-                            style: TextStyle(
-                                color: context.textSecondary, fontSize: 13),
-                          ),
-                        ),
-                      ],
-                      const SizedBox(height: 8),
-                      _choiceTiles<ReplayGainMode>(
-                        title: 'Normalización de volumen (ReplayGain)',
-                        value: settings.replayGainMode,
-                        options: const [
-                          (
-                            value: ReplayGainMode.off,
-                            label: 'Desactivado',
-                            subtitle: 'Sin normalización de volumen',
-                          ),
-                          (
-                            value: ReplayGainMode.track,
-                            label: 'Pista (Track)',
-                            subtitle: 'Normaliza cada pista individualmente',
-                          ),
-                          (
-                            value: ReplayGainMode.album,
-                            label: 'Álbum (Album)',
-                            subtitle: 'Preserva la dinámica del álbum completo',
-                          ),
-                        ],
-                        onChanged: settings.setReplayGainMode,
-                      ),
-                      if (settings.replayGainMode != ReplayGainMode.off) ...[
-                        const SizedBox(height: 8),
-                        ListTile(
-                          contentPadding: EdgeInsets.zero,
-                          title: Text(
-                            'Preamplificador (Preamp)',
-                            style: TextStyle(
-                                color: context.textPrimary, fontSize: 14),
-                          ),
-                          subtitle: Slider(
-                            value: settings.replayGainPreamp.clamp(-12.0, 12.0),
-                            min: -12.0,
-                            max: 12.0,
-                            divisions: 48,
-                            activeColor: context.accent,
-                            inactiveColor: context.themeBorder,
-                            onChanged: settings.setReplayGainPreamp,
-                          ),
-                          trailing: Text(
-                            '${settings.replayGainPreamp > 0 ? '+' : ''}${settings.replayGainPreamp.toStringAsFixed(1)} dB',
-                            style: TextStyle(
-                                color: context.textSecondary, fontSize: 13),
-                          ),
-                        ),
-                        _switchTile(
-                          title: 'Evitar distorsión (Prevent clipping)',
-                          subtitle:
-                              'Atenúa la ganancia si el pico de la pista superaría 0 dBFS',
-                          value: settings.replayGainPreventClipping,
-                          onChanged: settings.setReplayGainPreventClipping,
-                        ),
-                        const SizedBox(height: 4),
-                        const _InfoText(
-                          'ReplayGain opera únicamente por atenuación (≤ 0 dB) en este '
-                          'reproductor para evitar distorsión digital.',
-                        ),
-                      ],
-                      const SizedBox(height: 8),
-                      _switchTile(
-                        title: 'Eliminar silencios',
-                        subtitle:
-                            'Recorta silencios al inicio y final de las canciones usando análisis de waveform',
-                        value: settings.silenceRemovalEnabled,
-                        onChanged: settings.setSilenceRemovalEnabled,
-                      ),
-                      _switchTile(
-                        title: 'Mezcla inteligente',
-                        subtitle:
-                            'Evita repetir el mismo artista seguido en modo aleatorio',
-                        value: settings.isSmartMixEnabled,
-                        onChanged: settings.setSmartMixEnabled,
-                      ),
-                      const Divider(height: 24),
-                      ListTile(
-                        contentPadding: EdgeInsets.zero,
-                        leading: Icon(Icons.equalizer_rounded,
-                            color: context.textSecondary),
-                        title: Text('Ecualizador',
-                            style: TextStyle(
-                                color: context.textPrimary, fontSize: 14)),
-                        subtitle: Text(
-                          'Ajustes de 10 bandas y presets',
-                          style: TextStyle(
-                              color: context.textSecondary, fontSize: 13),
-                        ),
-                        trailing:
-                            Icon(Icons.chevron_right, color: context.textMuted),
-                        onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                                builder: (_) => const EqualizerScreen()),
-                          );
-                        },
-                      ),
-                      ListTile(
-                        contentPadding: EdgeInsets.zero,
-                        leading: Icon(Icons.insights_rounded,
-                            color: context.textSecondary),
-                        title: Text('Estadísticas de escucha',
-                            style: TextStyle(
-                                color: context.textPrimary, fontSize: 14)),
-                        subtitle: Text(
-                          'Tiempo reproducido, canciones y artistas más escuchados',
-                          style: TextStyle(
-                              color: context.textSecondary, fontSize: 13),
-                        ),
-                        trailing:
-                            Icon(Icons.chevron_right, color: context.textMuted),
-                        onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                                builder: (_) => const StatsScreen()),
-                          );
-                        },
-                      ),
-                    ],
-                  ),
-
-                  // ---------------------------------------------------------------
-                  // Interfaz
-                  // ---------------------------------------------------------------
-                  _sectionTitle('Interfaz'),
-                  _card(
-                    children: [
-                      _choiceTiles<int>(
-                        title: 'Resolución de portadas',
-                        value: settings.coverArtSize,
-                        options: const [
-                          (
-                            value: 600,
-                            label: 'Alta',
-                            subtitle: 'Portadas nítidas · más datos'
-                          ),
-                          (value: 300, label: 'Baja', subtitle: 'Ahorra datos'),
-                        ],
-                        onChanged: settings.setCoverArtSize,
-                      ),
-                      const SizedBox(height: 8),
-                      const _InfoText(
-                        'La nueva resolución se aplica al volver a cargar el contenido.',
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  // Temas (.zip estilo Psysonic, carpeta configurable).
-                  const ThemesSection(),
-
-                  // ---------------------------------------------------------------
-                  // Servidor Jam (relay propio o por defecto)
-                  // ---------------------------------------------------------------
-                  _sectionTitle('Servidor Jam'),
-                  _card(children: [_JamServerField(settings: settings)]),
-
-                  // ---------------------------------------------------------------
-                  // Playlists (gestionar/borrar)
-                  // ---------------------------------------------------------------
-                  _sectionTitle('Mis playlists'),
-                  const _PlaylistsManager(),
-
-                  // ---------------------------------------------------------------
-                  // Cierre de sesión; las cuentas se gestionan desde el avatar.
-                  // ---------------------------------------------------------------
-                  _sectionTitle('Sesión'),
-                  _card(
-                    children: [
-                      SizedBox(
-                        width: double.infinity,
-                        child: OutlinedButton.icon(
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: context.danger,
-                            side: BorderSide(color: context.danger),
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                          ),
-                          icon: const Icon(Icons.logout, size: 18),
-                          label: const Text('Cerrar sesión plana'),
-                          onPressed: () => _confirmLogout(context),
-                        ),
-                      ),
-                    ],
-                  ),
-
-                  // ---------------------------------------------------------------
-                  // Vincular con el teléfono
-                  // ---------------------------------------------------------------
-                  if (nav.connected) ...[
-                    _sectionTitle('Vincular teléfono'),
-                    _card(
-                      children: [
-                        PairingSharePanel(
-                          compact: true,
-                          server: context.read<PairingServer>(),
-                          onGetCredentials: () async => nav.currentCredentials,
-                        ),
-                      ],
-                    ),
-                  ],
-
-                  // ---------------------------------------------------------------
-                  // Acerca de
-                  // ---------------------------------------------------------------
-                  _sectionTitle('Acerca de'),
-                  _card(
-                    children: const [
-                      _InfoText(
-                        'Scrotify — cliente de Navidrome (Subsonic API)\n'
-                        'v1.0.0',
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 24),
-                ],
-              ));
-        },
+      body: ConstrainedContent(
+        maxWidth: 1000,
+        child: ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            _menuGroup([
+              _menuRow(
+                icon: Icons.high_quality_rounded,
+                title: 'Audio y calidad',
+                subtitle: 'Calidad según la red',
+                onTap: () => _openPage('Audio y calidad', _audioPage),
+              ),
+              _menuRow(
+                icon: Icons.play_circle_outline_rounded,
+                title: 'Reproducción',
+                subtitle: 'Transiciones, volumen y cola',
+                onTap: () => _openPage('Reproducción', _playbackPage),
+              ),
+              _menuRow(
+                icon: Icons.equalizer_rounded,
+                title: 'Ecualizador',
+                subtitle: 'Ajustes de 10 bandas y presets',
+                onTap: () => _push(const EqualizerScreen()),
+              ),
+            ]),
+            const SizedBox(height: 16),
+            _menuGroup([
+              _menuRow(
+                icon: Icons.palette_outlined,
+                title: 'Apariencia y temas',
+                subtitle: 'Portadas y temas de color',
+                onTap: () => _openPage('Apariencia y temas', _appearancePage),
+              ),
+              _menuRow(
+                icon: Icons.library_music_outlined,
+                title: 'Biblioteca y descargas',
+                subtitle: 'Música local y playlists',
+                onTap: () => _openPage('Biblioteca y descargas', _libraryPage),
+              ),
+              _menuRow(
+                icon: Icons.podcasts_rounded,
+                title: nav.connected ? 'Jam y dispositivos' : 'Servidor Jam',
+                subtitle: nav.connected
+                    ? 'Servidor Jam y vincular teléfono'
+                    : 'Servidor de sesiones grupales',
+                onTap: () => _openPage(
+                    nav.connected ? 'Jam y dispositivos' : 'Servidor Jam',
+                    _jamPage),
+              ),
+              _menuRow(
+                icon: Icons.insights_rounded,
+                title: 'Estadísticas de escucha',
+                subtitle: 'Tiempo reproducido y lo más escuchado',
+                onTap: () => _push(const StatsScreen()),
+              ),
+            ]),
+            const SizedBox(height: 24),
+            Center(
+              child: Text(
+                'Scrotify · v1.0.0\nCliente de Navidrome (Subsonic API)',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: context.textMuted, fontSize: 12),
+              ),
+            ),
+            const SizedBox(height: 24),
+          ],
+        ),
       ),
     );
   }
 
-  void _confirmLogout(BuildContext context) {
+  // ---------------------------------------------------------------------------
+  // Categorías
+  // ---------------------------------------------------------------------------
+
+  void _push(Widget page) =>
+      Navigator.push(context, MaterialPageRoute(builder: (_) => page));
+
+  void _openPage(
+    String title,
+    List<Widget> Function(SettingsController settings) children,
+  ) {
+    _push(_SettingsSubpage(
+      title: title,
+      children: (settings) => children(settings),
+    ));
+  }
+
+  List<Widget> _audioPage(SettingsController settings) => [
+        _card(children: [
+          _switchTile(
+            title: 'Detectar red automáticamente',
+            subtitle:
+                'Usa una calidad distinta según estés en casa o en datos móviles',
+            value: settings.autoSwitch,
+            onChanged: settings.setAutoSwitch,
+          ),
+          if (settings.autoSwitch) ...[
+            _networkBadge(settings.networkLabel, settings.isMobileData),
+            const SizedBox(height: 12),
+            _qualitySelector(
+              title: 'En casa (WiFi / conexión fija)',
+              current: settings.wifiQuality,
+              onChanged: settings.setWifiQuality,
+            ),
+            const SizedBox(height: 12),
+            _qualitySelector(
+              title: 'En datos móviles',
+              current: settings.mobileQuality,
+              onChanged: settings.setMobileQuality,
+            ),
+          ] else ...[
+            const SizedBox(height: 8),
+            _qualitySelector(
+              title: 'Calidad de audio',
+              current: settings.wifiQuality,
+              onChanged: settings.setWifiQuality,
+            ),
+          ],
+          const SizedBox(height: 12),
+          const _InfoText(
+            'Sin pérdida transmite el archivo original (FLAC). '
+            'Las demás opciones se transcodifican a MP3 en el servidor, '
+            'ahorrando datos móviles.',
+          ),
+        ]),
+        _sectionTitle('Fidelidad'),
+        _card(children: [
+          _choiceTiles<AudioFidelityMode>(
+            title: 'Modo de reproducción',
+            value: settings.fidelityMode,
+            options: const [
+              (
+                value: AudioFidelityMode.standard,
+                label: 'Estándar',
+                subtitle: 'Como siempre: sonido seguro y compatible',
+              ),
+              (
+                value: AudioFidelityMode.highFidelity,
+                label: 'Alta fidelidad',
+                subtitle: 'Archivo original y procesado en coma flotante',
+              ),
+              (
+                value: AudioFidelityMode.bitPerfect,
+                label: 'Bit-perfect',
+                subtitle: 'Sin procesar: sin ecualizador, crossfade ni '
+                    'ReplayGain; volumen fijo al 100 %',
+              ),
+            ],
+            onChanged: settings.setFidelityMode,
+          ),
+          if (settings.fidelityMode != AudioFidelityMode.standard) ...[
+            const SizedBox(height: 8),
+            _switchTile(
+              title: 'Sin pérdida también con datos móviles',
+              subtitle: 'Gasta más datos; si no, se usa Opus con datos móviles',
+              value: settings.losslessOnMobileData,
+              onChanged: settings.setLosslessOnMobileData,
+            ),
+          ],
+          Builder(builder: (context) {
+            final notes = context.watch<HifiCoordinator?>()?.plan?.notes ??
+                const <String>[];
+            if (settings.fidelityMode == AudioFidelityMode.standard ||
+                notes.isEmpty) {
+              return const SizedBox.shrink();
+            }
+            return Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  for (final note in notes)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 6),
+                      child: _InfoText(note),
+                    ),
+                ],
+              ),
+            );
+          }),
+        ]),
+      ];
+
+  List<Widget> _playbackPage(SettingsController settings) => [
+        _sectionTitle('Transiciones'),
+        _card(children: [
+          _switchTile(
+            title: 'Reproducción sin cortes',
+            subtitle: 'Evita silencios entre canciones (depende del backend)',
+            value: settings.gapless,
+            onChanged: settings.setGapless,
+          ),
+          const SizedBox(height: 8),
+          _switchTile(
+            title: 'Crossfade',
+            subtitle:
+                'Funde el final de una canción con el inicio de la siguiente',
+            value: settings.crossfade > Duration.zero,
+            onChanged: (enabled) => settings.setCrossfade(
+              enabled ? const Duration(seconds: 5) : Duration.zero,
+            ),
+          ),
+          if (settings.crossfade > Duration.zero) ...[
+            const SizedBox(height: 4),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              title: Text('Duración del fundido',
+                  style: TextStyle(color: context.textPrimary, fontSize: 14)),
+              subtitle: Slider(
+                value: settings.crossfade.inSeconds.clamp(1, 10).toDouble(),
+                min: 1,
+                max: 10,
+                activeColor: context.accent,
+                inactiveColor: context.themeBorder,
+                onChanged: (v) =>
+                    settings.setCrossfade(Duration(seconds: v.round())),
+              ),
+              trailing: Text(
+                '${settings.crossfade.inSeconds} s',
+                style: TextStyle(color: context.textSecondary, fontSize: 13),
+              ),
+            ),
+          ],
+        ]),
+        _sectionTitle('Volumen'),
+        _card(children: [
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            title: Text('Volumen inicial',
+                style: TextStyle(color: context.textPrimary, fontSize: 14)),
+            subtitle: Slider(
+              value: settings.initialVolume,
+              activeColor: context.accent,
+              inactiveColor: context.themeBorder,
+              onChanged: settings.setInitialVolume,
+            ),
+            trailing: Text(
+              '${(settings.initialVolume * 100).round()}%',
+              style: TextStyle(color: context.textSecondary, fontSize: 13),
+            ),
+          ),
+          const SizedBox(height: 8),
+          _choiceTiles<ReplayGainMode>(
+            title: 'Normalización de volumen (ReplayGain)',
+            value: settings.replayGainMode,
+            options: const [
+              (
+                value: ReplayGainMode.off,
+                label: 'Desactivado',
+                subtitle: 'Sin normalización de volumen',
+              ),
+              (
+                value: ReplayGainMode.track,
+                label: 'Pista (Track)',
+                subtitle: 'Normaliza cada pista individualmente',
+              ),
+              (
+                value: ReplayGainMode.album,
+                label: 'Álbum (Album)',
+                subtitle: 'Preserva la dinámica del álbum completo',
+              ),
+            ],
+            onChanged: settings.setReplayGainMode,
+          ),
+          if (settings.replayGainMode != ReplayGainMode.off) ...[
+            const SizedBox(height: 8),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              title: Text(
+                'Preamplificador (Preamp)',
+                style: TextStyle(color: context.textPrimary, fontSize: 14),
+              ),
+              subtitle: Slider(
+                value: settings.replayGainPreamp.clamp(-12.0, 12.0),
+                min: -12.0,
+                max: 12.0,
+                divisions: 48,
+                activeColor: context.accent,
+                inactiveColor: context.themeBorder,
+                onChanged: settings.setReplayGainPreamp,
+              ),
+              trailing: Text(
+                '${settings.replayGainPreamp > 0 ? '+' : ''}${settings.replayGainPreamp.toStringAsFixed(1)} dB',
+                style: TextStyle(color: context.textSecondary, fontSize: 13),
+              ),
+            ),
+            _switchTile(
+              title: 'Evitar distorsión (Prevent clipping)',
+              subtitle:
+                  'Atenúa la ganancia si el pico de la pista superaría 0 dBFS',
+              value: settings.replayGainPreventClipping,
+              onChanged: settings.setReplayGainPreventClipping,
+            ),
+            const SizedBox(height: 4),
+            const _InfoText(
+              'ReplayGain opera únicamente por atenuación (≤ 0 dB) en este '
+              'reproductor para evitar distorsión digital.',
+            ),
+          ],
+        ]),
+        _sectionTitle('Cola'),
+        _card(children: [
+          _switchTile(
+            title: 'Eliminar silencios',
+            subtitle:
+                'Recorta silencios al inicio y final de las canciones usando análisis de waveform',
+            value: settings.silenceRemovalEnabled,
+            onChanged: settings.setSilenceRemovalEnabled,
+          ),
+          _switchTile(
+            title: 'Mezcla inteligente',
+            subtitle:
+                'Evita repetir el mismo artista seguido en modo aleatorio',
+            value: settings.isSmartMixEnabled,
+            onChanged: settings.setSmartMixEnabled,
+          ),
+        ]),
+      ];
+
+  List<Widget> _appearancePage(SettingsController settings) => [
+        _card(children: [
+          _choiceTiles<int>(
+            title: 'Resolución de portadas',
+            value: settings.coverArtSize,
+            options: const [
+              (
+                value: 600,
+                label: 'Alta',
+                subtitle: 'Portadas nítidas · más datos'
+              ),
+              (value: 300, label: 'Baja', subtitle: 'Ahorra datos'),
+            ],
+            onChanged: settings.setCoverArtSize,
+          ),
+          const SizedBox(height: 8),
+          const _InfoText(
+            'La nueva resolución se aplica al volver a cargar el contenido.',
+          ),
+        ]),
+        const SizedBox(height: 12),
+        // Temas (.zip estilo Psysonic, carpeta configurable).
+        const ThemesSection(),
+      ];
+
+  List<Widget> _libraryPage(SettingsController settings) => [
+        _sectionTitle('Música local'),
+        _card(children: const [LocalMusicSettings()]),
+        _sectionTitle('Mis playlists'),
+        const _PlaylistsManager(),
+      ];
+
+  List<Widget> _jamPage(SettingsController settings) {
     final nav = context.read<NavidromeService>();
-    final server = context.read<PairingServer>();
-    final navigator = Navigator.of(context);
-    showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: context.bgCard,
-        title: Text('¿Cerrar sesión?',
-            style: TextStyle(color: context.textPrimary)),
-        content: Text(
-          'Se eliminarán las credenciales guardadas en este dispositivo y volverás a la pantalla de inicio de sesión.',
-          style: TextStyle(color: context.textSecondary),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: Text('Cancelar',
-                style: TextStyle(color: context.textSecondary)),
+    return [
+      _sectionTitle('Servidor Jam'),
+      _card(children: [_JamServerField(settings: settings)]),
+      _sectionTitle('Sincronización'),
+      _card(children: const [SyncSettings()]),
+      if (nav.connected) ...[
+        _sectionTitle('Vincular teléfono'),
+        _card(children: [
+          PairingSharePanel(
+            compact: true,
+            server: context.read<PairingServer>(),
+            onGetCredentials: () async => nav.currentCredentials,
           ),
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(true),
-            child:
-                Text('Cerrar sesión', style: TextStyle(color: context.danger)),
-          ),
-        ],
-      ),
-    ).then((confirmed) async {
-      if (confirmed != true) return;
-      await server.stop();
-      await SecureStorage.clearCredentials();
-      nav.disconnect();
-      navigator.pushAndRemoveUntil(
-        MaterialPageRoute(builder: (_) => const LoginScreen()),
-        (route) => false,
-      );
-    });
+        ]),
+      ],
+    ];
+  }
+
+  // ---------------------------------------------------------------------------
+  // Menú principal
+  // ---------------------------------------------------------------------------
+
+  Widget _menuGroup(List<Widget> rows) {
+    return MaterialSurface(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      color: context.bgCard,
+      child: Column(children: rows),
+    );
+  }
+
+  Widget _menuRow({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required VoidCallback onTap,
+  }) {
+    return ListTile(
+      leading: Icon(icon, color: context.accent),
+      title: Text(title,
+          style: TextStyle(color: context.textPrimary, fontSize: 15)),
+      subtitle: Text(subtitle,
+          style: TextStyle(color: context.textSecondary, fontSize: 13)),
+      trailing: Icon(Icons.chevron_right, color: context.textMuted),
+      onTap: onTap,
+    );
   }
 
   // ---------------------------------------------------------------------------
@@ -889,6 +913,37 @@ class _JamServerFieldState extends State<_JamServerField> {
             'Relay para salas Jam remotas. Puedes alojar el tuyo con el '
             'Docker de jam-server/. Usa wss://; ws:// solo en red local.'),
       ],
+    );
+  }
+}
+
+/// Subpágina de una categoría de ajustes: se reconstruye al cambiar los
+/// ajustes o el tema activo.
+class _SettingsSubpage extends StatelessWidget {
+  const _SettingsSubpage({required this.title, required this.children});
+
+  final String title;
+  final List<Widget> Function(SettingsController settings) children;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: context.bgApp,
+      appBar: AppBar(
+        backgroundColor: context.bgApp,
+        foregroundColor: context.textPrimary,
+        elevation: 0,
+        title: Text(title),
+      ),
+      body: Consumer<SettingsController>(
+        builder: (context, settings, _) => ConstrainedContent(
+          maxWidth: 1000,
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+            children: children(settings),
+          ),
+        ),
+      ),
     );
   }
 }

@@ -265,7 +265,21 @@ class JamController extends ChangeNotifier {
       (_session?.pinCode.isNotEmpty == true
           ? '${_session!.pinCode.substring(0, 3)}-${_session!.pinCode.substring(3)}'
           : null);
-  String? get qrUri => _hostService.qrDataUri;
+  /// QR de invitación: con el relay (dominio de la Jam) conectado lleva el
+  /// dominio y funciona desde cualquier red; si no, usa la IP local (LAN).
+  String? get qrUri {
+    final pin = _hostService.pinCode?.value;
+    final ep = _remoteEndpoint;
+    if (pin != null && _remoteService.isConnected && ep.isValid) {
+      final server = ep.port == 443 ? ep.host : '${ep.host}:${ep.port}';
+      return Uri(
+        scheme: 'scrotify',
+        host: 'join',
+        queryParameters: {'code': pin, 'server': server},
+      ).toString();
+    }
+    return _hostService.qrDataUri;
+  }
   String? get hostIp => _hostService.hostIp;
   int get port => _hostService.port;
   bool get allowGuestControls => _session?.allowGuestControls ?? true;
@@ -1176,7 +1190,10 @@ class JamController extends ChangeNotifier {
     _remoteParticipants.clear();
     _currentTrackAddedBy = _localParticipant;
 
-    final password = roomPassword?.trim();
+    // La contraseña solo aplica a salas persistentes (PIN fijo).
+    final password = fixedPin?.trim().isNotEmpty == true
+        ? roomPassword?.trim()
+        : null;
     _hasRoomPassword = password != null && password.isNotEmpty;
     _remoteService.roomPassword = _hasRoomPassword ? password : null;
     await _hostService.start(
@@ -1404,6 +1421,7 @@ class JamController extends ChangeNotifier {
       'mode': _hostService.mode.name,
       'allowGuestControls': _hostService.allowGuestControls,
       'allowGuestQueueManage': _hostService.allowGuestQueueManage,
+      'isPublic': isPublic,
       if (_remoteService.clock.isReady)
         'refTs': _remoteService.clock
             .toReference(DateTime.now().millisecondsSinceEpoch),
@@ -1444,6 +1462,7 @@ class JamController extends ChangeNotifier {
         hostName: _localParticipant?.name ?? 'Host',
         initialState: _remoteStatePayload(),
         resume: resuming,
+        isPublic: isPublic,
       );
       if (resuming && !ok) {
         _remoteService.hostToken = null;
@@ -1451,6 +1470,7 @@ class JamController extends ChangeNotifier {
           pin: pin,
           hostName: _localParticipant?.name ?? 'Host',
           initialState: _remoteStatePayload(),
+          isPublic: isPublic,
         );
       }
       debugPrint('JamController: Creación en servidor remoto: $ok');
@@ -1687,6 +1707,7 @@ class JamController extends ChangeNotifier {
         pin: normalizedPin,
         customName: name,
         customColor: color,
+        password: password,
       );
     }
 
@@ -1751,17 +1772,25 @@ class JamController extends ChangeNotifier {
         }
       }
 
-      // 2. Agregar anuncios de Navidrome
+      String cleanPin(DiscoveredJamSession s) =>
+          s.pin.toUpperCase().replaceAll(RegExp(r'[^A-Z0-9]'), '');
+      final lanPins = {for (final s in lanResults) cleanPin(s)};
+
+      // 2. Agregar anuncios de Navidrome. Un anuncio sobrevive en el chat si
+      // el anfitrión se cierra de golpe, así que solo se muestra si la sala
+      // responde en la LAN o en el servidor central; si apunta a un servidor
+      // central que no podemos consultar, se conserva (no hay forma de saberlo).
+      final remoteHost = _remoteEndpoint.host;
       for (final s in serverResults) {
-        final clean = s.pin.toUpperCase().replaceAll(RegExp(r'[^A-Z0-9]'), '');
-        if (clean.isNotEmpty && !map.containsKey(clean)) {
-          map[clean] = s;
-        }
+        final clean = cleanPin(s);
+        if (clean.isEmpty || map.containsKey(clean)) continue;
+        final foreignCloud = s.remoteHost != null && s.remoteHost != remoteHost;
+        if (lanPins.contains(clean) || foreignCloud) map[clean] = s;
       }
 
       // 3. Si la sala está en la red local (LAN), preferir LAN por menor latencia
       for (final s in lanResults) {
-        final clean = s.pin.toUpperCase().replaceAll(RegExp(r'[^A-Z0-9]'), '');
+        final clean = cleanPin(s);
         if (clean.isNotEmpty) {
           map[clean] = s;
         }
@@ -1830,6 +1859,10 @@ class JamController extends ChangeNotifier {
     int? customColor,
     String? password,
   }) async {
+    if (JamInviteLink.parse(uri) != null) {
+      return joinByLink(uri,
+          customName: customName, customColor: customColor, password: password);
+    }
     final data = JamQrData.fromUri(uri);
     if (data == null) return false;
     return joinSession(
@@ -2284,7 +2317,11 @@ class JamController extends ChangeNotifier {
     _hostPublishTimer = null;
 
     _player.removeListener(_onPlayerChangedAsHost);
-    if (_role == JamRole.host) _trackHistory(finalize: true);
+    if (_role == JamRole.host) {
+      _trackHistory(finalize: true);
+      final ending = _session;
+      if (ending != null) unawaited(_navidrome.publishServerJamEnded(ending));
+    }
     _guestService.roomPassword = null;
     _remoteService.roomPassword = null;
     _hintSentForTrackId = null;

@@ -116,3 +116,29 @@ npx wscat -c wss://jam.templo.cloud/
 ```
 
 Nunca pegues tokens, contraseñas ni credenciales de Navidrome en los mensajes WebSocket: el servicio sólo recibe PIN, nombres de sala y estado de reproducción.
+
+## Sincronización de datos entre dispositivos (`/api/sync/v1`)
+
+Desactivada por defecto (`syncEnabled` en `/admin` → Funciones). El servidor solo guarda **blobs cifrados en el cliente**: no puede leer temas, ajustes ni la clave de sincronización.
+
+Todas las rutas llevan `Authorization: Bearer <64 hex>`. `vaultId` (64 hex) y el token salen de derivaciones distintas de la clave; el servidor guarda solo el SHA-256 del token. El primer `PUT` a una bóveda nueva la crea.
+
+| Método y ruta | Uso |
+|---|---|
+| `GET /api/sync/v1/<vaultId>` | Lista `{key, updatedAt, size}` |
+| `GET /api/sync/v1/<vaultId>/<key>` | Devuelve `{key, updatedAt, blob}` |
+| `PUT /api/sync/v1/<vaultId>/<key>` | Cuerpo `{updatedAt, blob}`; `409` si hay una versión más reciente (gana el último cambio) |
+| `DELETE /api/sync/v1/<vaultId>[/<key>]` | Borra un documento o toda la bóveda |
+
+Límites editables: tamaño por documento (4 MB), documentos por bóveda (64) y bóvedas (100). Credenciales erróneas cuentan para el bloqueo progresivo por IP.
+
+## Scrotify Connect (control remoto entre tus dispositivos)
+
+Cada **usuario de Navidrome** forma su grupo: los dispositivos de `admin` solo ven a los de `admin`. Se activa configurando `navidromeUrl` en `/admin` (URL de tu Navidrome; vacío = desactivado). El servidor verifica al usuario llamando a `ping` en esa URL con el token de Subsonic (`md5(clave + salt)`): nunca recibe la clave ni consulta URLs enviadas por el cliente. Por el WebSocket normal:
+
+| Mensaje | Respuesta / efecto |
+|---|---|
+| `{"action":"connect_join","user","token","salt","deviceId","name","kind"}` | `{"status":"connect_joined","devices":[…]}` y `{"event":"connect_devices"}` a los demás del mismo usuario (`kind`: `phone`, `tablet`, `desktop`, `other`) |
+| `{"action":"connect_send","to":"<deviceId>"\|"*","blob":"…"}` | El destinatario recibe `{"event":"connect_msg","from","blob"}` |
+
+El servidor solo reenvía `blob`, cifrado de extremo a extremo por los clientes con una clave derivada de la clave del usuario (máx. 64 KB). Hasta 16 dispositivos por usuario y 100 mensajes/s por dispositivo. La verificación correcta se recuerda 5 minutos y los fallos cuentan para el bloqueo por IP. Una segunda conexión del mismo `deviceId` reemplaza a la anterior.

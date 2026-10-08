@@ -12,6 +12,8 @@ import '../widgets/global_top_bar.dart';
 import '../widgets/explore_tracks_view.dart';
 import '../services/home_navigation_controller.dart';
 import '../widgets/track_context_menu.dart';
+import '../widgets/local_download_button.dart';
+import '../widgets/offline_connection_banner.dart';
 import 'liked_songs_screen.dart';
 import 'playlist_detail_screen.dart';
 import 'album_detail_screen.dart';
@@ -275,7 +277,7 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ],
       ),
-      bottomNavigationBar: PersistentPlayerBar(showQueue: !showSidePanel),
+      bottomNavigationBar: const PersistentPlayerBar(),
     );
   }
 
@@ -968,7 +970,11 @@ class _HomeScreenState extends State<HomeScreen> {
               children: [
                 Padding(
                   padding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
-                  child: _genreSelector(),
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(
+                        maxHeight: MediaQuery.sizeOf(context).height * 0.35),
+                    child: SingleChildScrollView(child: _genreSelector()),
+                  ),
                 ),
                 Expanded(child: body),
               ],
@@ -1025,6 +1031,7 @@ class _HomeScreenState extends State<HomeScreen> {
               trailing: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
+                  LocalDownloadButton(tracks: [track], compact: true),
                   IconButton(
                     icon: Icon(Icons.more_horiz, color: context.textMuted),
                     onPressed: () => TrackContextMenu.show(context, track),
@@ -1116,6 +1123,7 @@ class _HomeScreenState extends State<HomeScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          const OfflineConnectionBanner(),
           _quickAccessGrid(),
           const SizedBox(height: 32),
           _sectionHeader(

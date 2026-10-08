@@ -1,8 +1,8 @@
+import '../utils/app_data_dir.dart';
 import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
-import 'package:path_provider/path_provider.dart';
 
 /// Evento individual de reproducción que superó el umbral cualificado.
 class ListeningEvent {
@@ -440,7 +440,7 @@ class ListeningStatsService extends ChangeNotifier {
 
   Future<void> _load() async {
     try {
-      final dir = await getApplicationDocumentsDirectory();
+      final dir = await getAppDataDirectory();
       final file = File('${dir.path}/listening_stats.json');
       if (!await file.exists()) return;
 
@@ -475,7 +475,7 @@ class ListeningStatsService extends ChangeNotifier {
       do {
         _saveAgain = false;
         try {
-          final dir = await getApplicationDocumentsDirectory();
+          final dir = await getAppDataDirectory();
           final file = File('${dir.path}/listening_stats.json');
           final tmp = File('${file.path}.tmp');
           final data = jsonEncode(_events.map((e) => e.toJson()).toList());

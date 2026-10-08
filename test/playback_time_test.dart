@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:navidrome_client/utils/playback_time.dart';
 import 'package:navidrome_client/screens/player_screen.dart';
 import 'package:navidrome_client/widgets/persistent_player_bar.dart';
+import 'package:navidrome_client/services/connect/connect_service.dart';
 import 'package:navidrome_client/services/jam_controller.dart';
 import 'package:navidrome_client/services/navidrome_service.dart';
 import 'package:navidrome_client/services/player_controller.dart';
@@ -316,6 +317,7 @@ void main() {
         MultiProvider(
           providers: [
             ChangeNotifierProvider<PlayerController>.value(value: player),
+            ChangeNotifierProvider<ConnectService>(create: (_) => idleConnectService()),
             ChangeNotifierProvider<JamController>.value(value: jam),
             ChangeNotifierProvider<NavidromeService>.value(value: nav),
             ChangeNotifierProvider<ThemeController>(
@@ -413,6 +415,7 @@ void main() {
         MultiProvider(
           providers: [
             ChangeNotifierProvider<PlayerController>.value(value: player),
+            ChangeNotifierProvider<ConnectService>(create: (_) => idleConnectService()),
             ChangeNotifierProvider<JamController>.value(value: jam),
             ChangeNotifierProvider<NavidromeService>.value(value: nav),
             ChangeNotifierProvider<ThemeController>(
@@ -510,6 +513,7 @@ void main() {
         MultiProvider(
           providers: [
             ChangeNotifierProvider<PlayerController>.value(value: player),
+            ChangeNotifierProvider<ConnectService>(create: (_) => idleConnectService()),
             ChangeNotifierProvider<JamController>.value(value: jam),
             ChangeNotifierProvider<NavidromeService>.value(value: nav),
             ChangeNotifierProvider<ThemeController>(

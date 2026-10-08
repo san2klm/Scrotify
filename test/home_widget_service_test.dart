@@ -53,6 +53,31 @@ void main() {
     );
   });
 
+  test('empuja si la pista actual es favorita y reacciona al cambio', () {
+    fakeAsync((async) {
+      final liked = <String>{};
+      final withLikes = HomeWidgetService(
+        player,
+        isLiked: (t) => liked.contains(t.id),
+        debounce: const Duration(milliseconds: 100),
+        save: (k, v) async => saved[k] = v,
+        refresh: () async => refreshes++,
+        fetchCover: (t) async => null,
+      );
+      withLikes.start();
+      player.change(track: _t('1'), playing: true);
+      async.elapse(const Duration(milliseconds: 150));
+      expect(saved[HomeWidgetService.keyLiked], false);
+      expect(saved[HomeWidgetService.keyAlbum], 'Album');
+
+      liked.add('1');
+      player.change(track: _t('1'), playing: true); // notifica al escuchar
+      async.elapse(const Duration(milliseconds: 150));
+      expect(saved[HomeWidgetService.keyLiked], true);
+      withLikes.dispose();
+    });
+  });
+
   test('empuja pista, artista, estado y carátula al cambiar de canción', () {
     fakeAsync((async) {
       service.start();
@@ -66,6 +91,7 @@ void main() {
 
       expect(saved[HomeWidgetService.keyTitle], 'Title 1');
       expect(saved[HomeWidgetService.keyArtist], 'Artist 1');
+      expect(saved[HomeWidgetService.keyAlbum], 'Album');
       expect(saved[HomeWidgetService.keyPlaying], true);
       expect(saved[HomeWidgetService.keyCoverPath], '/cache/1.img');
       expect(covers, ['1']);

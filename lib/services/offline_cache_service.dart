@@ -1,3 +1,4 @@
+import '../utils/app_data_dir.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -208,7 +209,7 @@ class SqfliteOfflineCacheMetadataStore implements OfflineCacheMetadataStore {
     if (_customDbPath != null) {
       path = _customDbPath!;
     } else {
-      final docDir = await getApplicationDocumentsDirectory();
+      final docDir = await getAppDataDirectory();
       path = p.join(docDir.path, dbName);
     }
 
@@ -466,6 +467,23 @@ class OfflineCacheService {
   })  : _cacheRootDir = cacheRootDir,
         _metadataStore = metadataStore ?? SqfliteOfflineCacheMetadataStore();
 
+  // Solo se autorizan raíces elegidas y comprobadas por Música local.
+  final List<Directory> _musicRoots = [];
+
+  void allowMusicRoot(Directory root) {
+    if (!_musicRoots.any((item) => item.absolute.path == root.absolute.path)) {
+      _musicRoots.add(root.absolute);
+    }
+  }
+
+  Directory _rootForPath(String path, Directory fallback) {
+    final absolute = p.canonicalize(p.absolute(path));
+    for (final root in _musicRoots) {
+      if (p.isWithin(p.canonicalize(root.path), absolute)) return root;
+    }
+    return fallback;
+  }
+
   Future<Directory> getCacheRootDir() async {
     if (_resolvedRootDir != null) return _resolvedRootDir!;
     if (_cacheRootDir != null) {
@@ -498,7 +516,8 @@ class OfflineCacheService {
     final root = await getCacheRootDir();
     final allEntries = await _metadataStore.getAllEntries();
     for (final entry in allEntries) {
-      if (!await _isPathValidAndWithinRoot(entry.localPath, root)) {
+      if (!await _isPathValidAndWithinRoot(
+          entry.localPath, _rootForPath(entry.localPath, root))) {
         await _metadataStore.deleteEntry(entry.serverScope, entry.trackId);
       }
     }
@@ -750,7 +769,8 @@ class OfflineCacheService {
 
     await _ensureInitialized();
     final root = await getCacheRootDir();
-    final stat = await _validateFileForRegistration(localPath, root);
+    final stat = await _validateFileForRegistration(
+        localPath, _rootForPath(localPath, root));
 
     final int actualByteSize = stat.size >= 0 ? stat.size : 0;
     final effectiveDuration = durationSeconds ?? duration ?? 0;
@@ -812,7 +832,8 @@ class OfflineCacheService {
     if (entry == null) return null;
 
     final root = await getCacheRootDir();
-    final valid = await _isPathValidAndWithinRoot(entry.localPath, root);
+    final valid = await _isPathValidAndWithinRoot(
+        entry.localPath, _rootForPath(entry.localPath, root));
     if (!valid) {
       await _metadataStore.deleteEntry(canonicalScope, trackId);
       return null;
@@ -821,6 +842,12 @@ class OfflineCacheService {
     final updated = entry.copyWith(lastAccessedAt: DateTime.now());
     await _metadataStore.saveEntry(updated);
     return updated;
+  }
+
+  /// Retira solo los metadatos, conservando cualquier archivo del usuario.
+  Future<void> forget(String serverScope, String trackId) async {
+    await _ensureInitialized();
+    await _metadataStore.deleteEntry(safeScopeSegment(serverScope), trackId);
   }
 
   /// Alias for [lookup].
@@ -852,7 +879,8 @@ class OfflineCacheService {
 
     if (entry != null) {
       try {
-        if (await _isPathValidAndWithinRoot(entry.localPath, root)) {
+        if (await _isPathValidAndWithinRoot(
+            entry.localPath, _rootForPath(entry.localPath, root))) {
           final file = File(entry.localPath);
           if (await file.exists()) {
             await file.delete();
@@ -922,7 +950,8 @@ class OfflineCacheService {
         await _metadataStore.getAllEntries(serverScope: canonicalScope);
     final valid = <OfflineCacheEntry>[];
     for (final entry in entries) {
-      if (await _isPathValidAndWithinRoot(entry.localPath, root)) {
+      if (await _isPathValidAndWithinRoot(
+          entry.localPath, _rootForPath(entry.localPath, root))) {
         valid.add(entry);
       } else {
         await _metadataStore.deleteEntry(entry.serverScope, entry.trackId);

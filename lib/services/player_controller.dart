@@ -1,3 +1,4 @@
+import '../utils/app_data_dir.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -6,9 +7,11 @@ import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:media_kit/media_kit.dart' as mk;
-import 'package:path_provider/path_provider.dart';
 
+import 'hifi/hifi_native.dart';
+import 'hifi/hifi_profiles.dart';
 import 'navidrome_service.dart';
+import 'remote_playback.dart';
 import 'settings_controller.dart';
 import 'listening_stats_service.dart';
 import 'waveform_service.dart';
@@ -79,6 +82,7 @@ class MostPlayedItem {
 /// cola es manual: `_order` es el orden de reproducción (índices de `_queue`,
 /// barajados si el shuffle está activo) y `_pos` la posición en ese orden.
 class PlayerController extends ChangeNotifier {
+  String? Function(String trackId)? localFileResolver;
   final NavidromeService _service;
   final SettingsController _settings;
   final WaveformService _waveformService = AudioWaveformService();
@@ -310,7 +314,91 @@ class PlayerController extends ChangeNotifier {
     if (!silent) notifyListeners();
   }
 
-  List<Track> get queue => List.unmodifiable(_queue);
+  // ---------------------------------------------------------------------------
+  // Scrotify Connect: modo espejo
+  // ---------------------------------------------------------------------------
+
+  RemotePlayback? _remote;
+  int _forceLocal = 0;
+  String? _mirroredTrackId;
+
+  /// Dispositivo remoto controlado (Connect). Mientras esté activo, este
+  /// controlador refleja y manda al remoto en lugar de reproducir aquí.
+  RemotePlayback? get remote => _remote;
+  set remote(RemotePlayback? value) {
+    _remote?.removeListener(_onRemoteChanged);
+    _remote = value;
+    _remote?.addListener(_onRemoteChanged);
+  }
+
+  bool get _mirror => _forceLocal == 0 && (_remote?.active ?? false);
+
+  /// `true` si ahora mismo se está controlando otro dispositivo.
+  bool get isMirroring => _mirror;
+
+  /// Ejecuta [action] sobre el reproductor local aunque haya un remoto
+  /// controlado (lo usa Connect para transferir y para atender comandos).
+  Future<T> runLocally<T>(Future<T> Function() action) async {
+    _forceLocal++;
+    try {
+      return await action();
+    } finally {
+      _forceLocal--;
+    }
+  }
+
+  /// Lee estado del reproductor local ignorando el modo espejo.
+  T readLocally<T>(T Function() read) {
+    _forceLocal++;
+    try {
+      return read();
+    } finally {
+      _forceLocal--;
+    }
+  }
+
+  void _onRemoteChanged() {
+    if (_mirror) {
+      final id = currentTrack?.id;
+      if (id != _mirroredTrackId) {
+        _mirroredTrackId = id;
+        if (id != null) _loadCurrentTrackWaveform();
+      }
+    } else {
+      _mirroredTrackId = null;
+    }
+    notifyListeners();
+  }
+
+  /// Emite el valor local mientras se reproduce aquí y el del remoto, muestreado,
+  /// mientras se controla otro dispositivo (los widgets no tienen que
+  /// resuscribirse al cambiar de modo).
+  Stream<T> _modal<T>(Stream<T> local, T Function() remoteNow,
+      {Duration tick = const Duration(milliseconds: 250)}) {
+    late StreamController<T> controller;
+    StreamSubscription<T>? sub;
+    Timer? timer;
+    controller = StreamController<T>(
+      onListen: () {
+        sub = local.listen((v) {
+          if (!_mirror) controller.add(v);
+        }, onError: controller.addError);
+        timer = Timer.periodic(tick, (_) {
+          if (_mirror) controller.add(remoteNow());
+        });
+        if (_mirror) controller.add(remoteNow());
+      },
+      onCancel: () {
+        timer?.cancel();
+        return sub?.cancel();
+      },
+    );
+    return controller.stream;
+  }
+
+  List<Track> get queue => _mirror
+      ? List.unmodifiable(_remote!.queue)
+      : List.unmodifiable(_queue);
   List<Track> get recentlyPlayed => List.unmodifiable(_recentlyPlayed);
   List<MostPlayedItem> get mostPlayed {
     final items = _mostPlayedByKey.values.toList();
@@ -321,9 +409,13 @@ class PlayerController extends ChangeNotifier {
     return List.unmodifiable(items);
   }
 
-  int get currentOrderPos => _pos;
-  List<int> get order => List.unmodifiable(_order);
-  List<Track> get orderedQueue => [
+  int get currentOrderPos => _mirror ? _remote!.index : _pos;
+  List<int> get order => _mirror
+      ? List.generate(_remote!.queue.length, (i) => i)
+      : List.unmodifiable(_order);
+  List<Track> get orderedQueue => _mirror
+      ? List.unmodifiable(_remote!.queue)
+      : [
         for (final idx in _order)
           if (idx >= 0 && idx < _queue.length) _queue[idx]
       ];
@@ -331,7 +423,14 @@ class PlayerController extends ChangeNotifier {
   int get _currentIndex =>
       _pos >= 0 && _pos < _order.length ? _order[_pos] : -1;
 
-  Track? get currentTrack => _currentIndex >= 0 ? _queue[_currentIndex] : null;
+  Track? get currentTrack {
+    if (_mirror) {
+      final i = _remote!.index;
+      final q = _remote!.queue;
+      return i >= 0 && i < q.length ? q[i] : null;
+    }
+    return _currentIndex >= 0 ? _queue[_currentIndex] : null;
+  }
   bool get hasTrack => currentTrack != null;
 
   // Waveform handling
@@ -417,25 +516,38 @@ class PlayerController extends ChangeNotifier {
     _usefulEnd = Duration(milliseconds: ((lastIdx + 1) * binMs).round());
   }
 
-  Stream<PlayerState> get playerStateStream => _karaokeMode
-      ? _karaokePlayerStateController.stream
-      : _lead.playerStateStream;
-  Stream<Duration> get positionStream =>
-      _karaokeMode ? _karaokePositionController.stream : _lead.positionStream;
-  Stream<Duration?> get durationStream =>
-      _karaokeMode ? _karaokeDurationController.stream : _lead.durationStream;
-  Stream<double> get volumeStream => _lead.volumeStream;
+  Stream<PlayerState> get playerStateStream => _modal(
+      _karaokeMode
+          ? _karaokePlayerStateController.stream
+          : _lead.playerStateStream,
+      () => PlayerState(_remote!.playing, ProcessingState.ready));
+  Stream<Duration> get positionStream => _modal(
+      _karaokeMode ? _karaokePositionController.stream : _lead.positionStream,
+      () => _remote!.position);
+  Stream<Duration?> get durationStream => _modal(
+      _karaokeMode ? _karaokeDurationController.stream : _lead.durationStream,
+      () => _remote!.duration);
+  Stream<double> get volumeStream =>
+      _modal(_lead.volumeStream, () => _remote!.volume);
 
-  bool get shuffleEnabled => _shuffleEnabled;
-  LoopMode get repeatMode => _repeatMode;
-  bool get playing =>
-      _karaokeMode ? (_karaokePlayer?.state.playing ?? false) : _lead.playing;
-  Duration get position => _karaokeMode
-      ? (_karaokePlayer?.state.position ?? Duration.zero)
-      : _lead.position;
-  Duration? get duration =>
-      _karaokeMode ? _karaokePlayer?.state.duration : _lead.duration;
-  double get volume => _volume;
+  bool get shuffleEnabled => _mirror ? _remote!.shuffle : _shuffleEnabled;
+  LoopMode get repeatMode => _mirror ? _remote!.repeat : _repeatMode;
+  bool get playing => _mirror
+      ? _remote!.playing
+      : _karaokeMode
+          ? (_karaokePlayer?.state.playing ?? false)
+          : _lead.playing;
+  Duration get position => _mirror
+      ? _remote!.position
+      : _karaokeMode
+          ? (_karaokePlayer?.state.position ?? Duration.zero)
+          : _lead.position;
+  Duration? get duration => _mirror
+      ? _remote!.duration
+      : _karaokeMode
+          ? _karaokePlayer?.state.duration
+          : _lead.duration;
+  double get volume => _mirror ? _remote!.volume : _volume;
 
   double _playbackSpeed = 1.0;
   double get playbackSpeed => _playbackSpeed;
@@ -454,6 +566,7 @@ class PlayerController extends ChangeNotifier {
       }
     }
   }
+
   bool get gapless => _settings.gapless;
   ProcessingState get processingState => _karaokeMode
       ? (_karaokePlayer != null && (_karaokePlayer?.state.buffering ?? false)
@@ -531,7 +644,10 @@ class PlayerController extends ChangeNotifier {
   ReplayGainResult _computeTrackReplayGain(Track? track) {
     return computeReplayGain(
       replayGain: track?.replayGain,
-      mode: _settings.replayGainMode,
+      // Bit-perfect: ningún procesamiento de volumen.
+      mode: (_hifiPlan?.allowReplayGain ?? true)
+          ? _settings.replayGainMode
+          : ReplayGainMode.off,
       preampDb: _settings.replayGainPreamp,
       preventClipping: _settings.replayGainPreventClipping,
     );
@@ -739,7 +855,7 @@ class PlayerController extends ChangeNotifier {
 
   Future<void> _loadHistory() async {
     try {
-      final dir = await getApplicationDocumentsDirectory();
+      final dir = await getAppDataDirectory();
       final session = _mostPlayedSession;
       File file;
       if (session != null) {
@@ -770,11 +886,10 @@ class PlayerController extends ChangeNotifier {
 
   Future<void> _saveHistory() async {
     try {
-      final dir = await getApplicationDocumentsDirectory();
+      final dir = await getAppDataDirectory();
       final session = _mostPlayedSession;
-      final fileName = session != null
-          ? _historyFileName(session)
-          : 'recently_played.json';
+      final fileName =
+          session != null ? _historyFileName(session) : 'recently_played.json';
       final file = File('${dir.path}/$fileName');
       await file.writeAsString(
           jsonEncode(_recentlyPlayed.map(_trackToJson).toList()));
@@ -839,7 +954,7 @@ class PlayerController extends ChangeNotifier {
     if (session == null) return;
     final loadGeneration = ++_mostPlayedLoadGeneration;
     try {
-      final dir = await getApplicationDocumentsDirectory();
+      final dir = await getAppDataDirectory();
       final file = File('${dir.path}/${_mostPlayedFileName(session)}');
       if (!await file.exists()) return;
       final values = jsonDecode(await file.readAsString()) as List;
@@ -869,7 +984,7 @@ class PlayerController extends ChangeNotifier {
     if (session == null) return;
     final values = _mostPlayedByKey.values.map(_mostPlayedToJson).toList();
     try {
-      final dir = await getApplicationDocumentsDirectory();
+      final dir = await getAppDataDirectory();
       final file = File('${dir.path}/${_mostPlayedFileName(session)}');
       await file.writeAsString(jsonEncode(values));
     } catch (_) {}
@@ -994,13 +1109,19 @@ class PlayerController extends ChangeNotifier {
   // Carga de fuentes
   // ---------------------------------------------------------------------------
 
-  AudioSource _sourceFor(Track t) => AudioSource.uri(Uri.parse(
-      _service.getStreamUrl(t.id, quality: _settings.effectiveQuality)));
+  AudioSource _sourceFor(Track t) {
+    final path = localFileResolver?.call(t.id);
+    return AudioSource.uri(path != null
+        ? Uri.file(path)
+        : Uri.parse(_service.getPlaybackStreamUrl(t.id,
+            quality: _settings.effectiveQuality)));
+  }
 
   Future<void> _loadTrackOn(AudioPlayer p, int realIndex) async {
     final track = _queue[realIndex];
     final isPlayerA = identical(p, _a);
     _applyReplayGainForTrack(onPlayerA: isPlayerA, track: track);
+    await _requestHifiOutputFor(track);
     await p.setAudioSource(_sourceFor(track));
     final gainResult = isPlayerA ? _gainA : _gainB;
     final targetVol = _computeEffectivePlayerVolume(
@@ -1116,6 +1237,10 @@ class PlayerController extends ChangeNotifier {
     Playlist? sourcePlaylist,
   }) async {
     if (tracks.isEmpty) return;
+    if (_mirror) {
+      _remote!.playQueue(tracks, startIndex);
+      return;
+    }
     _cancelFade();
     _sourcePlaylist = sourcePlaylist;
     _queue = List.of(tracks);
@@ -1144,6 +1269,10 @@ class PlayerController extends ChangeNotifier {
     Playlist? sourcePlaylist,
   }) async {
     if (tracks.isEmpty) return;
+    if (_mirror) {
+      _remote!.playQueue(tracks, _rand.nextInt(tracks.length), shuffle: true);
+      return;
+    }
     _shuffleEnabled = true;
     await playQueue(
       tracks,
@@ -1155,6 +1284,7 @@ class PlayerController extends ChangeNotifier {
   /// Añade una pista al final de la cola de reproducción.
   /// Si no hay nada reproduciéndose, empieza a reproducirla.
   Future<void> addToQueue(Track track) async {
+    if (_mirror) return _remote!.addToQueue(track);
     _queue.add(track);
     final newRealIndex = _queue.length - 1;
     _order.add(newRealIndex);
@@ -1173,6 +1303,7 @@ class PlayerController extends ChangeNotifier {
 
   /// Inserta una pista para sonar a continuación de la canción actual.
   Future<void> addNextInQueue(Track track) async {
+    if (_mirror) return _remote!.addNext(track);
     _queue.add(track);
     final newRealIndex = _queue.length - 1;
     if (_pos >= 0 && _pos < _order.length) {
@@ -1195,6 +1326,7 @@ class PlayerController extends ChangeNotifier {
 
   /// Elimina una pista de la cola en la posición del orden dado.
   void removeFromQueue(int orderIndex) {
+    if (_mirror) return _remote!.removeFromQueue(orderIndex);
     if (orderIndex < 0 || orderIndex >= _order.length) return;
     if (orderIndex == _pos) return; // No eliminar la canción que está sonando
     _order.removeAt(orderIndex);
@@ -1210,6 +1342,7 @@ class PlayerController extends ChangeNotifier {
 
   /// Reordena las pistas pendientes de la cola.
   void reorderQueue(int oldOrderIndex, int newOrderIndex) {
+    if (_mirror) return _remote!.reorderQueue(oldOrderIndex, newOrderIndex);
     if (oldOrderIndex < 0 || oldOrderIndex >= _order.length) return;
     if (newOrderIndex < 0 || newOrderIndex >= _order.length) return;
     if (oldOrderIndex == newOrderIndex) return;
@@ -1232,6 +1365,7 @@ class PlayerController extends ChangeNotifier {
 
   /// Limpia la cola y detiene la reproducción.
   void clearQueue() {
+    if (_mirror) return _remote!.clearQueue();
     _cancelFade();
     _queue.clear();
     _order.clear();
@@ -1247,6 +1381,7 @@ class PlayerController extends ChangeNotifier {
   }
 
   Future<void> toggleShuffle() async {
+    if (_mirror) return _remote!.toggleShuffle();
     _shuffleEnabled = !_shuffleEnabled;
     final n = _queue.length;
     if (n == 0) return;
@@ -1262,6 +1397,7 @@ class PlayerController extends ChangeNotifier {
   }
 
   Future<void> toggleRepeat() async {
+    if (_mirror) return _remote!.toggleRepeat();
     _repeatMode = switch (_repeatMode) {
       LoopMode.off => LoopMode.all,
       LoopMode.all => LoopMode.one,
@@ -1333,8 +1469,8 @@ class PlayerController extends ChangeNotifier {
     if (_karaokeMode && _karaokePlayer != null) {
       final t = currentTrack;
       if (t != null) {
-        final url =
-            _service.getStreamUrl(t.id, quality: _settings.effectiveQuality);
+        final url = _service.getPlaybackStreamUrl(t.id,
+            quality: _settings.effectiveQuality);
         unawaited(_applyKaraokeVolume());
         unawaited(_karaokePlayer!.open(mk.Media(url), play: true));
         _recordRecent(t);
@@ -1390,7 +1526,8 @@ class PlayerController extends ChangeNotifier {
   // Crossfade
   // ---------------------------------------------------------------------------
 
-  Duration? get _crossfade => _settings.crossfade;
+  Duration? get _crossfade =>
+      (_hifiPlan?.allowCrossfade ?? true) ? _settings.crossfade : null;
 
   void _ensureWatchdog() {
     _watchdog ??= Timer.periodic(
@@ -1497,7 +1634,9 @@ class PlayerController extends ChangeNotifier {
     final crossfade = _crossfade;
     final repeatOne = _repeatMode == LoopMode.one;
     // Cambios de configuración en caliente: anular un fundido/a medio preparar.
-    if ((crossfade ?? Duration.zero) <= Duration.zero || repeatOne || _sleepEndsAtEndOfTrack) {
+    if ((crossfade ?? Duration.zero) <= Duration.zero ||
+        repeatOne ||
+        _sleepEndsAtEndOfTrack) {
       if (_fading || _preloaded) _cancelFade();
       return;
     }
@@ -1698,7 +1837,7 @@ class PlayerController extends ChangeNotifier {
       await _initKaraokePlayer();
       _karaokeMode = true;
       if (currentTr != null) {
-        final streamUrl = _service.getStreamUrl(currentTr.id,
+        final streamUrl = _service.getPlaybackStreamUrl(currentTr.id,
             quality: _settings.effectiveQuality);
         await _applyVocalFilter(_vocalReduction);
         await _applyKaraokeVolume();
@@ -1767,6 +1906,7 @@ class PlayerController extends ChangeNotifier {
   // ---------------------------------------------------------------------------
 
   Future<void> togglePlay() async {
+    if (_mirror) return _remote!.toggle();
     if (currentTrack == null) return;
     if (_karaokeMode && _karaokePlayer != null) {
       await _karaokePlayer!.playOrPause();
@@ -1787,14 +1927,17 @@ class PlayerController extends ChangeNotifier {
   }
 
   Future<void> play() async {
+    if (_mirror) return _remote!.play();
     if (!playing) await togglePlay();
   }
 
   Future<void> pause() async {
+    if (_mirror) return _remote!.pause();
     if (playing) await togglePlay();
   }
 
   Future<void> skipNext() async {
+    if (_mirror) return _remote!.next();
     final next = _nextOrderPos(_pos);
     if (next == null) return;
     if (await _playPreparedNext(next)) {
@@ -1810,8 +1953,8 @@ class PlayerController extends ChangeNotifier {
     if (_karaokeMode && _karaokePlayer != null) {
       final t = currentTrack;
       if (t != null) {
-        final url =
-            _service.getStreamUrl(t.id, quality: _settings.effectiveQuality);
+        final url = _service.getPlaybackStreamUrl(t.id,
+            quality: _settings.effectiveQuality);
         await _applyKaraokeVolume();
         await _karaokePlayer!.open(mk.Media(url), play: true);
         _recordRecent(t);
@@ -1828,6 +1971,7 @@ class PlayerController extends ChangeNotifier {
   }
 
   Future<void> skipPrevious() async {
+    if (_mirror) return _remote!.previous();
     _cancelFade();
     if (position > const Duration(seconds: 3)) {
       await seek(Duration.zero);
@@ -1838,8 +1982,8 @@ class PlayerController extends ChangeNotifier {
       if (_karaokeMode && _karaokePlayer != null) {
         final t = currentTrack;
         if (t != null) {
-          final url =
-              _service.getStreamUrl(t.id, quality: _settings.effectiveQuality);
+          final url = _service.getPlaybackStreamUrl(t.id,
+              quality: _settings.effectiveQuality);
           await _applyKaraokeVolume();
           await _karaokePlayer!.open(mk.Media(url), play: true);
           _recordRecent(t);
@@ -1857,6 +2001,7 @@ class PlayerController extends ChangeNotifier {
   }
 
   Future<void> seek(Duration target) async {
+    if (_mirror) return _remote!.seek(target);
     _cancelFade();
     if (_karaokeMode && _karaokePlayer != null) {
       await _karaokePlayer!.seek(target);
@@ -1867,6 +2012,9 @@ class PlayerController extends ChangeNotifier {
   }
 
   Future<void> setVolume(double v) async {
+    if (_mirror) return _remote!.setVolume(v.clamp(0.0, 1.0).toDouble());
+    // Bit-perfect: el volumen digital queda fijo al 100 %.
+    if (volumeLocked) return;
     _volume = v.clamp(0.0, 1.0).toDouble();
     if (_karaokeMode && _karaokePlayer != null) {
       await _applyKaraokeVolume();
@@ -1887,6 +2035,72 @@ class PlayerController extends ChangeNotifier {
   // Cambios de configuración (calidad, volumen)
   // ---------------------------------------------------------------------------
 
+  // ---------------------------------------------------------------------------
+  // Modos de alta fidelidad (Estándar / Alta fidelidad / Bit-perfect)
+  // ---------------------------------------------------------------------------
+
+  HifiPlan? _hifiPlan;
+  double? _volumeBeforeLock;
+
+  /// Plan de fidelidad vigente (`null` hasta que el coordinador lo calcule).
+  HifiPlan? get hifiPlan => _hifiPlan;
+
+  /// En Bit-perfect el volumen digital queda fijo al 100 %.
+  bool get volumeLocked => _hifiPlan?.lockVolumeAt100 ?? false;
+
+  /// Aplica un [HifiPlan]: origen del stream, volumen, crossfade, ReplayGain y
+  /// salida nativa. Lo llama `HifiCoordinator` al cambiar el modo o la red.
+  Future<void> applyHifi(HifiPlan plan) async {
+    final previous = _hifiPlan;
+    _hifiPlan = plan;
+
+    // Origen del stream: el archivo original en Alta fidelidad/Bit-perfect.
+    final streamBefore = _service.hifiStream?.toQuery();
+    _service.hifiStream =
+        plan.mode == AudioFidelityMode.standard ? null : plan.stream;
+    final streamChanged =
+        !mapEquals(streamBefore, _service.hifiStream?.toQuery());
+
+    // Volumen digital fijo (y recuperación del anterior al salir).
+    if (plan.lockVolumeAt100 && previous?.lockVolumeAt100 != true) {
+      _volumeBeforeLock = _volume;
+      _volume = 1.0;
+    } else if (!plan.lockVolumeAt100 && previous?.lockVolumeAt100 == true) {
+      _volume = _volumeBeforeLock ?? _volume;
+      _volumeBeforeLock = null;
+    }
+
+    if (!plan.allowCrossfade && (_fading || _preloaded)) _cancelFade();
+    _reapplyReplayGainToCurrentPlayers(); // vuelve a calcular volumen y ganancia
+
+    if (plan.requestAndroidBitPerfect) {
+      final track = currentTrack;
+      if (track != null) unawaited(_requestHifiOutputFor(track));
+    } else if (previous?.requestAndroidBitPerfect == true) {
+      unawaited(HifiNative.disableAndroidBitPerfect());
+    }
+
+    // Cambió el origen del audio: recarga la pista en curso sin perder la posición.
+    if (streamChanged && _currentIndex >= 0) await _reloadAtQuality();
+    notifyListeners();
+  }
+
+  /// Bit-perfect (Android 14+) e iOS necesitan la frecuencia/profundidad de cada pista.
+  Future<void> _requestHifiOutputFor(Track track) async {
+    final plan = _hifiPlan;
+    if (plan == null) return;
+    if (plan.requestAndroidBitPerfect) {
+      await HifiNative.enableAndroidBitPerfect(
+        sampleRate: track.samplingRate ?? 44100,
+        bitDepth: track.bitDepth ?? 16,
+      );
+    }
+    final rate = track.samplingRate;
+    if (plan.matchIosSampleRate && rate != null) {
+      await HifiNative.setIosPreferredSampleRate(rate);
+    }
+  }
+
   void _onSettingsChanged() {
     final q = _settings.effectiveQuality;
     if (q != _lastAppliedQuality) {
@@ -1897,6 +2111,11 @@ class PlayerController extends ChangeNotifier {
     // arrastrar el slider de crossfade u otros ajustes resetee el volumen).
     if (_settings.initialVolume != _lastAppliedVolume) {
       _lastAppliedVolume = _settings.initialVolume;
+      if (volumeLocked) {
+        // Se recordará al salir de Bit-perfect.
+        _volumeBeforeLock = _settings.initialVolume;
+        return;
+      }
       _volume = _settings.initialVolume;
       if (_karaokeMode && _karaokePlayer != null) {
         unawaited(_applyKaraokeVolume());
@@ -1932,8 +2151,8 @@ class PlayerController extends ChangeNotifier {
       if (t != null) {
         final pos = _karaokePlayer!.state.position;
         final wasPlaying = _karaokePlayer!.state.playing;
-        final url =
-            _service.getStreamUrl(t.id, quality: _settings.effectiveQuality);
+        final url = _service.getPlaybackStreamUrl(t.id,
+            quality: _settings.effectiveQuality);
         await _applyKaraokeVolume();
         await _karaokePlayer!.open(mk.Media(url), play: wasPlaying);
         if (pos > Duration.zero) {
@@ -1967,6 +2186,7 @@ class PlayerController extends ChangeNotifier {
 
   @override
   void dispose() {
+    _remote?.removeListener(_onRemoteChanged);
     _audioHandler?.detachPlayerController();
     _audioHandler = null;
     _watchdog?.cancel();

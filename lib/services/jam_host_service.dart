@@ -1095,6 +1095,7 @@ class JamHostService {
       'albumArtUrl': _albumArtUrl,
       'mode': _mode.name,
       'isPublic': _isPublic,
+      'hasPassword': roomPassword?.isNotEmpty == true,
       if (hasFallback)
         'remoteHost': _allLocalIps.firstWhere((address) => address != _hostIp),
       if (hasFallback) 'remotePort': _port,

@@ -1,99 +1,143 @@
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
+import 'package:navidrome_client/models/eq_models.dart';
+import 'package:navidrome_client/services/eq/eq_backends.dart';
+import 'package:navidrome_client/services/eq/eq_math.dart';
+import 'package:navidrome_client/services/eq/eq_presets.dart';
 import 'package:navidrome_client/services/equalizer_service.dart';
+
+class _FakeBackend extends EqBackend {
+  final applied = <(List<EqBand>, double)>[];
+  int bypasses = 0;
+
+  @override
+  EqCapabilities get capabilities =>
+      const EqCapabilities(exact: true, maxBands: 16, engineLabel: 'fake');
+
+  @override
+  Future<void> apply(List<EqBand> bands, double preampDb) async =>
+      applied.add((bands, preampDb));
+
+  @override
+  Future<void> bypass() async => bypasses++;
+}
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  group('EqualizerService', () {
-    test('initializes with 10 bands and default flat gains', () {
-      final eq = EqualizerService();
+  late Directory dir;
+  late _FakeBackend backend;
+  late EqualizerService eq;
 
-      expect(EqualizerService.bandCount, 10);
-      expect(EqualizerService.bandFrequencies, [
-        31,
-        62,
-        125,
-        250,
-        500,
-        1000,
-        2000,
-        4000,
-        8000,
-        16000,
-      ]);
-      expect(EqualizerService.bandLabels.length, 10);
-      expect(eq.gains.length, 10);
-      expect(eq.gains.every((g) => g == 0.0), isTrue);
-      expect(eq.currentPreset, 'Flat');
-      expect(eq.enabled, isFalse);
-    });
+  setUp(() async {
+    dir = await Directory.systemTemp.createTemp('scrotify-eq-');
+    backend = _FakeBackend();
+    eq = EqualizerService(backend: backend, storageDir: dir);
+    await eq.initialize();
+  });
 
-    test('clamps band gains between -12.0 dB and +12.0 dB', () {
-      final eq = EqualizerService();
+  tearDown(() async {
+    eq.dispose();
+    await dir.delete(recursive: true);
+  });
 
-      eq.setBandGain(0, 15.5);
-      expect(eq.gains[0], 12.0);
+  test('arranca plano, desactivado y en modo simple', () {
+    expect(eq.enabled, isFalse);
+    expect(eq.mode, EqMode.simple);
+    expect(eq.active.isFlat, isTrue);
+  });
 
-      eq.setBandGain(1, -25.0);
-      expect(eq.gains[1], -12.0);
+  test('desactivado no aplica nada: pasa por el bypass', () async {
+    await eq.selectProfile(EqPresets.simple[1]); // «Más graves» activa el EQ
+    expect(eq.enabled, isTrue);
+    expect(backend.applied, isNotEmpty);
+    final applied = backend.applied.length;
 
-      eq.setBandGain(2, 4.5);
-      expect(eq.gains[2], 4.5);
+    await eq.setEnabled(false);
+    expect(backend.bypasses, greaterThan(0));
+    expect(backend.applied.length, applied);
+  });
 
-      // Invalid index does not crash or modify
-      eq.setBandGain(-1, 5.0);
-      eq.setBandGain(10, 5.0);
-      expect(eq.gains.length, 10);
-    });
+  test('el preamp automático compensa el realce que recibe el backend',
+      () async {
+    await eq.setMode(EqMode.intermediate);
+    final bass = EqPresets.graphic.firstWhere((p) => p.name == 'Bass Boost');
+    await eq.selectProfile(bass);
+    final (bands, preamp) = backend.applied.last;
+    expect(bands, isNotEmpty);
+    expect(preamp, lessThan(-6));
+    expect(preamp, EqMath.autoPreampDb(bands));
+  });
 
-    test('applies presets correctly and detects custom edits', () {
-      final eq = EqualizerService();
+  test('cambiar de modo conserva la curva (simple → 10 bandas)', () async {
+    await eq.selectProfile(EqPresets.simple[1]); // graves +5 dB
+    final before = EqMath.responseDb(eq.active.effectiveBands, 80);
+    await eq.setMode(EqMode.intermediate);
+    expect(eq.mode, EqMode.intermediate);
+    expect(eq.active.bands, hasLength(10));
+    final after = EqMath.responseDb(eq.active.effectiveBands, 80);
+    expect(after, closeTo(before, 0.8));
+  });
 
-      eq.applyPreset('Bass Boost');
-      expect(eq.currentPreset, 'Bass Boost');
-      expect(eq.gains, EqualizerService.presets['Bass Boost']);
+  test('de cualquier modo al profesional no pierde filtros', () async {
+    await eq.setMode(EqMode.intermediate);
+    await eq
+        .selectProfile(EqPresets.graphic.firstWhere((p) => p.name == 'Rock'));
+    final bands = eq.active.bands;
+    await eq.setMode(EqMode.professional);
+    expect(eq.active.bands, bands);
+  });
 
-      eq.applyPreset('Vocal');
-      expect(eq.currentPreset, 'Vocal');
-      expect(eq.gains, EqualizerService.presets['Vocal']);
+  test('el modo Bit-perfect pone el ecualizador en pausa', () async {
+    await eq.selectProfile(EqPresets.simple[1]);
+    final bypasses = backend.bypasses;
+    await eq.setHifiAllowsEq(false);
+    expect(eq.blockedByHifi, isTrue);
+    expect(backend.bypasses, bypasses + 1);
 
-      eq.applyPreset('Treble Boost');
-      expect(eq.currentPreset, 'Treble Boost');
-      expect(eq.gains, EqualizerService.presets['Treble Boost']);
+    await eq.setHifiAllowsEq(true);
+    expect(eq.blockedByHifi, isFalse);
+    expect(backend.applied.last.$1, isNotEmpty);
+  });
 
-      // Modifying one band marks it as Personalizado
-      eq.setBandGain(0, 1.0);
-      expect(eq.currentPreset, 'Personalizado');
+  test('importa AutoEQ y lo deja activo en modo profesional', () async {
+    final warnings = await eq.importApo(
+        'Preamp: -4.0 dB\nFilter 1: ON PK Fc 1000 Hz Gain 3 dB Q 1.41\nruido',
+        'HD 600');
+    expect(warnings, hasLength(1));
+    expect(eq.mode, EqMode.professional);
+    expect(eq.enabled, isTrue);
+    expect(eq.active.bands, hasLength(1));
+    expect(eq.effectivePreampDb, -4.0);
+  });
 
-      // Reset restores Flat preset
-      eq.reset();
-      expect(eq.currentPreset, 'Flat');
-      expect(eq.gains.every((g) => g == 0.0), isTrue);
-    });
+  test('persiste modo, perfiles y presets propios entre ejecuciones', () async {
+    await eq.setMode(EqMode.intermediate);
+    await eq
+        .selectProfile(EqPresets.graphic.firstWhere((p) => p.name == 'Vocal'));
+    await eq.saveCurrentAs('Mi vocal');
+    // La escritura tiene un debounce de 600 ms.
+    await Future<void>.delayed(const Duration(milliseconds: 800));
 
-    test('toggles enabled state and bypass correctly', () {
-      final eq = EqualizerService();
+    final file = File('${dir.path}/equalizer_v2.json');
+    expect(file.existsSync(), isTrue);
+    expect(File('${file.path}.tmp').existsSync(), isFalse);
 
-      expect(eq.enabled, isFalse);
-      eq.setEnabled(true);
-      expect(eq.enabled, isTrue);
+    final again = EqualizerService(backend: _FakeBackend(), storageDir: dir);
+    addTearDown(again.dispose);
+    await again.initialize();
+    expect(again.mode, EqMode.intermediate);
+    expect(again.enabled, isTrue);
+    expect(again.presetsForMode.any((p) => p.name == 'Mi vocal'), isTrue);
+  });
 
-      eq.toggleEnabled();
-      expect(eq.enabled, isFalse);
-
-      eq.toggleEnabled();
-      expect(eq.enabled, isTrue);
-
-      eq.bypass();
-      expect(eq.enabled, isFalse);
-    });
-
-    test('honestly reports that real-time backend DSP is not active', () {
-      final eq = EqualizerService();
-
-      expect(eq.isBackendSupported, isFalse);
-      expect(eq.backendStatusMessage, contains('just_audio'));
-      expect(eq.backendStatusMessage, contains('media_kit'));
-    });
+  test('un archivo corrupto arranca plano sin lanzar', () async {
+    await File('${dir.path}/equalizer_v2.json').writeAsString('{ no es json');
+    final broken = EqualizerService(backend: _FakeBackend(), storageDir: dir);
+    addTearDown(broken.dispose);
+    await broken.initialize();
+    expect(broken.enabled, isFalse);
+    expect(broken.active.isFlat, isTrue);
   });
 }

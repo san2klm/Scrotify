@@ -6,6 +6,7 @@ import '../services/player_controller.dart';
 import '../widgets/interactive_artist_text.dart';
 import '../widgets/persistent_player_bar.dart';
 import '../widgets/global_top_bar.dart';
+import '../widgets/local_download_button.dart';
 import '../utils/app_colors.dart';
 import '../widgets/material_surface.dart';
 
@@ -126,21 +127,26 @@ class _AlbumDetailScreenState extends State<AlbumDetailScreen> {
                                     color: context.textPrimary, fontSize: 14)),
                             subtitle: InteractiveArtistText(
                                 artistString: track.artist),
-                            trailing: IconButton(
-                              icon: Icon(
-                                starred
-                                    ? Icons.favorite
-                                    : Icons.favorite_border,
-                                color: starred
-                                    ? context.accent
-                                    : context.textMuted,
-                                size: 20,
+                            trailing:
+                                Row(mainAxisSize: MainAxisSize.min, children: [
+                              LocalDownloadButton(
+                                  tracks: [track], compact: true),
+                              IconButton(
+                                icon: Icon(
+                                  starred
+                                      ? Icons.favorite
+                                      : Icons.favorite_border,
+                                  color: starred
+                                      ? context.accent
+                                      : context.textMuted,
+                                  size: 20,
+                                ),
+                                onPressed: () async {
+                                  await nav.toggleStar(track);
+                                  setState(() {});
+                                },
                               ),
-                              onPressed: () async {
-                                await nav.toggleStar(track);
-                                setState(() {});
-                              },
-                            ),
+                            ]),
                             onTap: () => context
                                 .read<PlayerController>()
                                 .playQueue(tracks, startIndex: index),

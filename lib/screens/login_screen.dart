@@ -37,6 +37,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Future<void> _tryAutoLogin() async {
     var allowLegacyCredentials = true;
+    var openedLibrary = false;
     try {
       if (mounted) {
         final profilesCtrl = context.read<ServerProfilesController>();
@@ -70,12 +71,17 @@ class _LoginScreenState extends State<LoginScreen> {
       if (_savedUrl != null && _savedUser != null && _savedPass != null) {
         if (mounted) {
           final nav = context.read<NavidromeService>();
-          await nav.connectByUrl(
-            _savedUrl!,
-            _savedUser!,
-            _savedPass!,
-          );
+          try {
+            await nav.connectByUrl(_savedUrl!, _savedUser!, _savedPass!);
+          } catch (error) {
+            if (!NavidromeService.isNetworkFailure(error) ||
+                !await nav.openOfflineLibrary(
+                    _savedUrl!, _savedUser!, _savedPass!)) {
+              rethrow;
+            }
+          }
           if (mounted) {
+            openedLibrary = true;
             Navigator.pushReplacement(
               context,
               MaterialPageRoute(builder: (_) => const HomeShell()),
@@ -87,7 +93,7 @@ class _LoginScreenState extends State<LoginScreen> {
     } catch (_) {
       // Si falla el auto-login, se presentan las pantallas precargadas con los datos
     } finally {
-      if (mounted) {
+      if (mounted && !openedLibrary) {
         setState(() => _checkingSavedCreds = false);
       }
     }

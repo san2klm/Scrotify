@@ -1,7 +1,7 @@
 name: navidrome_client
 description: Cliente de música moderno para Navidrome (API Subsonic)
 publish_to: 'none'
-version: 1.0.0+2002
+version: 1.0.0+2003
 
 environment:
   sdk: '>=3.0.0 <4.0.0'
@@ -22,7 +22,9 @@ dependencies:
   cupertino_icons: ^1.0.6
   flutter_animate: ^4.3.0
   just_audio: ^0.9.44
-  just_audio_media_kit: ^2.1.0
+  # Copia local parcheada (acceso al Player de mpv): ver third_party/just_audio_media_kit/SCROTIFY_PATCH.md
+  just_audio_media_kit:
+    path: third_party/just_audio_media_kit
   media_kit_libs_linux: ^1.2.1
   media_kit_libs_windows_audio: ^1.0.0
   media_kit_libs_windows_video: ^1.0.0
