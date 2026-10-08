@@ -74,6 +74,10 @@ linux/*
 linux/runner/*
 !linux/runner/my_application.cc
 
+# Proyecto iOS completo (permisos, icono y Podfile propios de Scrotify).
+# ios/.gitignore ya excluye Pods, Flutter/ephemeral y demás archivos generados.
+!ios/
+
 # Node.js dependencies
 **/node_modules/
 

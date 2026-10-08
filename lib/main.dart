@@ -85,7 +85,9 @@ Future<void> main() async {
   final connectIdentity = await ConnectIdentity.load();
 
   ScrotifyAudioHandler? audioHandler;
-  if (!kIsWeb && Platform.isAndroid) {
+  // Android e iOS: controles en la notificación / pantalla de bloqueo y sesión
+  // de audio de música para seguir sonando en segundo plano.
+  if (!kIsWeb && (Platform.isAndroid || Platform.isIOS)) {
     try {
       audioHandler = await AudioService.init(
         builder: () =>
