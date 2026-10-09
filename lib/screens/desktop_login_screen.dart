@@ -5,6 +5,7 @@ import '../services/server_profiles_controller.dart';
 import '../models/server_profile.dart';
 import '../services/pairing_server.dart';
 import '../widgets/pairing_panel.dart';
+import '../widgets/cleartext_url_warning.dart';
 import 'home_shell.dart';
 import '../utils/app_colors.dart';
 
@@ -445,6 +446,7 @@ class _DesktopLoginScreenState extends State<DesktopLoginScreen> {
             return null;
           },
         ),
+        CleartextUrlWarning(controller: _urlController),
         const SizedBox(height: 16),
         _DesktopField(
           controller: _userController,

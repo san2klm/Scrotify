@@ -38,11 +38,11 @@ en verde, un commit por ítem y una línea en `tasks/todo.md`.
 ### [!] 5. `applicationId` definitivo
 - Sigue `com.example.navidrome_client`. Cambiarlo obliga a reinstalar y pierde los datos locales: decide el usuario.
 
-### [ ] 6. Acotar el tráfico en claro
+### [x] 6. Acotar el tráfico en claro
 - `usesCleartextTraffic="true"` global (necesario para Navidrome en LAN). Avisar en el login si la URL es `http://` hacia un host público.
 - Auditar `pairing_client.dart` (`http://host:port/pair/claim`): confirmar que el contenido va cifrado.
 
-### [ ] 7. CORS del jam-server
+### [x] 7. CORS del jam-server (auditado, sin cambios)
 - `access-control-allow-origin: *` en varios endpoints de `server.js`: dejarlo solo donde haga falta.
 
 ## Fase 3 — Diagnóstico
@@ -82,3 +82,5 @@ en verde, un commit por ítem y una línea en `tasks/todo.md`.
 - **1** · workflow con dos jobs; YAML validado en local, jam-server 54/54 en local.
 - **4** · aviso en `build.gradle.kts` y en `scripts/build_apks.sh`; `./gradlew help` evalúa bien.
 - **17, 20** · `.gitignore` y archivos de build de Android añadidos al repo (sin secretos: `key.properties` y `local.properties` siguen ignorados).
+- **6** · `isPublicCleartextUrl` (`lib/utils/cleartext_url.dart`) + `CleartextUrlWarning` bajo el campo de URL en login móvil, login de escritorio y edición de perfiles. No bloquea. LAN, loopback, link-local, CGNAT/Tailscale, ULA IPv6 y `.local`/`.lan`/`.home.arpa`/`.internal` no avisan. Auditoría del emparejamiento: `/pair/claim` va por HTTP pero las credenciales vuelven en sealed-box X25519 hacia una clave efímera del móvil, así que un observador pasivo no las lee; el código de emparejamiento sí viaja en claro (aceptable en LAN, queda anotado).
+- **7** · los endpoints con `access-control-allow-origin: *` (`/api/capabilities`, `/health`, `/rooms`, lobby) son públicos y sin cookies; `/admin` no envía cabeceras CORS y usa cookie SameSite=Strict + CSRF. No hay nada que cerrar.

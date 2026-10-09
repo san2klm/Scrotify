@@ -6,6 +6,7 @@ import '../models/server_profile.dart';
 import '../services/server_profiles_controller.dart';
 import '../services/secure_storage.dart';
 import '../widgets/pairing_panel.dart';
+import '../widgets/cleartext_url_warning.dart';
 import 'home_shell.dart';
 import '../utils/app_colors.dart';
 import '../utils/tv_mode.dart';
@@ -424,6 +425,7 @@ class _MobileLoginScreenState extends State<MobileLoginScreen> {
               return null;
             },
           ),
+          CleartextUrlWarning(controller: _urlController),
           const SizedBox(height: 14),
           _buildMobileField(
             controller: _userController,

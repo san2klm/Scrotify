@@ -7,6 +7,7 @@ import '../services/server_profiles_controller.dart';
 import '../utils/app_colors.dart';
 import '../utils/responsive.dart';
 import '../widgets/profile_connection.dart';
+import '../widgets/cleartext_url_warning.dart';
 import '../services/pairing_server.dart';
 import '../services/theme_controller.dart';
 
@@ -316,6 +317,7 @@ class _ProfileDialogState extends State<_ProfileDialog> {
                 validator: (v) =>
                     (v == null || v.trim().isEmpty) ? 'Requerido' : null,
               ),
+              CleartextUrlWarning(controller: _urlCtrl),
               const SizedBox(height: 12),
               _buildField(
                 controller: _userCtrl,
