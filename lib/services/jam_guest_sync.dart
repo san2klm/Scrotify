@@ -130,7 +130,10 @@ mixin _JamGuestSync on _JamBase {
         final r = await _resolver.resolve(next);
         if (!r.isAvailable) return; // no existe aquí: no se precarga
         playable = r.track!;
-      } catch (_) {}
+      } catch (e) {
+        debugPrint(
+            'JamController: no se pudo resolver la pista siguiente para precargarla: $e');
+      }
       if (_role == JamRole.guest) await _player.addNextInQueue(playable);
     }());
   }

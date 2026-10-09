@@ -1,5 +1,7 @@
 import 'dart:math';
 
+import 'package:flutter/foundation.dart' show debugPrint;
+
 import '../services/navidrome_service.dart';
 
 /// Elimina las credenciales Subsonic (`u`, `s`, `t`, `p`) de una URL de
@@ -736,7 +738,9 @@ List<JamQueueRequest> parseJamRequests(Object? raw) {
     if (e is Map) {
       try {
         out.add(JamQueueRequest.fromJson(Map<String, dynamic>.from(e)));
-      } catch (_) {}
+      } catch (e) {
+        debugPrint('JamQueueRequest: solicitud de cola ilegible: $e');
+      }
     }
   }
   return out;

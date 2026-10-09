@@ -567,7 +567,10 @@ class RemoteJamService {
     if (!_isConnected) return;
     try {
       _channel?.sink.add(jsonEncode(msg));
-    } catch (_) {}
+    } catch (e) {
+      debugPrint(
+          'RemoteJamService: no se pudo enviar la acción ${msg['action']}: $e');
+    }
   }
 
   void sendReaction(String emoji) =>

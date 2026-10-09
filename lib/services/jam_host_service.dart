@@ -964,7 +964,10 @@ class JamHostService extends _JamHostBase with _JamHostDiscovery {
         if (entry.value.readyState == WebSocket.open) {
           entry.value.add(encoded);
         }
-      } catch (_) {}
+      } catch (e) {
+        // Ese invitado se queda con el estado anterior hasta reconectar.
+        debugPrint('JamHostService: no se pudo enviar el estado a un invitado: $e');
+      }
     }
   }
 

@@ -524,7 +524,10 @@ class JamGuestService {
                       Track.fromJson(Map<String, dynamic>.from(rawTrack)),
                       startAt,
                     );
-                  } catch (_) {}
+                  } catch (e) {
+                    debugPrint(
+                        'JamGuestService: aviso de pista siguiente ilegible: $e');
+                  }
                 }
                 break;
 

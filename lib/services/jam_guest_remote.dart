@@ -213,7 +213,10 @@ mixin _JamGuestRemote on _JamBase {
                   final tracks = await _navidrome.getTracks(limit: 500);
                   final found = tracks.firstWhere((t) => t.id == trackId);
                   await _addTrackAsHost(found, p, playNext: playNext);
-                } catch (_) {}
+                } catch (e) {
+                  debugPrint(
+                      'JamController: no se pudo añadir la canción pedida por un invitado: $e');
+                }
               }
             }
           }
@@ -295,7 +298,9 @@ mixin _JamGuestRemote on _JamBase {
         if (item is Map) {
           try {
             queue.add(JamQueueItem.fromJson(Map<String, dynamic>.from(item)));
-          } catch (_) {}
+          } catch (e) {
+            debugPrint('JamController: elemento de cola ilegible: $e');
+          }
         } else if (item is String && item.isNotEmpty) {
           queue.add(JamQueueItem(
             id: 'remote_q_${i}_$item',
@@ -403,7 +408,9 @@ mixin _JamGuestRemote on _JamBase {
           Track.fromJson(Map<String, dynamic>.from(hint['track'] as Map)),
           (hint['startAtMs'] as num?)?.toInt() ?? 0,
         );
-      } catch (_) {}
+      } catch (e) {
+        debugPrint('JamController: aviso de pista siguiente ilegible: $e');
+      }
     }
 
     notifyListeners();

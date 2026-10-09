@@ -88,7 +88,9 @@ mixin _JamHostDiscovery on _JamHostBase {
           }
         }
       }
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('JamHostService: no se pudieron listar las interfaces de red: $e');
+    }
     _cachedBroadcastAddresses = targets;
   }
 
@@ -193,7 +195,9 @@ mixin _JamHostDiscovery on _JamHostBase {
           }
         }
       }
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('JamHostService: no se pudieron obtener las IP locales: $e');
+    }
     if (ips.isEmpty) ips.add('127.0.0.1');
     return ips;
   }
