@@ -44,9 +44,13 @@ List<AudioOutputDevice> parseAudioDeviceList(Object? raw) {
   }
 }
 
+/// Las salidas `hw:` directas, sin nombres repetidos (se queda la primera): la
+/// interfaz las usa como valor único de un desplegable.
 List<AudioOutputDevice> directHardwareDevices(
-        Iterable<AudioOutputDevice> devices) =>
-    [
-      for (final d in devices)
-        if (d.isDirectHardware) d
-    ];
+    Iterable<AudioOutputDevice> devices) {
+  final seen = <String>{};
+  return [
+    for (final d in devices)
+      if (d.isDirectHardware && seen.add(d.name)) d
+  ];
+}

@@ -33,6 +33,18 @@ void main() {
           ['alsa/hw:CARD=DAC,DEV=0', 'alsa/hw:CARD=Generic,DEV=3']);
     });
 
+    test('un nombre repetido solo aparece una vez (la primera descripción)',
+        () {
+      final direct = directHardwareDevices(const [
+        AudioOutputDevice('alsa/hw:CARD=DAC,DEV=0', 'USB DAC'),
+        AudioOutputDevice('alsa/hw:CARD=DAC,DEV=0', 'USB DAC (otra vez)'),
+        AudioOutputDevice('alsa/hw:CARD=Generic,DEV=3', 'HDMI'),
+      ]);
+      expect(direct.map((d) => d.name),
+          ['alsa/hw:CARD=DAC,DEV=0', 'alsa/hw:CARD=Generic,DEV=3']);
+      expect(direct.first.description, 'USB DAC');
+    });
+
     test('entradas inválidas o ajenas se ignoran sin lanzar', () {
       expect(parseAudioDeviceList(null), isEmpty);
       expect(parseAudioDeviceList('no es json'), isEmpty);
