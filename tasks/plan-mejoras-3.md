@@ -32,7 +32,7 @@ comprobar la app armada y de saber qué build hay instalado.
 - El test de Ajustes no monta `HifiCoordinator`, así que el selector ALSA nunca se ejercitó con dispositivos; el fallo de Bit-perfect venía de ahí.
 - Test que abre cada subpantalla con todos los proveedores reales de `main.dart`, activa cada opción y vuelve atrás sin excepciones. Con una lista de salidas falsa (0, 1 y varias, y una elegida que ya no está).
 
-### [ ] 6. Arranque real en CI
+### [x] 6. Arranque real en CI
 - `integration_test` mínimo en Linux (bajo `xvfb`): la app abre, llega al login y a Ajustes.
 
 ## Fase 2 — Publicación
@@ -56,11 +56,11 @@ comprobar la app armada y de saber qué build hay instalado.
 ### [~] 10. Los `catch (_) {}` dejan rastro
 - 91 en `lib/`. Revisarlos por archivo: los que ocultan fallos de red, disco o Jam pasan a registrar en `DiagnosticsLog`; los de limpieza se quedan con un comentario de por qué.
 
-### [~] 11. La unión a una Jam espera el primer estado (S)
+### [x] 11. La unión a una Jam espera el primer estado (S)
 - `joinSession` termina con `join_response`; la sesión llega en el mensaje siguiente. Hoy funciona por el orden de entrega de `web_socket_channel` 2.
 - Hacer que espere el `jam_state_snapshot` (con tope de tiempo) y después subir a `web_socket_channel` 3.
 
-### [ ] 12. Partir `jam_host_service.dart` (1279 líneas) (S)
+### [x] 12. Partir `jam_host_service.dart` (1279 líneas) (S)
 
 ## Fase 4 — Dependencias que necesitan dispositivo
 
@@ -92,3 +92,6 @@ comprobar la app armada y de saber qué build hay instalado.
 - **5** (sesión `Scrotify`, `1e36ed5`, `9543465`, `835ae49`) · `test/settings_smoke_test.dart`, 20 tests con los proveedores de `main.dart`: abre las siete subpantallas, mueve cada interruptor, opción y deslizador, y vuelve. Destapó un bug real: dos salidas ALSA con el mismo nombre rompían el desplegable («exactly one item with value»); `directHardwareDevices` ahora quita repetidas. Límite: «Biblioteca y descargas» usa un `LocalMusicService` falso (el real se cuelga en `initialize()` dentro de `testWidgets`, sin investigar).
 - **4** · `AppErrorBox` (`lib/widgets/app_error_box.dart`) instalado como `ErrorWidget.builder` en `main`: un fallo al construir un widget deja un recuadro en su hueco y el resto de la pantalla sigue visible; el texto técnico solo se ve en debug. No lleva botón de copiar: remite a Ajustes → Diagnóstico, donde ya queda el error.
 - **10** (parcial) · revisados los 56 `catch (_) {}` de fuera de Jam. Siete ocultaban pérdida de datos o un fallo de seguridad y ahora escriben en el registro: guardar el historial reciente y lo más escuchado, restaurar la copia previa de una descarga, borrar un audio de la caché, permisos `600` y respaldo de `SecureStorage`, y borrar el estado de sincronización. El resto es limpieza de temporales, emparejamiento por LAN o lecturas defensivas y se deja igual. Quedan sin revisar los 35 de los servicios de Jam (los tiene la otra sesión mientras hace los ítems 11 y 12).
+- **11** (sesión `Scrotify`, `03ea984`, `e9b474c`) · la unión del invitado solo se completa al llegar el primer estado de la sala (tope de 5 s; si no llega, falla limpio y no deja sala a medias). Después, `web_socket_channel` 3.0.3 sin más diferencias. La ruta por el servidor central no tenía el problema. Sin probar contra el servidor Jam real ni en Android.
+- **12** (sesión `Scrotify`, `2bf7734`) · `jam_host_service.dart` 1279 → 1115; el descubrimiento LAN pasa a `jam_host_discovery.dart`. Ya no queda ningún archivo de `lib/` por encima de 1200 líneas.
+- **6** · `integration_test/app_smoke_test.dart` + `tool/run_linux_smoke.sh`: ejecuta `main()` completo en Linux hasta el inicio de sesión, con las credenciales en memoria y los datos de la app en una carpeta temporal; no toca la red. Comprobado por mutación (un fallo al construir el login lo hace fallar en 12 s). Hallazgo al escribirlo: `main` reemplaza los manejadores de errores, así que un test que arranca la app debe devolvérselos al banco de pruebas o se queda colgado. Job `linux-smoke` añadido al CI con `xvfb`; la lista de paquetes del job es una estimación sin ejecutar.
