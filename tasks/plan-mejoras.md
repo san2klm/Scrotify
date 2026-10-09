@@ -109,7 +109,7 @@ Primero lo pequeño y aislado, luego lo medio, y al final el refactor grande
 
 ## Fase E — Refactor sin cambio de comportamiento
 
-### [ ] 9. Partir archivos grandes
+### [x] 9. Partir archivos grandes
 Objetivo: ninguno por encima de ~1200 líneas, **sin cambiar API pública** ni comportamiento.
 
 | Archivo | Líneas | Corte propuesto |
@@ -125,11 +125,11 @@ Objetivo: ninguno por encima de ~1200 líneas, **sin cambiar API pública** ni c
 ---
 
 ## Verificación final
-- [ ] `flutter analyze`: 0 issues
-- [ ] `flutter test`: todo verde
-- [ ] `jam-server`: `node --test` verde
-- [ ] APK teléfono y TV compilan
-- [ ] `tasks/todo.md` actualizado
+- [x] `flutter analyze`: 0 issues
+- [x] `flutter test`: todo verde
+- [x] `jam-server`: `node --test` verde
+- [x] APK teléfono y TV compilan
+- [x] `tasks/todo.md` actualizado
 - [ ] Push solo con confirmación expresa
 
 ## Fuera de alcance (necesita dispositivo físico del usuario)
@@ -151,3 +151,13 @@ Pruebas en TV real, teléfono físico, auriculares Bluetooth, deriva de reloj en
 - **13** · notificación de Jam en Android: se reutiliza la notificación de medios de `audio_service` (sin segundo servicio en primer plano). `ScrotifyAudioHandler.setJam(JamNotificationInfo)` añade «<artista> · Jam de <anfitrión>» / «Tu Jam», «N personas» (solo si se conoce: el invitado conectado por el servidor central no recibe la lista, así que no se inventa) y un botón «Salir de la Jam»/«Terminar la Jam» (`drawable/audio_service_leave_jam`, con nombre `audio_service_*` para que `res/raw/keep.xml` lo salve de R8). El nombre del anfitrión (lo elige otra persona) se limpia y se recorta. Verificado: tests del handler, `notificationInfo` con host LAN real y el recurso presente en `app-phone-debug.apk` y `app-tv-debug.apk`. **Limitación**: aparece solo mientras haya una pista (es la notificación de reproducción); sin pista no hay notificación. Pendiente de tu lado: verlo en un teléfono con una Jam real.
 - **10** · `integration_test/local_music_recovery_test.dart` (7 pruebas) + fixture FLAC con etiquetas + `tool/run_android_integration.sh <id>`. Ejecutado en el emulador `pixel_test` (Android 14): lector nativo `MediaMetadataRetriever` (título/artista/álbum/duración), archivo corrupto, recuperación desde subcarpetas con copias que cuentan como una, etiquetas ambiguas, persistencia al reabrir y cancelación. 7/7. Añade `integration_test` (SDK) como dependencia de desarrollo: solo suma paquetes transitivos de desarrollo, no cambia versiones existentes. **Seguridad**: el script exige el id del dispositivo y rechaza los que no sean `emulator-*` (hay un teléfono real conectado por Wi-Fi; escribe en `/storage/emulated/0/Music` y concede «todos los archivos»). Solo se usó `emulator-5554`; el emulador quedó apagado y su carpeta Music vacía.
 - **5** · borrados en la sincronización (solo **temas .zip**; los JSON se reescriben, nunca se borran). Diseño: aviso de borrado (tombstone) cifrado bajo la clave `x-<hash del documento>` (derivada de la clave del documento, sin revelar nombres); su contenido se **autentica** (descifra y comprueba que habla de ese tema) antes de actuar; el nombre del aviso acaba en `.deleted`, así un cliente antiguo lo descarta en vez de escribir un archivo. Reglas: lo editado en un dispositivo gana al borrado (y se devuelve a los demás); un dispositivo que nunca sincronizó ese tema no lo pierde; un borrado local solo se infiere si la carpeta de temas existe y el tema falta en **dos ciclos seguidos**; si desaparecen ≥3 temas y más de la mitad de los conocidos de golpe, no se propaga, se restauran y se avisa; los temas borrados por un aviso van a una **papelera local** (`sync_trash/`, 30 días) y los avisos de más de 30 días se eliminan del servidor. Sin cambios en `jam-server` (ya admitía DELETE). 18 tests nuevos; **6 mutaciones** de las guardas (confirmación en 2 ciclos, borrado masivo, autenticidad, editar-gana, carpeta no listada, JSON borrable) detectadas por los tests. Limitaciones: un dispositivo desconectado >30 días puede devolver un tema ya borrado (preferible a perder uno); clientes antiguos descargan cada aviso en cada ciclo sin usarlo (una GET diminuta). Falta probar entre dos dispositivos reales.
+- **9** · archivos grandes partidos **sin cambiar comportamiento ni API pública**. Método: la clase pasa a `abstract class _XBase` (con todos los campos) + `mixin`s en archivos `part` por área; los miembros que un mixin usa y viven en otro sitio se declaran abstractos en la base. Verificado por **comparación de líneas** (multiconjunto de líneas del original frente a la suma de los archivos nuevos): solo difieren cabeceras, firmas abstractas, `@override` y los pocos estáticos calificados con el nombre de la clase. Un primer intento perdió comentarios de sección; se detectó con esa misma comparación, se corrigió el generador y se repitió.
+
+  | Archivo | Antes | Ahora |
+  |---|---|---|
+  | `navidrome_service.dart` | 2911 | 850 (+ `navidrome_models` 354, `_playlists` 303, `_favorites` 373, `_library` 590, `_extras` 541) |
+  | `player_controller.dart` | 2221 | 1076 (+ 7 áreas de 120–359) |
+  | `jam_controller.dart` | 2464 | 689 (+ 6 áreas de 103–507) |
+  | `home_screen.dart` | 1786 | 354 (+ biblioteca 617, contenido 834) |
+
+  Los modelos canónicos `Track`/`Album`/`Artist` siguen en la biblioteca `navidrome_service.dart` (son un `part` de ella), así que el invariante §3.1 de AGENTS.md se cumple. 754 tests, analyze limpio, compilan Linux debug y Android phone/TV debug; con `SCROTIFY_AUDIO_INTEGRATION=1` pasan los tests con libmpv. Siguen por encima de 1200 líneas y no estaban en el alcance: `pairing_panel` (1661), `jam_dialog` (1632), `track_context_menu` (1606), `mobile_home_screen` (1594), `jam_host_service` (1279).
