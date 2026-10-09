@@ -1758,12 +1758,52 @@ class NavidromeService with ChangeNotifier {
     }
   }
 
+  /// Cuánto se reutiliza el catálogo de recuperación antes de pedirlo otra vez.
+  /// Es corto a propósito: cubre reescaneos seguidos (p. ej. tras cancelar) sin
+  /// esconder canciones que se acaban de añadir al servidor.
+  static const recoveryCatalogTtl = Duration(minutes: 3);
+
+  /// Reloj de la caché del catálogo (sustituible en tests).
+  @visibleForTesting
+  DateTime Function() recoveryClock = DateTime.now;
+
+  ({String? session, DateTime at, List<Track> tracks})? _recoveryCatalog;
+  ({String? session, Future<List<Track>> future})? _recoveryInFlight;
+
   /// Catálogo completo para recuperar descargas; no usa el fallback sin conexión.
-  Future<List<Track>> getDownloadRecoveryCatalog() async {
+  ///
+  /// Se guarda en memoria [recoveryCatalogTtl] por sesión y las consultas
+  /// simultáneas comparten una sola descarga. Una descarga cuyo escaneo se
+  /// canceló sigue en segundo plano y deja el resultado listo para el
+  /// siguiente. [forceRefresh] salta la caché.
+  Future<List<Track>> getDownloadRecoveryCatalog(
+      {bool forceRefresh = false}) async {
     final session = currentSessionKey;
     if (!connected || offlineMode) {
       throw StateError('Conecta el servidor para recuperar descargas.');
     }
+    final cached = _recoveryCatalog;
+    if (!forceRefresh &&
+        cached != null &&
+        cached.session == session &&
+        recoveryClock().difference(cached.at) < recoveryCatalogTtl) {
+      return cached.tracks;
+    }
+    final inFlight = _recoveryInFlight;
+    if (!forceRefresh && inFlight != null && inFlight.session == session) {
+      return inFlight.future;
+    }
+    final future = _downloadRecoveryCatalog(session);
+    final pending = (session: session, future: future);
+    _recoveryInFlight = pending;
+    try {
+      return await future;
+    } finally {
+      if (identical(_recoveryInFlight, pending)) _recoveryInFlight = null;
+    }
+  }
+
+  Future<List<Track>> _downloadRecoveryCatalog(String? session) async {
     final tracks = <Track>[];
     for (var offset = 0;; offset += 500) {
       final page = await _fetchTracks(limit: 500, offset: offset)
@@ -1774,7 +1814,9 @@ class NavidromeService with ChangeNotifier {
       tracks.addAll(page);
       if (page.length < 500) break;
     }
-    return tracks;
+    final frozen = List<Track>.unmodifiable(tracks);
+    _recoveryCatalog = (session: session, at: recoveryClock(), tracks: frozen);
+    return frozen;
   }
 
   Future<List<Track>> getTracks(

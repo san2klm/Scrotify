@@ -15,6 +15,20 @@ import 'navidrome_service.dart';
 import 'offline_cache_service.dart';
 import 'offline_download_manager.dart';
 
+/// Etapa de un escaneo de la carpeta de música.
+enum LocalScanPhase { listing, files, catalog, matching }
+
+/// Avance de un escaneo. [total] es 0 mientras se desconoce.
+class LocalScanProgress {
+  const LocalScanProgress(this.phase, this.done, [this.total = 0]);
+  final LocalScanPhase phase;
+  final int done;
+  final int total;
+
+  /// Fracción 0–1, o `null` si la etapa no tiene total conocido.
+  double? get fraction => total > 0 ? (done / total).clamp(0.0, 1.0) : null;
+}
+
 /// Biblioteca local con identidad independiente de la carpeta y huellas persistentes.
 class LocalMusicService extends ChangeNotifier {
   LocalMusicService(this.cache,
@@ -49,6 +63,15 @@ class LocalMusicService extends ChangeNotifier {
   int unidentifiedByLastScan = 0;
   bool recoveryUnavailable = false;
   bool scanning = false;
+
+  /// Etapa y avance del escaneo en curso; `null` si no hay ninguno.
+  LocalScanProgress? scanProgress;
+
+  /// `true` si el último escaneo se interrumpió con [cancelScan].
+  bool lastScanCancelled = false;
+  bool _cancelRequested = false;
+  Completer<void>? _cancelSignal;
+  DateTime _lastProgressNotify = DateTime.fromMillisecondsSinceEpoch(0);
   bool _disposed = false;
   String? get folderPath => _root?.path;
 
@@ -660,6 +683,29 @@ class LocalMusicService extends ChangeNotifier {
         durationSeconds: record['duration'] as int);
   }
 
+  /// Pide interrumpir el escaneo en curso. Si se corta antes de comparar con
+  /// los archivos existentes no se toca el índice (no se sabe qué falta de
+  /// verdad); si se corta al identificar, lo ya recuperado se conserva.
+  void cancelScan() {
+    if (!scanning) return;
+    _cancelRequested = true;
+    final signal = _cancelSignal;
+    if (signal != null && !signal.isCompleted) signal.complete();
+  }
+
+  void _progress(LocalScanPhase phase, int done, [int total = 0]) {
+    scanProgress = LocalScanProgress(phase, done, total);
+    final now = DateTime.now();
+    final edge = done == 0 || done == 1 || (total > 0 && done >= total);
+    if (!edge &&
+        now.difference(_lastProgressNotify) <
+            const Duration(milliseconds: 100)) {
+      return;
+    }
+    _lastProgressNotify = now;
+    _notify();
+  }
+
   Future<void> rescan(
       {bool requestAccess = true,
       String? serverScope,
@@ -693,29 +739,38 @@ class LocalMusicService extends ChangeNotifier {
       return;
     }
     scanning = true;
+    _cancelRequested = false;
+    _cancelSignal = Completer<void>();
+    lastScanCancelled = false;
     recoveredByLastScan = 0;
     unidentifiedByLastScan = 0;
     recoveryUnavailable = false;
+    scanProgress = const LocalScanProgress(LocalScanPhase.listing, 0);
     _notify();
     try {
-      final hashes = <String, List<String>>{};
+      const audioExtensions = {
+        'mp3',
+        'flac',
+        'ogg',
+        'opus',
+        'm4a',
+        'aac',
+        'wav',
+        'wma',
+        'audio'
+      };
+      final files = <File>[];
       for (final path in _roots.toList()) {
         final dir = Directory(path);
         if (!await dir.exists()) continue;
         await for (final entity
             in dir.list(recursive: true, followLinks: false)) {
+          if (_cancelRequested) {
+            lastScanCancelled = true;
+            return;
+          }
           if (entity is! File ||
-              !{
-                'mp3',
-                'flac',
-                'ogg',
-                'opus',
-                'm4a',
-                'aac',
-                'wav',
-                'wma',
-                'audio'
-              }.contains(p
+              !audioExtensions.contains(p
                   .extension(entity.path)
                   .replaceFirst('.', '')
                   .toLowerCase())) {
@@ -724,9 +779,22 @@ class LocalMusicService extends ChangeNotifier {
           if (await entity.length() == 0) {
             continue;
           }
-          final hash = await _fingerprint(entity);
-          hashes.putIfAbsent(hash, () => []).add(entity.absolute.path);
+          files.add(entity);
+          _progress(LocalScanPhase.listing, files.length);
         }
+      }
+      final hashes = <String, List<String>>{};
+      for (var i = 0; i < files.length; i++) {
+        // Cortar aquí deja el índice intacto: aún no se sabe qué archivos
+        // faltan de verdad, y purgar con una lista incompleta borraría
+        // descargas válidas.
+        if (_cancelRequested) {
+          lastScanCancelled = true;
+          return;
+        }
+        final hash = await _fingerprint(files[i]);
+        hashes.putIfAbsent(hash, () => []).add(files[i].absolute.path);
+        _progress(LocalScanPhase.files, i + 1, files.length);
       }
       for (final record in _records.values.toList()) {
         final previous = (record['paths'] as List).cast<String>();
@@ -757,10 +825,20 @@ class LocalMusicService extends ChangeNotifier {
           unknown.fold<int>(0, (total, entry) => total + entry.value.length);
       if (unknown.isNotEmpty && serverScope != null && catalogLoader != null) {
         List<Track>? catalog;
+        _progress(LocalScanPhase.catalog, 0);
         try {
-          catalog = await catalogLoader();
+          // Cancelar deja de esperar al servidor (la descarga sigue en segundo
+          // plano y su resultado se ignora).
+          catalog = await Future.any<List<Track>?>([
+            catalogLoader(),
+            _cancelSignal!.future.then<List<Track>?>((_) => null),
+          ]);
         } catch (_) {
           recoveryUnavailable = true;
+        }
+        if (_cancelRequested) {
+          catalog = null;
+          lastScanCancelled = true;
         }
         if (catalog != null) {
           final byTags = <String, List<Track>>{};
@@ -769,7 +847,13 @@ class LocalMusicService extends ChangeNotifier {
                 .putIfAbsent(_tagKey(track.title, track.artist), () => [])
                 .add(track);
           }
+          var examined = 0;
           for (final entry in unknown) {
+            if (_cancelRequested) {
+              lastScanCancelled = true;
+              break;
+            }
+            _progress(LocalScanPhase.matching, examined++, unknown.length);
             Map<String, dynamic>? tags;
             for (final path in entry.value) {
               tags = await metadataReader(File(path));
@@ -828,6 +912,8 @@ class LocalMusicService extends ChangeNotifier {
       await _save();
     } finally {
       scanning = false;
+      scanProgress = null;
+      _cancelSignal = null;
       _notify();
     }
   }

@@ -41,12 +41,12 @@ Primero lo pequeño y aislado, luego lo medio, y al final el refactor grande
 - Plan: `JamCapabilities` (modelo tipado con valores por defecto conservadores), cargado al conectar al relé; las funciones opcionales (historial, matching, etc.) se habilitan solo si el servidor las declara. Fallo de red o 404 → capacidades mínimas, sin error visible.
 - Tests: parser con campos desconocidos y ausentes; servidor viejo sin endpoint.
 
-### [ ] 11. Progreso y cancelación del escaneo de descargas
+### [x] 11. Progreso y cancelación del escaneo de descargas
 - Dónde: `local_music_service.dart` (`rescan`/`_rescan`, línea 663+), `local_music_settings.dart`, `navidrome_service.getDownloadRecoveryCatalog`.
 - Plan: `ValueNotifier<ScanProgress>` (fase: catálogo / archivos, hechos/total) y token de cancelación; botón "Cancelar" en Ajustes. Cancelar deja el índice consistente (no escribe a medias).
 - Tests: cancelar a mitad conserva el índice anterior; el progreso es monótono.
 
-### [ ] 12. Caché del catálogo de recuperación
+### [x] 12. Caché del catálogo de recuperación
 - Dónde: `navidrome_service.dart:1762`.
 - Plan: caché en memoria por `serverScope` con TTL de 10 min e invalidación al cambiar de sesión o tras forzar "Reescanear". Mantiene la comprobación de sesión actual.
 - Tests: segunda llamada no vuelve a paginar; otra sesión no reutiliza; el forzado sí refresca.
@@ -141,3 +141,5 @@ Pruebas en TV real, teléfono físico, auriculares Bluetooth, deriva de reloj en
 - **2** · nombre de dispositivo editable: `SettingsController.connectDeviceName` + `ConnectService.rename` (recrea transportes y reanuncia) + lápiz en el panel. 7 tests nuevos; 632 en total, analyze limpio.
 - **3** · cola completa en Connect: `ConnectQueueChunks` (40 + trozos de 80, tope 1000), `ConnectQueueReceiver` (orden estricto, sin huecos, caduca a los 5 min), comando `queue_append`, `PlayerController.addAllToQueue`. Compatible con clientes viejos (ignoran `queue_append` y reciben los 40 de siempre). 647 tests, analyze limpio. Nota: `sync_service_test` es intermitente por carrera con directorios temporales (preexistente, pasa aislado).
 - **7** · `JamCapabilities` tipado (`lib/models/jam_capabilities.dart`) reemplaza el registro `(reactions, chat)`; `JamController.cloudCapabilities`/`refreshCloudCapabilities()` (se invalida al cambiar de relé); el diálogo oculta "Sesión pública" y "Sala persistente" solo si el relé declara que no las ofrece (relé antiguo = todo visible, sin cambios). 653 tests, analyze limpio.
+- **11** · progreso y cancelación del escaneo: `LocalScanProgress`/`LocalScanPhase`, `LocalMusicService.cancelScan()`, `ScanProgressView` en Ajustes. Decisión de seguridad: cancelar antes de comparar con el disco **no toca el índice** (purgar con una lista incompleta borraría descargas válidas; hay un test de control que demuestra que un escaneo completo sí purga); cancelar al identificar conserva lo ya recuperado y lo guarda.
+- **12** · caché del catálogo: `getDownloadRecoveryCatalog({forceRefresh})` con validez de 3 min por sesión, descargas simultáneas compartidas, resultado inmutable; un escaneo cancelado deja la descarga lista para el siguiente. 670 tests, analyze limpio.

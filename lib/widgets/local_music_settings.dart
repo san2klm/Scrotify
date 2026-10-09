@@ -105,6 +105,9 @@ class _LocalMusicSettingsState extends State<LocalMusicSettings> {
         _scanSummary =
             '$_scanSummary Conecta el servidor para identificar archivos antiguos.';
       }
+      if (music.lastScanCancelled) {
+        _scanSummary = 'Escaneo cancelado. $_scanSummary';
+      }
     });
   }
 
@@ -128,6 +131,9 @@ class _LocalMusicSettingsState extends State<LocalMusicSettings> {
             icon: const Icon(Icons.refresh_rounded),
             label: Text(busy ? 'Escaneando…' : 'Reescanear')),
       ]),
+      if (music.scanProgress != null)
+        ScanProgressView(
+            progress: music.scanProgress!, onCancel: music.cancelScan),
       const SizedBox(height: 16),
       FutureBuilder<int?>(
           future: _serverCount,
@@ -149,4 +155,40 @@ class _LocalMusicSettingsState extends State<LocalMusicSettings> {
                 'Al descargar o reescanear, permite el acceso al almacenamiento en Android.')),
     ]);
   }
+}
+
+/// Texto de la etapa del escaneo ("Leyendo archivos… 12 de 340").
+String scanProgressLabel(LocalScanProgress progress) {
+  switch (progress.phase) {
+    case LocalScanPhase.listing:
+      return 'Buscando archivos… ${progress.done}';
+    case LocalScanPhase.files:
+      return 'Leyendo archivos… ${progress.done} de ${progress.total}';
+    case LocalScanPhase.catalog:
+      return 'Consultando el catálogo del servidor…';
+    case LocalScanPhase.matching:
+      return 'Identificando canciones… ${progress.done} de ${progress.total}';
+  }
+}
+
+/// Barra de avance del escaneo con botón para cancelarlo.
+class ScanProgressView extends StatelessWidget {
+  const ScanProgressView(
+      {super.key, required this.progress, required this.onCancel});
+
+  final LocalScanProgress progress;
+  final VoidCallback onCancel;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.only(top: 12),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          LinearProgressIndicator(value: progress.fraction),
+          const SizedBox(height: 8),
+          Row(children: [
+            Expanded(child: Text(scanProgressLabel(progress))),
+            TextButton(onPressed: onCancel, child: const Text('Cancelar')),
+          ]),
+        ]),
+      );
 }
