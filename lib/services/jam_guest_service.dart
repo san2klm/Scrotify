@@ -379,6 +379,11 @@ class JamGuestService {
   /// Contraseña de sala a enviar al unirse (nunca se persiste ni se loguea).
   String? roomPassword;
 
+  /// Cuánto se espera, al unirse, a la aceptación del anfitrión y a su primer
+  /// estado de la sala. Ajustable solo para pruebas.
+  @visibleForTesting
+  Duration joinStateTimeout = const Duration(seconds: 5);
+
   Future<bool> connect({
     required String host,
     required int port,
@@ -448,6 +453,8 @@ class JamGuestService {
     }
 
     final completer = Completer<bool>();
+    // El anfitrión aceptó la unión (aún puede faltar su primer estado).
+    var joinAccepted = false;
     final uri =
         Uri(scheme: 'wss', host: host.trim(), port: port, path: '/jam/ws');
 
@@ -524,6 +531,7 @@ class JamGuestService {
               case 'join_response':
                 final accepted = msg['accepted'] as bool? ?? false;
                 if (accepted) {
+                  joinAccepted = true;
                   final receivedToken = msg['token'] as String?;
                   if (receivedToken != null) {
                     _savedReconnectToken = receivedToken;
@@ -565,7 +573,10 @@ class JamGuestService {
                   _startSilenceDetection();
                   _startClockSync();
 
-                  if (!completer.isCompleted) {
+                  // La unión no está completa hasta tener el primer estado:
+                  // si la aceptación no lo trae, llega en el mensaje siguiente
+                  // (`jam_state_snapshot`) y es ese el que completa.
+                  if (msg['state'] != null && !completer.isCompleted) {
                     completer.complete(true);
                   }
                   if (_sessionState != null) {
@@ -799,10 +810,12 @@ class JamGuestService {
       });
 
       final connected = await completer.future.timeout(
-        const Duration(seconds: 5),
+        joinStateTimeout,
         onTimeout: () {
-          lastError ??=
-              'El host no respondió al PIN en 5s (red lenta o Jam colgada).';
+          lastError ??= joinAccepted
+              ? 'El anfitrión aceptó la unión pero no envió el estado de la '
+                  'sala a tiempo.'
+              : 'El host no respondió al PIN en 5s (red lenta o Jam colgada).';
           return false;
         },
       );
