@@ -75,7 +75,7 @@ en verde, un commit por ítem y una línea en `tasks/todo.md`.
 
 ## Fase 7 — Limpieza
 
-### [~] 16. Partir los archivos que siguen por encima de 1200 líneas (S)
+### [x] 16. Partir los archivos que siguen por encima de 1200 líneas (S)
 - `pairing_panel.dart`, `jam_dialog.dart`, `track_context_menu.dart`, `mobile_home_screen.dart`.
 
 ### [x] 17. Ignorar `Scrotify-*.apk` en la raíz
@@ -95,3 +95,9 @@ en verde, un commit por ítem y una línea en `tasks/todo.md`.
 - **3** · `unawaited_futures` y `cancel_subscriptions` activos. 22 llamadas asíncronas sin esperar, todas intencionales, ahora marcadas con `unawaited(...)` (sin cambio de comportamiento); `cancel_subscriptions` no encontró nada. `close_sinks` descartado: sus 8 avisos eran falsos positivos (sockets y controladores que se cierran en otro método). Los 91 `catch (_) {}` no se tocaron: ningún lint estándar los cubre y revisarlos uno por uno es otro ítem. Suite completa: 801 tests en verde.
 - **15** · `rxdart` 0.28: analyze limpio y 825 tests en verde; `lib/` no lo importa directamente, lo usan `just_audio` y `audio_service`, así que falta oírlo en un dispositivo. `web_socket_channel` 3 **revertido**: `jam_guest_history_test` («notificationInfo describe la sala…») falla siempre con la v3 y pasa con la v2. `joinSession` termina al llegar `join_response`, y con la v3 el `jam_state_snapshot` que crea la sesión se entrega un turno después, así que justo tras unirse `session` es `null`. Para subir de versión, antes hay que hacer que la unión espere al primer snapshot.
 - **9** (sesión `Scrotify`, `4796705`) · 75 tests nuevos en 5 archivos (`replay_gain_model`, `playlist_export_service`, `relay_transport`, `connect_mirror`, `player_connect_port`); suite en 852. `replay_gain.dart` ya tenía cobertura indirecta; los otros cuatro, ninguna. Comprobado por mutación. No destapó bugs. Solo Linux; el selector de archivos de Windows/macOS no se probó.
+- **16** (sesión `Scrotify`, `5fc2814`, `747a943`, `c787b96`, `f60383b`) · `pairing_panel` 1661 → 516, `jam_dialog` 1632 → 176, `track_context_menu` 1607 → 1090, `mobile_home_screen` 1597 → 606, solo moviendo código a `part`. Único archivo que sigue por encima de 1200: `jam_host_service.dart` (1279), fuera de este ítem.
+
+## Cierre de la tanda (2026-10-09)
+- Verificado por la sesión coordinadora tras el último commit: `flutter analyze` 0 issues, `flutter test` 852 en verde (3 omitidos), jam-server 54/54.
+- Abierto: 5 (`applicationId`), 13 y 14 (`just_audio` 0.10, `mobile_scanner` 7: necesitan dispositivo real), 15 parcial (`web_socket_channel` 3, `audio_session` 0.2), 10 (login de escritorio), 11 (medir en la tele), 18, 19.
+- Sin push: el CI (ítem 1) sigue sin ejecutarse por primera vez.

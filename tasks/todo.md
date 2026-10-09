@@ -341,3 +341,4 @@ El mismo APK sirve para teléfono y tele. En una tele se activa un modo con la i
 
 ## Mejoras, tanda 2 (plan en `tasks/plan-mejoras-2.md`)
 - [x] 1 CI (GitHub Actions) · 4 aviso de firma debug · 17 ignorar APK · 20 versionar build de Android (2026-10-09).
+- [x] 2 tests intermitentes · 3 lints · 6 aviso http · 8 diagnóstico · 9 cobertura · 12 timers · 16 archivos grandes · 15 parcial (rxdart). Suite: 852 verdes (2026-10-09).
