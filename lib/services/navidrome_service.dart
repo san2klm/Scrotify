@@ -375,7 +375,8 @@ class StructuredLyricBlock {
 
 class NavidromeService with ChangeNotifier {
   NavidromeService(
-      {SettingsController? settings,
+      {this.recoveryRetryInterval = const Duration(seconds: 5),
+      SettingsController? settings,
       http.Client? httpClient,
       ServerProfilesController? profilesController}) {
     _injectedClient = httpClient;
@@ -446,6 +447,13 @@ class NavidromeService with ChangeNotifier {
   String? _user;
   String? _pass;
   LocalMusicService? localMusic;
+  final Duration recoveryRetryInterval;
+  Timer? _recoveryTimer;
+  Future<bool>? _connectionCheck;
+  int _connectionEpoch = 0;
+  int _recoveryAttempts = 0;
+  bool _recoveryRejected = false;
+  bool _disposed = false;
   bool _offlineMode = false;
   bool get offlineMode => _offlineMode;
   bool _connected = false;
@@ -542,6 +550,7 @@ class NavidromeService with ChangeNotifier {
     required String password,
     http.Client? client,
   }) {
+    _cancelRecovery();
     _url = url;
     _user = username;
     _pass = password;
@@ -617,6 +626,7 @@ class NavidromeService with ChangeNotifier {
   }
 
   Future<void> connectByUrl(String url, String user, String pass) async {
+    _cancelRecovery();
     var processedUrl =
         url.endsWith('/') ? url.substring(0, url.length - 1) : url;
 
@@ -712,6 +722,7 @@ class NavidromeService with ChangeNotifier {
     }
     final scope = OfflineCacheService.safeScopeSegment(normalized);
     if (music.count(scope) == 0) return false;
+    _cancelRecovery();
     _url = normalized;
     _user = username;
     _pass = password;
@@ -733,12 +744,103 @@ class NavidromeService with ChangeNotifier {
     _starredIds
         .addAll(music.offlineLikes(scope, userScope!).map((track) => track.id));
     notifyListeners();
+    _scheduleRecovery();
     return true;
   }
 
   Future<void> reconnect() async {
     if (_url == null || _user == null || _pass == null) return;
     await connectByUrl(_url!, _user!, _pass!);
+  }
+
+  void _cancelRecovery() {
+    _connectionEpoch++;
+    _recoveryTimer?.cancel();
+    _recoveryTimer = null;
+    _connectionCheck = null;
+    _recoveryAttempts = 0;
+    _recoveryRejected = false;
+  }
+
+  /// Una comprobación compartida evita lanzar un ping por cada consulta fallida.
+  Future<bool> _serverResponds() {
+    if (_disposed || _url == null || _user == null || _pass == null) {
+      return Future.value(false);
+    }
+    return _connectionCheck ??= _checkServer();
+  }
+
+  Future<bool> _checkServer() async {
+    final epoch = _connectionEpoch;
+    final salt = _randomSalt();
+    final uri = Uri.parse('$_url/rest/ping.view').replace(queryParameters: {
+      'u': _user!,
+      's': salt,
+      't': _md5('$_pass$salt'),
+      'v': '1.16.1',
+      'c': 'Psysonic',
+      'f': 'json',
+    });
+    try {
+      final response =
+          await _client.get(uri).timeout(const Duration(seconds: 4));
+      if (_disposed || epoch != _connectionEpoch) return false;
+      if (response.statusCode == 401 || response.statusCode == 403) {
+        _recoveryRejected = true;
+        return false;
+      }
+      if (response.statusCode != 200) return false;
+      final body = jsonDecode(response.body)['subsonic-response'];
+      final code = body?['error']?['code'];
+      if (code == 40 || code == 41) _recoveryRejected = true;
+      return body?['status'] == 'ok';
+    } catch (_) {
+      return false;
+    } finally {
+      if (epoch == _connectionEpoch) _connectionCheck = null;
+    }
+  }
+
+  void _scheduleRecovery() {
+    if (_disposed ||
+        !_offlineMode ||
+        _recoveryRejected ||
+        _recoveryTimer != null) {
+      return;
+    }
+    final multiplier = 1 << min(_recoveryAttempts, 4);
+    final milliseconds =
+        min(recoveryRetryInterval.inMilliseconds * multiplier, 60000);
+    _recoveryTimer = Timer(Duration(milliseconds: milliseconds), () {
+      _recoveryTimer = null;
+      unawaited(recoverConnection());
+    });
+  }
+
+  /// Recupera la misma sesión sin reiniciar preferencias, cola ni credenciales.
+  Future<void> recoverConnection() async {
+    if (_disposed || !_offlineMode || _recoveryRejected) return;
+    final epoch = _connectionEpoch;
+    final session = currentSessionKey;
+    _recoveryTimer?.cancel();
+    _recoveryTimer = null;
+    final available = await _serverResponds();
+    if (_disposed ||
+        epoch != _connectionEpoch ||
+        session != currentSessionKey ||
+        !_offlineMode) {
+      return;
+    }
+    if (available) {
+      _connected = true;
+      _offlineMode = false;
+      _recoveryAttempts = 0;
+      _sessionVersion++;
+      notifyListeners();
+    } else {
+      _recoveryAttempts++;
+      _scheduleRecovery();
+    }
   }
 
   /// Conserva datos por cuenta y recurre a los archivos locales al perder la red.
@@ -765,9 +867,14 @@ class NavidromeService with ChangeNotifier {
     } catch (error) {
       if (currentSessionKey != session) rethrow;
       if (isNetworkFailure(error)) {
-        _connected = false;
-        _offlineMode = true;
-        notifyListeners();
+        final available = await _serverResponds();
+        if (_disposed || currentSessionKey != session) rethrow;
+        if (!available) {
+          _connected = false;
+          _offlineMode = true;
+          notifyListeners();
+          _scheduleRecovery();
+        }
       }
       return fallback(music, scope, user);
     }
@@ -2783,6 +2890,7 @@ class NavidromeService with ChangeNotifier {
   }
 
   void disconnect() {
+    _cancelRecovery();
     _connected = false;
     _offlineMode = false;
     _url = null;
@@ -2803,5 +2911,15 @@ class NavidromeService with ChangeNotifier {
     _cachedGenres = null;
 
     notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _disposed = true;
+    _cancelRecovery();
+    _settings?.removeListener(_syncFromSettings);
+    _profilesController?.removeListener(_onActiveProfileChanged);
+    _client.close();
+    super.dispose();
   }
 }

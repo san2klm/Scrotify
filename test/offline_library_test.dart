@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -45,6 +46,9 @@ void main() {
   late NavidromeService nav;
   late bool network;
   late int requests;
+  bool failLibrary = false;
+  bool rejectPing = false;
+  Completer<http.Response>? pendingPing;
   const url = 'https://musica.test';
   const user = 'ana';
   final songs = [
@@ -85,9 +89,25 @@ void main() {
   LocalMusicService newMusic() => LocalMusicService(cache,
       stateFile: File(p.join(temp.path, 'biblioteca.json')),
       defaultRoot: Directory(p.join(temp.path, 'Música', 'Scrotify')));
-  NavidromeService newNav() {
+  NavidromeService newNav({Duration retry = const Duration(seconds: 5)}) {
     final client = MockClient((request) async {
       requests++;
+      if (request.url.path == '/rest/ping.view' && pendingPing != null) {
+        return pendingPing!.future;
+      }
+      if (request.url.path == '/rest/ping.view' && rejectPing) {
+        return http.Response(
+            jsonEncode({
+              'subsonic-response': {
+                'status': 'failed',
+                'error': {'code': 40, 'message': 'Credenciales rechazadas'}
+              }
+            }),
+            200);
+      }
+      if (failLibrary && request.url.path != '/rest/ping.view') {
+        throw const SocketException('Consulta interrumpida');
+      }
       if (!network) throw const SocketException('Sin red');
       final data = <String, dynamic>{'status': 'ok'};
       switch (request.url.path) {
@@ -126,7 +146,8 @@ void main() {
       }
       return http.Response(jsonEncode({'subsonic-response': data}), 200);
     });
-    return NavidromeService(httpClient: client)..localMusic = music;
+    return NavidromeService(httpClient: client, recoveryRetryInterval: retry)
+      ..localMusic = music;
   }
 
   Future<void> seed(Track track, {String? folder}) async {
@@ -156,6 +177,9 @@ void main() {
     temp =
         await Directory.systemTemp.createTemp('scrotify-biblioteca-offline-');
     network = true;
+    failLibrary = false;
+    rejectPing = false;
+    pendingPing = null;
     requests = 0;
     cache = newCache();
     music = newMusic();
@@ -297,6 +321,95 @@ void main() {
     expect((await nav.getPlaylistTracks('rock')).length, 3);
   });
 
+  test(
+      'Un fallo aislado de consulta no desconecta si Navidrome responde al ping',
+      () async {
+    await seed(songs[0]);
+    await saveOnline();
+    failLibrary = true;
+    expect((await nav.getTracks()).single.id, '1');
+    expect(nav.offlineMode, isFalse);
+    expect(nav.connected, isTrue);
+    failLibrary = false;
+    expect(await nav.getTracks(), hasLength(3));
+  });
+
+  test('Se recupera automáticamente tras un corte sin tocar Reconectar',
+      () async {
+    nav.dispose();
+    nav = newNav(retry: const Duration(milliseconds: 20))
+      ..setConnectedForTesting(
+          url: url, username: user, password: 'clave-de-prueba');
+    await seed(songs[0]);
+    network = false;
+    await nav.getTracks();
+    expect(nav.offlineMode, isTrue);
+    network = true;
+    final restored = Completer<void>();
+    nav.addListener(() {
+      if (nav.connected && !restored.isCompleted) restored.complete();
+    });
+    await restored.future.timeout(const Duration(seconds: 2));
+    expect(nav.offlineMode, isFalse);
+    expect(await nav.getTracks(), hasLength(3));
+  });
+
+  test('No restaura una cuenta anterior si cambia durante la comprobación',
+      () async {
+    await seed(songs[0]);
+    network = false;
+    await nav.getTracks();
+    network = true;
+    pendingPing = Completer<http.Response>();
+    final check = nav.recoverConnection();
+    await Future<void>.delayed(Duration.zero);
+    nav.setConnectedForTesting(
+        url: 'https://otro.test', username: 'bea', password: 'otra');
+    final session = nav.currentSessionKey;
+    pendingPing!.complete(http.Response(
+        jsonEncode({
+          'subsonic-response': {'status': 'ok'}
+        }),
+        200));
+    await check;
+    expect(nav.currentSessionKey, session);
+    expect(nav.username, 'bea');
+  });
+
+  test('Cancelar sesión impide que un ping pendiente la vuelva a abrir',
+      () async {
+    await seed(songs[0]);
+    network = false;
+    await nav.getTracks();
+    network = true;
+    pendingPing = Completer<http.Response>();
+    final check = nav.recoverConnection();
+    await Future<void>.delayed(Duration.zero);
+    nav.disconnect();
+    pendingPing!.complete(http.Response(
+        jsonEncode({
+          'subsonic-response': {'status': 'ok'}
+        }),
+        200));
+    await check;
+    expect(nav.connected, isFalse);
+    expect(nav.currentSessionKey, isNull);
+  });
+
+  test('Una autenticación rechazada detiene los reintentos automáticos',
+      () async {
+    await seed(songs[0]);
+    network = false;
+    await nav.getTracks();
+    network = true;
+    rejectPing = true;
+    await nav.recoverConnection();
+    final before = requests;
+    await nav.recoverConnection();
+    expect(requests, before);
+    expect(nav.offlineMode, isTrue);
+  });
+
   test('El arranque local distingue fallos de red de errores de autenticación',
       () {
     expect(NavidromeService.isNetworkFailure(const SocketException('sin red')),
@@ -322,7 +435,8 @@ void main() {
       ChangeNotifierProvider<NavidromeService>.value(value: nav),
       ChangeNotifierProvider<LocalMusicService>.value(value: music),
       ChangeNotifierProvider<PlayerController>(create: (_) => IdlePlayer()),
-      ChangeNotifierProvider<ConnectService>(create: (_) => idleConnectService()),
+      ChangeNotifierProvider<ConnectService>(
+          create: (_) => idleConnectService()),
       ChangeNotifierProvider<JamController>(create: (_) => IdleJam()),
       ChangeNotifierProvider<ThemeController>(create: (_) => ThemeController()),
       ChangeNotifierProvider<ServerProfilesController>(
@@ -342,5 +456,7 @@ void main() {
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pumpAndSettle();
+    // Provider.value no dispone el servicio; cancelar su temporizador antes de cerrar la prueba.
+    nav.disconnect();
   });
 }

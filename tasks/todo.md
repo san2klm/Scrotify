@@ -311,3 +311,11 @@ Cambio: Connect ya no depende de la clave de sincronización. Cada usuario de Na
 
 - [x] Revisar los cambios locales y verificar análisis limpio, 616 pruebas Flutter aprobadas (2 integraciones omitidas) y 54 pruebas del servidor Jam aprobadas.
 - [x] Preparar PC123 con los 25 commits posteriores de main y las correcciones locales de recuperación de descargas y salida Hi-Fi en Linux para publicar sin forzar el historial.
+
+## Recuperación automática de conexión móvil (2026-10-09)
+
+- [x] Confirmar que un error aislado de biblioteca no desconecte una sesión cuyo ping autenticado responde.
+- [x] Reintentar con espera progresiva al perder Navidrome y al volver la app al primer plano, conservando cuenta y reproducción.
+- [x] Cancelar reintentos y respuestas pendientes al cerrar sesión/cambiar cuenta/disponer el servicio; no reintentar autenticación rechazada.
+- [x] Pruebas de cortes temporales, restauración automática y aislamiento; suite completa: 621 aprobadas, 2 integraciones omitidas, análisis limpio y APK debug actualizado.
+- [ ] Instalar en el teléfono y verificar el caso real: ADB no detecta dispositivos; pendiente IP/puerto de depuración inalámbrica.

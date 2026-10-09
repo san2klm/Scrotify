@@ -53,3 +53,18 @@ para leer etiquetas de archivos desconocidos; las descargas con índice previo
 continúan funcionando sin él. La prueba de integración del lector se ejecuta con
 `SCROTIFY_METADATA_INTEGRATION=1 flutter test test/local_music_recovery_test.dart`
 (en Linux, con ffmpeg y ffprobe).
+
+## Recuperación de conexión
+
+Un fallo aislado al consultar la biblioteca no basta para pasar a modo sin conexión:
+la app comprueba primero el [ping autenticado del servidor](https://opensubsonic.netlify.app/docs/endpoints/ping/).
+Si responde, utiliza el contenido local para esa consulta y mantiene la sesión activa.
+Si tampoco responde, mantiene disponible el audio local y programa reintentos a los
+5, 10, 20, 40 y hasta 60 segundos. Al recuperar el servidor vuelve a cargar la biblioteca
+sin reiniciar la cuenta, las preferencias ni la cola del reproductor.
+
+Al volver al primer plano, HomeShell también intenta recuperar una sesión local mediante
+[WidgetsBindingObserver](https://api.flutter.dev/flutter/widgets/WidgetsBindingObserver/didChangeAppLifecycleState.html).
+Las comprobaciones simultáneas comparten un ping. Cambiar de cuenta, cerrar sesión o
+disponer el servicio cancela los reintentos e invalida respuestas atrasadas. Una respuesta
+de autenticación rechazada detiene los reintentos; el botón Reconectar sigue disponible.
