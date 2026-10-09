@@ -1,3 +1,4 @@
+import 'widgets/app_error_box.dart';
 import 'widgets/jam_deep_link_listener.dart';
 import 'dart:async' show unawaited;
 import 'dart:io' show Platform;
@@ -58,6 +59,7 @@ Future<void> main() async {
   // Un error no capturado no debe dejar la app en un estado inconsistente en
   // silencio: se registra y se mantiene la ejecución.
   DiagnosticsLog.instance.attach();
+  AppErrorBox.install();
   FlutterError.onError = (details) {
     FlutterError.presentError(details);
     debugPrint('FlutterError no controlado: ${details.exceptionAsString()}');

@@ -24,11 +24,11 @@ comprobar la app armada y de saber qué build hay instalado.
 - `versionName` fijo en 1.0.0, `versionCode` 2003 sin tocar y «v1.0.0» escrito a mano en Ajustes. Hubo que deducir el build por la hora de instalación.
 - Inyectar commit corto y fecha con `--dart-define`, mostrarlos en Ajustes y en la cabecera del diagnóstico, y subir `versionCode` en `scripts/build_apks.sh`.
 
-### [ ] 4. Pantalla de error propia
+### [x] 4. Pantalla de error propia
 - Hoy un fallo de build muestra la pantalla roja (debug) o gris (release) a ventana completa.
 - `ErrorWidget.builder` con un recuadro acotado y «copiar diagnóstico»; el error entra en `DiagnosticsLog`.
 
-### [~] 5. Recorrido de humo de Ajustes (S)
+### [x] 5. Recorrido de humo de Ajustes (S)
 - El test de Ajustes no monta `HifiCoordinator`, así que el selector ALSA nunca se ejercitó con dispositivos; el fallo de Bit-perfect venía de ahí.
 - Test que abre cada subpantalla con todos los proveedores reales de `main.dart`, activa cada opción y vuelve atrás sin excepciones. Con una lista de salidas falsa (0, 1 y varias, y una elegida que ya no está).
 
@@ -51,7 +51,7 @@ comprobar la app armada y de saber qué build hay instalado.
 ### [ ] 10. Los `catch (_) {}` dejan rastro
 - 91 en `lib/`. Revisarlos por archivo: los que ocultan fallos de red, disco o Jam pasan a registrar en `DiagnosticsLog`; los de limpieza se quedan con un comentario de por qué.
 
-### [ ] 11. La unión a una Jam espera el primer estado (S)
+### [~] 11. La unión a una Jam espera el primer estado (S)
 - `joinSession` termina con `join_response`; la sesión llega en el mensaje siguiente. Hoy funciona por el orden de entrega de `web_socket_channel` 2.
 - Hacer que espere el `jam_state_snapshot` (con tope de tiempo) y después subir a `web_socket_channel` 3.
 
@@ -84,3 +84,5 @@ comprobar la app armada y de saber qué build hay instalado.
 - **9** · `scripts/build_apks.sh` genera un APK por arquitectura: teléfono arm64 (31 MB frente a 82 MB) y tele arm64 + armv7. `--universal` para emulador. Solo se compiló y probó el de teléfono.
 - **2** · `tool/install_android.sh <id> phone|tv [--check]`. Probado en real: sin id lista los dispositivos; rechaza `phone` en el Chromecast y `tv` en el teléfono; avisa si falta el APK de esa arquitectura; instaló en el teléfono y comprobó el arranque (versionCode 12146). Sin probar: el camino en que la app se cierra tras instalar.
 - Nota: una compilación de APK falló una vez porque `GeneratedPluginRegistrant.java` quedó con el plugin de `integration_test` mientras la otra sesión corría tests; al reintentar pasó. Otra razón para un `git worktree` por sesión.
+- **5** (sesión `Scrotify`, `1e36ed5`, `9543465`, `835ae49`) · `test/settings_smoke_test.dart`, 20 tests con los proveedores de `main.dart`: abre las siete subpantallas, mueve cada interruptor, opción y deslizador, y vuelve. Destapó un bug real: dos salidas ALSA con el mismo nombre rompían el desplegable («exactly one item with value»); `directHardwareDevices` ahora quita repetidas. Límite: «Biblioteca y descargas» usa un `LocalMusicService` falso (el real se cuelga en `initialize()` dentro de `testWidgets`, sin investigar).
+- **4** · `AppErrorBox` (`lib/widgets/app_error_box.dart`) instalado como `ErrorWidget.builder` en `main`: un fallo al construir un widget deja un recuadro en su hueco y el resto de la pantalla sigue visible; el texto técnico solo se ve en debug. No lleva botón de copiar: remite a Ajustes → Diagnóstico, donde ya queda el error.
