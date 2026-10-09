@@ -69,7 +69,7 @@ Future<void> main() async {
 
   if (!kIsWeb && (Platform.isLinux || Platform.isWindows || Platform.isMacOS)) {
     await windowManager.ensureInitialized();
-    windowManager.waitUntilReadyToShow(
+    unawaited(windowManager.waitUntilReadyToShow(
       const WindowOptions(
         titleBarStyle: TitleBarStyle.hidden,
         minimumSize: Size(400, 500),
@@ -82,7 +82,7 @@ Future<void> main() async {
         await windowManager.show();
         await windowManager.focus();
       },
-    );
+    ));
   }
   // Limpia caché de portadas externas por si quedó null de versión anterior.
   CoverFallbackService.instance.clearCache();

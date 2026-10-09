@@ -191,7 +191,7 @@ mixin _PlayerTransitions on _PlayerBase {
       );
       await newLead.setVolume(newLeadVol);
       unawaited(newLead.play().catchError((_) {}));
-      _loadCurrentTrackWaveform();
+      unawaited(_loadCurrentTrackWaveform());
       _prepareNextForSkip();
       return true;
     } catch (_) {

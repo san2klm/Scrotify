@@ -485,11 +485,11 @@ mixin _HomeLibraryPanel on _HomeStateBase {
     final tracks =
         await context.read<NavidromeService>().getPlaylistTracks(playlist.id);
     if (mounted && tracks.isNotEmpty) {
-      context.read<PlayerController>().playQueue(
+      unawaited(context.read<PlayerController>().playQueue(
             tracks,
             startIndex: 0,
             sourcePlaylist: playlist,
-          );
+          ));
     }
   }
 

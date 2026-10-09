@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:flutter/material.dart';
@@ -110,7 +111,8 @@ class _ArtistScreenState extends State<ArtistScreen> {
         children: [
           const GlobalTopBar(title: 'Artista', showBackButton: true),
           Expanded(
-            child: TvInitialFocus(child: CustomScrollView(
+            child: TvInitialFocus(
+                child: CustomScrollView(
               slivers: [
                 _buildSliverAppBar(),
                 SliverToBoxAdapter(child: _buildContent()),
@@ -293,7 +295,7 @@ class _ArtistScreenState extends State<ArtistScreen> {
               content: Text('${widget.artist.name} compartido en la comunidad'),
               backgroundColor: theme.bgElevated,
             ));
-            ServerActivityPanel.show(context);
+            unawaited(ServerActivityPanel.show(context));
           }
         }
       },
@@ -370,7 +372,8 @@ class _ArtistScreenState extends State<ArtistScreen> {
   Future<void> _playArtistTopTracks() async {
     final tracks = await _futureTopTracks;
     if (mounted && tracks.isNotEmpty) {
-      context.read<PlayerController>().playQueue(tracks, startIndex: 0);
+      unawaited(
+          context.read<PlayerController>().playQueue(tracks, startIndex: 0));
     }
   }
 

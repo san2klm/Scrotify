@@ -126,11 +126,11 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
     final tracks =
         await context.read<NavidromeService>().getPlaylistTracks(playlist.id);
     if (!mounted || tracks.isEmpty) return;
-    context.read<PlayerController>().playQueue(
+    unawaited(context.read<PlayerController>().playQueue(
           tracks,
           startIndex: 0,
           sourcePlaylist: playlist,
-        );
+        ));
   }
 
   Future<void> _createPlaylist() async {

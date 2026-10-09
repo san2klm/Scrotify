@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -106,12 +107,12 @@ void main() {
       }),
     ));
     // Se abre un diálogo antes de que el temporizador dispare.
-    showDialog<void>(
+    unawaited(showDialog<void>(
         context: ctx,
         builder: (_) => AlertDialog(
               content: TextButton(
                   key: bKey, onPressed: () {}, child: const Text('Diálogo')),
-            ));
+            )));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 500));
     expect(focused(aKey), isFalse);

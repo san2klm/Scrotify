@@ -357,7 +357,7 @@ class JamHostService {
               _clientSockets[participantId] != socket) {
             // Socket was superseded by a reconnect or replaced. Close and ignore.
             try {
-              socket.close();
+              unawaited(socket.close());
             } catch (_) {}
             return;
           }
@@ -424,7 +424,7 @@ class JamHostService {
                   final oldSocket = _clientSockets[reconnectParticipantId];
                   if (oldSocket != null && oldSocket != socket) {
                     try {
-                      oldSocket.close();
+                      unawaited(oldSocket.close());
                     } catch (_) {}
                   }
                   _clientSockets[reconnectParticipantId] = socket;

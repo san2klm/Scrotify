@@ -768,7 +768,7 @@ class _ServerActivityPanelState extends State<ServerActivityPanel>
                         ),
                       );
                       if (track.id.isNotEmpty) {
-                        player.playQueue([track], startIndex: 0);
+                        unawaited(player.playQueue([track], startIndex: 0));
                         if (mounted) Navigator.of(context).pop();
                       }
                     } catch (err) {

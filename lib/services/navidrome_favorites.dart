@@ -345,7 +345,7 @@ mixin _NavidromeFavorites on _NavidromeBase {
       _starredSongOrder.add(track.id);
     }
     notifyListeners();
-    _saveStarredOrder();
+    unawaited(_saveStarredOrder());
 
     try {
       if (wasStarred) {
@@ -367,7 +367,7 @@ mixin _NavidromeFavorites on _NavidromeBase {
         _starredSongOrder.remove(track.id);
       }
       notifyListeners();
-      _saveStarredOrder();
+      unawaited(_saveStarredOrder());
     }
   }
 }

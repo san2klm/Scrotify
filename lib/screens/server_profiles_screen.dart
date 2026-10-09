@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -133,7 +134,7 @@ class _ServerProfilesScreenState extends State<ServerProfilesScreen> {
                           if (value == 'edit') {
                             _showProfileDialog(profile: profile);
                           } else if (value == 'logout') {
-                            _confirmLogout(profile);
+                            unawaited(_confirmLogout(profile));
                           }
                         },
                       ),

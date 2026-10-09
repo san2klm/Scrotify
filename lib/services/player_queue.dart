@@ -26,7 +26,7 @@ mixin _PlayerQueue on _PlayerBase {
     unawaited(_lead.play().catchError((_) {}));
     _recordRecent(currentTrack!);
     _resetPlayTracking();
-    _loadCurrentTrackWaveform();
+    unawaited(_loadCurrentTrackWaveform());
     _prepareNextForSkip();
     _ensureWatchdog();
     notifyListeners();
@@ -76,7 +76,7 @@ mixin _PlayerQueue on _PlayerBase {
       unawaited(_lead.play().catchError((_) {}));
       _recordRecent(currentTrack!);
       _resetPlayTracking();
-      _loadCurrentTrackWaveform();
+      unawaited(_loadCurrentTrackWaveform());
       _prepareNextForSkip();
       _ensureWatchdog();
     }
@@ -99,7 +99,7 @@ mixin _PlayerQueue on _PlayerBase {
       unawaited(_lead.play().catchError((_) {}));
       _recordRecent(currentTrack!);
       _resetPlayTracking();
-      _loadCurrentTrackWaveform();
+      unawaited(_loadCurrentTrackWaveform());
       _prepareNextForSkip();
       _ensureWatchdog();
     }

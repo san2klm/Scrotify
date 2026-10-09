@@ -17,11 +17,11 @@ en verde, un commit por ítem y una línea en `tasks/todo.md`.
 - `.github/workflows/ci.yml`: `flutter analyze` + `flutter test` (con libmpv y ffmpeg) y `node --test` del jam-server.
 - Sin verificar hasta el primer push (no se puede ejecutar en local).
 
-### [~] 2. Eliminar tests intermitentes (S)
+### [x] 2. Eliminar tests intermitentes (S)
 - Fallos aislados anotados en `offline_download_manager_test` y `local_music_service_test`.
 - Hecho cuando: 20 corridas seguidas de la suite sin fallos, con causa raíz (sin reintentos ni skips).
 
-### [ ] 3. Endurecer lints
+### [x] 3. Endurecer lints
 - `flutter_lints` 3.0.1 sin reglas extra; 91 `catch (_) {}` vacíos en `lib/`.
 - Activar `unawaited_futures`, `cancel_subscriptions`, `close_sinks`; analyze en 0.
 - Va después de los ítems 2 y 9 para no pisar a la otra sesión.
@@ -88,3 +88,5 @@ en verde, un commit por ítem y una línea en `tasks/todo.md`.
 - **7** · los endpoints con `access-control-allow-origin: *` (`/api/capabilities`, `/health`, `/rooms`, lobby) son públicos y sin cookies; `/admin` no envía cabeceras CORS y usa cookie SameSite=Strict + CSRF. No hay nada que cerrar.
 - **8** · `DiagnosticsLog` (`lib/services/diagnostics_log.dart`): buffer circular de 800 líneas enganchado a `debugPrint` desde `main` (los ~175 mensajes existentes entran sin tocarlos, y también los errores no controlados), con `redactSecrets` (parámetros Subsonic `u/p/t/s`, tokens, claves, `user:pass@`, `scrotify-sync://`, cabeceras y JSON). Ajustes → Diagnóstico: copiar, guardar en archivo y vaciar. Solo en memoria. Queda fuera: los 91 `catch (_) {}` siguen sin registrar nada (ítem 3).
 - **12** · revisados los 23. Tres alimentaban interfaz con la app oculta: `ServerActivityPanel` (dos peticiones al servidor cada 5 s), el refresco de contadores de Inicio (cada 30 s, escritorio y móvil) y `PlayerPositionBuilder` (redibujo 4 veces por segundo). Ahora consultan `isAppVisible` (`lib/utils/app_visibility.dart`); la barra se re-ancla a la posición real al volver. Los de Jam, Connect, sincronización, reconexión y transiciones siguen en segundo plano a propósito. No medido en dispositivo: el ahorro de batería es por diseño, no por medición.
+- **2** (sesión `Scrotify`, `7b6c820`) · 20/20 corridas completas sin fallos (antes 7 de 20). Causas: esperas de tiempo fijo en `offline_download_manager_test` (ahora por condición) y un reescaneo en segundo plano que escribía en la carpeta temporal mientras el `tearDown` la borraba (`LocalMusicService.settled()`, solo para tests). Verificado solo en Linux.
+- **3** · `unawaited_futures` y `cancel_subscriptions` activos. 22 llamadas asíncronas sin esperar, todas intencionales, ahora marcadas con `unawaited(...)` (sin cambio de comportamiento); `cancel_subscriptions` no encontró nada. `close_sinks` descartado: sus 8 avisos eran falsos positivos (sockets y controladores que se cierran en otro método). Los 91 `catch (_) {}` no se tocaron: ningún lint estándar los cubre y revisarlos uno por uno es otro ítem. Suite completa: 801 tests en verde.

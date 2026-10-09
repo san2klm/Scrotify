@@ -827,7 +827,7 @@ class PlayerController extends _PlayerBase
       if (gen != _loadGen) return;
       unawaited(p.play().catchError((_) {}));
       // Load waveform after starting playback
-      _loadCurrentTrackWaveform();
+      unawaited(_loadCurrentTrackWaveform());
     } catch (_) {
       // Si la carga falla (p. ej. sin conexión), no se mata la sesión.
     }
@@ -962,7 +962,8 @@ class PlayerController extends _PlayerBase
     if (await _playPreparedNext(next)) {
       _recordRecent(currentTrack!);
       _resetPlayTracking();
-      _loadCurrentTrackWaveform(); // Load waveform for the next track
+      unawaited(
+          _loadCurrentTrackWaveform()); // Load waveform for the next track
       notifyListeners();
       return;
     }
@@ -978,7 +979,7 @@ class PlayerController extends _PlayerBase
         await _karaokePlayer!.open(mk.Media(url), play: true);
         _recordRecent(t);
         _resetPlayTracking();
-        _loadCurrentTrackWaveform();
+        unawaited(_loadCurrentTrackWaveform());
       }
     } else {
       await _loadCurrentAndPlay(_lead);
@@ -1007,7 +1008,7 @@ class PlayerController extends _PlayerBase
           await _karaokePlayer!.open(mk.Media(url), play: true);
           _recordRecent(t);
           _resetPlayTracking();
-          _loadCurrentTrackWaveform();
+          unawaited(_loadCurrentTrackWaveform());
         }
       } else {
         await _loadCurrentAndPlay(_lead);

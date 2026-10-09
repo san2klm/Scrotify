@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -590,7 +591,7 @@ class TrackContextMenu extends StatelessWidget {
                       '🎵 [TRACK:${track.id}:${track.title}:${track.artist}]';
                   final ok = await nav.addChatMessage(msg);
                   if (ok && context.mounted) {
-                    ServerActivityPanel.show(context);
+                    unawaited(ServerActivityPanel.show(context));
                   } else if (!ok && messenger.mounted) {
                     messenger.showSnackBar(SnackBar(
                       content:

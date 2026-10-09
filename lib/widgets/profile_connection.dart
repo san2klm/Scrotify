@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -13,7 +14,7 @@ Future<void> connectToServerProfile(
   final nav = context.read<NavidromeService>();
   final profilesController = context.read<ServerProfilesController>();
 
-  showDialog(
+  unawaited(showDialog(
     context: context,
     barrierDismissible: false,
     builder: (_) => AlertDialog(
@@ -29,7 +30,7 @@ Future<void> connectToServerProfile(
         ],
       ),
     ),
-  );
+  ));
 
   try {
     await nav.connectByUrl(profile.url, profile.username, profile.password);
