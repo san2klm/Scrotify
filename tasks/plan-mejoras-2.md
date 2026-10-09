@@ -47,7 +47,7 @@ en verde, un commit por ítem y una línea en `tasks/todo.md`.
 
 ## Fase 3 — Diagnóstico
 
-### [ ] 8. Log estructurado y «Exportar diagnóstico»
+### [x] 8. Log estructurado y «Exportar diagnóstico»
 - 175 `debugPrint`/`print` sueltos. Buffer circular en memoria, exportable desde Ajustes, sin secretos.
 
 ## Fase 4 — Cobertura
@@ -84,3 +84,4 @@ en verde, un commit por ítem y una línea en `tasks/todo.md`.
 - **17, 20** · `.gitignore` y archivos de build de Android añadidos al repo (sin secretos: `key.properties` y `local.properties` siguen ignorados).
 - **6** · `isPublicCleartextUrl` (`lib/utils/cleartext_url.dart`) + `CleartextUrlWarning` bajo el campo de URL en login móvil, login de escritorio y edición de perfiles. No bloquea. LAN, loopback, link-local, CGNAT/Tailscale, ULA IPv6 y `.local`/`.lan`/`.home.arpa`/`.internal` no avisan. Auditoría del emparejamiento: `/pair/claim` va por HTTP pero las credenciales vuelven en sealed-box X25519 hacia una clave efímera del móvil, así que un observador pasivo no las lee; el código de emparejamiento sí viaja en claro (aceptable en LAN, queda anotado).
 - **7** · los endpoints con `access-control-allow-origin: *` (`/api/capabilities`, `/health`, `/rooms`, lobby) son públicos y sin cookies; `/admin` no envía cabeceras CORS y usa cookie SameSite=Strict + CSRF. No hay nada que cerrar.
+- **8** · `DiagnosticsLog` (`lib/services/diagnostics_log.dart`): buffer circular de 800 líneas enganchado a `debugPrint` desde `main` (los ~175 mensajes existentes entran sin tocarlos, y también los errores no controlados), con `redactSecrets` (parámetros Subsonic `u/p/t/s`, tokens, claves, `user:pass@`, `scrotify-sync://`, cabeceras y JSON). Ajustes → Diagnóstico: copiar, guardar en archivo y vaciar. Solo en memoria. Queda fuera: los 91 `catch (_) {}` siguen sin registrar nada (ítem 3).

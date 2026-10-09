@@ -11,6 +11,7 @@ import '../services/hifi/audio_output_devices.dart';
 import '../services/hifi/hifi_coordinator.dart';
 import '../services/hifi/hifi_profiles.dart';
 import '../services/settings_controller.dart';
+import '../widgets/diagnostics_panel.dart';
 import '../widgets/pairing_panel.dart';
 import '../widgets/sync_settings.dart';
 import '../widgets/theme_grid.dart';
@@ -46,7 +47,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ),
       body: ConstrainedContent(
         maxWidth: 1000,
-        child: TvInitialFocus(child: ListView(
+        child: TvInitialFocus(
+            child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
             _menuGroup([
@@ -98,6 +100,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 title: 'Estadísticas de escucha',
                 subtitle: 'Tiempo reproducido y lo más escuchado',
                 onTap: () => _push(const StatsScreen()),
+              ),
+              _menuRow(
+                icon: Icons.bug_report_outlined,
+                title: 'Diagnóstico',
+                subtitle: 'Exportar el registro para reportar un fallo',
+                onTap: () => _openPage(
+                    'Diagnóstico',
+                    (_) => [
+                          _sectionTitle('Registro de la app'),
+                          _card(children: const [DiagnosticsPanel()]),
+                        ]),
               ),
             ]),
             const SizedBox(height: 24),
@@ -945,7 +958,8 @@ class _SettingsSubpage extends StatelessWidget {
       body: Consumer<SettingsController>(
         builder: (context, settings, _) => ConstrainedContent(
           maxWidth: 1000,
-          child: TvInitialFocus(child: ListView(
+          child: TvInitialFocus(
+              child: ListView(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
             children: children(settings),
           )),
@@ -954,7 +968,6 @@ class _SettingsSubpage extends StatelessWidget {
     );
   }
 }
-
 
 /// Selector de salida ALSA directa (`hw:`) para Bit-perfect en Linux.
 class _AlsaOutputPicker extends StatefulWidget {
@@ -981,8 +994,8 @@ class _AlsaOutputPickerState extends State<_AlsaOutputPicker> {
   @override
   Widget build(BuildContext context) {
     final settings = context.watch<SettingsController>();
-    final missing = context.watch<HifiCoordinator?>()?.outputDeviceMissing ??
-        false;
+    final missing =
+        context.watch<HifiCoordinator?>()?.outputDeviceMissing ?? false;
     return FutureBuilder<List<AudioOutputDevice>>(
       future: _devices,
       builder: (context, snapshot) {

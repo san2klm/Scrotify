@@ -12,6 +12,7 @@ import 'package:just_audio_media_kit/just_audio_media_kit.dart';
 import 'package:provider/provider.dart';
 import 'package:window_manager/window_manager.dart';
 
+import 'services/diagnostics_log.dart';
 import 'services/hifi/hifi_coordinator.dart';
 import 'services/home_widget_service.dart';
 import 'services/notification_cover_cache.dart';
@@ -56,6 +57,7 @@ Future<void> main() async {
 
   // Un error no capturado no debe dejar la app en un estado inconsistente en
   // silencio: se registra y se mantiene la ejecución.
+  DiagnosticsLog.instance.attach();
   FlutterError.onError = (details) {
     FlutterError.presentError(details);
     debugPrint('FlutterError no controlado: ${details.exceptionAsString()}');
