@@ -133,7 +133,7 @@ AVPlayer no permite insertar DSP propio. En lugar de simular un EQ que no hace n
 | :--- | :--- | :--- |
 | **Windows** | mpv + SoXr, frecuencia nativa | `ao=wasapi`, `audio-exclusive=yes` (WASAPI exclusivo) |
 | **macOS** | mpv + SoXr | `ao=coreaudio`, hog mode, `coreaudio-change-physical-format=yes` (el DAC cambia a 44.1/96/192 kHz por pista) |
-| **Linux** | mpv + SoXr | Sin procesado de Scrotify, usando la salida del sistema sin exclusividad. Bluetooth/PipeWire compartido no garantiza bit-perfect real; la app todavía no ofrece selección ALSA `hw:` directa. |
+| **Linux** | mpv + SoXr | Sin procesado de Scrotify, usando la salida del sistema sin exclusividad. Bluetooth/PipeWire compartido no garantiza bit-perfect real. Para bit-perfect real, en Ajustes > Fidelidad se puede elegir una salida ALSA `hw:` directa (tu DAC). |
 | **Android** | Stream original; el sistema mezcla a 48 kHz | Android 14+ con DAC USB: `AudioManager.setPreferredMixerAttributes` con `MIXER_BEHAVIOR_BIT_PERFECT` (`HifiAudioPlugin.kt`). Bluetooth y parlante interno no pueden ser bit-perfect. |
 | **iOS** | `AVAudioSession.setPreferredSampleRate` igual a la pista (`HifiAudioPlugin.swift`) | Igual + sin procesamiento. iOS no ofrece modo exclusivo. |
 
@@ -262,4 +262,19 @@ rápidamente sin audio. El modo sin procesado conserva `audio-exclusive=no`,
 sin EQ, ReplayGain ni crossfade, con volumen digital al 100 %.
 La salida compartida no se presenta como bit-perfect garantizado.
 La propiedad `ao=alsa` anterior se omitía por ser de inicio y nunca seleccionaba
-ALSA: no había una salida directa implementada.
+ALSA.
+
+#### Salida ALSA directa (`hw:`)
+
+En Ajustes > Fidelidad, con Bit-perfect en Linux, aparece «Salida directa (ALSA
+hw:)». La lista sale de la propiedad `audio-device-list` de mpv filtrada a
+`alsa/hw:…` (PipeWire, `default` y `plughw:` mezclan o convierten, así que no se
+ofrecen). La elección se aplica con `audio-device` (propiedad de ejecución: no
+hace falta recrear el reproductor) y se guarda en `settings.json`
+(`audioOutputDevice`; solo se aceptan nombres `alsa/hw:` con caracteres seguros).
+
+- Si el dispositivo elegido deja de estar conectado, se vuelve a `auto` y Ajustes
+  lo avisa; al reconectarlo basta con «Buscar salidas de nuevo» o reabrir.
+- Al salir de Bit-perfect se restaura `audio-device=auto`.
+- Con una salida `hw:` el resto de aplicaciones no puede usar ese dispositivo
+  mientras Scrotify reproduce.

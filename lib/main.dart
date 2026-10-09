@@ -305,6 +305,8 @@ class MyApp extends StatelessWidget {
               applyToPlayer: player.applyHifi,
               setEqAllowed: equalizer.setHifiAllowsEq,
               setMpvProperty: HifiCoordinator.isDesktop ? setMpvProperty : null,
+              listOutputDevices:
+                  HifiCoordinator.isDesktop ? listMpvOutputDevices : null,
             )..start();
             if (HifiCoordinator.isDesktop) {
               // Un reproductor mpv nuevo también debe recibir las propiedades.

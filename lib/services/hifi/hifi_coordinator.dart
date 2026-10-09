@@ -15,6 +15,7 @@ import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart';
 
 import '../settings_controller.dart';
+import 'audio_output_devices.dart';
 import 'hifi_profiles.dart';
 
 typedef HifiMpvSetter = Future<void> Function(String name, String value);
@@ -25,6 +26,7 @@ class HifiCoordinator extends ChangeNotifier {
     required Future<void> Function(HifiPlan plan) applyToPlayer,
     required Future<void> Function(bool allowed) setEqAllowed,
     HifiMpvSetter? setMpvProperty,
+    this.listOutputDevices,
     HifiPlatform? platform,
     bool? mpvEngine,
   })  : _settings = settings,
@@ -38,6 +40,9 @@ class HifiCoordinator extends ChangeNotifier {
   final Future<void> Function(HifiPlan plan) _applyToPlayer;
   final Future<void> Function(bool allowed) _setEqAllowed;
   final HifiMpvSetter? _setMpv;
+
+  /// Salidas de audio que mpv ve ahora mismo (`audio-device-list`).
+  final Future<List<AudioOutputDevice>> Function()? listOutputDevices;
   final HifiPlatform platform;
 
   /// `true` donde el audio lo reproduce mpv (escritorio).
@@ -46,7 +51,24 @@ class HifiCoordinator extends ChangeNotifier {
   HifiPlan? _plan;
   Object? _lastKey;
   bool _mpvTouched = false;
+  bool _deviceTouched = false;
   bool _started = false;
+  bool _outputDeviceMissing = false;
+
+  /// `true` si la salida ALSA elegida ya no está conectada y se usa la del
+  /// sistema.
+  bool get outputDeviceMissing => _outputDeviceMissing;
+
+  /// Salidas ALSA directas (`hw:`) disponibles ahora, para el selector.
+  Future<List<AudioOutputDevice>> directOutputDevices() async {
+    final list = listOutputDevices;
+    if (list == null) return const [];
+    try {
+      return directHardwareDevices(await list());
+    } catch (_) {
+      return const [];
+    }
+  }
 
   /// Plan vigente (para mostrar sus notas en Ajustes).
   HifiPlan? get plan => _plan;
@@ -93,7 +115,8 @@ class HifiCoordinator extends ChangeNotifier {
 
   void _onSettingsChanged() => unawaited(refresh());
 
-  HifiPlan computePlan() => HifiPlanner.plan(
+  HifiPlan computePlan({String? outputDevice}) => HifiPlanner.plan(
+        outputDevice: outputDevice,
         mode: _settings.fidelityMode,
         platform: platform,
         network: _settings.isMobileData
@@ -109,11 +132,28 @@ class HifiCoordinator extends ChangeNotifier {
       _settings.fidelityMode,
       _settings.losslessOnMobileData,
       _settings.isMobileData,
+      _settings.audioOutputDevice,
     );
     if (!force && key == _lastKey) return;
     _lastKey = key;
 
-    final plan = computePlan();
+    final wanted = _settings.audioOutputDevice;
+    var device = wanted;
+    _outputDeviceMissing = false;
+    if (wanted != null && platform == HifiPlatform.linux && mpvEngine) {
+      final present = await directOutputDevices();
+      // Con la lista vacía (no se pudo leer) se intenta igualmente: mpv avisará.
+      if (present.isNotEmpty && !present.any((d) => d.name == wanted)) {
+        device = null;
+        _outputDeviceMissing = true;
+      }
+    }
+    final base = computePlan(outputDevice: device);
+    final plan = _outputDeviceMissing &&
+            base.mode == AudioFidelityMode.bitPerfect
+        ? base.withNote('La salida ALSA elegida ($wanted) no está disponible: '
+            'se usa la salida del sistema.')
+        : base;
     _plan = plan;
     try {
       await _applyToPlayer(plan);
@@ -137,6 +177,7 @@ class HifiCoordinator extends ChangeNotifier {
       for (final e in mpvDefaults.entries) {
         await set(e.key, e.value);
       }
+      await _applyDevice(set, null);
       _mpvTouched = false;
       return;
     }
@@ -149,5 +190,15 @@ class HifiCoordinator extends ChangeNotifier {
     for (final e in props.entries) {
       await set(e.key, e.value);
     }
+    await _applyDevice(set, plan.mpvProperties['audio-device']);
+  }
+
+  /// Fija la salida de audio: la elegida, o `auto` para deshacer una anterior.
+  /// Cambiar `audio-device` reinicia la salida de mpv, así que solo se toca si
+  /// hay una elección o hay algo que deshacer.
+  Future<void> _applyDevice(HifiMpvSetter set, String? device) async {
+    if (device == null && !_deviceTouched) return;
+    await set('audio-device', device ?? 'auto');
+    _deviceTouched = device != null;
   }
 }

@@ -55,7 +55,7 @@ Primero lo pequeño y aislado, luego lo medio, y al final el refactor grande
 
 ## Fase B — Medios
 
-### [ ] 1. Selector de salida ALSA `hw:` en Linux (bit-perfect real)
+### [x] 1. Selector de salida ALSA `hw:` en Linux (bit-perfect real)
 - Dónde: `hifi_profiles.dart` (rama Linux), `hifi_coordinator.dart`, `settings_screen.dart` (Salida), `docs/equalizer.md`.
 - Plan: enumerar dispositivos con mpv (`audio-device-list`) filtrando `alsa/hw:` y mostrar PipeWire/sistema como opción por defecto; guardar la elección; con `hw:` aplicar `ao=alsa` + `audio-device`, y volver a la salida del sistema si el dispositivo desaparece. Mantener el aviso de que Bluetooth/PipeWire no es bit-perfect.
 - Cuidado: no reintroducir el bug de `bc53fca` (exclusividad que deja el stream sin destino). Por defecto sigue `audio-exclusive=no`.
@@ -143,3 +143,4 @@ Pruebas en TV real, teléfono físico, auriculares Bluetooth, deriva de reloj en
 - **7** · `JamCapabilities` tipado (`lib/models/jam_capabilities.dart`) reemplaza el registro `(reactions, chat)`; `JamController.cloudCapabilities`/`refreshCloudCapabilities()` (se invalida al cambiar de relé); el diálogo oculta "Sesión pública" y "Sala persistente" solo si el relé declara que no las ofrece (relé antiguo = todo visible, sin cambios). 653 tests, analyze limpio.
 - **11** · progreso y cancelación del escaneo: `LocalScanProgress`/`LocalScanPhase`, `LocalMusicService.cancelScan()`, `ScanProgressView` en Ajustes. Decisión de seguridad: cancelar antes de comparar con el disco **no toca el índice** (purgar con una lista incompleta borraría descargas válidas; hay un test de control que demuestra que un escaneo completo sí purga); cancelar al identificar conserva lo ya recuperado y lo guarda.
 - **12** · caché del catálogo: `getDownloadRecoveryCatalog({forceRefresh})` con validez de 3 min por sesión, descargas simultáneas compartidas, resultado inmutable; un escaneo cancelado deja la descarga lista para el siguiente. 670 tests, analyze limpio.
+- **1** · selector ALSA `hw:` (Linux, Bit-perfect): `audio_output_devices.dart` (parser de `audio-device-list` + validación estricta del nombre), `HifiPlanner(outputDevice)`, `HifiCoordinator` (lista, comprobación de presencia, `outputDeviceMissing`, restauración a `auto`), `SettingsController.audioOutputDevice`, selector en Ajustes y doc. `audio-device` se cambia sin recrear el player. Verificado con libmpv real (`SCROTIFY_AUDIO_INTEGRATION=1`). Pendiente de tu lado: probar con un DAC USB real.

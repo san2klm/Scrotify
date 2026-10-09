@@ -6,6 +6,7 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/foundation.dart';
 
 import '../models/jam_models.dart';
+import 'hifi/audio_output_devices.dart' show isValidDirectDevice;
 import 'hifi/hifi_profiles.dart' show AudioFidelityMode;
 import 'replay_gain.dart';
 
@@ -74,6 +75,7 @@ class SettingsController extends ChangeNotifier {
   AudioFidelityMode _fidelityMode = AudioFidelityMode.standard;
   bool _losslessOnMobileData = false;
   String? _connectDeviceName;
+  String? _audioOutputDevice;
 
   // Red actual detectada. Si no se puede saber (sin NetworkManager, etc.) se
   // asume "casa" para no degradar la calidad sin motivo.
@@ -163,6 +165,18 @@ class SettingsController extends ChangeNotifier {
     return clean.length <= maxDeviceNameLength
         ? clean
         : clean.substring(0, maxDeviceNameLength).trimRight();
+  }
+
+  /// Salida ALSA `hw:` elegida para Bit-perfect en Linux, o `null` para usar
+  /// la del sistema.
+  String? get audioOutputDevice => _audioOutputDevice;
+
+  void setAudioOutputDevice(String? device) {
+    final value = isValidDirectDevice(device) ? device : null;
+    if (value == _audioOutputDevice) return;
+    _audioOutputDevice = value;
+    _save();
+    notifyListeners();
   }
 
   void setConnectDeviceName(String? name) {
@@ -362,6 +376,10 @@ class SettingsController extends ChangeNotifier {
       final jamUrl =
           JamServerEndpoint.parse(data['jamServerUrl'] as String? ?? '');
       _jamServerUrl = jamUrl.url ?? kDefaultRemoteJamEndpoint;
+      final savedDevice = data['audioOutputDevice'];
+      _audioOutputDevice = savedDevice is String && isValidDirectDevice(savedDevice)
+          ? savedDevice
+          : null;
       final savedName = data['connectDeviceName'];
       _connectDeviceName =
           savedName is String ? normalizeDeviceName(savedName) : null;
@@ -392,6 +410,7 @@ class SettingsController extends ChangeNotifier {
         'fidelityMode': _fidelityMode.name,
         'losslessOnMobileData': _losslessOnMobileData,
         'connectDeviceName': _connectDeviceName,
+        'audioOutputDevice': _audioOutputDevice,
       }));
     } catch (err) {
       debugPrint('settings_controller:304 ignorado: $err');

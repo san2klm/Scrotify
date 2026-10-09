@@ -11,6 +11,7 @@
 // PlayerController aplica. Así es testeable y la UI puede mostrar qué hará.
 
 import '../../models/eq_models.dart';
+import 'audio_output_devices.dart';
 
 enum AudioFidelityMode { standard, highFidelity, bitPerfect }
 
@@ -66,6 +67,21 @@ class HifiPlan {
   /// Explicaciones honestas para mostrar en Ajustes.
   final List<String> notes;
 
+  /// Copia con una nota más para mostrar en Ajustes.
+  HifiPlan withNote(String note) => HifiPlan(
+        mode: mode,
+        stream: stream,
+        mpvProperties: mpvProperties,
+        mpvInitOnly: mpvInitOnly,
+        allowEq: allowEq,
+        allowReplayGain: allowReplayGain,
+        allowCrossfade: allowCrossfade,
+        lockVolumeAt100: lockVolumeAt100,
+        requestAndroidBitPerfect: requestAndroidBitPerfect,
+        matchIosSampleRate: matchIosSampleRate,
+        notes: [...notes, note],
+      );
+
   const HifiPlan({
     required this.mode,
     required this.stream,
@@ -97,6 +113,7 @@ class HifiPlanner {
     required bool mpvEngine,
     int mobileKbps = 192,
     bool allowLosslessOnMobileData = false,
+    String? outputDevice,
   }) {
     final notes = <String>[];
 
@@ -178,16 +195,26 @@ class HifiPlanner {
                   'CoreAudio en modo exclusivo (hog mode) con cambio automático '
                   'de frecuencia del DAC.');
             case HifiPlatform.linux:
-              // La salida actual la elige el sistema. Pedir exclusividad a
-              // PipeWire puede dejar el stream sin destino (p. ej. Bluetooth)
-              // y consumir la pista rápidamente sin emitir sonido.
+              // Pedir exclusividad a PipeWire puede dejar el stream sin
+              // destino (p. ej. Bluetooth) y consumir la pista sin emitir
+              // sonido: nunca se pide.
               mpv['audio-exclusive'] = 'no';
-              notes.add(
-                  'En Linux se conserva la salida del sistema, incluido Bluetooth, '
-                  'sin pedir exclusividad a PipeWire. Se desactiva el procesado '
-                  'de Scrotify, pero la salida compartida o Bluetooth no garantiza '
-                  'bit-perfect real. Para eso hace falta una salida ALSA hw: '
-                  'directa a un DAC compatible; esta app aún no permite elegirla.');
+              if (isValidDirectDevice(outputDevice)) {
+                mpv['audio-device'] = outputDevice!;
+                notes.add(
+                    'Salida ALSA directa ($outputDevice): el audio va a la '
+                    'tarjeta sin pasar por el mezclador del sistema. Es la '
+                    'única forma de bit-perfect real en Linux; mientras dure, '
+                    'el resto de aplicaciones no suena por ese dispositivo.');
+              } else {
+                notes.add(
+                    'En Linux se conserva la salida del sistema, incluido '
+                    'Bluetooth, sin pedir exclusividad a PipeWire. Se '
+                    'desactiva el procesado de Scrotify, pero la salida '
+                    'compartida o Bluetooth no garantiza bit-perfect real. '
+                    'Para eso elegí una salida ALSA directa (hw:) de tu DAC '
+                    'en Ajustes.');
+              }
             case HifiPlatform.android:
             case HifiPlatform.ios:
               break;

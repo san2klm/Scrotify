@@ -1,3 +1,5 @@
+import 'dart:io' show Platform;
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -5,6 +7,7 @@ import '../models/jam_models.dart';
 import '../services/navidrome_service.dart';
 import '../services/remote_jam_service.dart';
 import '../services/pairing_server.dart';
+import '../services/hifi/audio_output_devices.dart';
 import '../services/hifi/hifi_coordinator.dart';
 import '../services/hifi/hifi_profiles.dart';
 import '../services/settings_controller.dart';
@@ -200,6 +203,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
               onChanged: settings.setLosslessOnMobileData,
             ),
           ],
+          if (settings.fidelityMode == AudioFidelityMode.bitPerfect &&
+              Platform.isLinux)
+            const _AlsaOutputPicker(),
           Builder(builder: (context) {
             final notes = context.watch<HifiCoordinator?>()?.plan?.notes ??
                 const <String>[];
@@ -944,6 +950,85 @@ class _SettingsSubpage extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+
+/// Selector de salida ALSA directa (`hw:`) para Bit-perfect en Linux.
+class _AlsaOutputPicker extends StatefulWidget {
+  const _AlsaOutputPicker();
+
+  @override
+  State<_AlsaOutputPicker> createState() => _AlsaOutputPickerState();
+}
+
+class _AlsaOutputPickerState extends State<_AlsaOutputPicker> {
+  Future<List<AudioOutputDevice>>? _devices;
+
+  void _reload() {
+    final hifi = context.read<HifiCoordinator?>();
+    setState(() => _devices = hifi?.directOutputDevices() ?? Future.value([]));
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_devices == null) _reload();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final settings = context.watch<SettingsController>();
+    final missing = context.watch<HifiCoordinator?>()?.outputDeviceMissing ??
+        false;
+    return FutureBuilder<List<AudioOutputDevice>>(
+      future: _devices,
+      builder: (context, snapshot) {
+        final devices = snapshot.data ?? const <AudioOutputDevice>[];
+        final selected = settings.audioOutputDevice;
+        final known = devices.any((d) => d.name == selected);
+        return Padding(
+          padding: const EdgeInsets.only(top: 8),
+          child: Row(children: [
+            Expanded(
+              child: DropdownButtonFormField<String?>(
+                // La clave fuerza a reconstruir si cambia la elección externa.
+                key: ValueKey('$selected-${devices.length}'),
+                initialValue: selected,
+                isExpanded: true,
+                decoration: InputDecoration(
+                  labelText: 'Salida directa (ALSA hw:)',
+                  helperText: missing
+                      ? 'La salida elegida no está conectada: se usa la del sistema.'
+                      : 'Elegí tu DAC para bit-perfect real.',
+                ),
+                items: [
+                  const DropdownMenuItem<String?>(
+                      value: null, child: Text('Salida del sistema')),
+                  for (final d in devices)
+                    DropdownMenuItem<String?>(
+                        value: d.name,
+                        child: Text(d.description,
+                            overflow: TextOverflow.ellipsis)),
+                  // Conserva visible una elección cuyo dispositivo no está.
+                  if (selected != null && !known)
+                    DropdownMenuItem<String?>(
+                        value: selected,
+                        child: Text('$selected (desconectada)',
+                            overflow: TextOverflow.ellipsis)),
+                ],
+                onChanged: settings.setAudioOutputDevice,
+              ),
+            ),
+            IconButton(
+              tooltip: 'Buscar salidas de nuevo',
+              icon: const Icon(Icons.refresh_rounded),
+              onPressed: _reload,
+            ),
+          ]),
+        );
+      },
     );
   }
 }
