@@ -15,6 +15,7 @@ import 'package:navidrome_client/services/hifi/hifi_coordinator.dart';
 import 'package:navidrome_client/services/hifi/hifi_profiles.dart';
 import 'package:navidrome_client/services/jam_controller.dart';
 import 'package:navidrome_client/services/listening_stats_service.dart';
+import 'package:navidrome_client/services/local_music_service.dart';
 import 'package:navidrome_client/services/navidrome_service.dart';
 import 'package:navidrome_client/services/player_controller.dart';
 import 'package:navidrome_client/services/settings_controller.dart';
@@ -37,6 +38,44 @@ class _Themes extends ThemeController {
   bool get loading => false;
   @override
   Future<void> rescan() async {}
+}
+
+class _Nav extends FakeNavidrome {
+  @override
+  Future<List<Playlist>> getPlaylists() async => [];
+  @override
+  Future<int?> getServerSongCount() async => 0;
+}
+
+/// Biblioteca local mínima: lo que lee la sección «Música local» de Ajustes.
+class _Music extends ChangeNotifier implements LocalMusicService {
+  @override
+  String? get folderPath => '/storage/emulated/0/Music/Scrotify';
+  @override
+  bool get scanning => false;
+  @override
+  LocalScanProgress? get scanProgress => null;
+  @override
+  bool get lastScanCancelled => false;
+  @override
+  int get recoveredByLastScan => 0;
+  @override
+  int get unidentifiedByLastScan => 0;
+  @override
+  bool get recoveryUnavailable => false;
+  @override
+  int count(String? scope) => 0;
+  @override
+  Future<void> initialize() async {}
+  @override
+  Future<void> rescan(
+      {bool requestAccess = true,
+      String? serverScope,
+      Future<List<Track>> Function()? catalogLoader}) async {}
+  @override
+  void cancelScan() {}
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
 class _Stats extends ChangeNotifier implements ListeningStatsService {
@@ -78,7 +117,10 @@ void main() {
   var devices = <AudioOutputDevice>[];
   var listCalls = 0;
 
+  late LocalMusicService music;
+
   Future<void> pumpSettings(WidgetTester tester) async {
+    music = _Music();
     tester.view.physicalSize = const Size(1000, 1800);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
@@ -109,13 +151,13 @@ void main() {
     await tester.pumpWidget(MultiProvider(
       providers: [
         ChangeNotifierProvider<ThemeController>(create: (_) => _Themes()),
-        ChangeNotifierProvider<NavidromeService>(
-            create: (_) => FakeNavidrome()),
+        ChangeNotifierProvider<NavidromeService>(create: (_) => _Nav()),
         ChangeNotifierProvider<PlayerController>(create: (_) => IdlePlayer()),
         ChangeNotifierProvider<ConnectService>(
             create: (_) => idleConnectService()),
         ChangeNotifierProvider<JamController>(create: (_) => IdleJam()),
         ChangeNotifierProvider<SettingsController>.value(value: settings),
+        ChangeNotifierProvider<LocalMusicService>.value(value: music),
         ChangeNotifierProvider<HifiCoordinator>.value(value: hifi),
         ChangeNotifierProvider<SyncService>.value(value: sync),
         ChangeNotifierProvider<EqualizerService>(
@@ -194,13 +236,18 @@ void main() {
       'Audio y calidad',
       'Reproducción',
       'Apariencia y temas',
+      'Biblioteca y descargas',
       'Servidor Jam',
     ]) {
       testWidgets('$page: abrir, tocar todo y volver', (tester) async {
         await pumpSettings(tester);
         await open(tester, page);
         final touched = await exerciseControls(tester, page);
-        if (page != 'Servidor Jam' && page != 'Apariencia y temas') {
+        if (!const {
+          'Servidor Jam',
+          'Apariencia y temas',
+          'Biblioteca y descargas'
+        }.contains(page)) {
           expect(touched, greaterThan(0),
               reason: '$page debería tener controles');
         }
@@ -224,6 +271,7 @@ void main() {
           'Audio y calidad',
           'Reproducción',
           'Apariencia y temas',
+          'Biblioteca y descargas',
           'Servidor Jam',
         ]) {
           await open(tester, page);
