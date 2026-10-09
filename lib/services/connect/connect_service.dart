@@ -4,6 +4,7 @@ import 'dart:math';
 
 import 'package:flutter/foundation.dart';
 
+import '../settings_controller.dart';
 import '../sync/sync_crypto.dart';
 import 'connect_protocol.dart';
 import 'connect_transport.dart';
@@ -41,10 +42,15 @@ class ConnectService extends ChangeNotifier {
     required this.port,
     required this.selfId,
     required this.transportsFor,
+    String selfName = 'Esta computadora',
+    String? defaultName,
+    this.persistName,
     DateTime Function()? now,
     this.ackTimeout = const Duration(seconds: 6),
     this.stateInterval = const Duration(seconds: 3),
-  }) : _now = now ?? DateTime.now;
+  })  : _selfName = selfName,
+        defaultName = defaultName ?? selfName,
+        _now = now ?? DateTime.now;
 
   static const _docKey = 'connect';
 
@@ -54,6 +60,13 @@ class ConnectService extends ChangeNotifier {
   final Duration ackTimeout;
   final Duration stateInterval;
   final DateTime Function() _now;
+
+  /// Nombre del sistema, al que se vuelve si el usuario borra el suyo.
+  final String defaultName;
+
+  /// Guarda el nombre elegido (`null` = el de por defecto).
+  final Future<void> Function(String? name)? persistName;
+  String _selfName;
 
   SyncCrypto? _crypto;
   List<ConnectTransport> _transports = [];
@@ -72,6 +85,25 @@ class ConnectService extends ChangeNotifier {
   String? _lastQueueSig;
   bool _forceQueue = true;
   int _publishes = 0;
+
+  /// Nombre con el que este dispositivo aparece en los demás.
+  String get selfName => _selfName;
+
+  /// Cambia el nombre visible y lo reanuncia: los transportes se recrean para
+  /// que LAN y relé usen el nuevo nombre enseguida.
+  Future<void> rename(String input) async {
+    final name = SettingsController.normalizeDeviceName(input);
+    final next = name ?? defaultName;
+    if (next == _selfName) return;
+    _selfName = next;
+    notifyListeners();
+    await persistName?.call(name);
+    final crypto = _crypto;
+    if (crypto != null) {
+      await _stop();
+      await _start(crypto);
+    }
+  }
 
   /// Dispositivos del mismo usuario visibles ahora mismo.
   List<ConnectDevice> get devices => _devices;
@@ -120,6 +152,10 @@ class ConnectService extends ChangeNotifier {
       notifyListeners();
       return;
     }
+    await _start(crypto);
+  }
+
+  Future<void> _start(SyncCrypto crypto) async {
     _transports = transportsFor(crypto);
     _perTransport = [for (final _ in _transports) {}];
     for (var i = 0; i < _transports.length; i++) {

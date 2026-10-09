@@ -5,6 +5,7 @@ import '../services/connect/connect_protocol.dart';
 import '../services/connect/connect_service.dart';
 import '../services/navidrome_service.dart';
 import '../services/player_controller.dart';
+import '../services/settings_controller.dart';
 import '../services/theme_controller.dart';
 import '../utils/app_colors.dart';
 import '../utils/responsive.dart';
@@ -81,7 +82,17 @@ class ConnectPanel extends StatelessWidget {
         const SizedBox(height: 4),
         _DeviceRow(
           icon: _isMobile(context) ? Icons.smartphone : Icons.computer,
-          title: _isMobile(context) ? 'Este teléfono' : 'Esta computadora',
+          title: connect.selfName != connect.defaultName
+              ? connect.selfName
+              : _isMobile(context)
+                  ? 'Este teléfono'
+                  : 'Esta computadora',
+          trailing: IconButton(
+            tooltip: 'Cambiar nombre del dispositivo',
+            icon: Icon(Icons.edit_outlined,
+                color: context.textSecondary, size: 18),
+            onPressed: () => _rename(context, connect),
+          ),
           subtitle: here && player.currentTrack != null && player.playing
               ? 'Reproduciendo aquí'
               : null,
@@ -99,12 +110,21 @@ class ConnectPanel extends StatelessWidget {
     );
   }
 
+  static Future<void> _rename(
+      BuildContext context, ConnectService connect) async {
+    final name = await showDialog<String>(
+      context: context,
+      builder: (_) => _RenameDialog(
+          current: connect.selfName, fallback: connect.defaultName),
+    );
+    if (name != null) await connect.rename(name);
+  }
+
   static bool _isMobile(BuildContext context) =>
       Theme.of(context).platform == TargetPlatform.android ||
       Theme.of(context).platform == TargetPlatform.iOS;
 
-  Widget _devices(
-      BuildContext context, ConnectService connect, bool signedIn) {
+  Widget _devices(BuildContext context, ConnectService connect, bool signedIn) {
     if (!signedIn) {
       return const _Hint(
         icon: Icons.login,
@@ -177,6 +197,48 @@ class ConnectPanel extends StatelessWidget {
   }
 }
 
+class _RenameDialog extends StatefulWidget {
+  const _RenameDialog({required this.current, required this.fallback});
+  final String current;
+  final String fallback;
+
+  @override
+  State<_RenameDialog> createState() => _RenameDialogState();
+}
+
+class _RenameDialogState extends State<_RenameDialog> {
+  late final _input = TextEditingController(text: widget.current);
+
+  @override
+  void dispose() {
+    _input.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+        title: const Text('Nombre del dispositivo'),
+        content: TextField(
+          controller: _input,
+          autofocus: true,
+          maxLength: SettingsController.maxDeviceNameLength,
+          decoration: InputDecoration(
+              hintText: widget.fallback,
+              helperText: 'Así te verán tus otros dispositivos. '
+                  'Vacío = ${widget.fallback}.'),
+          onSubmitted: (v) => Navigator.pop(context, v),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancelar')),
+          TextButton(
+              onPressed: () => Navigator.pop(context, _input.text),
+              child: const Text('Guardar')),
+        ],
+      );
+}
+
 class _DeviceRow extends StatelessWidget {
   const _DeviceRow({
     required this.icon,
@@ -184,6 +246,7 @@ class _DeviceRow extends StatelessWidget {
     required this.selected,
     this.subtitle,
     this.onTap,
+    this.trailing,
   });
 
   final IconData icon;
@@ -191,6 +254,7 @@ class _DeviceRow extends StatelessWidget {
   final String? subtitle;
   final bool selected;
   final VoidCallback? onTap;
+  final Widget? trailing;
 
   @override
   Widget build(BuildContext context) {
@@ -229,6 +293,7 @@ class _DeviceRow extends StatelessWidget {
                               fontSize: 12.5)),
                   ]),
             ),
+            if (trailing != null) trailing!,
           ]),
         ),
       ),

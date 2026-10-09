@@ -124,4 +124,16 @@ void main() {
     expect(find.text('Internet'), findsNWidgets(2));
     expect(find.byIcon(Icons.smartphone), findsNWidgets(2));
   });
+
+  testWidgets('el nombre del dispositivo se puede cambiar desde el panel',
+      (tester) async {
+    await pump(tester, signedIn: true);
+    await tester.tap(find.byTooltip('Cambiar nombre del dispositivo'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField), 'Salón');
+    await tester.tap(find.text('Guardar'));
+    await tester.pumpAndSettle();
+    expect(connect.selfName, 'Salón');
+    expect(find.text('Salón'), findsOneWidget);
+  });
 }

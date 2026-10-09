@@ -337,6 +337,9 @@ class MyApp extends StatelessWidget {
             final connect = ConnectService(
               port: PlayerConnectPort(ctx.read<PlayerController>(), nav),
               selfId: identity.id,
+              selfName: settings.connectDeviceName ?? identity.name,
+              defaultName: identity.name,
+              persistName: (name) async => settings.setConnectDeviceName(name),
               transportsFor: (crypto) {
                 final endpoint = JamServerEndpoint.parse(settings.jamServerUrl);
                 return [
@@ -344,7 +347,7 @@ class MyApp extends StatelessWidget {
                   LanTransport(
                     crypto: crypto,
                     selfId: identity.id,
-                    selfName: identity.name,
+                    selfName: settings.connectDeviceName ?? identity.name,
                     selfKind: identity.kind,
                   ),
                   if (endpoint.isValid && account != null)
@@ -352,7 +355,7 @@ class MyApp extends StatelessWidget {
                       account: account!,
                       serverUrl: Uri.parse(endpoint.url!),
                       selfId: identity.id,
-                      selfName: identity.name,
+                      selfName: settings.connectDeviceName ?? identity.name,
                       selfKind: identity.kind,
                     ),
                 ];

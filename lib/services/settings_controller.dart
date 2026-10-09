@@ -73,6 +73,7 @@ class SettingsController extends ChangeNotifier {
   String _jamServerUrl = kDefaultRemoteJamEndpoint;
   AudioFidelityMode _fidelityMode = AudioFidelityMode.standard;
   bool _losslessOnMobileData = false;
+  String? _connectDeviceName;
 
   // Red actual detectada. Si no se puede saber (sin NetworkManager, etc.) se
   // asume "casa" para no degradar la calidad sin motivo.
@@ -143,6 +144,33 @@ class SettingsController extends ChangeNotifier {
       notifyListeners();
     }
     return parsed;
+  }
+
+  /// Nombre elegido por el usuario para este dispositivo en Connect, o `null`
+  /// para usar el del sistema.
+  String? get connectDeviceName => _connectDeviceName;
+
+  static const maxDeviceNameLength = 40;
+
+  /// Limpia un nombre de dispositivo: sin caracteres de control, espacios
+  /// colapsados y como mucho [maxDeviceNameLength]. `null` si queda vacío.
+  static String? normalizeDeviceName(String input) {
+    final clean = input
+        .replaceAll(RegExp(r'[\u0000-\u0008\u000b-\u001f\u007f]'), '')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+    if (clean.isEmpty) return null;
+    return clean.length <= maxDeviceNameLength
+        ? clean
+        : clean.substring(0, maxDeviceNameLength).trimRight();
+  }
+
+  void setConnectDeviceName(String? name) {
+    final value = name == null ? null : normalizeDeviceName(name);
+    if (value == _connectDeviceName) return;
+    _connectDeviceName = value;
+    _save();
+    notifyListeners();
   }
 
   void resetJamServerUrl() => setJamServerUrl(kDefaultRemoteJamEndpoint);
@@ -334,6 +362,9 @@ class SettingsController extends ChangeNotifier {
       final jamUrl =
           JamServerEndpoint.parse(data['jamServerUrl'] as String? ?? '');
       _jamServerUrl = jamUrl.url ?? kDefaultRemoteJamEndpoint;
+      final savedName = data['connectDeviceName'];
+      _connectDeviceName =
+          savedName is String ? normalizeDeviceName(savedName) : null;
       notifyListeners();
     } catch (_) {
       // Silently ignore — los ajustes no son críticos.
@@ -360,6 +391,7 @@ class SettingsController extends ChangeNotifier {
         'jamServerUrl': _jamServerUrl,
         'fidelityMode': _fidelityMode.name,
         'losslessOnMobileData': _losslessOnMobileData,
+        'connectDeviceName': _connectDeviceName,
       }));
     } catch (err) {
       debugPrint('settings_controller:304 ignorado: $err');

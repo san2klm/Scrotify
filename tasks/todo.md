@@ -322,3 +322,7 @@ El mismo APK sirve para teléfono y tele. En una tele se activa un modo con la i
 
 - [x] Revisar los cambios locales y verificar análisis limpio, 616 pruebas Flutter aprobadas (2 integraciones omitidas) y 54 pruebas del servidor Jam aprobadas.
 - [x] Preparar PC123 con los 25 commits posteriores de main y las correcciones locales de recuperación de descargas y salida Hi-Fi en Linux para publicar sin forzar el historial.
+
+## Mejoras (plan en `tasks/plan-mejoras.md`)
+
+- [x] **M2** Nombre de dispositivo editable en Connect (se guarda en ajustes y se reanuncia por LAN y relé).
