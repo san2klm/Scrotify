@@ -3,6 +3,9 @@
 #
 #   tool/install_android.sh <id-del-dispositivo> phone|tv
 #   tool/install_android.sh <id> phone --check     (solo valida, no instala)
+#   tool/install_android.sh <id> phone --no-launch (instala sin abrir la app:
+#                                    no interrumpe lo que haya en pantalla,
+#                                    pero tampoco comprueba el arranque)
 #
 # El id es obligatorio: suele haber varios dispositivos por adb (teléfono,
 # tele, emulador) con arquitecturas distintas, y un APK de 32 bits instalado en
@@ -19,10 +22,12 @@ PACKAGE=com.example.navidrome_client
 DEVICE=${1:-}
 FLAVOR=${2:-}
 CHECK_ONLY=0
+LAUNCH=1
 [[ "${3:-}" == "--check" ]] && CHECK_ONLY=1
+[[ "${3:-}" == "--no-launch" ]] && LAUNCH=0
 
 if [[ -z "$DEVICE" || ( "$FLAVOR" != phone && "$FLAVOR" != tv ) ]]; then
-  echo "Uso: $0 <id-del-dispositivo> phone|tv [--check]" >&2
+  echo "Uso: $0 <id-del-dispositivo> phone|tv [--check|--no-launch]" >&2
   echo "Dispositivos conectados:" >&2
   "$ADB" devices -l | sed 1d >&2
   exit 2
@@ -68,6 +73,10 @@ echo "$model ($abi) <- $apk"
 [[ $CHECK_ONLY == 1 ]] && { echo "Comprobación correcta; no se instala (--check)."; exit 0; }
 
 adb install -r "$apk" | tail -1
+if [[ $LAUNCH == 0 ]]; then
+  echo "Instalada sin abrir: $(adb shell dumpsys package "$PACKAGE" | grep -m1 versionCode | xargs)"
+  exit 0
+fi
 
 # Arranque: la app debe seguir viva y sin cierres nuevos.
 since=$(adb shell date +%s | tr -d '\r')
