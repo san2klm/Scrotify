@@ -25,6 +25,7 @@ import 'playlist_detail_screen.dart';
 import 'album_detail_screen.dart';
 import 'artist_screen.dart';
 import 'settings_screen.dart';
+import '../utils/app_visibility.dart';
 import '../utils/app_colors.dart';
 import '../widgets/quick_actions_row.dart';
 
@@ -77,7 +78,9 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
         context.read<NavidromeService>().getRecentlyAddedTracks();
     _serverPlayCountTimer = Timer.periodic(
       const Duration(seconds: 30),
-      (_) => _refreshServerPlayCounts(),
+      (_) {
+        if (isAppVisible) _refreshServerPlayCounts();
+      },
     );
     _hourlyRefreshTimer = Timer.periodic(
       const Duration(hours: 1),

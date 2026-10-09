@@ -18,6 +18,7 @@ import 'liked_songs_screen.dart';
 import 'playlist_detail_screen.dart';
 import 'album_detail_screen.dart';
 import 'artist_screen.dart';
+import '../utils/app_visibility.dart';
 import '../utils/app_colors.dart';
 import '../utils/responsive.dart';
 import '../widgets/now_playing_panel.dart';
@@ -71,7 +72,6 @@ class _HomeScreenState extends _HomeStateBase
   /// Por debajo de este ancho la biblioteca se colapsa sola.
   static const double _autoCollapseWidth = 900;
 
-
   @override
   void initState() {
     super.initState();
@@ -85,7 +85,9 @@ class _HomeScreenState extends _HomeStateBase
         context.read<NavidromeService>().getRecentlyAddedTracks();
     _serverPlayCountTimer = Timer.periodic(
       const Duration(seconds: 30),
-      (_) => _refreshServerPlayCounts(),
+      (_) {
+        if (isAppVisible) _refreshServerPlayCounts();
+      },
     );
     _hourlyRefreshTimer = Timer.periodic(
       const Duration(hours: 1),
