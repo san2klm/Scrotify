@@ -2,6 +2,11 @@ part of 'navidrome_service.dart';
 
 /// Letras, géneros, "escuchando ahora", chat del lobby y Jams del servidor.
 mixin _NavidromeExtras on _NavidromeBase {
+  // ---------------------------------------------------------------------------
+  // Letras locales (prioridad 1): getLyricsBySongId de Navidrome/OpenSubsonic.
+  // Usa letras embebidas o .lrc externos ya escaneados por el servidor.
+  // ---------------------------------------------------------------------------
+
   /// Devuelve los bloques de letra estructurada para una canción.
   /// Lista vacía si el servidor no tiene letra para ese `songId`.
   Future<List<StructuredLyricBlock>> getLyricsBySongId(String songId) async {
@@ -264,6 +269,7 @@ mixin _NavidromeExtras on _NavidromeBase {
       return _cachedGenres ?? [];
     }
   }
+  // ---------------------------------------------------------------------------
 
   /// Obtiene lo que otros usuarios están escuchando en este servidor en tiempo real.
   Future<List<NowPlayingEntry>> getNowPlaying() async {
