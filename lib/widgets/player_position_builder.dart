@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/widgets.dart';
 
 import '../services/player_controller.dart';
+import '../utils/app_visibility.dart';
 
 /// Reconstruye [builder] con la posición de reproducción a alta frecuencia.
 ///
@@ -55,6 +56,7 @@ class _PlayerPositionBuilderState extends State<PlayerPositionBuilder> {
   bool _subscribedKaraoke = false;
   Duration _displayed = Duration.zero;
   Timer? _ticker;
+  bool _hidden = false;
 
   @override
   void initState() {
@@ -62,7 +64,18 @@ class _PlayerPositionBuilderState extends State<PlayerPositionBuilder> {
     _displayed = _safePosition();
     _subscribe();
     _ticker = Timer.periodic(widget.tick, (_) {
+      // Con la app oculta nadie ve la barra: no se redibuja.
+      if (!isAppVisible) {
+        _hidden = true;
+        return;
+      }
       _ensureSubscription();
+      if (_hidden) {
+        // De vuelta: partir de la posición real, no de la última estimada.
+        _hidden = false;
+        if (mounted) setState(() => _displayed = _safePosition());
+        return;
+      }
       if (mounted && _safePlaying()) {
         setState(() {
           _displayed = PlayerPositionBuilder.advance(
@@ -107,7 +120,7 @@ class _PlayerPositionBuilderState extends State<PlayerPositionBuilder> {
     try {
       _sub = widget.player.positionStream.listen((pos) {
         _displayed = pos;
-        if (mounted) setState(() {});
+        if (mounted && isAppVisible) setState(() {});
       });
     } catch (_) {}
   }

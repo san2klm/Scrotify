@@ -24,8 +24,7 @@ class _FakePlayer extends ChangeNotifier implements PlayerController {
   bool karaokeMode = false;
 
   @override
-  dynamic noSuchMethod(Invocation invocation) =>
-      super.noSuchMethod(invocation);
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
 void main() {
@@ -101,6 +100,49 @@ void main() {
     fake.isPlaying = false;
     await tester.pump(const Duration(seconds: 2));
     expect(shown, const Duration(seconds: 11));
+
+    await fake.positions.close();
+  });
+
+  testWidgets('en segundo plano no reconstruye y al volver se re-ancla',
+      (WidgetTester tester) async {
+    final fake = _FakePlayer()
+      ..isPlaying = true
+      ..currentPosition = const Duration(seconds: 10);
+    var builds = 0;
+    Duration? shown;
+    addTearDown(() => tester.binding
+        .handleAppLifecycleStateChanged(AppLifecycleState.resumed));
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: PlayerPositionBuilder(
+          player: fake,
+          duration: const Duration(seconds: 200),
+          builder: (context, position) {
+            builds++;
+            shown = position;
+            return const SizedBox();
+          },
+        ),
+      ),
+    );
+    expect(shown, const Duration(seconds: 10));
+
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+    final before = builds;
+    // El backend sigue emitiendo y el tiempo pasa, pero nadie mira la barra.
+    fake.currentPosition = const Duration(seconds: 40);
+    fake.positions.add(const Duration(seconds: 40));
+    await tester.pump(const Duration(seconds: 5));
+    expect(builds, before, reason: 'sin reconstrucciones en segundo plano');
+
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    fake.currentPosition = const Duration(seconds: 42);
+    await tester.pump(const Duration(milliseconds: 250));
+    await tester.pump();
+    expect(shown, const Duration(seconds: 42),
+        reason: 'toma la posición real, no la estimada antes de ocultarse');
 
     await fake.positions.close();
   });

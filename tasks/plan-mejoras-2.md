@@ -60,7 +60,7 @@ en verde, un commit por ítem y una línea en `tasks/todo.md`.
 ## Fase 5 — Rendimiento (medir antes de tocar)
 
 ### [ ] 11. Perfilar la APK de TV y decodificar portadas a tamaño real
-### [ ] 12. Revisar los `Timer.periodic` (23): que se pausen en segundo plano
+### [x] 12. Revisar los `Timer.periodic` (23): que se pausen en segundo plano
 
 ## Fase 6 — Dependencias (una por commit)
 
@@ -85,3 +85,4 @@ en verde, un commit por ítem y una línea en `tasks/todo.md`.
 - **6** · `isPublicCleartextUrl` (`lib/utils/cleartext_url.dart`) + `CleartextUrlWarning` bajo el campo de URL en login móvil, login de escritorio y edición de perfiles. No bloquea. LAN, loopback, link-local, CGNAT/Tailscale, ULA IPv6 y `.local`/`.lan`/`.home.arpa`/`.internal` no avisan. Auditoría del emparejamiento: `/pair/claim` va por HTTP pero las credenciales vuelven en sealed-box X25519 hacia una clave efímera del móvil, así que un observador pasivo no las lee; el código de emparejamiento sí viaja en claro (aceptable en LAN, queda anotado).
 - **7** · los endpoints con `access-control-allow-origin: *` (`/api/capabilities`, `/health`, `/rooms`, lobby) son públicos y sin cookies; `/admin` no envía cabeceras CORS y usa cookie SameSite=Strict + CSRF. No hay nada que cerrar.
 - **8** · `DiagnosticsLog` (`lib/services/diagnostics_log.dart`): buffer circular de 800 líneas enganchado a `debugPrint` desde `main` (los ~175 mensajes existentes entran sin tocarlos, y también los errores no controlados), con `redactSecrets` (parámetros Subsonic `u/p/t/s`, tokens, claves, `user:pass@`, `scrotify-sync://`, cabeceras y JSON). Ajustes → Diagnóstico: copiar, guardar en archivo y vaciar. Solo en memoria. Queda fuera: los 91 `catch (_) {}` siguen sin registrar nada (ítem 3).
+- **12** · revisados los 23. Solo dos alimentaban interfaz con la app oculta: `ServerActivityPanel` (dos peticiones al servidor cada 5 s) y `PlayerPositionBuilder` (redibujo 4 veces por segundo). Ahora consultan `isAppVisible` (`lib/utils/app_visibility.dart`); la barra se re-ancla a la posición real al volver. Los de Jam, Connect, sincronización, reconexión y transiciones siguen en segundo plano a propósito. No medido en dispositivo: el ahorro de batería es por diseño, no por medición.

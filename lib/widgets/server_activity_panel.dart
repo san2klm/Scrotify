@@ -9,6 +9,7 @@ import 'cover_art.dart';
 import 'jam_dialog.dart';
 import 'track_context_menu.dart';
 import '../utils/app_colors.dart';
+import '../utils/app_visibility.dart';
 import 'material_surface.dart';
 
 /// Panel interactivo de Comunidad para usuarios conectados al mismo servidor Navidrome.
@@ -75,8 +76,10 @@ class _ServerActivityPanelState extends State<ServerActivityPanel>
     _tabController = TabController(length: 2, vsync: this);
     _loadData();
     // Refresco periódico cada 5 segundos mientras el panel esté visible
-    _refreshTimer = Timer.periodic(
-        const Duration(seconds: 5), (_) => _loadData(silent: true));
+    _refreshTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+      // Sin la app a la vista no se consulta al servidor.
+      if (isAppVisible) _loadData(silent: true);
+    });
   }
 
   @override
