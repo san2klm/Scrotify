@@ -98,8 +98,10 @@ mixin _PlayerStats on _PlayerBase {
       if (await file.exists()) {
         final content = await file.readAsString();
         final list = jsonDecode(content) as List;
-        _recentlyPlayed =
-            list.map((j) => PlayerController._trackFromJson(j as Map<String, dynamic>)).toList();
+        _recentlyPlayed = list
+            .map((j) =>
+                PlayerController._trackFromJson(j as Map<String, dynamic>))
+            .toList();
         notifyListeners();
       } else {
         _recentlyPlayed = [];
@@ -117,9 +119,12 @@ mixin _PlayerStats on _PlayerBase {
       final fileName =
           session != null ? _historyFileName(session) : 'recently_played.json';
       final file = File('${dir.path}/$fileName');
-      await file.writeAsString(
-          jsonEncode(_recentlyPlayed.map(PlayerController._trackToJson).toList()));
-    } catch (_) {}
+      await file.writeAsString(jsonEncode(
+          _recentlyPlayed.map(PlayerController._trackToJson).toList()));
+    } catch (e) {
+      debugPrint(
+          'PlayerController: no se pudo guardar el historial reciente: $e');
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -208,12 +213,16 @@ mixin _PlayerStats on _PlayerBase {
   Future<void> _saveMostPlayed() async {
     final session = _mostPlayedSession;
     if (session == null) return;
-    final values = _mostPlayedByKey.values.map(PlayerController._mostPlayedToJson).toList();
+    final values = _mostPlayedByKey.values
+        .map(PlayerController._mostPlayedToJson)
+        .toList();
     try {
       final dir = await getAppDataDirectory();
       final file = File('${dir.path}/${_mostPlayedFileName(session)}');
       await file.writeAsString(jsonEncode(values));
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('PlayerController: no se pudo guardar lo más escuchado: $e');
+    }
   }
 
   String? get _currentMostPlayedSession {

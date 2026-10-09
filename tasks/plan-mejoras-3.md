@@ -48,7 +48,7 @@ comprobar la app armada y de saber qué build hay instalado.
 
 ## Fase 3 — Robustez
 
-### [ ] 10. Los `catch (_) {}` dejan rastro
+### [~] 10. Los `catch (_) {}` dejan rastro
 - 91 en `lib/`. Revisarlos por archivo: los que ocultan fallos de red, disco o Jam pasan a registrar en `DiagnosticsLog`; los de limpieza se quedan con un comentario de por qué.
 
 ### [~] 11. La unión a una Jam espera el primer estado (S)
@@ -86,3 +86,4 @@ comprobar la app armada y de saber qué build hay instalado.
 - Nota: una compilación de APK falló una vez porque `GeneratedPluginRegistrant.java` quedó con el plugin de `integration_test` mientras la otra sesión corría tests; al reintentar pasó. Otra razón para un `git worktree` por sesión.
 - **5** (sesión `Scrotify`, `1e36ed5`, `9543465`, `835ae49`) · `test/settings_smoke_test.dart`, 20 tests con los proveedores de `main.dart`: abre las siete subpantallas, mueve cada interruptor, opción y deslizador, y vuelve. Destapó un bug real: dos salidas ALSA con el mismo nombre rompían el desplegable («exactly one item with value»); `directHardwareDevices` ahora quita repetidas. Límite: «Biblioteca y descargas» usa un `LocalMusicService` falso (el real se cuelga en `initialize()` dentro de `testWidgets`, sin investigar).
 - **4** · `AppErrorBox` (`lib/widgets/app_error_box.dart`) instalado como `ErrorWidget.builder` en `main`: un fallo al construir un widget deja un recuadro en su hueco y el resto de la pantalla sigue visible; el texto técnico solo se ve en debug. No lleva botón de copiar: remite a Ajustes → Diagnóstico, donde ya queda el error.
+- **10** (parcial) · revisados los 56 `catch (_) {}` de fuera de Jam. Siete ocultaban pérdida de datos o un fallo de seguridad y ahora escriben en el registro: guardar el historial reciente y lo más escuchado, restaurar la copia previa de una descarga, borrar un audio de la caché, permisos `600` y respaldo de `SecureStorage`, y borrar el estado de sincronización. El resto es limpieza de temporales, emparejamiento por LAN o lecturas defensivas y se deja igual. Quedan sin revisar los 35 de los servicios de Jam (los tiene la otra sesión mientras hace los ítems 11 y 12).

@@ -77,7 +77,10 @@ class SecureStorage {
         if (!Platform.isWindows) {
           try {
             await Process.run('chmod', ['600', file.path]);
-          } catch (_) {}
+          } catch (e) {
+            debugPrint(
+                'SecureStorage: no se pudo restringir los permisos del archivo de respaldo: $e');
+          }
         }
       }
       await file.writeAsString(jsonEncode(data), flush: true);
@@ -139,7 +142,10 @@ class SecureStorage {
       if (fallback.remove(key) != null) {
         await _saveFallback(fallback);
       }
-    } catch (_) {}
+    } catch (e) {
+      debugPrint(
+          'SecureStorage: no se pudo actualizar el respaldo al borrar una clave: $e');
+    }
   }
 
   /// Guarda las credenciales completas.
@@ -186,11 +192,12 @@ class SecureStorage {
   }
 
   /// Lee todas las credenciales de una vez (para auto-login).
-  static Future<({
-    String? serverUrl,
-    String? username,
-    String? password,
-  })> getAll() async {
+  static Future<
+      ({
+        String? serverUrl,
+        String? username,
+        String? password,
+      })> getAll() async {
     final serverUrl = await secureRead(_kServerUrl);
     final username = await secureRead(_kUsername);
     final password = await secureRead(_kPassword);

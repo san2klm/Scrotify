@@ -3,6 +3,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:crypto/crypto.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
@@ -901,7 +902,10 @@ class OfflineCacheService {
           await file.delete();
           fileRemoved = true;
         }
-      } catch (_) {}
+      } catch (e) {
+        debugPrint(
+            'OfflineCacheService: no se pudo borrar el archivo de audio: $e');
+      }
     }
     return fileRemoved;
   }

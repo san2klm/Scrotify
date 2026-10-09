@@ -211,7 +211,10 @@ class SyncService extends ChangeNotifier {
     try {
       final file = File(p.join((await dataDir()).path, _stateFile));
       if (await file.exists()) await file.delete();
-    } catch (_) {}
+    } catch (e) {
+      debugPrint(
+          'SyncService: no se pudo borrar el estado local de sincronización: $e');
+    }
     notifyListeners();
   }
 

@@ -906,7 +906,10 @@ class OfflineDownloadManager extends ChangeNotifier {
                 await backupFile.copy(targetPath);
                 await backupFile.delete();
               }
-            } catch (_) {}
+            } catch (e) {
+              debugPrint(
+                  'OfflineDownloadManager: no se pudo restaurar la copia previa de la descarga: $e');
+            }
           } else if (!hadExistingTarget && await targetFile.exists()) {
             try {
               await targetFile.delete();
