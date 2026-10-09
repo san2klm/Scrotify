@@ -92,6 +92,13 @@ class FakePort extends ChangeNotifier implements ConnectPlayerPort {
   bool pausedLocal = false;
   bool failAdopt = false;
 
+  /// Cola completa que exporta al transferir (si no, solo la pista actual).
+  List<Map<String, dynamic>>? exportQueue;
+  int adoptedCount = 0;
+  final appendedSeqs = <int>[];
+  final queueIds = <String>[];
+  final _chunks = ConnectQueueReceiver();
+
   @override
   Map<String, dynamic>? snapshot() => track == null
       ? null
@@ -115,7 +122,7 @@ class FakePort extends ChangeNotifier implements ConnectPlayerPort {
       ? null
       : ConnectTransfer(
           scope: scope!,
-          tracks: [track!],
+          tracks: exportQueue ?? [track!],
           index: 0,
           positionMs: positionMs,
           playing: playing);
@@ -124,6 +131,11 @@ class FakePort extends ChangeNotifier implements ConnectPlayerPort {
   Future<void> adopt(ConnectTransfer transfer) async {
     if (failAdopt) throw StateError('no se pudo');
     track = transfer.tracks[transfer.index];
+    adoptedCount = transfer.tracks.length;
+    queueIds
+      ..clear()
+      ..addAll([for (final t in transfer.tracks) t['id'] as String]);
+    _chunks.expect(transfer.xfer, transfer.more);
     positionMs = transfer.positionMs;
     playing = transfer.playing;
     pausedLocal = false;
@@ -135,6 +147,13 @@ class FakePort extends ChangeNotifier implements ConnectPlayerPort {
       String command, num? value, Map<String, dynamic> data) async {
     applied.add(value == null ? command : '$command:$value');
     if (data.isNotEmpty) appliedData.add(data);
+    if (command == ConnectCommand.queueAppend) {
+      final more = _chunks.accept(data, scope);
+      if (more != null) {
+        appendedSeqs.add(data['seq'] as int);
+        queueIds.addAll([for (final t in more) t['id'] as String]);
+      }
+    }
     if (command == ConnectCommand.toggle) playing = !playing;
     notifyListeners();
   }

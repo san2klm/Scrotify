@@ -396,9 +396,8 @@ class PlayerController extends ChangeNotifier {
     return controller.stream;
   }
 
-  List<Track> get queue => _mirror
-      ? List.unmodifiable(_remote!.queue)
-      : List.unmodifiable(_queue);
+  List<Track> get queue =>
+      _mirror ? List.unmodifiable(_remote!.queue) : List.unmodifiable(_queue);
   List<Track> get recentlyPlayed => List.unmodifiable(_recentlyPlayed);
   List<MostPlayedItem> get mostPlayed {
     final items = _mostPlayedByKey.values.toList();
@@ -416,9 +415,9 @@ class PlayerController extends ChangeNotifier {
   List<Track> get orderedQueue => _mirror
       ? List.unmodifiable(_remote!.queue)
       : [
-        for (final idx in _order)
-          if (idx >= 0 && idx < _queue.length) _queue[idx]
-      ];
+          for (final idx in _order)
+            if (idx >= 0 && idx < _queue.length) _queue[idx]
+        ];
 
   int get _currentIndex =>
       _pos >= 0 && _pos < _order.length ? _order[_pos] : -1;
@@ -431,6 +430,7 @@ class PlayerController extends ChangeNotifier {
     }
     return _currentIndex >= 0 ? _queue[_currentIndex] : null;
   }
+
   bool get hasTrack => currentTrack != null;
 
   // Waveform handling
@@ -1283,11 +1283,22 @@ class PlayerController extends ChangeNotifier {
 
   /// Añade una pista al final de la cola de reproducción.
   /// Si no hay nada reproduciéndose, empieza a reproducirla.
-  Future<void> addToQueue(Track track) async {
-    if (_mirror) return _remote!.addToQueue(track);
-    _queue.add(track);
-    final newRealIndex = _queue.length - 1;
-    _order.add(newRealIndex);
+  Future<void> addToQueue(Track track) => addAllToQueue([track]);
+
+  /// Añade varias pistas, en orden, al final de la cola. Si no hay nada
+  /// reproduciéndose, empieza por la primera.
+  Future<void> addAllToQueue(List<Track> tracks) async {
+    if (tracks.isEmpty) return;
+    if (_mirror) {
+      for (final track in tracks) {
+        _remote!.addToQueue(track);
+      }
+      return;
+    }
+    for (final track in tracks) {
+      _queue.add(track);
+      _order.add(_queue.length - 1);
+    }
     if (_pos == -1) {
       _pos = 0;
       await _loadTrackOn(_lead, _currentIndex);

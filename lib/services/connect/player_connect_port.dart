@@ -48,8 +48,9 @@ class PlayerConnectPort extends ChangeNotifier implements ConnectPlayerPort {
     player.addListener(notifyListeners);
   }
 
-  /// Máximo de canciones que viajan en un mensaje (el mensaje cifrado tiene
-  /// un tope de 64 KB en el servidor).
+  /// Máximo de canciones de la ventana de cola que se publica en el estado
+  /// (el mensaje cifrado tiene un tope de tamaño en el servidor). La
+  /// transferencia de la cola completa va en trozos: [ConnectQueueChunks].
   static const maxTransferTracks = 40;
 
   /// Canciones anteriores a la actual que se publican en la ventana de cola.
@@ -57,6 +58,7 @@ class PlayerConnectPort extends ChangeNotifier implements ConnectPlayerPort {
 
   final PlayerController player;
   final NavidromeService service;
+  final _chunks = ConnectQueueReceiver();
 
   @override
   void dispose() {
@@ -100,7 +102,7 @@ class PlayerConnectPort extends ChangeNotifier implements ConnectPlayerPort {
         if (scope == null || track == null) return null;
         final upcoming = player.orderedQueue
             .skip(max(0, player.currentOrderPos))
-            .take(maxTransferTracks)
+            .take(ConnectQueueChunks.maxTotal)
             .toList();
         return ConnectTransfer(
           scope: scope,
@@ -117,6 +119,7 @@ class PlayerConnectPort extends ChangeNotifier implements ConnectPlayerPort {
           for (final m in transfer.tracks) trackFromConnectJson(m),
         ];
         await player.playQueue(tracks, startIndex: transfer.index);
+        _chunks.expect(transfer.xfer, transfer.more);
         if (transfer.positionMs > 0) {
           await player.seek(Duration(milliseconds: transfer.positionMs));
         }
@@ -166,6 +169,13 @@ class PlayerConnectPort extends ChangeNotifier implements ConnectPlayerPort {
               await player.playShuffledQueue(tracks);
             } else {
               await player.playQueue(tracks, startIndex: transfer.index);
+            }
+            _chunks.expect(transfer.xfer, transfer.more);
+          case ConnectCommand.queueAppend:
+            final more = _chunks.accept(data, scope);
+            if (more != null) {
+              await player.addAllToQueue(
+                  [for (final m in more) trackFromConnectJson(m)]);
             }
           case ConnectCommand.queueAdd:
             final track = _track(data);

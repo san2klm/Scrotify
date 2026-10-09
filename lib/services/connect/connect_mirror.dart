@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:just_audio/just_audio.dart';
 
@@ -77,13 +79,26 @@ class ConnectMirror extends ChangeNotifier implements RemotePlayback {
     final scope = this.scope();
     if (scope == null || tracks.isEmpty) return;
     final start = startIndex.clamp(0, tracks.length - 1);
-    final window = tracks.skip(start).take(40).toList();
-    connect.command(ConnectCommand.playQueue, null, {
-      'scope': scope,
-      'tracks': [for (final t in window) trackToConnectJson(t)],
-      'index': 0,
-      'shuffle': shuffle,
-    });
+    final split = ConnectQueueChunks.split(
+        [for (final t in tracks.skip(start)) trackToConnectJson(t)]);
+    unawaited(connect.commandSequence([
+      (
+        command: ConnectCommand.playQueue,
+        data: {
+          'scope': scope,
+          'tracks': split.head,
+          'index': 0,
+          'shuffle': shuffle,
+          if (split.xfer != null) 'xfer': split.xfer,
+          if (split.xfer != null) 'more': split.more,
+        }
+      ),
+      for (var seq = 0; seq < split.rest.length; seq++)
+        (
+          command: ConnectCommand.queueAppend,
+          data: split.appendData(scope, seq)
+        ),
+    ]));
   }
 
   void _withTrack(String command, Track track) {

@@ -31,7 +31,7 @@ Primero lo pequeño y aislado, luego lo medio, y al final el refactor grande
 - Tests: guardar/leer, reanuncio, nombre vacío o >40 caracteres se normaliza.
 - Hecho cuando: renombrar se ve en otro dispositivo sin reiniciar.
 
-### [ ] 3. Transferir toda la cola en Connect
+### [x] 3. Transferir toda la cola en Connect
 - Dónde: `player_connect_port.dart` (`maxTransferTracks = 40`, líneas 53/78/103), `connect_mirror.dart:80`, límite de trama de 128 KB del servidor.
 - Plan: enviar la cola en trozos (lotes de N pistas, calculados por tamaño codificado y no por cantidad) con mensaje `queue_chunk` (índice, total). El receptor ensambla y aplica al completar; si falta un trozo, descarta y mantiene la cola previa. Sin romper clientes viejos: si el receptor no declara soporte, se mantiene el tope de 40.
 - Tests: cola de 500 pistas llega completa; trozo perdido no deja cola a medias; compatibilidad con el tope antiguo.
@@ -139,3 +139,4 @@ Pruebas en TV real, teléfono físico, auriculares Bluetooth, deriva de reloj en
 (Se rellena al cerrar cada ítem: commit, tests, notas.)
 
 - **2** · nombre de dispositivo editable: `SettingsController.connectDeviceName` + `ConnectService.rename` (recrea transportes y reanuncia) + lápiz en el panel. 7 tests nuevos; 632 en total, analyze limpio.
+- **3** · cola completa en Connect: `ConnectQueueChunks` (40 + trozos de 80, tope 1000), `ConnectQueueReceiver` (orden estricto, sin huecos, caduca a los 5 min), comando `queue_append`, `PlayerController.addAllToQueue`. Compatible con clientes viejos (ignoran `queue_append` y reciben los 40 de siempre). 647 tests, analyze limpio. Nota: `sync_service_test` es intermitente por carrera con directorios temporales (preexistente, pasa aislado).

@@ -267,8 +267,7 @@ class ConnectService extends ChangeNotifier {
       notifyListeners();
       return;
     }
-    final ok = await _request(deviceId,
-        () => _send(deviceId, ConnectMessage.transfer, transfer.toJson()));
+    final ok = await _deliver(deviceId, transfer);
     if (!ok) return _fail('${target.name} no respondió.');
     await port.pauseLocal();
     _controlledId = deviceId;
@@ -306,6 +305,41 @@ class ConnectService extends ChangeNotifier {
       if (value != null) 'value': value,
       if (data != null) 'data': data,
     }));
+  }
+
+  /// Envía varios comandos seguidos al dispositivo controlado, esperando a
+  /// que cada uno salga antes del siguiente para que lleguen en orden.
+  Future<void> commandSequence(
+      List<({String command, Map<String, dynamic> data})> steps) async {
+    final id = _controlledId;
+    if (id == null) return;
+    for (final step in steps) {
+      if (_controlledId != id || !ConnectCommand.all.contains(step.command)) {
+        return;
+      }
+      await _send(
+          id, ConnectMessage.command, {'cmd': step.command, 'data': step.data});
+    }
+  }
+
+  /// Entrega una cola a [to]: la primera parte en el `transfer` (que espera su
+  /// `ack`) y, si hay más, el resto en trozos ordenados una vez adoptada.
+  Future<bool> _deliver(String to, ConnectTransfer transfer) async {
+    final split = ConnectQueueChunks.split(transfer.tracks);
+    final head = transfer.headOf(split);
+    final ok = await _request(
+        to, () => _send(to, ConnectMessage.transfer, head.toJson()));
+    if (ok && split.rest.isNotEmpty) {
+      unawaited(() async {
+        for (var seq = 0; seq < split.rest.length; seq++) {
+          await _send(to, ConnectMessage.command, {
+            'cmd': ConnectCommand.queueAppend,
+            'data': split.appendData(transfer.scope, seq),
+          });
+        }
+      }());
+    }
+    return ok;
   }
 
   void _fail(String message) {
@@ -441,8 +475,7 @@ class ConnectService extends ChangeNotifier {
       return;
     }
     if (to == selfId) return;
-    final ok = await _request(
-        to, () => _send(to, ConnectMessage.transfer, transfer.toJson()));
+    final ok = await _deliver(to, transfer);
     if (ok) await port.pauseLocal();
     await _send(message.from, ConnectMessage.ack, {'ok': ok});
   }

@@ -326,3 +326,4 @@ El mismo APK sirve para teléfono y tele. En una tele se activa un modo con la i
 ## Mejoras (plan en `tasks/plan-mejoras.md`)
 
 - [x] **M2** Nombre de dispositivo editable en Connect (se guarda en ajustes y se reanuncia por LAN y relé).
+- [x] **M3** Connect transfiere la cola completa (hasta 1000 canciones) en trozos ordenados; clientes viejos siguen recibiendo 40.
