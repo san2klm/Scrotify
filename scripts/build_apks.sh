@@ -6,6 +6,10 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 target="${1:-all}"
 out="build/app/outputs/flutter-apk"
+if [[ ! -f android/key.properties ]]; then
+  echo "AVISO: sin android/key.properties los APK salen firmados con la clave DEBUG" >&2
+  echo "       (válidos para instalar por adb, no para distribuir ni actualizar otra firma)." >&2
+fi
 ver=$(grep -E '^version:' pubspec.yaml | sed 's/version: *//; s/+.*//')
 
 if [[ "$target" == all || "$target" == phone ]]; then
