@@ -1758,6 +1758,25 @@ class NavidromeService with ChangeNotifier {
     }
   }
 
+  /// Catálogo completo para recuperar descargas; no usa el fallback sin conexión.
+  Future<List<Track>> getDownloadRecoveryCatalog() async {
+    final session = currentSessionKey;
+    if (!connected || offlineMode) {
+      throw StateError('Conecta el servidor para recuperar descargas.');
+    }
+    final tracks = <Track>[];
+    for (var offset = 0;; offset += 500) {
+      final page = await _fetchTracks(limit: 500, offset: offset)
+          .timeout(const Duration(seconds: 15));
+      if (session != currentSessionKey || !connected || offlineMode) {
+        throw StateError('La sesión cambió durante el escaneo.');
+      }
+      tracks.addAll(page);
+      if (page.length < 500) break;
+    }
+    return tracks;
+  }
+
   Future<List<Track>> getTracks(
           {String? artist, String? album, int limit = 500, int offset = 0}) =>
       _readLibrary(

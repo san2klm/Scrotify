@@ -1,5 +1,6 @@
 package com.example.navidrome_client
 
+import android.media.MediaMetadataRetriever
 import android.Manifest
 import android.content.Intent
 import android.app.UiModeManager
@@ -64,6 +65,31 @@ class MainActivity : AudioServiceFragmentActivity() {
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "scrotify/music_storage")
             .setMethodCallHandler { call, result ->
                 when (call.method) {
+                    "readAudioMetadata" -> {
+                        val path = call.argument<String>("path")
+                        if (path == null) {
+                            result.success(null)
+                        } else {
+                            Thread {
+                                val reader = MediaMetadataRetriever()
+                                val tags = try {
+                                    reader.setDataSource(path)
+                                    mapOf(
+                                        "title" to reader.extractMetadata(MediaMetadataRetriever.METADATA_KEY_TITLE),
+                                        "artist" to reader.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ARTIST),
+                                        "album" to reader.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ALBUM),
+                                        "duration" to reader.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)
+                                            ?.toDoubleOrNull()?.div(1000.0)
+                                    )
+                                } catch (_: Exception) {
+                                    null
+                                } finally {
+                                    runCatching { reader.release() }
+                                }
+                                runOnUiThread { result.success(tags) }
+                            }.start()
+                        }
+                    }
                     "hasAccess" -> result.success(hasStorageAccess())
                     "requestAccess" -> {
                         if (hasStorageAccess()) {

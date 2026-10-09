@@ -302,3 +302,23 @@ El mismo APK sirve para teléfono y tele. En una tele se activa un modo con la i
 - [x] **15.5** Corregido tras probar en un Chromecast HD (Google TV): los selectores de pestaña del login eran `GestureDetector` (no enfocables) y la flecha abajo/arriba dentro de un campo de texto movía el cursor (aserción `isValid`) en vez del foco. Ahora son `InkWell` y `TvTextFieldNavigation` mueve el foco desde los campos. Verificado recorriendo todo el formulario con las flechas.
 - [x] **15.6** Teclado en pantalla propio para la tele (`showTvKeyboard`): OK/Enter en un campo lo abre (letras, mayúsculas, números, símbolos, `.com`, mostrar/ocultar clave, solo dígitos en campos numéricos); se desactiva el teclado del sistema (en Google TV pide conectar el teléfono) y un teclado físico sigue escribiendo.
 - [ ] **15.4** Pendiente: probar en una tele real; el foco inicial al abrir una pantalla cae en la barra superior; no se tocó la pantalla completa del reproductor ni Ajustes con el control remoto; Jam (cámara/QR) no está pensado para tele. La tele funciona como destino de Connect (se controla desde el teléfono).
+
+## Compatibilidad bit-perfect en esta PC Linux (2026-10-08)
+
+- [x] Reproducir con un WAV silencioso: PipeWire exclusivo termina 3 s en 0,27 s y registra `no target node available`; salida normal funciona.
+- [x] Conservar la salida del sistema sin exclusividad en Linux, mantener el modo sin procesado y aclarar sus límites en Ajustes.
+- [x] Verificar el reloj y la salida real con libmpv y un WAV silencioso (1 integración), 30 pruebas unitarias, análisis limpio y compilación Linux release terminada.
+- [ ] Reabrir Scrotify y comprobar una canción audible con los Galaxy Buds2 Pro.
+
+## Recuperación de descargas antiguas (2026-10-08)
+
+- [x] Reescanear la carpeta elegida y sus subcarpetas; recuperar archivos sin índice comparando título, artista, álbum y duración con el catálogo del servidor activo.
+- [x] Conservar todas las copias de igual contenido como una sola canción y persistir la identidad para uso sin conexión y evitar descargas repetidas.
+- [x] Leer etiquetas con MediaMetadataRetriever en Android y ffprobe en escritorio; mostrar recuperadas y archivos sin identificar, sin atribuir coincidencias ambiguas.
+- [x] Validar 60 pruebas de recuperación, descargas, caché y biblioteca sin conexión (incluida lectura real de FLAC), análisis limpio, Linux release y APK Android debug compilados. Pendiente prueba en teléfono físico.
+
+
+## Publicación del estado local en PC123 (2026-10-08)
+
+- [x] Revisar los cambios locales y verificar análisis limpio, 616 pruebas Flutter aprobadas (2 integraciones omitidas) y 54 pruebas del servidor Jam aprobadas.
+- [x] Preparar PC123 con los 25 commits posteriores de main y las correcciones locales de recuperación de descargas y salida Hi-Fi en Linux para publicar sin forzar el historial.

@@ -31,3 +31,25 @@ no el total definitivo ([implementación de Navidrome](https://github.com/navidr
 - Las listas, mini reproductor, reproductor y fondos admiten imágenes locales. Sin conexión no buscar imágenes en fuentes externas.
 - Conservar también género, número de pista, identificadores musicales, fecha, reproducciones y ReplayGain.
 - Validar la imagen antes de guardarla y limitar su tamaño a 8 MB; mantener la separación entre servidores.
+
+## Recuperar archivos antiguos sin índice
+
+Reescanear recorre la carpeta configurada y sus subcarpetas, conserva la identidad
+por hash de las descargas conocidas y recupera archivos desconocidos mediante sus
+etiquetas. La recuperación inicial requiere conexión con el servidor: consulta
+su catálogo completo y exige título, artista y duración (tolerancia de 2 s), además
+del álbum cuando el archivo lo incluye. Las coincidencias ambiguas se dejan sin
+identificar; el nombre del archivo por sí solo no prueba la identidad.
+
+Las copias idénticas se registran una sola vez, conservando sus rutas. El registro
+persistido permite reproducir sin red y evita descargar otra vez desde likes u
+otras playlists. Cambiar de carpeta ejecuta también esta recuperación. El resultado
+muestra canciones recuperadas y contenidos sin identificar, y pide conexión cuando
+no se pudo consultar el catálogo. Un archivo sin etiquetas suficientes permanece
+sin identificar.
+
+Android utiliza MediaMetadataRetriever. En escritorio se necesita ffprobe en PATH
+para leer etiquetas de archivos desconocidos; las descargas con índice previo
+continúan funcionando sin él. La prueba de integración del lector se ejecuta con
+`SCROTIFY_METADATA_INTEGRATION=1 flutter test test/local_music_recovery_test.dart`
+(en Linux, con ffmpeg y ffprobe).

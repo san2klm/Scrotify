@@ -178,12 +178,16 @@ class HifiPlanner {
                   'CoreAudio en modo exclusivo (hog mode) con cambio automático '
                   'de frecuencia del DAC.');
             case HifiPlatform.linux:
-              mpv['ao'] = 'alsa';
-              initOnly.add('ao');
+              // La salida actual la elige el sistema. Pedir exclusividad a
+              // PipeWire puede dejar el stream sin destino (p. ej. Bluetooth)
+              // y consumir la pista rápidamente sin emitir sonido.
+              mpv['audio-exclusive'] = 'no';
               notes.add(
-                  'Para bit-perfect real en Linux elegí un dispositivo "hw:" '
-                  'en Ajustes > Salida. Con PipeWire, configurá '
-                  'default.clock.allowed-rates = [ 44100 48000 88200 96000 176400 192000 ].');
+                  'En Linux se conserva la salida del sistema, incluido Bluetooth, '
+                  'sin pedir exclusividad a PipeWire. Se desactiva el procesado '
+                  'de Scrotify, pero la salida compartida o Bluetooth no garantiza '
+                  'bit-perfect real. Para eso hace falta una salida ALSA hw: '
+                  'directa a un DAC compatible; esta app aún no permite elegirla.');
             case HifiPlatform.android:
             case HifiPlatform.ios:
               break;
