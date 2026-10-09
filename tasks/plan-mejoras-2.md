@@ -68,7 +68,10 @@ en verde, un commit por ítem y una línea en `tasks/todo.md`.
 
 ### [ ] 13. `just_audio` 0.9 → 0.10 (riesgo alto: copia parcheada en `third_party/just_audio_media_kit`)
 ### [ ] 14. `mobile_scanner` 5 → 7
-### [ ] 15. `web_socket_channel` 2 → 3, `rxdart` 0.27 → 0.28, `audio_session` 0.1 → 0.2
+### [~] 15. `web_socket_channel` 2 → 3, `rxdart` 0.27 → 0.28, `audio_session` 0.1 → 0.2
+- [x] `rxdart` 0.28.
+- [!] `web_socket_channel` 3: revertido, cambia el orden de entrega en la unión a una Jam (ver bitácora).
+- [ ] `audio_session` 0.2: bloqueado por `just_audio` 0.9 (va junto con el ítem 13).
 
 ## Fase 7 — Limpieza
 
@@ -90,3 +93,4 @@ en verde, un commit por ítem y una línea en `tasks/todo.md`.
 - **12** · revisados los 23. Tres alimentaban interfaz con la app oculta: `ServerActivityPanel` (dos peticiones al servidor cada 5 s), el refresco de contadores de Inicio (cada 30 s, escritorio y móvil) y `PlayerPositionBuilder` (redibujo 4 veces por segundo). Ahora consultan `isAppVisible` (`lib/utils/app_visibility.dart`); la barra se re-ancla a la posición real al volver. Los de Jam, Connect, sincronización, reconexión y transiciones siguen en segundo plano a propósito. No medido en dispositivo: el ahorro de batería es por diseño, no por medición.
 - **2** (sesión `Scrotify`, `7b6c820`) · 20/20 corridas completas sin fallos (antes 7 de 20). Causas: esperas de tiempo fijo en `offline_download_manager_test` (ahora por condición) y un reescaneo en segundo plano que escribía en la carpeta temporal mientras el `tearDown` la borraba (`LocalMusicService.settled()`, solo para tests). Verificado solo en Linux.
 - **3** · `unawaited_futures` y `cancel_subscriptions` activos. 22 llamadas asíncronas sin esperar, todas intencionales, ahora marcadas con `unawaited(...)` (sin cambio de comportamiento); `cancel_subscriptions` no encontró nada. `close_sinks` descartado: sus 8 avisos eran falsos positivos (sockets y controladores que se cierran en otro método). Los 91 `catch (_) {}` no se tocaron: ningún lint estándar los cubre y revisarlos uno por uno es otro ítem. Suite completa: 801 tests en verde.
+- **15** · `rxdart` 0.28: analyze limpio y 825 tests en verde; `lib/` no lo importa directamente, lo usan `just_audio` y `audio_service`, así que falta oírlo en un dispositivo. `web_socket_channel` 3 **revertido**: `jam_guest_history_test` («notificationInfo describe la sala…») falla siempre con la v3 y pasa con la v2. `joinSession` termina al llegar `join_response`, y con la v3 el `jam_state_snapshot` que crea la sesión se entrega un turno después, así que justo tras unirse `session` es `null`. Para subir de versión, antes hay que hacer que la unión espere al primer snapshot.
