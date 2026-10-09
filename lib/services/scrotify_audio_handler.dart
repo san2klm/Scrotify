@@ -4,6 +4,7 @@ import 'package:audio_service/audio_service.dart';
 import 'package:flutter/foundation.dart';
 import 'package:just_audio/just_audio.dart' show LoopMode, ProcessingState;
 
+import 'jam_notification.dart';
 import 'navidrome_service.dart' show Track;
 import 'player_controller.dart';
 
@@ -22,6 +23,12 @@ class ScrotifyAudioHandler extends BaseAudioHandler with SeekHandler {
   /// Acción del botón de favorito del widget (se envía como acción
   /// personalizada de la sesión de medios).
   Future<void> Function()? onToggleLike;
+
+  /// Sale de la Jam (invitado) o la termina (anfitrión) desde el botón de la
+  /// notificación.
+  Future<void> Function()? onLeaveJam;
+
+  JamNotificationInfo? _jam;
   final Map<String, Uri> _localCovers = {};
   final Set<String> _coversRequested = {};
 
@@ -32,6 +39,9 @@ class ScrotifyAudioHandler extends BaseAudioHandler with SeekHandler {
 
   /// Nombre de la acción personalizada que envía el widget para marcar favorito.
   static const customActionToggleLike = 'toggleLike';
+
+  /// Acción del botón «Salir de la Jam» de la notificación.
+  static const customActionLeaveJam = 'leaveJam';
 
   static final _credentialQueryParams = <String>{
     'u',
@@ -154,6 +164,16 @@ class ScrotifyAudioHandler extends BaseAudioHandler with SeekHandler {
     }
   }
 
+  /// Indica la Jam en curso (`null` al salir) para mostrarla en la notificación
+  /// de medios. Reutiliza la notificación de reproducción: no crea otro
+  /// servicio en primer plano, así que aparece mientras haya una pista.
+  void setJam(JamNotificationInfo? info) {
+    if (_jam == info) return;
+    _jam = info;
+    final player = _player;
+    if (player != null) syncFromPlayer(player);
+  }
+
   /// Sincroniza metadatos, estado de reproducción y cola desde [player].
   void syncFromPlayer(PlayerController player) {
     final track = player.currentTrack;
@@ -189,8 +209,13 @@ class ScrotifyAudioHandler extends BaseAudioHandler with SeekHandler {
     final duration = player.duration ?? _parseDuration(track.duration);
     final currentItem = mediaItem.value;
     final artUri = _coverUriFor(track);
+    final jam = _jam;
+    final subtitle = jam == null ? null : '${track.artist} · ${jam.roomLabel}';
+    final String? description = jam?.peopleLabel;
 
     if (currentItem == null ||
+        currentItem.displaySubtitle != subtitle ||
+        currentItem.displayDescription != description ||
         currentItem.id != track.id ||
         currentItem.title != track.title ||
         currentItem.artist != track.artist ||
@@ -206,6 +231,8 @@ class ScrotifyAudioHandler extends BaseAudioHandler with SeekHandler {
         genre: track.genre,
         duration: duration,
         artUri: artUri,
+        displaySubtitle: subtitle,
+        displayDescription: description,
       ));
     }
 
@@ -234,6 +261,12 @@ class ScrotifyAudioHandler extends BaseAudioHandler with SeekHandler {
       isPlaying ? MediaControl.pause : MediaControl.play,
       MediaControl.stop,
       MediaControl.skipToNext,
+      if (jam != null)
+        MediaControl.custom(
+          androidIcon: 'drawable/audio_service_leave_jam',
+          label: jam.leaveLabel,
+          name: customActionLeaveJam,
+        ),
     ];
 
     playbackState.add(PlaybackState(
@@ -275,6 +308,8 @@ class ScrotifyAudioHandler extends BaseAudioHandler with SeekHandler {
       [Map<String, dynamic>? extras]) async {
     if (name == customActionToggleLike) {
       await onToggleLike?.call();
+    } else if (name == customActionLeaveJam) {
+      await onLeaveJam?.call();
     }
     return super.customAction(name, extras);
   }

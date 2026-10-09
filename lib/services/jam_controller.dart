@@ -8,6 +8,7 @@ import '../models/jam_models.dart';
 import 'jam_guest_service.dart';
 import 'jam_clock.dart';
 import 'jam_history.dart';
+import 'jam_notification.dart';
 import 'jam_host_service.dart';
 import 'jam_queue_logic.dart';
 import 'jam_social.dart';
@@ -306,6 +307,20 @@ class JamController extends ChangeNotifier {
   bool get isPublic => _session?.isPublic ?? true;
   int get maxParticipants => _session?.maxParticipants ?? 0;
   JamParticipant? get currentTrackAddedBy => _currentTrackAddedBy;
+  /// Datos de la Jam para la notificación de medios; `null` fuera de una sala.
+  JamNotificationInfo? get notificationInfo {
+    final session = _session;
+    if (_role == JamRole.none || session == null) return null;
+    // El número solo es fiable si lo conoce este dispositivo: el anfitrión, o
+    // un invitado de LAN (recibe la lista). Por el servidor central, no.
+    final known = _role == JamRole.host || _guestService.isConnected;
+    return JamNotificationInfo(
+      hostName: session.hostName,
+      isHost: _role == JamRole.host,
+      participants: known ? session.participants.length : null,
+    );
+  }
+
   JamHistory get history => _history;
   JamHistorySummary get historySummary => _history.summary();
 

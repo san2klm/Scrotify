@@ -334,3 +334,4 @@ El mismo APK sirve para teléfono y tele. En una tele se activa un modo con la i
 - [x] **M4** Vincular la sincronización por QR (`scrotify-sync://`), con aviso de secreto y biometría; falta probar la cámara en un teléfono real.
 - [x] **M6** Android TV: foco inicial en el contenido, reproductor completo con el mando (saltos de 10 s) y Ajustes recorrible con flechas; falta probar en tele/emulador.
 - [x] **M8** El invitado de una Jam tiene su propio historial (lo que sonó desde que entró) y puede guardar sus aportaciones como playlist; sin cambios de protocolo.
+- [x] **M13** La notificación de medios de Android muestra la Jam y trae el botón de salir (solo con una pista sonando); falta verlo en un teléfono real.

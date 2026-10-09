@@ -320,11 +320,20 @@ class MyApp extends StatelessWidget {
           },
         ),
         ChangeNotifierProvider<JamController>(
-          create: (ctx) => JamController(
-            ctx.read<PlayerController>(),
-            ctx.read<NavidromeService>(),
-            settings: ctx.read<SettingsController>(),
-          ),
+          create: (ctx) {
+            final jam = JamController(
+              ctx.read<PlayerController>(),
+              ctx.read<NavidromeService>(),
+              settings: ctx.read<SettingsController>(),
+            );
+            // La notificación de medios muestra la Jam y trae el botón de salir.
+            final handler = audioHandler;
+            if (handler != null) {
+              handler.onLeaveJam = jam.leaveOrEndSession;
+              jam.addListener(() => handler.setJam(jam.notificationInfo));
+            }
+            return jam;
+          },
         ),
         // Scrotify Connect: ver y controlar tus otros dispositivos.
         ChangeNotifierProvider<ConnectService>(

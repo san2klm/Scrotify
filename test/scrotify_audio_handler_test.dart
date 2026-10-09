@@ -7,6 +7,7 @@ import 'package:just_audio/just_audio.dart';
 import 'package:navidrome_client/services/navidrome_service.dart';
 import 'package:navidrome_client/services/player_controller.dart';
 import 'package:navidrome_client/services/scrotify_audio_handler.dart';
+import 'package:navidrome_client/services/jam_notification.dart';
 
 class FakePlayerController extends ChangeNotifier implements PlayerController {
   Track? _currentTrack;
@@ -246,6 +247,117 @@ void main() {
     await handler.customAction(ScrotifyAudioHandler.customActionToggleLike);
     await handler.customAction('otra');
     expect(calls, 1);
+  });
+
+  group('ScrotifyAudioHandler - notificación de Jam', () {
+    late FakePlayerController player;
+    late ScrotifyAudioHandler handler;
+
+    setUp(() {
+      player = FakePlayerController();
+      handler = ScrotifyAudioHandler();
+      handler.attachPlayerController(player);
+      player.setTrack(sampleTrack1, queue: [sampleTrack1, sampleTrack2]);
+    });
+
+    MediaControl? leaveControl() => handler.playbackState.value.controls
+        .where((c) =>
+            c.action == MediaAction.custom &&
+            c.customAction?.name == ScrotifyAudioHandler.customActionLeaveJam)
+        .firstOrNull;
+
+    test('sin Jam la notificación es la de siempre', () {
+      expect(handler.playbackState.value.controls, hasLength(4));
+      expect(leaveControl(), isNull);
+      expect(handler.mediaItem.value!.displaySubtitle, isNull);
+      expect(handler.mediaItem.value!.displayDescription, isNull);
+    });
+
+    test('en una Jam muestra la sala y añade el botón de salir', () {
+      handler.setJam(const JamNotificationInfo(
+          hostName: 'Ana', participants: 3, isHost: false));
+
+      final item = handler.mediaItem.value!;
+      expect(item.title, 'Starman');
+      expect(item.displaySubtitle, 'David Bowie · Jam de Ana');
+      expect(item.displayDescription, '3 personas');
+      expect(leaveControl(), isNotNull);
+      expect(leaveControl()!.androidIcon, 'drawable/audio_service_leave_jam');
+      // Los tres botones compactos siguen siendo anterior / pausa / siguiente.
+      expect(
+          handler.playbackState.value.androidCompactActionIndices, [0, 1, 3]);
+    });
+
+    test('el anfitrión ve «Tu Jam» y el botón dice terminar', () {
+      handler.setJam(const JamNotificationInfo(
+          hostName: 'Ana', participants: 1, isHost: true));
+      expect(handler.mediaItem.value!.displaySubtitle, 'David Bowie · Tu Jam');
+      expect(handler.mediaItem.value!.displayDescription, '1 persona');
+      expect(leaveControl()!.label, 'Terminar la Jam');
+    });
+
+    test('el invitado ve «Salir de la Jam»', () {
+      handler.setJam(const JamNotificationInfo(
+          hostName: 'Ana', participants: 2, isHost: false));
+      expect(leaveControl()!.label, 'Salir de la Jam');
+    });
+
+    test('cambiar de participantes actualiza sin cambiar de pista', () {
+      handler.setJam(const JamNotificationInfo(
+          hostName: 'Ana', participants: 2, isHost: false));
+      handler.setJam(const JamNotificationInfo(
+          hostName: 'Ana', participants: 5, isHost: false));
+      expect(handler.mediaItem.value!.displayDescription, '5 personas');
+    });
+
+    test('si no se conoce el número de personas no se muestra ninguno', () {
+      handler.setJam(const JamNotificationInfo(hostName: 'Ana', isHost: false));
+      expect(
+          handler.mediaItem.value!.displaySubtitle, 'David Bowie · Jam de Ana');
+      expect(handler.mediaItem.value!.displayDescription, isNull);
+      expect(leaveControl(), isNotNull);
+    });
+
+    test('al salir de la Jam vuelve la notificación normal', () {
+      handler.setJam(const JamNotificationInfo(
+          hostName: 'Ana', participants: 3, isHost: false));
+      handler.setJam(null);
+      expect(leaveControl(), isNull);
+      expect(handler.mediaItem.value!.displaySubtitle, isNull);
+      expect(handler.playbackState.value.controls, hasLength(4));
+    });
+
+    test('la acción leaveJam llama al callback y no a otras', () async {
+      var left = 0;
+      handler.onLeaveJam = () async => left++;
+      await handler.customAction(ScrotifyAudioHandler.customActionLeaveJam);
+      await handler.customAction('otra');
+      expect(left, 1);
+    });
+
+    test('un nombre de sala con caracteres de control se limpia', () {
+      handler.setJam(const JamNotificationInfo(
+          hostName: 'An\u0000a\nB', participants: 2, isHost: false));
+      expect(handler.mediaItem.value!.displaySubtitle,
+          'David Bowie · Jam de Ana B');
+    });
+
+    test('un nombre larguísimo se recorta', () {
+      handler.setJam(JamNotificationInfo(
+          hostName: 'x' * 200, participants: 2, isHost: false));
+      expect(handler.mediaItem.value!.displaySubtitle!.length, lessThan(80));
+    });
+
+    test('sin pista no hay notificación aunque haya Jam', () {
+      player.setTrack(null);
+      handler.setJam(const JamNotificationInfo(
+          hostName: 'Ana', participants: 3, isHost: false));
+      expect(handler.mediaItem.value, isNull);
+      // Y al volver a sonar algo, la Jam aparece sin repetir setJam.
+      player.setTrack(sampleTrack2, queue: [sampleTrack2]);
+      expect(
+          handler.mediaItem.value!.displaySubtitle, 'David Bowie · Jam de Ana');
+    });
   });
 
   group('ScrotifyAudioHandler - carátula local en la notificación', () {

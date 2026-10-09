@@ -251,6 +251,24 @@ void main() {
       expect(find.textContaining('2 pistas'), findsWidgets);
     });
 
+    test('notificationInfo describe la sala solo mientras se está en ella',
+        () async {
+      expect(guest.notificationInfo, isNull);
+      await guest.joinSession(
+        host: '127.0.0.1',
+        port: host.port,
+        pin: 'JK94MN',
+        customName: 'Lucía',
+        tlsFingerprint: host.tlsFingerprint!,
+      );
+      final info = guest.notificationInfo!;
+      expect(info.hostName, 'Host');
+      expect(info.isHost, isFalse);
+      expect(info.participants, greaterThanOrEqualTo(1));
+      await guest.leaveOrEndSession();
+      expect(guest.notificationInfo, isNull);
+    });
+
     test('entrar en otra sala empieza un historial limpio', () async {
       await guest.joinSession(
         host: '127.0.0.1',
