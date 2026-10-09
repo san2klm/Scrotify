@@ -1407,7 +1407,16 @@ class _PairCodeInputFormatter extends TextInputFormatter {
 
 /// Modal con escáner de cámara para leer el código QR del PC.
 class QrScannerSheet extends StatefulWidget {
-  const QrScannerSheet({super.key});
+  const QrScannerSheet({
+    super.key,
+    this.prefix = 'scrotify://pair',
+    this.hint =
+        'Apunta con la cámara al código QR que aparece en la pantalla de tu PC.',
+  });
+
+  /// Solo se aceptan códigos que empiecen por este texto.
+  final String prefix;
+  final String hint;
 
   @override
   State<QrScannerSheet> createState() => _QrScannerSheetState();
@@ -1480,7 +1489,7 @@ class _QrScannerSheetState extends State<QrScannerSheet>
     if (_handled || !mounted) return;
     for (final barcode in capture.barcodes) {
       final value = barcode.rawValue;
-      if (value != null && value.startsWith('scrotify://pair')) {
+      if (value != null && value.startsWith(widget.prefix)) {
         _handled = true;
         unawaited(_controller.stop());
         Navigator.of(context).pop(value);
@@ -1607,7 +1616,7 @@ class _QrScannerSheetState extends State<QrScannerSheet>
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20),
             child: Text(
-              'Apunta con la cámara al código QR que aparece en la pantalla de tu PC.',
+              widget.hint,
               style: TextStyle(color: context.textMuted, fontSize: 12.5),
             ),
           ),

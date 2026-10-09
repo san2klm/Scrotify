@@ -331,3 +331,4 @@ El mismo APK sirve para teléfono y tele. En una tele se activa un modo con la i
 - [x] **M11** El escaneo de descargas muestra progreso y se puede cancelar sin perder el índice.
 - [x] **M12** Caché de 3 min del catálogo de recuperación (por sesión, sin descargas duplicadas).
 - [x] **M1** Selector de salida ALSA `hw:` para Bit-perfect en Linux (probado con libmpv; falta probar con un DAC real).
+- [x] **M4** Vincular la sincronización por QR (`scrotify-sync://`), con aviso de secreto y biometría; falta probar la cámara en un teléfono real.

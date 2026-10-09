@@ -1,16 +1,41 @@
+import 'dart:io' show Platform;
+
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
+import '../services/biometric_auth_service.dart';
+import '../services/sync/sync_key_link.dart';
 import '../services/sync/sync_service.dart';
 import '../utils/app_colors.dart';
+import 'pairing_panel.dart' show QrScannerSheet;
+import 'pairing_qr_code.dart';
 
 /// Ajustes → Servidor Jam → Sincronización entre dispositivos.
 ///
 /// Activa la sincronización cifrada de temas, ajustes y datos de la
 /// biblioteca, o vincula este dispositivo con la clave de otro.
 class SyncSettings extends StatelessWidget {
-  const SyncSettings({super.key});
+  const SyncSettings({super.key, this.authorize, this.canScan});
+
+  /// Confirma la identidad antes de mostrar el QR con la clave. Por defecto
+  /// usa la biometría del dispositivo si existe (y no pide nada si no).
+  final Future<bool> Function()? authorize;
+
+  /// Si se ofrece escanear un QR (por defecto, solo en móvil).
+  final bool? canScan;
+
+  static bool get _isMobile =>
+      !kIsWeb && (Platform.isAndroid || Platform.isIOS);
+
+  static Future<bool> _authorizeWithBiometrics() async {
+    final biometrics = BiometricAuthService();
+    if (!await biometrics.isBiometricsAvailable()) return true;
+    final result = await biometrics.authenticate(
+        localizedReason: 'Confirma para mostrar la clave de sincronización');
+    return result.isSuccess;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -51,6 +76,11 @@ class SyncSettings extends StatelessWidget {
             onPressed: () => _showKey(context, sync.keyText ?? ''),
             icon: const Icon(Icons.key_outlined, size: 18),
             label: const Text('Ver clave'),
+          ),
+          OutlinedButton.icon(
+            onPressed: () => _showQr(context, sync.keyText ?? ''),
+            icon: const Icon(Icons.qr_code_2_rounded, size: 18),
+            label: const Text('Mostrar QR'),
           ),
           OutlinedButton.icon(
             onPressed: sync.syncing ? null : () => _randomKey(context, sync),
@@ -166,45 +196,148 @@ class SyncSettings extends StatelessWidget {
     );
   }
 
-  Future<void> _link(BuildContext context, SyncService sync) async {
-    final controller = TextEditingController();
-    String? error;
-    final linked = await showDialog<bool>(
+  /// Muestra la clave como QR para vincular otro dispositivo, tras avisar de
+  /// que es un secreto y confirmar la identidad.
+  Future<void> _showQr(BuildContext context, String key) async {
+    final link = SyncKeyLink.build(key);
+    if (link == null) return;
+    final proceed = await showDialog<bool>(
       context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setState) => AlertDialog(
-          title: const Text('Vincular con una clave'),
-          content: TextField(
-            controller: controller,
-            autofocus: true,
-            decoration: InputDecoration(
-              hintText: 'XXXX-XXXX-XXXX-…',
-              errorText: error,
-            ),
-          ),
-          actions: [
-            TextButton(
-                onPressed: () => Navigator.pop(ctx, false),
-                child: const Text('Cancelar')),
-            TextButton(
-              onPressed: () async {
-                final ok = await sync.link(controller.text);
-                if (ok) {
-                  if (ctx.mounted) Navigator.pop(ctx, true);
-                } else {
-                  setState(() => error = 'La clave no es válida.');
-                }
-              },
-              child: const Text('Vincular'),
-            ),
-          ],
-        ),
+      builder: (ctx) => AlertDialog(
+        title: const Text('Mostrar QR de la clave'),
+        content: const Text(
+            'El código contiene tu clave de sincronización. Quien lo escanee '
+            'podrá leer lo que sincronizas. Muéstralo solo a tu propio '
+            'dispositivo y en un lugar privado.'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancelar')),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Mostrar')),
+        ],
       ),
     );
-    controller.dispose();
+    if (proceed != true || !context.mounted) return;
+    if (!await (authorize ?? _authorizeWithBiometrics)()) return;
+    if (!context.mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Escanea desde el otro dispositivo'),
+        // Ancho fijo: el QR usa LayoutBuilder, que no admite medidas intrínsecas
+        // (AlertDialog las pide para calcular su tamaño).
+        content: SizedBox(
+          width: 280,
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            Center(child: PairingQrCode(data: link, size: 240)),
+            const SizedBox(height: 12),
+            const Text(
+                'En el otro dispositivo: Ajustes → Sincronización → «Ya tengo '
+                'una clave» → Escanear QR.'),
+          ]),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx), child: const Text('Cerrar')),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _link(BuildContext context, SyncService sync) async {
+    final linked = await showDialog<bool>(
+      context: context,
+      builder: (_) => _LinkDialog(sync: sync, canScan: canScan ?? _isMobile),
+    );
     if (linked == true && context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
           content: Text('Dispositivo vinculado. Sincronizando…')));
     }
   }
+}
+
+/// Diálogo para vincular este dispositivo con la clave de otro, escrita,
+/// pegada o escaneada desde un QR.
+class _LinkDialog extends StatefulWidget {
+  const _LinkDialog({required this.sync, required this.canScan});
+
+  final SyncService sync;
+  final bool canScan;
+
+  @override
+  State<_LinkDialog> createState() => _LinkDialogState();
+}
+
+class _LinkDialogState extends State<_LinkDialog> {
+  final _controller = TextEditingController();
+  String? _error;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  Future<void> _linkWith(String text) async {
+    final ok = await widget.sync.link(SyncKeyLink.parse(text) ?? text);
+    if (!mounted) return;
+    if (ok) {
+      Navigator.pop(context, true);
+    } else {
+      setState(() => _error = 'La clave no es válida.');
+    }
+  }
+
+  Future<void> _scan() async {
+    final scanned = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => const QrScannerSheet(
+        prefix: SyncKeyLink.scheme,
+        hint: 'Apunta al QR de «Mostrar QR» en tu otro dispositivo.',
+      ),
+    );
+    if (scanned == null || !mounted) return;
+    final key = SyncKeyLink.parse(scanned);
+    if (key == null) {
+      setState(() => _error = 'El QR no es una clave válida.');
+    } else {
+      await _linkWith(key);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+        title: const Text('Vincular con una clave'),
+        content: Column(mainAxisSize: MainAxisSize.min, children: [
+          TextField(
+            controller: _controller,
+            autofocus: true,
+            decoration: InputDecoration(
+              hintText: 'XXXX-XXXX-XXXX-…',
+              errorText: _error,
+            ),
+          ),
+          if (widget.canScan)
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                onPressed: _scan,
+                icon: const Icon(Icons.qr_code_scanner_rounded, size: 18),
+                label: const Text('Escanear QR'),
+              ),
+            ),
+        ]),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancelar')),
+          TextButton(
+              onPressed: () => _linkWith(_controller.text),
+              child: const Text('Vincular')),
+        ],
+      );
 }
