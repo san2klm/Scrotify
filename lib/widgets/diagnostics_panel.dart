@@ -7,6 +7,7 @@ import 'package:path/path.dart' as p;
 import '../services/diagnostics_log.dart';
 import '../utils/app_colors.dart';
 import '../utils/app_data_dir.dart';
+import '../utils/build_info.dart';
 
 /// Ajustes → Diagnóstico: copiar o guardar el registro reciente de la app
 /// para adjuntarlo al reportar un fallo.
@@ -22,7 +23,7 @@ class DiagnosticsPanel extends StatelessWidget {
   DiagnosticsLog get _log => log ?? DiagnosticsLog.instance;
 
   String _export() => _log.export(header: {
-        'App': 'Scrotify',
+        'App': 'Scrotify ${BuildInfo.label}',
         'Sistema':
             '${Platform.operatingSystem} ${Platform.operatingSystemVersion}',
         'Generado': DateTime.now().toIso8601String(),

@@ -19,6 +19,7 @@ import '../widgets/local_music_settings.dart';
 import 'equalizer_screen.dart';
 import 'stats_screen.dart';
 import '../utils/app_colors.dart';
+import '../utils/build_info.dart';
 import '../utils/responsive.dart';
 import '../widgets/material_surface.dart';
 import '../widgets/tv_initial_focus.dart';
@@ -116,7 +117,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
             const SizedBox(height: 24),
             Center(
               child: Text(
-                'Scrotify · v1.0.0\nCliente de Navidrome (Subsonic API)',
+                'Scrotify · ${BuildInfo.label}\n'
+                'Cliente de Navidrome (Subsonic API)',
                 textAlign: TextAlign.center,
                 style: TextStyle(color: context.textMuted, fontSize: 12),
               ),
