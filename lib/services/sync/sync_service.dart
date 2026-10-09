@@ -49,6 +49,26 @@ class SyncService extends ChangeNotifier {
           r'pinned_playlists|starred_track_order|track_ratings)'
           r'(_[a-z0-9_]+)?\.json$');
 
+  /// Clave del aviso de borrado de un documento. Se deriva de la clave del
+  /// documento (sin necesitar su nombre) y no empieza por `d-`, así que
+  /// cualquier cliente la distingue de un documento.
+  static String tombstoneKey(String docKey) =>
+      'x-${docKey.startsWith('d-') ? docKey.substring(2) : docKey}';
+
+  static bool _isTombstoneKey(String key) => key.startsWith('x-');
+
+  /// Cuánto se conserva un tema borrado en la papelera local, y cuánto vive un
+  /// aviso de borrado en el servidor. Un dispositivo que pase más tiempo sin
+  /// conectarse puede recuperar un tema borrado: es preferible a perder uno.
+  static const retention = Duration(days: 30);
+
+  /// Con al menos tantos temas desaparecidos a la vez, y más de la mitad de los
+  /// conocidos, se supone un accidente (carpeta vaciada) y no se propaga.
+  static const massDeletionMin = 3;
+
+  /// Carpeta (dentro de los datos de la app) donde van los temas borrados.
+  static const trashDir = 'sync_trash';
+
   /// Ajustes que pertenecen al dispositivo y no viajan.
   static const _deviceSettings = ['jamServerUrl'];
 
@@ -71,6 +91,7 @@ class SyncService extends ChangeNotifier {
   Uint8List? _secret;
   bool _enabled = false;
   bool _syncing = false;
+  String? _cycleNote;
   DateTime? _lastSync;
   String? _error;
   Timer? _timer;
@@ -231,6 +252,7 @@ class SyncService extends ChangeNotifier {
     notifyListeners();
     try {
       final applied = await _cycle(crypto, base);
+      _error = _cycleNote; // aviso no fatal del ciclo (p. ej. borrados masivos)
       _lastSync = _now();
       if (applied.isNotEmpty) onApplied?.call(applied);
     } on _SyncFailure catch (failure) {
@@ -251,28 +273,115 @@ class SyncService extends ChangeNotifier {
 
   Future<Set<String>> _cycle(SyncCrypto crypto, Uri base) async {
     final remote = await _listRemote(crypto, base);
-    final local = await _localDocs(crypto);
+    final listing = await _localDocs(crypto);
+    final local = listing.docs;
     final applied = <String>{};
-    for (final key in {...local.keys, ...remote.keys}) {
-      final l = local[key];
-      final r = remote[key];
-      final st = _state[key];
-      final action = _decide(l, r, st);
-      if (action == _Action.pull) {
-        final name = await _pull(crypto, base, key, r!);
-        if (name != null) applied.add(name);
-      } else if (action == _Action.push) {
-        await _push(crypto, base, key, l!,
-            minUpdatedAt: (st?['updatedAt'] as int? ?? 0) + 1);
+    final nowMs = _now().millisecondsSinceEpoch;
+    _cycleNote = null;
+
+    final docKeys = {
+      ...local.keys,
+      ...remote.keys.where((k) => !_isTombstoneKey(k)),
+    };
+    _RemoteDoc? tombstoneOf(String key) => remote[tombstoneKey(key)];
+
+    // Un tema que ya estaba sincronizado y ya no está en esta carpeta es un
+    // borrado. Solo se infiere si se pudo leer la carpeta y si no son muchos a
+    // la vez (una carpeta vaciada por error no debe borrar los de los demás).
+    var inferDelete = listing.themesListed;
+    if (inferDelete) {
+      final known = _state.values.where(_isSyncedTheme).length;
+      final vanished = [
+        for (final key in docKeys)
+          if (local[key] == null &&
+              remote[key] != null &&
+              _isSyncedTheme(_state[key]) &&
+              !_tombstoneWins(remote[key], tombstoneOf(key)))
+            key
+      ];
+      if (vanished.length >= massDeletionMin && vanished.length * 2 > known) {
+        inferDelete = false;
+        _cycleNote = 'Se detectaron ${vanished.length} temas borrados de '
+            'golpe; por seguridad no se propagan.';
       }
     }
+
+    for (final key in docKeys) {
+      final l = local[key];
+      final r = remote[key];
+      final t = tombstoneOf(key);
+      final st = _state[key];
+      switch (_decide(l, r, t, st, inferDelete: inferDelete)) {
+        case _Action.pull:
+          final name = await _pull(crypto, base, key, r!);
+          if (name != null) applied.add(name);
+        case _Action.push:
+          final afterTombstone = _tombstoneWins(r, t)
+              ? t!.updatedAt + 1
+              : 0; // por encima del aviso
+          final afterState = (st?['updatedAt'] as int? ?? 0) + 1;
+          await _push(crypto, base, key, l!,
+              minUpdatedAt:
+                  afterState > afterTombstone ? afterState : afterTombstone);
+        case _Action.deleteLocal:
+          if (await _tombstoneAuthentic(
+              crypto, base, tombstoneKey(key), l!.name)) {
+            await _moveToTrash(await _targetFile(l.name));
+            _state.remove(key);
+            applied.add(l.name);
+          }
+        case _Action.pushTombstone:
+          await _pushTombstone(
+              crypto, base, key, st!['name'] as String, r!, nowMs);
+        case _Action.markMissing:
+          _state[key] = {...st!, 'missing': 1};
+        case _Action.none:
+          if (l != null && st != null) {
+            // Se recuerda el nombre (para saber si es un tema) y se olvida
+            // cualquier sospecha de borrado anterior.
+            _state[key] = {...st, 'name': l.name}..remove('missing');
+          }
+      }
+    }
+    await _pruneTombstones(crypto, base, remote, nowMs);
+    await _purgeTrash(nowMs);
     await _saveState();
     return applied;
   }
 
-  _Action _decide(_LocalDoc? l, _RemoteDoc? r, Map<String, dynamic>? st) {
+  static bool _isSyncedTheme(Map<String, dynamic>? st) =>
+      (st?['name'] as String?)?.toLowerCase().endsWith('.zip') ?? false;
+
+  /// El aviso de borrado es posterior al documento del servidor (o este ya no
+  /// está).
+  static bool _tombstoneWins(_RemoteDoc? doc, _RemoteDoc? tombstone) =>
+      tombstone != null && (doc == null || tombstone.updatedAt > doc.updatedAt);
+
+  _Action _decide(
+      _LocalDoc? l, _RemoteDoc? r, _RemoteDoc? tomb, Map<String, dynamic>? st,
+      {required bool inferDelete}) {
+    final name = l?.name ?? st?['name'] as String?;
+    final theme = name != null && name.toLowerCase().endsWith('.zip');
+    // Solo los temas importados se pueden borrar por sincronización; los
+    // ajustes y demás datos se reescriben, nunca se borran.
+    if (theme && _tombstoneWins(r, tomb)) {
+      if (l == null) return _Action.none;
+      // Lo editado en este dispositivo (o que nunca se sincronizó aquí) gana
+      // al borrado: se devuelve a los demás.
+      if (st == null || st['hash'] != l.hash) return _Action.push;
+      return _Action.deleteLocal;
+    }
     if (l == null && r == null) return _Action.none;
-    if (l == null) return _Action.pull;
+    if (l == null) {
+      if (inferDelete && theme && st != null) {
+        // Hace falta verlo ausente en dos ciclos seguidos: un archivo que se
+        // está moviendo o reescribiendo no cuenta como borrado.
+        return (st['missing'] as int? ?? 0) >= 1
+            ? _Action.pushTombstone
+            : _Action.markMissing;
+      }
+      return _Action.pull;
+    }
     if (r == null) return _Action.push;
     // Primer contacto de este dispositivo con la bóveda: se adopta lo que ya
     // hay (los valores por defecto recién creados no deben pisar los datos).
@@ -285,6 +394,101 @@ class SyncService extends ChangeNotifier {
     if (remoteChanged) return _Action.pull;
     if (localChanged) return _Action.push;
     return _Action.none;
+  }
+
+  /// Comprueba que el aviso de borrado es auténtico (cifrado con la clave de la
+  /// bóveda) y que habla de [name]: un servidor no puede fabricarlo.
+  Future<bool> _tombstoneAuthentic(
+      SyncCrypto crypto, Uri base, String tombKey, String name) async {
+    try {
+      final response = await _send('GET', _uri(base, crypto, tombKey), crypto);
+      if (response.statusCode == 404) return false;
+      final doc = jsonDecode(response.body) as Map<String, dynamic>;
+      final plain =
+          await crypto.decrypt(doc['blob'] as String, docKey: tombKey);
+      final envelope = jsonDecode(utf8.decode(plain)) as Map<String, dynamic>;
+      return envelope['deleted'] == name;
+    } on _SyncFailure {
+      rethrow;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Publica el aviso de borrado de [name] y retira el documento del servidor.
+  /// El nombre del aviso termina en `.deleted`: un cliente sin esta función lo
+  /// descarta en vez de crear un archivo.
+  Future<void> _pushTombstone(SyncCrypto crypto, Uri base, String key,
+      String name, _RemoteDoc remote, int nowMs) async {
+    final tombKey = tombstoneKey(key);
+    final updatedAt = nowMs > remote.updatedAt ? nowMs : remote.updatedAt + 1;
+    final blob = await crypto.encrypt(
+        utf8.encode(jsonEncode({
+          'name': '$name.deleted',
+          'deleted': name,
+          'data': '',
+          'at': updatedAt,
+        })),
+        docKey: tombKey);
+    final response = await _send('PUT', _uri(base, crypto, tombKey), crypto,
+        body: jsonEncode({'updatedAt': updatedAt, 'blob': blob}));
+    if (response.statusCode == 409) return;
+    try {
+      // El aviso ya manda; quitar el documento solo libera espacio.
+      await _send('DELETE', _uri(base, crypto, key), crypto);
+    } on _SyncFailure {
+      rethrow;
+    } catch (_) {}
+    _state.remove(key);
+  }
+
+  /// Elimina del servidor los avisos más antiguos que [retention].
+  Future<void> _pruneTombstones(SyncCrypto crypto, Uri base,
+      Map<String, _RemoteDoc> remote, int nowMs) async {
+    final limit = nowMs - retention.inMilliseconds;
+    for (final entry in remote.entries) {
+      if (!_isTombstoneKey(entry.key) || entry.value.updatedAt >= limit) {
+        continue;
+      }
+      try {
+        await _send('DELETE', _uri(base, crypto, entry.key), crypto);
+      } on _SyncFailure {
+        rethrow;
+      } catch (_) {}
+    }
+  }
+
+  /// Mueve [file] a la papelera local en vez de borrarlo.
+  Future<void> _moveToTrash(File? file) async {
+    if (file == null || !await file.exists()) return;
+    final dir = Directory(p.join((await dataDir()).path, trashDir));
+    await dir.create(recursive: true);
+    final target = File(p.join(
+        dir.path, '${_now().millisecondsSinceEpoch}_${p.basename(file.path)}'));
+    try {
+      await file.rename(target.path);
+    } on FileSystemException {
+      await file.copy(target.path);
+      await file.delete();
+    }
+  }
+
+  /// Vacía de la papelera lo que lleva más de [retention].
+  Future<void> _purgeTrash(int nowMs) async {
+    try {
+      final dir = Directory(p.join((await dataDir()).path, trashDir));
+      if (!await dir.exists()) return;
+      final limit = nowMs - retention.inMilliseconds;
+      await for (final entity in dir.list(followLinks: false)) {
+        if (entity is! File) continue;
+        final stamp = int.tryParse(p.basename(entity.path).split('_').first);
+        final when =
+            stamp ?? (await entity.stat()).modified.millisecondsSinceEpoch;
+        if (when < limit) await entity.delete();
+      }
+    } catch (error) {
+      debugPrint('sync: no se pudo limpiar la papelera: $error');
+    }
   }
 
   Future<Map<String, _RemoteDoc>> _listRemote(
@@ -318,7 +522,8 @@ class SyncService extends ChangeNotifier {
     await tmp.rename(file.path);
     _state[key] = {
       'hash': _hash(await _normalized(name, file)),
-      'updatedAt': remote.updatedAt
+      'updatedAt': remote.updatedAt,
+      'name': name,
     };
     return name;
   }
@@ -335,14 +540,14 @@ class SyncService extends ChangeNotifier {
         body: jsonEncode({'updatedAt': updatedAt, 'blob': blob}));
     // 409: hay algo más nuevo en el servidor; se baja en el próximo ciclo.
     if (response.statusCode == 409) return;
-    _state[key] = {'hash': doc.hash, 'updatedAt': updatedAt};
+    _state[key] = {'hash': doc.hash, 'updatedAt': updatedAt, 'name': doc.name};
   }
 
   // ---------------------------------------------------------------------------
   // Documentos locales
   // ---------------------------------------------------------------------------
 
-  Future<Map<String, _LocalDoc>> _localDocs(SyncCrypto crypto) async {
+  Future<_LocalListing> _localDocs(SyncCrypto crypto) async {
     final docs = <String, _LocalDoc>{};
     final dir = await dataDir();
     if (await dir.exists()) {
@@ -354,14 +559,15 @@ class SyncService extends ChangeNotifier {
       }
     }
     final themes = await themeImportsDir();
-    if (await themes.exists()) {
+    final themesListed = await themes.exists();
+    if (themesListed) {
       await for (final entity in themes.list(followLinks: false)) {
         final name = p.basename(entity.path);
         if (entity is! File || !name.toLowerCase().endsWith('.zip')) continue;
         docs[await crypto.docKey(name)] = await _readDoc(name, entity);
       }
     }
-    return docs;
+    return _LocalListing(docs, themesListed);
   }
 
   Future<_LocalDoc> _readDoc(String name, File file) async {
@@ -479,7 +685,16 @@ class SyncService extends ChangeNotifier {
   }
 }
 
-enum _Action { none, pull, push }
+enum _Action { none, pull, push, deleteLocal, pushTombstone, markMissing }
+
+class _LocalListing {
+  const _LocalListing(this.docs, this.themesListed);
+  final Map<String, _LocalDoc> docs;
+
+  /// `false` si la carpeta de temas no existe: entonces la ausencia de un tema
+  /// no significa que se borró.
+  final bool themesListed;
+}
 
 class _LocalDoc {
   const _LocalDoc(this.name, this.bytes, this.hash, this.modified);

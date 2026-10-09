@@ -12,6 +12,9 @@ import 'package:path/path.dart' as p;
 /// Servidor Jam mínimo en memoria con el mismo contrato que `/api/sync/v1`.
 class FakeVault {
   final docs = <String, Map<String, dynamic>>{};
+
+  /// Claves borradas con DELETE, en orden.
+  final deleted = <String>[];
   String? token;
   bool enabled = true;
 
@@ -40,6 +43,11 @@ class FakeVault {
               ? http.Response('{}', 404)
               : http.Response(jsonEncode(doc), 200);
         }
+        if (request.method == 'DELETE' && key != null) {
+          deleted.add(key);
+          docs.remove(key);
+          return http.Response('{"ok":true}', 200);
+        }
         if (request.method == 'PUT') {
           token ??= auth!.substring(7);
           final body = jsonDecode(request.body) as Map<String, dynamic>;
@@ -56,7 +64,7 @@ class FakeVault {
 }
 
 class Device {
-  Device(this.vault, this.root) {
+  Device(this.vault, this.root, {DateTime Function()? now}) {
     data = Directory(p.join(root.path, 'data'))..createSync(recursive: true);
     themes = Directory(p.join(root.path, 'themes'))
       ..createSync(recursive: true);
@@ -68,6 +76,7 @@ class Device {
       serverBase: () => Uri.parse('https://jam.test/'),
       client: vault.client,
       interval: const Duration(days: 1),
+      now: now,
       readKey: () async => stored,
       writeKey: (value) async => stored = value,
       readOptOut: () async => optOut,
