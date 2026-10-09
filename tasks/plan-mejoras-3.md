@@ -46,6 +46,11 @@ comprobar la app armada y de saber qué build hay instalado.
 ### [x] 9. APK por arquitectura
 - El APK universal pesa 85 MB; el de solo arm64 de un build anterior, 30 MB. `--split-per-abi` en `scripts/build_apks.sh` (arm64 para teléfono, armv7 para el Chromecast).
 
+### [!] 19. Credenciales por defecto en el código
+- `login_screen.dart:118-120`, `desktop_login_screen.dart:23-25` y `main_preview.dart:19-23` llevan escritos la URL `navidrome.templo.cloud`, el usuario `Proyecto` y su contraseña. El login aparece ya rellenado con esa cuenta en cualquier instalación, y la contraseña viaja dentro de cada APK y AppImage que se comparta.
+- El repositorio remoto es privado (no responde sin autenticación), así que hoy la exposición son los binarios.
+- Decide el usuario: si es una cuenta de demostración a propósito, dejar constancia; si no, quitar los valores, cambiar la contraseña en Navidrome (queda en el historial de git) y dejar los campos vacíos.
+
 ## Fase 3 — Robustez
 
 ### [~] 10. Los `catch (_) {}` dejan rastro
