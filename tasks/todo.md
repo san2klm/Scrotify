@@ -338,3 +338,6 @@ El mismo APK sirve para teléfono y tele. En una tele se activa un modo con la i
 - [x] **M10** Pruebas de integración de la recuperación de descargas en Android (7/7 en emulador); script `tool/run_android_integration.sh`.
 - [x] **M5** Los temas importados que se borran en un dispositivo se borran en los demás (con papelera de 30 días y varias guardas); falta probar entre dos dispositivos reales.
 - [x] **M9** `navidrome_service`, `player_controller`, `jam_controller` y `home_screen` partidos en mixins/`part` (≤1076 líneas el mayor), sin cambios de comportamiento.
+
+## Mejoras, tanda 2 (plan en `tasks/plan-mejoras-2.md`)
+- [x] 1 CI (GitHub Actions) · 4 aviso de firma debug · 17 ignorar APK · 20 versionar build de Android (2026-10-09).
