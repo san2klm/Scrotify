@@ -761,14 +761,6 @@ class _PlayerVolumeBarState extends State<_PlayerVolumeBar> {
                     if (mounted) setState(() {});
                   }
                 },
-                onPointerDown: (details) {
-                  // Botones laterales del mouse → pista anterior / siguiente
-                  if (details.buttons & kBackMouseButton != 0) {
-                    widget.player.skipPrevious();
-                  } else if (details.buttons & kForwardMouseButton != 0) {
-                    widget.player.skipNext();
-                  }
-                },
                 child: SliderTheme(
                   data: SliderThemeData(
                     trackHeight: 2.5,

@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:provider/provider.dart';
@@ -846,32 +847,44 @@ class _VolumeBarState extends State<_VolumeBar> {
             ),
             SizedBox(
               width: 110,
-              child: SliderTheme(
-                data: SliderThemeData(
-                  trackHeight: 3,
-                  activeTrackColor: context.volumeAccent,
-                  inactiveTrackColor: context.themeBorder,
-                  thumbColor: context.sliderThumb,
-                  thumbShape:
-                      const RoundSliderThumbShape(enabledThumbRadius: 5),
-                  overlayColor: context.accentDim,
-                  overlayShape:
-                      const RoundSliderOverlayShape(overlayRadius: 12),
-                ),
-                child: Slider(
-                  min: 0,
-                  max: 1,
-                  value: volume,
-                  // Aplicar en vivo mientras se arrastra: el audio sube/baja al
-                  // mismo tiempo que el pulgar, sin esperar a soltar.
-                  onChanged: (v) {
-                    setState(() => _dragValue = v);
-                    apply(v);
-                  },
-                  onChangeEnd: (v) {
-                    apply(v);
-                    if (mounted) setState(() => _dragValue = null);
-                  },
+              child: Listener(
+                onPointerSignal: (pointerSignal) {
+                  // Rueda del mouse → volumen
+                  if (pointerSignal is PointerScrollEvent &&
+                      pointerSignal.scrollDelta.dy != 0) {
+                    final newVolume = (volume -
+                            pointerSignal.scrollDelta.dy * 0.001)
+                        .clamp(0.0, 1.0);
+                    apply(newVolume);
+                  }
+                },
+                child: SliderTheme(
+                  data: SliderThemeData(
+                    trackHeight: 3,
+                    activeTrackColor: context.volumeAccent,
+                    inactiveTrackColor: context.themeBorder,
+                    thumbColor: context.sliderThumb,
+                    thumbShape:
+                        const RoundSliderThumbShape(enabledThumbRadius: 5),
+                    overlayColor: context.accentDim,
+                    overlayShape:
+                        const RoundSliderOverlayShape(overlayRadius: 12),
+                  ),
+                  child: Slider(
+                    min: 0,
+                    max: 1,
+                    value: volume,
+                    // Aplicar en vivo mientras se arrastra: el audio sube/baja al
+                    // mismo tiempo que el pulgar, sin esperar a soltar.
+                    onChanged: (v) {
+                      setState(() => _dragValue = v);
+                      apply(v);
+                    },
+                    onChangeEnd: (v) {
+                      apply(v);
+                      if (mounted) setState(() => _dragValue = null);
+                    },
+                  ),
                 ),
               ),
             ),

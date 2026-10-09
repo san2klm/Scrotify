@@ -1,9 +1,14 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:window_manager/window_manager.dart';
 
+import '../services/connect/connect_protocol.dart';
+import '../services/connect/connect_service.dart';
+import '../services/jam_controller.dart';
 import '../services/mini_player_controller.dart';
+import '../services/player_controller.dart';
 import '../services/window_controls.dart';
 import 'mini_player_view.dart';
 
@@ -187,9 +192,95 @@ class _DesktopWindowFrameState extends State<DesktopWindowFrame>
         const SingleActivator(LogicalKeyboardKey.escape): () {
           if (_fullScreen) WindowControls.setFullScreen(false);
         },
+        const SingleActivator(LogicalKeyboardKey.mediaTrackNext): () =>
+            _skipNext(context),
+        const SingleActivator(LogicalKeyboardKey.mediaTrackPrevious): () =>
+            _skipPrevious(context),
+        const SingleActivator(LogicalKeyboardKey.browserForward): () =>
+            _skipNext(context),
+        const SingleActivator(LogicalKeyboardKey.browserBack): () =>
+            _skipPrevious(context),
+        const SingleActivator(LogicalKeyboardKey.arrowRight, alt: true): () =>
+            _skipNext(context),
+        const SingleActivator(LogicalKeyboardKey.arrowLeft, alt: true): () =>
+            _skipPrevious(context),
       },
-      child: Focus(autofocus: true, child: framed),
+      child: Focus(
+        autofocus: true,
+        child: Listener(
+          behavior: HitTestBehavior.translucent,
+          onPointerDown: (event) {
+            // Botones laterales del mouse (XBUTTON1 y XBUTTON2):
+            // Back (0x08) -> pista anterior
+            // Forward (0x10) -> pista siguiente
+            if ((event.buttons & kBackMouseButton) != 0) {
+              _skipPrevious(context);
+            } else if ((event.buttons & kForwardMouseButton) != 0) {
+              _skipNext(context);
+            }
+          },
+          child: framed,
+        ),
+      ),
     );
+  }
+
+  DateTime? _lastSkipTime;
+
+  bool _canSkip() {
+    final now = DateTime.now();
+    if (_lastSkipTime != null &&
+        now.difference(_lastSkipTime!).inMilliseconds < 250) {
+      return false;
+    }
+    _lastSkipTime = now;
+    return true;
+  }
+
+  void _skipNext(BuildContext context) {
+    if (!_canSkip()) return;
+    try {
+      final connect = context.read<ConnectService>();
+      if (connect.controlled != null) {
+        connect.command(ConnectCommand.next);
+        return;
+      }
+      final jam = context.read<JamController>();
+      if (jam.isGuest && !(jam.localParticipant?.canControlPlayback ?? false)) {
+        return;
+      }
+      if (jam.inJam) {
+        jam.playbackAction('skip_next');
+        return;
+      }
+      final player = context.read<PlayerController>();
+      player.skipNext();
+    } catch (e) {
+      debugPrint('[DesktopWindowFrame] skipNext error: $e');
+    }
+  }
+
+  void _skipPrevious(BuildContext context) {
+    if (!_canSkip()) return;
+    try {
+      final connect = context.read<ConnectService>();
+      if (connect.controlled != null) {
+        connect.command(ConnectCommand.previous);
+        return;
+      }
+      final jam = context.read<JamController>();
+      if (jam.isGuest && !(jam.localParticipant?.canControlPlayback ?? false)) {
+        return;
+      }
+      if (jam.inJam) {
+        jam.playbackAction('skip_previous');
+        return;
+      }
+      final player = context.read<PlayerController>();
+      player.skipPrevious();
+    } catch (e) {
+      debugPrint('[DesktopWindowFrame] skipPrevious error: $e');
+    }
   }
 }
 
