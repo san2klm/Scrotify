@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'jam_history_dialog.dart';
 import 'jam_social_bar.dart';
@@ -87,6 +89,7 @@ class _JamDialogState extends State<JamDialog>
       final jam = context.read<JamController>();
       if (!jam.inJam) {
         jam.scanRadar();
+        unawaited(jam.refreshCloudCapabilities());
       }
     });
   }
@@ -1018,6 +1021,10 @@ class _JamDialogState extends State<JamDialog>
                     if (mode != null) setState(() => _selectedMode = mode);
                   },
                 ),
+                if (context
+                    .watch<JamController>()
+                    .cloudCapabilities
+                    .offersPublicListing)
                 SwitchListTile(
                   contentPadding: EdgeInsets.zero,
                   dense: true,
@@ -1132,6 +1139,10 @@ class _JamDialogState extends State<JamDialog>
                   activeTrackColor: context.accent,
                   onChanged: (value) => setState(() => _failover = value),
                 ),
+                if (context
+                    .watch<JamController>()
+                    .cloudCapabilities
+                    .offersPersistentRooms)
                 ExpansionTile(
                   tilePadding: EdgeInsets.zero,
                   title: Text('Sala persistente (avanzado)',

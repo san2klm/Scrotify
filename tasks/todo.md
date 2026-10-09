@@ -327,3 +327,4 @@ El mismo APK sirve para teléfono y tele. En una tele se activa un modo con la i
 
 - [x] **M2** Nombre de dispositivo editable en Connect (se guarda en ajustes y se reanuncia por LAN y relé).
 - [x] **M3** Connect transfiere la cola completa (hasta 1000 canciones) en trozos ordenados; clientes viejos siguen recibiendo 40.
+- [x] **M7** El cliente lee `/api/capabilities` completo (`JamCapabilities`) y oculta opciones que el relé no ofrece.

@@ -36,7 +36,7 @@ Primero lo pequeño y aislado, luego lo medio, y al final el refactor grande
 - Plan: enviar la cola en trozos (lotes de N pistas, calculados por tamaño codificado y no por cantidad) con mensaje `queue_chunk` (índice, total). El receptor ensambla y aplica al completar; si falta un trozo, descarta y mantiene la cola previa. Sin romper clientes viejos: si el receptor no declara soporte, se mantiene el tope de 40.
 - Tests: cola de 500 pistas llega completa; trozo perdido no deja cola a medias; compatibilidad con el tope antiguo.
 
-### [ ] 7. El cliente lee `/api/capabilities` del servidor Jam
+### [x] 7. El cliente lee `/api/capabilities` del servidor Jam
 - Dónde: `jam-server/src/server.js:273` (endpoint ya existe), `lib/services/remote_jam_service.dart`, `jam_controller.dart`.
 - Plan: `JamCapabilities` (modelo tipado con valores por defecto conservadores), cargado al conectar al relé; las funciones opcionales (historial, matching, etc.) se habilitan solo si el servidor las declara. Fallo de red o 404 → capacidades mínimas, sin error visible.
 - Tests: parser con campos desconocidos y ausentes; servidor viejo sin endpoint.
@@ -140,3 +140,4 @@ Pruebas en TV real, teléfono físico, auriculares Bluetooth, deriva de reloj en
 
 - **2** · nombre de dispositivo editable: `SettingsController.connectDeviceName` + `ConnectService.rename` (recrea transportes y reanuncia) + lápiz en el panel. 7 tests nuevos; 632 en total, analyze limpio.
 - **3** · cola completa en Connect: `ConnectQueueChunks` (40 + trozos de 80, tope 1000), `ConnectQueueReceiver` (orden estricto, sin huecos, caduca a los 5 min), comando `queue_append`, `PlayerController.addAllToQueue`. Compatible con clientes viejos (ignoran `queue_append` y reciben los 40 de siempre). 647 tests, analyze limpio. Nota: `sync_service_test` es intermitente por carrera con directorios temporales (preexistente, pasa aislado).
+- **7** · `JamCapabilities` tipado (`lib/models/jam_capabilities.dart`) reemplaza el registro `(reactions, chat)`; `JamController.cloudCapabilities`/`refreshCloudCapabilities()` (se invalida al cambiar de relé); el diálogo oculta "Sesión pública" y "Sala persistente" solo si el relé declara que no las ofrece (relé antiguo = todo visible, sin cambios). 653 tests, analyze limpio.

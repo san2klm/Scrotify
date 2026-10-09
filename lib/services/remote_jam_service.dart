@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
+import '../models/jam_capabilities.dart';
 import '../models/jam_models.dart';
 import 'jam_clock.dart';
 
@@ -580,7 +581,7 @@ class RemoteJamService {
 
   /// Funciones que el admin del relay permite (`GET /api/capabilities`).
   /// `null` si el servidor es antiguo o no responde (usar valores por defecto).
-  static Future<({bool reactions, bool chat})?> fetchCapabilities(
+  static Future<JamCapabilities?> fetchCapabilities(
       String endpoint) async {
     final parsed = JamServerEndpoint.parse(endpoint);
     if (!parsed.isValid) return null;
@@ -590,10 +591,8 @@ class RemoteJamService {
           .getUrl(parsed.httpBase.replace(path: '/api/capabilities'));
       final res = await req.close().timeout(const Duration(seconds: 3));
       if (res.statusCode != 200) return null;
-      final data = jsonDecode(await res.transform(utf8.decoder).join());
-      final f = data is Map ? data['features'] : null;
-      if (f is! Map) return null;
-      return (reactions: f['reactions'] != false, chat: f['chat'] == true);
+      return JamCapabilities.tryParse(
+          jsonDecode(await res.transform(utf8.decoder).join()));
     } catch (_) {
       return null;
     } finally {

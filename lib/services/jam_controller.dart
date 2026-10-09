@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 
+import '../models/jam_capabilities.dart';
 import '../models/jam_models.dart';
 import 'jam_guest_service.dart';
 import 'jam_clock.dart';
@@ -63,8 +64,8 @@ class JamController extends ChangeNotifier {
   // Reacciones y chat (efímeros, solo RAM).
   final JamReactionFeed _reactions = JamReactionFeed();
   final JamChatLog _chat = JamChatLog();
-  bool _cloudReactions = true;
-  bool _cloudChat = false;
+  JamCapabilities _cloudCaps = JamCapabilities.legacy;
+  String? _cloudCapsEndpoint;
   bool _chatEnabledForRoom = true;
   Timer? _reactionSweep;
 
@@ -72,10 +73,10 @@ class JamController extends ChangeNotifier {
   List<JamChatMessage> get chatMessages => _chat.items;
 
   /// Reacciones/chat disponibles: en LAN siempre; en nube según el relay.
-  bool get reactionsAvailable => inJam && (_onLan || _cloudReactions);
+  bool get reactionsAvailable => inJam && (_onLan || _cloudCaps.reactions);
   bool get chatAvailable =>
-      inJam && _chatEnabledForRoom && (_onLan || _cloudChat);
-  bool get chatSupported => inJam && (_onLan || _cloudChat);
+      inJam && _chatEnabledForRoom && (_onLan || _cloudCaps.chat);
+  bool get chatSupported => inJam && (_onLan || _cloudCaps.chat);
   bool get chatRoomEnabled => _chatEnabledForRoom;
   bool get _onLan => isHost ? _hostService.isRunning : _guestService.isConnected;
 
@@ -137,11 +138,25 @@ class JamController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Lo que el relay configurado declara que ofrece. Hasta que responde (o si
+  /// es un relay antiguo) vale [JamCapabilities.legacy].
+  JamCapabilities get cloudCapabilities => _cloudCaps;
+
+  /// Consulta de nuevo las funciones del relay (p. ej. al abrir el diálogo).
+  Future<void> refreshCloudCapabilities() => _loadCloudCapabilities();
+
   Future<void> _loadCloudCapabilities() async {
-    final caps = await RemoteJamService.fetchCapabilities(_remoteService.endpoint);
-    if (caps == null) return; // relay antiguo: valores por defecto
-    _cloudReactions = caps.reactions;
-    _cloudChat = caps.chat;
+    final endpoint = _remoteService.endpoint;
+    final caps = await RemoteJamService.fetchCapabilities(endpoint);
+    if (caps == null) {
+      // Relay antiguo o sin red: se conserva lo ya sabido de ese mismo relay,
+      // pero lo de otro relay no vale.
+      if (_cloudCapsEndpoint == endpoint) return;
+      _cloudCaps = JamCapabilities.legacy;
+    } else {
+      _cloudCaps = caps;
+    }
+    _cloudCapsEndpoint = endpoint;
     notifyListeners();
   }
   late final JamTrackResolver _resolver = JamTrackResolver(
