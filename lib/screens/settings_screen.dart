@@ -980,15 +980,22 @@ class _AlsaOutputPicker extends StatefulWidget {
 class _AlsaOutputPickerState extends State<_AlsaOutputPicker> {
   Future<List<AudioOutputDevice>>? _devices;
 
+  Future<List<AudioOutputDevice>> _load() =>
+      context.read<HifiCoordinator?>()?.directOutputDevices() ??
+      Future.value(const []);
+
   void _reload() {
-    final hifi = context.read<HifiCoordinator?>();
-    setState(() => _devices = hifi?.directOutputDevices() ?? Future.value([]));
+    // Con llaves: una flecha devolvería el Future y setState lo rechaza.
+    setState(() {
+      _devices = _load();
+    });
   }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    if (_devices == null) _reload();
+    // Primera carga: aún no hay nada pintado, no hace falta setState.
+    _devices ??= _load();
   }
 
   @override

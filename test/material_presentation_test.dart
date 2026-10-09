@@ -170,7 +170,8 @@ Future<void> _pump(WidgetTester tester, Widget screen, _Themes themes,
         ChangeNotifierProvider<ThemeController>.value(value: themes),
         ChangeNotifierProvider<NavidromeService>(create: (_) => _Library()),
         ChangeNotifierProvider<PlayerController>(create: (_) => IdlePlayer()),
-        ChangeNotifierProvider<ConnectService>(create: (_) => idleConnectService()),
+        ChangeNotifierProvider<ConnectService>(
+            create: (_) => idleConnectService()),
         ChangeNotifierProvider<JamController>(create: (_) => IdleJam()),
         ChangeNotifierProvider<SettingsController>(
             create: (_) => SettingsController()),
@@ -237,6 +238,37 @@ void main() {
       expect(find.text(entry.value), findsWidgets);
     });
   }
+  testWidgets(
+      'ajustes: activar Bit-perfect no rompe la subpantalla ni al volver',
+      (tester) async {
+    await _pump(tester, const SettingsScreen(), _Themes(themes[0], imported),
+        const Size(1100, 800), 1);
+    await tester.tap(find.text('Audio y calidad').first);
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(find.text('Bit-perfect'), 200,
+        scrollable: find.byType(Scrollable).last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Bit-perfect'));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    if (Platform.isLinux) {
+      // El selector de salida ALSA solo existe en Linux.
+      await tester.scrollUntilVisible(
+          find.byTooltip('Buscar salidas de nuevo'), 200,
+          scrollable: find.byType(Scrollable).last);
+      await tester.ensureVisible(find.byTooltip('Buscar salidas de nuevo'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Buscar salidas de nuevo'));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      expect(find.text('Salida del sistema'), findsOneWidget);
+    }
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    expect(find.text('Reproducción'), findsWidgets);
+  });
+
   group('Android TV con el control remoto', () {
     tearDown(() => TvMode.debugSet(false));
 
