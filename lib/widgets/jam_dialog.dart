@@ -800,7 +800,8 @@ class _JamDialogState extends State<JamDialog>
             icon: const Icon(Icons.swap_horiz_rounded, size: 18),
             label: const Text('Transferir anfitrión'),
           ),
-        if (isHost)
+        // El anfitrión lo registra al reproducir; el invitado, desde que entró.
+        if (isHost || !jam.history.isEmpty)
           TextButton.icon(
             onPressed: () => JamHistoryDialog.show(context, jam),
             icon: const Icon(Icons.history_rounded, size: 18),

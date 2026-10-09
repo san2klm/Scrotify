@@ -117,6 +117,87 @@ class JamHistory {
   }
 }
 
+/// Historial del invitado: el host no lo envía, así que lo construye cada
+/// invitado observando el estado sincronizado de la sala (pista actual,
+/// posición y cola). Solo incluye lo que sonó desde que entró.
+class JamGuestHistoryTracker {
+  JamGuestHistoryTracker(this.history);
+
+  final JamHistory history;
+
+  /// Cuántas pistas de la cola se recuerdan para saber quién las añadió.
+  static const _maxRemembered = 300;
+
+  final Map<String, JamParticipant> _addedByTrack = {};
+  Track? _track;
+  JamParticipant? _addedBy;
+  int _startMs = 0;
+  int _maxMs = 0;
+
+  int get rememberedCount => _addedByTrack.length;
+
+  /// Anota quién añadió cada pista de la cola (el estado remoto no lo trae para
+  /// la pista actual). Conserva las más recientes.
+  void rememberQueue(Iterable<JamQueueItem> queue) {
+    for (final item in queue) {
+      final by = item.addedBy;
+      if (by == null) continue;
+      _addedByTrack.remove(item.track.id); // reinsertar = más reciente
+      _addedByTrack[item.track.id] = by;
+    }
+    while (_addedByTrack.length > _maxRemembered) {
+      _addedByTrack.remove(_addedByTrack.keys.first);
+    }
+  }
+
+  /// Observa el estado actual de la sala.
+  void observe({
+    required Track? track,
+    JamParticipant? addedBy,
+    required int positionMs,
+  }) {
+    if (track?.id != _track?.id) {
+      _close();
+      if (track != null) {
+        _track = track;
+        _addedBy = addedBy ?? _addedByTrack[track.id];
+        _startMs = positionMs;
+        _maxMs = positionMs;
+      }
+      return;
+    }
+    if (track == null) return;
+    if (positionMs > _maxMs) _maxMs = positionMs;
+    _addedBy ??= addedBy ?? _addedByTrack[track.id];
+  }
+
+  /// Cierra la pista en curso (al salir de la sala o terminar la sesión).
+  void finalize() => _close();
+
+  /// Olvida lo observado (nueva sala); no toca el historial ya guardado.
+  void reset() {
+    _track = null;
+    _addedBy = null;
+    _startMs = 0;
+    _maxMs = 0;
+    _addedByTrack.clear();
+  }
+
+  void _close() {
+    final track = _track;
+    if (track == null) return;
+    _track = null;
+    final heard = _maxMs > _startMs ? _maxMs - _startMs : 0;
+    history.record(
+      track,
+      _addedBy,
+      listened: Duration(milliseconds: heard),
+      total: parseTrackDuration(track.duration),
+    );
+    _addedBy = null;
+  }
+}
+
 /// `Track.duration` llega como segundos ("215") o como "m:ss".
 Duration? parseTrackDuration(String raw) {
   final text = raw.trim();

@@ -205,8 +205,12 @@ class JamController extends ChangeNotifier {
   String? _hintPreloadedTrackId;
   bool get hasRoomPassword => _hasRoomPassword;
 
-  // Historial (solo en RAM del host).
+  // Historial (en RAM): el host lo registra al reproducir; el invitado lo
+  // reconstruye observando el estado de la sala (solo desde que entró).
   final JamHistory _history = JamHistory();
+  late final JamGuestHistoryTracker _guestHistory =
+      JamGuestHistoryTracker(_history);
+  String? _historyOwnerName;
   Track? _histTrack;
   JamParticipant? _histAddedBy;
   Duration _histMaxPos = Duration.zero;
@@ -305,17 +309,40 @@ class JamController extends ChangeNotifier {
   JamHistory get history => _history;
   JamHistorySummary get historySummary => _history.summary();
 
+  /// Nombre con el que este dispositivo entró en la última Jam como invitado,
+  /// para ofrecer «guardar mis aportaciones». `null` si fue anfitrión.
+  String? get historyOwnerName => _historyOwnerName;
+
+  /// Aportaciones del invitado local en el historial (por nombre: en la nube el
+  /// id que ve el invitado no es estable).
+  List<JamHistoryEntry> get myContributions {
+    final me = _historyOwnerName;
+    if (me == null) return const [];
+    return [
+      for (final e in _history.entries)
+        if (e.addedBy?.name == me) e
+    ];
+  }
+
+  /// Crea en Navidrome una playlist con lo que añadió este invitado.
+  Future<int> saveMyContributionsAsPlaylist() =>
+      _savePlaylist(myContributions, 'Mis aportaciones a la Jam');
+
   /// Crea en Navidrome una playlist "Jam {fecha}" con el historial (opcionalmente
   /// solo las pistas de [participantId]). Devuelve cuántas pistas guardó.
-  Future<int> saveHistoryAsPlaylist({String? participantId}) async {
+  Future<int> saveHistoryAsPlaylist({String? participantId}) {
     final entries = participantId == null
         ? _history.entries
         : _history.byParticipant(participantId);
+    return _savePlaylist(entries, 'Jam');
+  }
+
+  Future<int> _savePlaylist(List<JamHistoryEntry> entries, String prefix) async {
     if (entries.isEmpty) return 0;
     final now = DateTime.now();
     final date =
         '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
-    final playlist = await _navidrome.createPlaylist('Jam $date');
+    final playlist = await _navidrome.createPlaylist('$prefix $date');
     if (playlist == null) throw Exception('No se pudo crear la playlist.');
     await _navidrome.updatePlaylist(
       playlistId: playlist.id,
@@ -760,6 +787,25 @@ class JamController extends ChangeNotifier {
   // ---------------------------------------------------------------------------
   // Inicialización de Callbacks del Guest
   // ---------------------------------------------------------------------------
+  /// Alimenta el historial del invitado con el estado que acaba de llegar.
+  void _observeGuestHistory() {
+    final session = _session;
+    if (_role != JamRole.guest || session == null) return;
+    _guestHistory.rememberQueue(session.queue);
+    _guestHistory.observe(
+      track: session.currentTrack,
+      addedBy: session.currentTrackAddedBy,
+      positionMs: session.positionMs,
+    );
+  }
+
+  /// Empieza un historial nuevo al entrar en una sala como invitado.
+  void _startGuestHistory(String name) {
+    _history.clear();
+    _guestHistory.reset();
+    _historyOwnerName = name;
+  }
+
   void _initGuestCallbacks() {
     _guestService.onConnectionStateChanged = (_) => notifyListeners();
 
@@ -771,6 +817,7 @@ class JamController extends ChangeNotifier {
     _guestService.onStateSync = (state) {
       _session = state;
       _currentTrackAddedBy = state.currentTrackAddedBy;
+      _observeGuestHistory();
       _scheduleQueueResolve();
       _syncGuestAudioIfApplicable(
         track: state.currentTrack,
@@ -800,6 +847,7 @@ class JamController extends ChangeNotifier {
         );
       }
       _currentTrackAddedBy = addedBy;
+      _observeGuestHistory();
       _syncGuestAudioIfApplicable(
         track: track,
         isPlaying: isPlaying,
@@ -819,6 +867,7 @@ class JamController extends ChangeNotifier {
     _guestService.onQueueUpdated = (queue) {
       if (_session != null) {
         _session = _session!.copyWith(queue: queue);
+        _guestHistory.rememberQueue(queue);
         _scheduleQueueResolve();
         debugPrint(
           '[JAM] JamController.onQueueUpdated: id=${identityHashCode(this)} '
@@ -1115,6 +1164,7 @@ class JamController extends ChangeNotifier {
       );
     }
 
+    _observeGuestHistory();
     _scheduleQueueResolve();
     final refTs = (state['refTs'] as num?)?.toInt();
     final useRef = refTs != null && _remoteService.clock.isReady;
@@ -1168,6 +1218,8 @@ class JamController extends ChangeNotifier {
     _pinnedIds.clear();
     _myVotes.clear();
     _history.clear();
+    _guestHistory.reset();
+    _historyOwnerName = null;
     _lastVotesByTrack.clear();
     _histTrack = null;
 
@@ -1668,6 +1720,7 @@ class JamController extends ChangeNotifier {
         ? customName!.trim()
         : _navidrome.username ?? _getDefaultDeviceName();
     final color = customColor ?? 0xFF10B981; // Neon Emerald
+    _startGuestHistory(name);
     if (!JamTlsIdentity.isValidFingerprint(tlsFingerprint)) {
       lastJoinError =
           'Esta Jam LAN no ofrece una identidad TLS verificable. Actualizá al anfitrión o usá una Jam remota WSS.';
@@ -1969,6 +2022,7 @@ class JamController extends ChangeNotifier {
         ? customName!.trim()
         : _navidrome.username ?? _getDefaultDeviceName();
     final color = customColor ?? 0xFF10B981; // Neon Emerald
+    _startGuestHistory(name);
 
     _role = JamRole.guest;
     _localParticipant = JamParticipant(
@@ -2332,6 +2386,7 @@ class JamController extends ChangeNotifier {
     _hostPublishTimer = null;
 
     _player.removeListener(_onPlayerChangedAsHost);
+    if (_role == JamRole.guest) _guestHistory.finalize();
     if (_role == JamRole.host) {
       _trackHistory(finalize: true);
       final ending = _session;

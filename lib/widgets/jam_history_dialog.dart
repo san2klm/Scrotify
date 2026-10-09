@@ -3,8 +3,9 @@ import 'package:flutter/material.dart';
 import '../services/jam_controller.dart';
 import '../utils/app_colors.dart';
 
-/// Historial de la Jam (solo host): lista, resumen, filtro por participante y
-/// "Guardar como playlist".
+/// Historial de la Jam: lista, resumen, filtro por participante y "Guardar como
+/// playlist". El invitado ve lo que sonó desde que entró y puede guardar solo
+/// lo que añadió él.
 class JamHistoryDialog extends StatefulWidget {
   final JamController jam;
 
@@ -25,15 +26,17 @@ class _JamHistoryDialogState extends State<JamHistoryDialog> {
   bool _saving = false;
   String? _message;
 
-  Future<void> _save() async {
+  Future<void> _save({bool mine = false}) async {
     setState(() {
       _saving = true;
       _message = null;
     });
     try {
-      final n = await widget.jam.saveHistoryAsPlaylist(
-        participantId: _participantId,
-      );
+      final n = mine
+          ? await widget.jam.saveMyContributionsAsPlaylist()
+          : await widget.jam.saveHistoryAsPlaylist(
+              participantId: _participantId,
+            );
       if (!mounted) return;
       setState(() => _message = n == 0
           ? 'No hay pistas que guardar.'
@@ -128,6 +131,13 @@ class _JamHistoryDialogState extends State<JamHistoryDialog> {
           onPressed: () => Navigator.of(context).pop(),
           child: const Text('Cerrar'),
         ),
+        if (widget.jam.historyOwnerName != null)
+          TextButton(
+            onPressed: _saving || widget.jam.myContributions.isEmpty
+                ? null
+                : () => _save(mine: true),
+            child: const Text('Guardar mis aportaciones'),
+          ),
         FilledButton.icon(
           onPressed: _saving || entries.isEmpty ? null : _save,
           icon: const Icon(Icons.playlist_add_rounded, size: 18),

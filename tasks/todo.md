@@ -333,3 +333,4 @@ El mismo APK sirve para teléfono y tele. En una tele se activa un modo con la i
 - [x] **M1** Selector de salida ALSA `hw:` para Bit-perfect en Linux (probado con libmpv; falta probar con un DAC real).
 - [x] **M4** Vincular la sincronización por QR (`scrotify-sync://`), con aviso de secreto y biometría; falta probar la cámara en un teléfono real.
 - [x] **M6** Android TV: foco inicial en el contenido, reproductor completo con el mando (saltos de 10 s) y Ajustes recorrible con flechas; falta probar en tele/emulador.
+- [x] **M8** El invitado de una Jam tiene su propio historial (lo que sonó desde que entró) y puede guardar sus aportaciones como playlist; sin cambios de protocolo.
