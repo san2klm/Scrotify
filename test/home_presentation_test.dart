@@ -12,6 +12,8 @@ import 'package:navidrome_client/services/jam_controller.dart';
 import 'package:navidrome_client/services/navidrome_service.dart';
 import 'package:navidrome_client/services/player_controller.dart';
 import 'package:navidrome_client/services/theme_controller.dart';
+import 'package:navidrome_client/utils/tv_mode.dart';
+import 'package:navidrome_client/widgets/global_top_bar.dart';
 
 import 'support/app_fakes.dart';
 
@@ -135,4 +137,39 @@ void main() {
       }
     }
   }
+
+  testWidgets('En una tele el foco inicial cae en el contenido, no en la barra',
+      (tester) async {
+    TvMode.debugSet(true);
+    addTearDown(() => TvMode.debugSet(false));
+    tester.view.physicalSize = const Size(1920, 1080);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final tema = temas.first;
+    await tester.pumpWidget(MultiProvider(
+      providers: [
+        ChangeNotifierProvider<NavidromeService>(create: (_) => _Biblioteca()),
+        ChangeNotifierProvider<PlayerController>(
+            create: (_) => _Reproductor()),
+        ChangeNotifierProvider<ThemeController>(create: (_) => _Tema(tema)),
+        ChangeNotifierProvider<ConnectService>(
+            create: (_) => idleConnectService()),
+        ChangeNotifierProvider<JamController>(create: (_) => IdleJam()),
+      ],
+      child: MaterialApp(theme: tema.toThemeData(), home: const HomeScreen()),
+    ));
+    await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    final focused = FocusManager.instance.primaryFocus;
+    expect(focused, isNotNull);
+    expect(focused, isNot(isA<FocusScopeNode>()),
+        reason: 'debe haber un elemento concreto enfocado, no solo el ámbito');
+    expect(focused!.context!.findAncestorWidgetOfExactType<GlobalTopBar>(),
+        isNull,
+        reason: 'el foco no debe quedarse en la barra superior');
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pumpAndSettle();
+  });
 }

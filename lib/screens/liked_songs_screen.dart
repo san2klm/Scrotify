@@ -12,6 +12,7 @@ import '../widgets/track_context_menu.dart';
 import '../widgets/local_download_button.dart';
 import '../utils/app_colors.dart';
 import '../widgets/material_surface.dart';
+import '../widgets/tv_initial_focus.dart';
 
 /// Pantalla que muestra las canciones marcadas como favoritas (me gusta).
 class LikedSongsScreen extends StatefulWidget {
@@ -86,7 +87,7 @@ class _LikedSongsScreenState extends State<LikedSongsScreen> {
         children: [
           const GlobalTopBar(title: 'Liked Songs'),
           Expanded(
-            child: FutureBuilder<List<Track>>(
+            child: TvInitialFocus(child: FutureBuilder<List<Track>>(
               future: _future,
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
@@ -295,7 +296,7 @@ class _LikedSongsScreenState extends State<LikedSongsScreen> {
                   ],
                 );
               },
-            ),
+            )),
           ),
         ],
       ),

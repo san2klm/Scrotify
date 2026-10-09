@@ -21,6 +21,7 @@ import '../widgets/player_position_builder.dart';
 import '../widgets/rating_stars.dart';
 import '../utils/app_colors.dart';
 import '../utils/playback_time.dart';
+import '../utils/tv_mode.dart';
 
 /// Pantalla completa del reproductor. Es una vista del estado global de
 /// reproducción ([PlayerController]); al cerrar esta pantalla la música sigue
@@ -579,6 +580,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
                           playing: playerModel.playing,
                           position: effectivePosition,
                           duration: duration,
+                          // Con el mando cada pulsación salta más.
+                          seekStep:
+                              Duration(seconds: TvMode.isTv ? 10 : 5),
                           onSeek: (target) =>
                               _seek(jam, player, target, canControl),
                         ),
@@ -672,6 +676,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
           onPressed: _playbackHandler(jam, player, 'skip_previous', canControl),
         ),
         IconButton(
+          // En una tele el foco empieza en pausa/reproducir.
+          autofocus: TvMode.isTv,
           iconSize: 60,
           icon: Icon(
             playing ? Icons.pause_circle_filled : Icons.play_circle_filled,

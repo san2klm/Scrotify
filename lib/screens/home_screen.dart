@@ -23,6 +23,7 @@ import '../utils/responsive.dart';
 import '../widgets/now_playing_panel.dart';
 import '../widgets/interactive_artist_text.dart';
 import '../widgets/genre_selector.dart';
+import '../widgets/tv_initial_focus.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -270,7 +271,9 @@ class _HomeScreenState extends State<HomeScreen> {
                 (_libraryCollapsed || narrow)
                     ? _buildCollapsedLibraryPanel(openAsDrawer: narrow)
                     : _buildLibraryPanel(width: libraryWidth),
-                Expanded(child: ConstrainedContent(child: _buildMainPanel())),
+                Expanded(
+                    child: TvInitialFocus(
+                        child: ConstrainedContent(child: _buildMainPanel()))),
                 if (showSidePanel) const NowPlayingSidePanel(),
               ],
             ),

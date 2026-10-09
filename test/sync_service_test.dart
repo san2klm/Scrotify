@@ -89,6 +89,22 @@ class Device {
   }
 }
 
+/// `link`/`enableForAccount` lanzan una sincronización en segundo plano; un
+/// `syncNow()` mientras otra está en curso no hace nada. Para que las pruebas
+/// no dependan de la velocidad de la máquina se espera a que termine la
+/// pendiente, se hace una completa y se vuelve a esperar.
+Future<void> fullSync(SyncService service) async {
+  Future<void> idle() async {
+    while (service.syncing) {
+      await Future<void>.delayed(const Duration(milliseconds: 5));
+    }
+  }
+
+  await idle();
+  await service.syncNow();
+  await idle();
+}
+
 void main() {
   late Directory tmp;
   late FakeVault vault;
@@ -111,8 +127,8 @@ void main() {
         url: 'https://MUSICA.test', username: 'ana', password: 'clave');
     expect(a.service.enabled, isTrue);
     expect(a.service.keyText, b.service.keyText);
-    await a.service.syncNow();
-    await b.service.syncNow();
+    await fullSync(a.service);
+    await fullSync(b.service);
     expect(b.file('settings.json').readAsStringSync(), '{"x":1}');
   });
 
@@ -140,7 +156,7 @@ void main() {
     while (d.service.syncing) {
       await Future<void>.delayed(const Duration(milliseconds: 5));
     }
-    await d.service.syncNow();
+    await fullSync(d.service);
   }
 
   test('rechaza una clave inválida', () async {
@@ -184,8 +200,8 @@ void main() {
 
     a.write('pinned_playlists_srv_x.json', '["p1","p2"]',
         modified: DateTime.now().add(const Duration(minutes: 1)));
-    await a.service.syncNow();
-    await b.service.syncNow();
+    await fullSync(a.service);
+    await fullSync(b.service);
     expect(b.file('pinned_playlists_srv_x.json').readAsStringSync(),
         '["p1","p2"]');
   });
@@ -202,9 +218,9 @@ void main() {
         modified: now.add(const Duration(minutes: 1)));
     b.write('followed_artists_srv_x.json', '["de-b"]',
         modified: now.add(const Duration(minutes: 2)));
-    await a.service.syncNow();
-    await b.service.syncNow(); // b es más reciente y gana
-    await a.service.syncNow();
+    await fullSync(a.service);
+    await fullSync(b.service); // b es más reciente y gana
+    await fullSync(a.service);
     expect(
         a.file('followed_artists_srv_x.json').readAsStringSync(), '["de-b"]');
   });

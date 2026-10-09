@@ -20,6 +20,7 @@ import 'stats_screen.dart';
 import '../utils/app_colors.dart';
 import '../utils/responsive.dart';
 import '../widgets/material_surface.dart';
+import '../widgets/tv_initial_focus.dart';
 
 /// Pantalla de ajustes. Centraliza las preferencias del usuario: calidad de
 /// audio según la red, portadas, volumen y cuenta.
@@ -45,7 +46,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ),
       body: ConstrainedContent(
         maxWidth: 1000,
-        child: ListView(
+        child: TvInitialFocus(child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
             _menuGroup([
@@ -109,7 +110,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
             const SizedBox(height: 24),
           ],
-        ),
+        )),
       ),
     );
   }
@@ -944,10 +945,10 @@ class _SettingsSubpage extends StatelessWidget {
       body: Consumer<SettingsController>(
         builder: (context, settings, _) => ConstrainedContent(
           maxWidth: 1000,
-          child: ListView(
+          child: TvInitialFocus(child: ListView(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
             children: children(settings),
-          ),
+          )),
         ),
       ),
     );

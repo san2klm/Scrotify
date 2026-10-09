@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:navidrome_client/utils/tv_mode.dart';
 import 'package:provider/provider.dart';
 import 'package:navidrome_client/models/jam_models.dart';
 import 'package:navidrome_client/screens/player_screen.dart';
@@ -448,6 +450,65 @@ void main() {
 
     expect(player.commands, contains('skipNext'));
     expect(jam.actions, isEmpty);
+  });
+
+  testWidgets('PlayerScreen en una tele enfoca pausa/reproducir y salta de 10 s',
+      (tester) async {
+    TvMode.debugSet(true);
+    addTearDown(() => TvMode.debugSet(false));
+    tester.view.physicalSize = const Size(1920, 1080);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final player =
+        TestPlayerController(currentTrack: localTrack, playing: false);
+    final jam = TestJamController(role: JamRole.none, session: null);
+    await tester.pumpWidget(createTestTree(
+      player: player,
+      jam: jam,
+      child: const PlayerScreen(),
+    ));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+
+    final focus = FocusManager.instance.primaryFocus!.context!;
+    expect(
+        find.descendant(
+            of: find.byElementPredicate((e) => e == focus),
+            matching: find.byIcon(Icons.play_circle_filled)),
+        findsOneWidget);
+    expect(
+        tester.widget<WaveformProgressBar>(find.byType(WaveformProgressBar))
+            .seekStep,
+        const Duration(seconds: 10));
+
+    // OK con el mando pulsa el botón enfocado.
+    await tester.sendKeyEvent(LogicalKeyboardKey.select);
+    await tester.pump();
+    expect(player.commands, contains('togglePlay'));
+  });
+
+  testWidgets('PlayerScreen fuera de una tele conserva saltos de 5 s',
+      (tester) async {
+    tester.view.physicalSize = const Size(800, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final player =
+        TestPlayerController(currentTrack: localTrack, playing: false);
+    final jam = TestJamController(role: JamRole.none, session: null);
+    await tester.pumpWidget(createTestTree(
+      player: player,
+      jam: jam,
+      child: const PlayerScreen(),
+    ));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(
+        tester.widget<WaveformProgressBar>(find.byType(WaveformProgressBar))
+            .seekStep,
+        const Duration(seconds: 5));
   });
 
   testWidgets('JamQueuePanel renders canonical Jam queue items',

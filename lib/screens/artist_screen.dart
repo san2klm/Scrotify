@@ -16,6 +16,7 @@ import 'album_detail_screen.dart';
 import '../widgets/interactive_artist_text.dart';
 import '../utils/app_colors.dart';
 import '../widgets/material_surface.dart';
+import '../widgets/tv_initial_focus.dart';
 
 /// Pantalla de un artista estilo Spotify:
 /// - Header con portada, nombre, botón play
@@ -109,12 +110,12 @@ class _ArtistScreenState extends State<ArtistScreen> {
         children: [
           const GlobalTopBar(title: 'Artista', showBackButton: true),
           Expanded(
-            child: CustomScrollView(
+            child: TvInitialFocus(child: CustomScrollView(
               slivers: [
                 _buildSliverAppBar(),
                 SliverToBoxAdapter(child: _buildContent()),
               ],
-            ),
+            )),
           ),
         ],
       ),

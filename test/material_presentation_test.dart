@@ -24,6 +24,7 @@ import 'package:navidrome_client/services/player_controller.dart';
 import 'package:navidrome_client/services/settings_controller.dart';
 import 'package:navidrome_client/services/sync/sync_service.dart';
 import 'package:navidrome_client/services/theme_controller.dart';
+import 'package:navidrome_client/utils/tv_mode.dart';
 import 'package:navidrome_client/widgets/theme_grid.dart';
 
 import 'support/app_fakes.dart';
@@ -236,6 +237,107 @@ void main() {
       expect(find.text(entry.value), findsWidgets);
     });
   }
+  group('Android TV con el control remoto', () {
+    tearDown(() => TvMode.debugSet(false));
+
+    bool focusedHasText(String text) {
+      final context = FocusManager.instance.primaryFocus?.context;
+      if (context == null) return false;
+      var found = false;
+      void visit(Element element) {
+        final widget = element.widget;
+        if (widget is Text && widget.data == text) found = true;
+        if (!found) element.visitChildren(visit);
+      }
+
+      (context as Element).visitChildren(visit);
+      return found;
+    }
+
+    testWidgets('Ajustes empieza en la primera categoría, no en la barra',
+        (tester) async {
+      TvMode.debugSet(true);
+      await _pump(tester, const SettingsScreen(), _Themes(themes[0], imported),
+          const Size(1920, 1080), 1);
+      await tester.pump(const Duration(milliseconds: 250));
+      expect(focusedHasText('Audio y calidad'), isTrue);
+    });
+
+    testWidgets('con las flechas se recorren todas las categorías y se vuelve',
+        (tester) async {
+      TvMode.debugSet(true);
+      await _pump(tester, const SettingsScreen(), _Themes(themes[0], imported),
+          const Size(1920, 1080), 1);
+      await tester.pump(const Duration(milliseconds: 250));
+
+      final visited = <String>[];
+      for (final title in [
+        'Audio y calidad',
+        'Reproducción',
+        'Ecualizador',
+        'Apariencia y temas',
+        'Biblioteca y descargas',
+        'Servidor Jam',
+        'Estadísticas de escucha',
+      ]) {
+        expect(focusedHasText(title), isTrue, reason: 'debía estar en $title');
+        visited.add(title);
+        await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+        await tester.pump(const Duration(milliseconds: 50));
+      }
+      expect(visited, hasLength(7));
+      expect(tester.takeException(), isNull);
+
+      // Y hacia arriba se llega otra vez a la primera sin quedar atrapado.
+      for (var i = 0; i < 8; i++) {
+        await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
+        await tester.pump(const Duration(milliseconds: 50));
+      }
+      expect(focusedHasText('Audio y calidad'), isTrue);
+    });
+
+    testWidgets('OK abre una categoría y Atrás vuelve a la lista',
+        (tester) async {
+      TvMode.debugSet(true);
+      await _pump(tester, const SettingsScreen(), _Themes(themes[0], imported),
+          const Size(1920, 1080), 1);
+      await tester.pump(const Duration(milliseconds: 250));
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown); // Reproducción
+      await tester.pump(const Duration(milliseconds: 50));
+      await tester.sendKeyEvent(LogicalKeyboardKey.select);
+      await tester.pumpAndSettle();
+      expect(find.text('Crossfade'), findsWidgets);
+
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+      expect(find.text('Crossfade'), findsNothing);
+      expect(find.text('Reproducción'), findsOneWidget);
+    });
+
+    testWidgets('dentro de una subpágina las flechas pasan por los ajustes',
+        (tester) async {
+      TvMode.debugSet(true);
+      await _pump(tester, const SettingsScreen(), _Themes(themes[0], imported),
+          const Size(1920, 1080), 1);
+      await tester.pump(const Duration(milliseconds: 250));
+      await tester.sendKeyEvent(LogicalKeyboardKey.select); // Audio y calidad
+      await tester.pumpAndSettle();
+      await tester.pump(const Duration(milliseconds: 250));
+      expect(tester.takeException(), isNull);
+
+      final seen = <FocusNode>{};
+      for (var i = 0; i < 25; i++) {
+        final node = FocusManager.instance.primaryFocus;
+        if (node != null) seen.add(node);
+        await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+        await tester.pump(const Duration(milliseconds: 30));
+      }
+      expect(seen.length, greaterThan(3),
+          reason: 'el foco debe avanzar por varios controles');
+      expect(tester.takeException(), isNull);
+    });
+  });
+
   for (final theme in themes) {
     test('Material respeta los tokens del tema ${theme.id}', () {
       final data = theme.toThemeData();

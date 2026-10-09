@@ -9,6 +9,7 @@ import '../widgets/global_top_bar.dart';
 import '../widgets/local_download_button.dart';
 import '../utils/app_colors.dart';
 import '../widgets/material_surface.dart';
+import '../widgets/tv_initial_focus.dart';
 
 /// Pantalla que muestra las canciones de un álbum.
 /// Se abre al tocar un álbum en el inicio o en un artista.
@@ -45,7 +46,7 @@ class _AlbumDetailScreenState extends State<AlbumDetailScreen> {
         children: [
           const GlobalTopBar(title: 'Álbum'),
           Expanded(
-            child: FutureBuilder<List<Track>>(
+            child: TvInitialFocus(child: FutureBuilder<List<Track>>(
               future: _future,
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
@@ -157,7 +158,7 @@ class _AlbumDetailScreenState extends State<AlbumDetailScreen> {
                   ],
                 );
               },
-            ),
+            )),
           ),
         ],
       ),

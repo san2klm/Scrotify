@@ -12,6 +12,7 @@ import '../widgets/track_context_menu.dart';
 import '../widgets/local_download_button.dart';
 import '../utils/app_colors.dart';
 import '../widgets/material_surface.dart';
+import '../widgets/tv_initial_focus.dart';
 
 /// Pantalla que muestra las canciones de una playlist específica.
 /// Se abre desde la barra lateral (Tu Biblioteca) del escritorio.
@@ -203,7 +204,7 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
         children: [
           const GlobalTopBar(title: 'Playlist', showBackButton: true),
           Expanded(
-            child: FutureBuilder<List<Track>>(
+            child: TvInitialFocus(child: FutureBuilder<List<Track>>(
               future: _future,
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
@@ -436,7 +437,7 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
                   ],
                 );
               },
-            ),
+            )),
           ),
         ],
       ),
