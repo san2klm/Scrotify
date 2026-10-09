@@ -86,6 +86,11 @@ void main() {
   });
   tearDown(() async {
     await manager.flushPersistence();
+    // initialize() lanza un reescaneo en segundo plano que guarda el estado en
+    // la carpeta temporal: hay que esperarlo antes de borrarla.
+    // (En un testWidgets el escaneo vive en el reloj simulado y no avanza desde
+    // aquí: el tope evita colgar ese caso; en los demás termina enseguida.)
+    await music.settled().timeout(const Duration(seconds: 2), onTimeout: () {});
     manager.dispose();
     music.dispose();
     await cache.close();

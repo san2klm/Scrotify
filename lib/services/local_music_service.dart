@@ -80,6 +80,21 @@ class LocalMusicService extends ChangeNotifier {
 
   Future<void> initialize() => _initializing ??= _initialize();
 
+  /// Espera a que termine la inicialización y el reescaneo en segundo plano que
+  /// lanza, sin empezar otro. Útil antes de borrar la carpeta que usa el servicio.
+  @visibleForTesting
+  Future<void> settled() async {
+    try {
+      await _initializing;
+      while (_scanFuture != null) {
+        await _scanFuture;
+      }
+      await _write; // guardados de estado pendientes
+    } catch (_) {
+      // El error ya se informó donde se lanzó el escaneo.
+    }
+  }
+
   Future<void> _initialize() async {
     _state = stateFile ??
         File(p.join(

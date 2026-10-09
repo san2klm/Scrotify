@@ -165,6 +165,11 @@ void main() {
           url: url, username: user, password: 'clave-de-prueba');
   });
   tearDown(() async {
+    // initialize() lanza un reescaneo en segundo plano que guarda el estado en
+    // la carpeta temporal: hay que esperarlo antes de borrarla.
+    // (En un testWidgets el escaneo vive en el reloj simulado y no avanza desde
+    // aquí: el tope evita colgar ese caso; en los demás termina enseguida.)
+    await music.settled().timeout(const Duration(seconds: 2), onTimeout: () {});
     nav.dispose();
     music.dispose();
     await cache.close();
@@ -322,7 +327,8 @@ void main() {
       ChangeNotifierProvider<NavidromeService>.value(value: nav),
       ChangeNotifierProvider<LocalMusicService>.value(value: music),
       ChangeNotifierProvider<PlayerController>(create: (_) => IdlePlayer()),
-      ChangeNotifierProvider<ConnectService>(create: (_) => idleConnectService()),
+      ChangeNotifierProvider<ConnectService>(
+          create: (_) => idleConnectService()),
       ChangeNotifierProvider<JamController>(create: (_) => IdleJam()),
       ChangeNotifierProvider<ThemeController>(create: (_) => ThemeController()),
       ChangeNotifierProvider<ServerProfilesController>(

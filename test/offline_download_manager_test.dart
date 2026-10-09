@@ -29,6 +29,9 @@ class _ControlledFakeTransport implements DownloadTransport {
   final Map<String, Exception> errorsToThrow = {};
   final Map<String, List<int>> payloads = {};
 
+  /// Transferencias en curso ahora mismo.
+  int inFlight = 0;
+
   void setPayload(String trackId, List<int> bytes) {
     payloads[trackId] = bytes;
   }
@@ -57,6 +60,20 @@ class _ControlledFakeTransport implements DownloadTransport {
     void Function(int receivedBytes, int? totalBytes)? onProgress,
     bool Function()? isCancelled,
   }) async {
+    inFlight++;
+    try {
+      await _download(trackId, destinationFile, onProgress, isCancelled);
+    } finally {
+      inFlight--;
+    }
+  }
+
+  Future<void> _download(
+    String trackId,
+    File destinationFile,
+    void Function(int receivedBytes, int? totalBytes)? onProgress,
+    bool Function()? isCancelled,
+  ) async {
     callCounts[trackId] = (callCounts[trackId] ?? 0) + 1;
 
     // Check for configured error
@@ -170,6 +187,35 @@ void main() {
       }
     }
 
+    /// Espera por condición (no por tiempo): el límite solo evita un cuelgue.
+    Future<void> waitUntil(bool Function() ok, String what) async {
+      final end = DateTime.now().add(const Duration(seconds: 20));
+      while (!ok()) {
+        if (DateTime.now().isAfter(end)) fail('Nunca ocurrió: $what');
+        await Future<void>.delayed(const Duration(milliseconds: 2));
+      }
+    }
+
+    /// La tarea llegó a un estado final.
+    Future<void> waitDone(String scope, String id) => waitUntil(() {
+          final status = manager.getTask(scope, id)?.status;
+          return status == DownloadTaskStatus.completed ||
+              status == DownloadTaskStatus.failed ||
+              status == DownloadTaskStatus.cancelled;
+        }, 'la tarea $id termina');
+
+    /// El transporte ya empezó a descargar [id].
+    Future<void> started(String id) => waitUntil(
+        () => (fakeTransport.callCounts[id] ?? 0) >= 1,
+        'el transporte empieza a descargar $id');
+
+    /// No queda ninguna transferencia en curso y se procesaron sus efectos.
+    Future<void> transportIdle() async {
+      await waitUntil(
+          () => fakeTransport.inFlight == 0, 'el transporte queda libre');
+      await pumpEventQueue();
+    }
+
     test(
         'concurrency ceiling: enforces maxConcurrency and processes next in queue',
         () async {
@@ -275,7 +321,11 @@ void main() {
           anyOf(DownloadTaskStatus.queued, DownloadTaskStatus.downloading));
 
       // Wait for completion
-      await Future<void>.delayed(const Duration(milliseconds: 50));
+      await waitUntil(
+          () =>
+              manager.getTask(serverScope, trackId)?.status ==
+              DownloadTaskStatus.completed,
+          'la descarga se completa');
 
       final completedTask = manager.getTask(serverScope, trackId)!;
       expect(completedTask.status, DownloadTaskStatus.completed);
@@ -317,12 +367,13 @@ void main() {
           isTrue);
       expect(manager.tasks.length, 1);
 
-      await Future<void>.delayed(const Duration(milliseconds: 15));
+      await started(trackId);
+      await pumpEventQueue();
       // Only one transport call should be initiated
       expect(fakeTransport.callCounts[trackId], 1);
 
       gate.complete();
-      await Future<void>.delayed(const Duration(milliseconds: 30));
+      await waitDone(serverScope, trackId);
       expect(manager.getTask(serverScope, trackId)!.status,
           DownloadTaskStatus.completed);
     });
@@ -377,7 +428,7 @@ void main() {
       final track = createTestTrack(id: trackId);
 
       await manager.queueTrack(track, serverScope: serverScope);
-      await Future<void>.delayed(const Duration(milliseconds: 10));
+      await started(trackId);
 
       // Pause while in-flight
       final paused = await manager.pauseTask(serverScope, trackId);
@@ -388,7 +439,7 @@ void main() {
 
       // Release gate and ensure no cache entry was registered
       gate.complete();
-      await Future<void>.delayed(const Duration(milliseconds: 20));
+      await transportIdle();
 
       expect(await cacheService.lookup(serverScope, trackId), isNull);
 
@@ -401,7 +452,7 @@ void main() {
       expect(resumedTask.status,
           anyOf(DownloadTaskStatus.queued, DownloadTaskStatus.downloading));
 
-      await Future<void>.delayed(const Duration(milliseconds: 50));
+      await waitDone(serverScope, trackId);
       expect(manager.getTask(serverScope, trackId)!.status,
           DownloadTaskStatus.completed);
       expect(await cacheService.lookup(serverScope, trackId), isNotNull);
@@ -414,7 +465,7 @@ void main() {
       final track = createTestTrack(id: trackId);
 
       await manager.queueTrack(track, serverScope: serverScope);
-      await Future<void>.delayed(const Duration(milliseconds: 10));
+      await started(trackId);
 
       // Cancel while downloading
       final cancelled = await manager.cancelTask(serverScope, trackId);
@@ -424,7 +475,7 @@ void main() {
       expect(cancelledTask.status, DownloadTaskStatus.cancelled);
 
       gate.complete();
-      await Future<void>.delayed(const Duration(milliseconds: 20));
+      await transportIdle();
 
       // No entry in C1 cache
       expect(await cacheService.lookup(serverScope, trackId), isNull);
@@ -455,7 +506,8 @@ void main() {
       expect(taskA.serverScope, isNot(equals(taskB.serverScope)));
       expect(taskA.compoundKey, isNot(equals(taskB.compoundKey)));
 
-      await Future<void>.delayed(const Duration(milliseconds: 60));
+      await waitDone(serverA, trackId);
+      await waitDone(serverB, trackId);
 
       final lookupA = await cacheService.lookup(serverA, trackId);
       final lookupB = await cacheService.lookup(serverB, trackId);
@@ -525,7 +577,13 @@ void main() {
           await secondManager.resumeTask(serverScope, 'interrupted-track');
       expect(resumed, isTrue);
 
-      await Future<void>.delayed(const Duration(milliseconds: 50));
+      await waitUntil(
+          () =>
+              secondManager
+                  .getTask(serverScope, 'interrupted-track')
+                  ?.status ==
+              DownloadTaskStatus.completed,
+          'la tarea reanudada se completa');
       expect(secondManager.getTask(serverScope, 'interrupted-track')!.status,
           DownloadTaskStatus.completed);
 
@@ -597,7 +655,7 @@ void main() {
         serverScope: serverScope,
         sourceMarker: 'lossless',
       );
-      await Future<void>.delayed(const Duration(milliseconds: 30));
+      await waitDone(serverScope, trackId);
 
       final failedTask = manager.getTask(serverScope, trackId)!;
       expect(failedTask.status, DownloadTaskStatus.failed);
@@ -828,7 +886,7 @@ void main() {
       expect(task.trackId, traversalTrackId);
 
       // Wait for download completion
-      await Future<void>.delayed(const Duration(milliseconds: 50));
+      await waitDone(serverScope, traversalTrackId);
 
       final completedTask = manager.getTask(serverScope, traversalTrackId)!;
       expect(completedTask.status, DownloadTaskStatus.completed);
@@ -848,7 +906,7 @@ void main() {
       final gate = fakeTransport.gate(cancelTraversalId);
 
       await manager.queueTrack(cancelTrack, serverScope: serverScope);
-      await Future<void>.delayed(const Duration(milliseconds: 15));
+      await started(cancelTraversalId);
 
       final cancelTemp =
           await manager.getTempFile(serverScope, cancelTraversalId);
@@ -858,7 +916,7 @@ void main() {
           await manager.cancelTask(serverScope, cancelTraversalId);
       expect(cancelled, isTrue);
       gate.complete();
-      await Future<void>.delayed(const Duration(milliseconds: 25));
+      await transportIdle();
 
       expect(cancelTemp.existsSync(), isFalse);
       expect(await cacheService.lookup(serverScope, cancelTraversalId), isNull);
