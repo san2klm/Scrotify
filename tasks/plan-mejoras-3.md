@@ -53,7 +53,7 @@ comprobar la app armada y de saber qué build hay instalado.
 
 ## Fase 3 — Robustez
 
-### [~] 10. Los `catch (_) {}` dejan rastro
+### [x] 10. Los `catch (_) {}` dejan rastro
 - 91 en `lib/`. Revisarlos por archivo: los que ocultan fallos de red, disco o Jam pasan a registrar en `DiagnosticsLog`; los de limpieza se quedan con un comentario de por qué.
 
 ### [x] 11. La unión a una Jam espera el primer estado (S)
@@ -93,5 +93,14 @@ comprobar la app armada y de saber qué build hay instalado.
 - **4** · `AppErrorBox` (`lib/widgets/app_error_box.dart`) instalado como `ErrorWidget.builder` en `main`: un fallo al construir un widget deja un recuadro en su hueco y el resto de la pantalla sigue visible; el texto técnico solo se ve en debug. No lleva botón de copiar: remite a Ajustes → Diagnóstico, donde ya queda el error.
 - **10** (parcial) · revisados los 56 `catch (_) {}` de fuera de Jam. Siete ocultaban pérdida de datos o un fallo de seguridad y ahora escriben en el registro: guardar el historial reciente y lo más escuchado, restaurar la copia previa de una descarga, borrar un audio de la caché, permisos `600` y respaldo de `SecureStorage`, y borrar el estado de sincronización. El resto es limpieza de temporales, emparejamiento por LAN o lecturas defensivas y se deja igual. Quedan sin revisar los 35 de los servicios de Jam (los tiene la otra sesión mientras hace los ítems 11 y 12).
 - **11** (sesión `Scrotify`, `03ea984`, `e9b474c`) · la unión del invitado solo se completa al llegar el primer estado de la sala (tope de 5 s; si no llega, falla limpio y no deja sala a medias). Después, `web_socket_channel` 3.0.3 sin más diferencias. La ruta por el servidor central no tenía el problema. Sin probar contra el servidor Jam real ni en Android.
-- **12** (sesión `Scrotify`, `2bf7734`) · `jam_host_service.dart` 1279 → 1115; el descubrimiento LAN pasa a `jam_host_discovery.dart`. Ya no queda ningún archivo de `lib/` por encima de 1200 líneas.
+- **12** (sesión `Scrotify`, `2bf7734`) · `jam_host_service.dart` 1279 → 1115; el descubrimiento LAN pasa a `jam_host_discovery.dart`. Corrección: sí queda uno por encima de 1200, `offline_download_manager.dart` (1228), que se me había pasado en el recuento de la tanda 2.
 - **6** · `integration_test/app_smoke_test.dart` + `tool/run_linux_smoke.sh`: ejecuta `main()` completo en Linux hasta el inicio de sesión, con las credenciales en memoria y los datos de la app en una carpeta temporal; no toca la red. Comprobado por mutación (un fallo al construir el login lo hace fallar en 12 s). Hallazgo al escribirlo: `main` reemplaza los manejadores de errores, así que un test que arranca la app debe devolvérselos al banco de pruebas o se queda colgado. Job `linux-smoke` añadido al CI con `xvfb`; la lista de paquetes del job es una estimación sin ejecutar.
+- **10** (resto, sesión `Scrotify`, `5cde3ab`) · 10 de los 36 de Jam ahora dejan rastro (mensajes del protocolo ilegibles, estado no enviado a un invitado, acción no enviada al servidor central, fallo al listar interfaces de red). Los 26 restantes son latidos, datagramas de descubrimiento y cierres de socket: registrarlos llenaría el diagnóstico de ruido. Total en `lib/`: de 91 a 74.
+- **9** (resto) · APK de tele compilados: arm64 31 MB y armv7 27 MB; `install_android.sh --check` elige el de armv7 para el Chromecast HD. No se instalaron en la tele.
+
+## Cierre de la tanda (2026-10-09)
+- Verificado tras el último commit: `flutter analyze` 0 issues, `flutter test` 886 en verde (3 omitidos), jam-server 54/54, prueba de arranque en Linux en verde.
+- En espera por indicación del usuario: 7 (keystore) y 8 (`applicationId`).
+- Necesitan decisión: 1 (push), 19 (credenciales por defecto en el login), 17 (tareas del Brain).
+- Necesitan dispositivo: 13 (`just_audio` 0.10), 14 (`mobile_scanner` 7), 15 (lag en la tele). También sin probar en real: la unión a una Jam tras el ítem 11.
+- Menores abiertos: 16 (test del login de escritorio), 18 (localización), partir `offline_download_manager.dart`.

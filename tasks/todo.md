@@ -343,3 +343,6 @@ El mismo APK sirve para teléfono y tele. En una tele se activa un modo con la i
 - [x] 1 CI (GitHub Actions) · 4 aviso de firma debug · 17 ignorar APK · 20 versionar build de Android (2026-10-09).
 - [x] 2 tests intermitentes · 3 lints · 6 aviso http · 8 diagnóstico · 9 cobertura · 12 timers · 16 archivos grandes · 15 parcial (rxdart). Suite: 852 verdes (2026-10-09).
 - [x] Fix: activar Bit-perfect en Linux rompía Ajustes (`setState` del selector ALSA devolvía un Future). Test de regresión en `material_presentation_test.dart` (2026-10-09).
+
+## Mejoras, tanda 3 (plan en `tasks/plan-mejoras-3.md`)
+- [x] 2 instalación segura · 3 build identificable · 4 recuadro de error · 5 humo de Ajustes · 6 arranque real · 9 APK por ABI · 10 catches · 11 unión a Jam + web_socket_channel 3 · 12 jam_host_service. Suite: 886 verdes (2026-10-09).
