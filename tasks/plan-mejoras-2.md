@@ -56,10 +56,12 @@ en verde, un commit por ítem y una línea en `tasks/todo.md`.
 - `replay_gain.dart`, `playlist_export_service.dart`, `connect/relay_transport.dart`, `connect/connect_mirror.dart`, `connect/player_connect_port.dart`.
 
 ### [ ] 10. Tests de widget de login, Inicio y reproductor
+- Revisado: ya hay tests que montan `MobileLoginScreen`, `HomeScreen`/`MobileHomeScreen` y `PlayerScreen`. Falta `DesktopLoginScreen`; prioridad baja.
 
 ## Fase 5 — Rendimiento (medir antes de tocar)
 
 ### [ ] 11. Perfilar la APK de TV y decodificar portadas a tamaño real
+- Revisado: `CoverArt` ya decodifica al tamaño en pantalla (`ResizeImage`). Quedan 8 usos directos de `NetworkImage`/`Image.network` (cabeceras de artista y álbum, avatares). No se toca sin medir en la tele.
 ### [x] 12. Revisar los `Timer.periodic` (23): que se pausen en segundo plano
 
 ## Fase 6 — Dependencias (una por commit)
