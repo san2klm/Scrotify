@@ -29,6 +29,9 @@ import '../utils/app_visibility.dart';
 import '../utils/app_colors.dart';
 import '../widgets/quick_actions_row.dart';
 
+part 'mobile_home_tab.dart';
+part 'mobile_search_library_tabs.dart';
+
 /// Interfaz móvil de Scrotify (estilo Spotify AMOLED).
 /// Diseñada exclusivamente para pantallas táctiles de teléfonos.
 class MobileHomeScreen extends StatefulWidget {
@@ -40,31 +43,64 @@ class MobileHomeScreen extends StatefulWidget {
 
 enum _HomeFilter { todo, musica, podcasts }
 
-class _MobileHomeScreenState extends State<MobileHomeScreen> {
+/// Estado de [MobileHomeScreen]. Vive en una clase base para que las pestañas (en
+/// archivos aparte) puedan ser mixins sobre el mismo estado.
+abstract class _MobileHomeBase extends State<MobileHomeScreen> {
   int _tabIndex = 0; // 0 = Inicio, 1 = Búsqueda, 2 = Biblioteca
+
   _HomeFilter _filter = _HomeFilter.todo;
+
   late Future<List<Track>> _futureTracks;
+
   late Future<List<Playlist>> _futurePlaylists;
+
   late Future<List<Track>> _futureRecentlyAdded;
+
   int _coverArtVersion = -1;
+
   int _playlistVersion = -1;
+
   String? _currentSessionKey;
 
   final TextEditingController _searchController = TextEditingController();
+
   SearchResults? _searchResults;
+
   bool _searching = false;
+
   int _searchVersion = 0;
+
   bool _showExplore = false;
+
   int _explorePageSize = 25;
+
   int _explorePage = 0;
+
   HomeNavigationController? _homeNavigation;
+
   String? _selectedGenre;
+
   late Future<List<String>> _futureGenres;
+
   Timer? _serverPlayCountTimer;
+
   Timer? _hourlyRefreshTimer;
+
   bool _refreshingPlayCounts = false;
+
   final ScrollController _artistsScrollController = ScrollController();
 
+  Future<void> _createPlaylist();
+  Widget _genreSelector();
+  void _openExplore();
+  void _openPlayer(List<Track> tracks, int index);
+  Future<void> _playPlaylist(Playlist playlist);
+  Future<void> _runGenreSearch(String genre);
+  Future<void> _runSearch(String query);
+}
+
+class _MobileHomeScreenState extends _MobileHomeBase
+    with _MobileHomeTab, _MobileSearchLibraryTabs {
   @override
   void initState() {
     super.initState();
@@ -118,10 +154,12 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
     }
   }
 
+  @override
   void _openPlayer(List<Track> tracks, int index) {
     context.read<PlayerController>().playQueue(tracks, startIndex: index);
   }
 
+  @override
   Future<void> _playPlaylist(Playlist playlist) async {
     final tracks =
         await context.read<NavidromeService>().getPlaylistTracks(playlist.id);
@@ -133,6 +171,7 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
         ));
   }
 
+  @override
   Future<void> _createPlaylist() async {
     final playlist = await showCreatePlaylistDialog(context);
     if (playlist == null || !mounted) return;
@@ -151,12 +190,14 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
     });
   }
 
+  @override
   void _openExplore() {
     _searchController.clear();
     _runSearch('');
     setState(() => _showExplore = true);
   }
 
+  @override
   Future<void> _runSearch(String query) async {
     final version = ++_searchVersion;
     _showExplore = false;
@@ -187,6 +228,7 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
     }
   }
 
+  @override
   Future<void> _runGenreSearch(String genre) async {
     final version = ++_searchVersion;
     _showExplore = false;
@@ -480,1039 +522,6 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
             _filterPills(),
           ],
         ],
-      ),
-    );
-  }
-
-  Widget _filterPills() {
-    return SizedBox(
-      height: 48 +
-          (MediaQuery.textScalerOf(context).scale(13) - 13)
-              .clamp(0.0, double.infinity),
-      child: ListView(
-        scrollDirection: Axis.horizontal,
-        children: [
-          _pill('Todo', _HomeFilter.todo),
-          _pill('Música', _HomeFilter.musica),
-          _pill('Podcasts', _HomeFilter.podcasts),
-        ],
-      ),
-    );
-  }
-
-  Widget _pill(String label, _HomeFilter value) {
-    final selected = _filter == value;
-    return Padding(
-      padding: const EdgeInsets.only(right: 8),
-      child: ChoiceChip(
-        label: Text(label),
-        selected: selected,
-        showCheckmark: false,
-        onSelected: (_) => setState(() => _filter = value),
-        selectedColor: context.sidebarActiveBg,
-        backgroundColor: context.bgCard,
-        labelStyle: TextStyle(
-          color: selected ? context.sidebarActiveText : context.textSecondary,
-          fontSize: 13,
-          fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
-        ),
-        side:
-            BorderSide(color: selected ? context.accent : context.borderSubtle),
-        shape: const StadiumBorder(),
-      ),
-    );
-  }
-
-  Widget _genreSelector() {
-    return FutureBuilder<List<String>>(
-      future: _futureGenres,
-      builder: (context, snapshot) {
-        final genres = snapshot.data ?? const <String>[];
-        if (genres.isEmpty) return const SizedBox.shrink();
-        return GenreSelector(
-          genres: genres,
-          selectedGenre: _selectedGenre,
-          onGenreChanged: (genre) {
-            setState(() {
-              _selectedGenre = genre;
-              _explorePage = 0;
-            });
-            if (genre != null) {
-              unawaited(context
-                  .read<NavidromeService>()
-                  .saveLastSelectedGenre(genre));
-              // En una búsqueda activa, el género lanza la búsqueda por género.
-              if (_searchResults != null) unawaited(_runGenreSearch(genre));
-            }
-          },
-        );
-      },
-    );
-  }
-
-  // ===========================================================================
-  // Pestaña Inicio (Mobile)
-  // ===========================================================================
-  double _metadataExtraHeight() {
-    final scaler = MediaQuery.textScalerOf(context);
-    return (scaler.scale(14) - 14).clamp(0.0, double.infinity) * 3;
-  }
-
-  Widget _buildHomeTab() {
-    return FutureBuilder<List<Track>>(
-      future: _futureTracks,
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return Center(
-            child: CircularProgressIndicator(
-              color: context.accent,
-              strokeWidth: 2,
-            ),
-          );
-        }
-        if (snapshot.hasError || !snapshot.hasData) {
-          return Center(
-            child: Text(
-              'Sin contenido disponible',
-              style: TextStyle(color: context.textSecondary),
-            ),
-          );
-        }
-        final tracks = snapshot.data!;
-        // Los géneros solo se muestran al buscar o explorar, no en Inicio.
-        final filteredTracks = tracks;
-        return SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const OfflineConnectionBanner(),
-              QuickActionsRow(tracks: filteredTracks),
-              const SizedBox(height: 16),
-              _quickAccessGrid(),
-              const SizedBox(height: 24),
-              _sectionHeader(
-                'Recientemente añadidos',
-                onReload: () => setState(() {
-                  _futureRecentlyAdded =
-                      context.read<NavidromeService>().getRecentlyAddedTracks();
-                }),
-              ),
-              const SizedBox(height: 12),
-              _recentlyAddedCarousel(),
-              const SizedBox(height: 24),
-              _sectionHeader('Recomendados para ti'),
-              const SizedBox(height: 12),
-              _carousel(filteredTracks),
-              const SizedBox(height: 24),
-              _sectionHeader('Álbumes'),
-              const SizedBox(height: 12),
-              _albumsCarousel(),
-              const SizedBox(height: 24),
-              _sectionHeader('Artistas'),
-              const SizedBox(height: 12),
-              _artistsCarousel(),
-              const SizedBox(height: 24),
-              _sectionHeader('Escuchados recientemente'),
-              const SizedBox(height: 8),
-              _recentsList(),
-              const SizedBox(height: 24),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _quickAccessGrid() {
-    final mostPlayed = context.watch<PlayerController>().mostPlayed;
-    MostPlayedItem? topPlaylist;
-    final topTracks = <MostPlayedItem>[];
-    for (final item in mostPlayed) {
-      if (item.type == MostPlayedItemType.playlist && topPlaylist == null) {
-        topPlaylist = item;
-      } else if (item.type == MostPlayedItemType.track &&
-          topTracks.length < 4) {
-        topTracks.add(item);
-      }
-    }
-    final items = <MostPlayedItem>[
-      if (topPlaylist != null) topPlaylist,
-      ...topTracks,
-    ];
-    return GridView.count(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      crossAxisCount: 2,
-      mainAxisExtent: 64 + _metadataExtraHeight(),
-      crossAxisSpacing: 12,
-      mainAxisSpacing: 8,
-      children: [
-        _quickAccessCard(
-          label: 'Tus Me Gusta',
-          color: context.accent2,
-          icon: Icons.favorite_rounded,
-          onTap: () => Navigator.push(
-            context,
-            MaterialPageRoute(builder: (_) => const LikedSongsScreen()),
-          ),
-        ),
-        for (final item in items)
-          if (item.type == MostPlayedItemType.playlist)
-            _quickAccessCard(
-              label: item.playlist!.name,
-              color: context.accent2,
-              albumArtUrl: item.playlist!.coverArtUrl,
-              icon: Icons.queue_music,
-              onTap: () => _playPlaylist(item.playlist!),
-            )
-          else
-            _quickAccessCard(
-              label: item.track!.title,
-              color: context.bgCard,
-              albumArtUrl: item.track!.albumArtUrl,
-              artist: item.track!.artist,
-              album: item.track!.album,
-              title: item.track!.title,
-              icon: Icons.music_note,
-              onTap: () => context
-                  .read<PlayerController>()
-                  .playQueue([item.track!], startIndex: 0),
-            ),
-      ],
-    );
-  }
-
-  Widget _quickAccessCard({
-    required String label,
-    required Color color,
-    IconData? icon,
-    String? albumArtUrl,
-    String? artist,
-    String? album,
-    String? title,
-    VoidCallback? onTap,
-  }) {
-    return HomeContentCard(
-      onTap: onTap,
-      child: Row(
-        children: [
-          SizedBox(
-            width: 44,
-            height: double.infinity,
-            child: CoverArt(
-              url: albumArtUrl,
-              artist: artist,
-              album: album,
-              title: title,
-              width: 44,
-              borderRadius: 7,
-              fallbackIcon: icon ?? Icons.music_note,
-              fallbackIconSize: 20,
-              fallbackColor: color,
-            ),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.only(right: 12),
-              child: Text(
-                label,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: context.textPrimary,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _sectionHeader(String title, {VoidCallback? onReload}) {
-    if (onReload == null) {
-      return Text(
-        title,
-        style: TextStyle(
-          color: context.textPrimary,
-          fontSize: 18,
-          fontWeight: FontWeight.bold,
-        ),
-      );
-    }
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Expanded(
-          child: Text(
-            title,
-            style: TextStyle(
-              color: context.textPrimary,
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-        ),
-        IconButton(
-          constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
-          icon: const Icon(Icons.refresh_rounded, size: 20),
-          tooltip: 'Recargar $title',
-          onPressed: onReload,
-          color: context.textSecondary,
-        ),
-      ],
-    );
-  }
-
-  Widget _recentlyAddedCarousel() {
-    return FutureBuilder<List<Track>>(
-      future: _futureRecentlyAdded,
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return SizedBox(
-            height: 196 + _metadataExtraHeight(),
-            child: Center(
-              child: CircularProgressIndicator(
-                  strokeWidth: 2, color: context.accent),
-            ),
-          );
-        }
-        final tracks = snapshot.data ?? const <Track>[];
-        if (tracks.isEmpty) {
-          final isOffline = !context.read<NavidromeService>().connected;
-          return Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8),
-            child: Row(
-              children: [
-                Icon(
-                  isOffline
-                      ? Icons.cloud_off_rounded
-                      : Icons.info_outline_rounded,
-                  color: context.textSecondary,
-                  size: 18,
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    isOffline
-                        ? 'Sin conexión para sincronizar novedades del servidor.'
-                        : 'No hay contenido añadido recientemente.',
-                    style:
-                        TextStyle(color: context.textSecondary, fontSize: 13),
-                  ),
-                ),
-              ],
-            ),
-          );
-        }
-        return _carousel(tracks);
-      },
-    );
-  }
-
-  Widget _carousel(List<Track> tracks) {
-    final items = tracks.take(8).toList();
-    return SizedBox(
-      height: 196 + _metadataExtraHeight(),
-      child: ListView.builder(
-        scrollDirection: Axis.horizontal,
-        itemCount: items.length,
-        itemBuilder: (context, index) {
-          final track = items[index];
-          return Padding(
-            padding: const EdgeInsets.only(right: 12),
-            child: HomeContentCard(
-              onTap: () => _openPlayer(tracks, tracks.indexOf(track)),
-              onLongPress: () => TrackContextMenu.show(context, track),
-              child: Container(
-                width: 145,
-                padding: const EdgeInsets.all(8),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      child: Stack(fit: StackFit.expand, children: [
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(6),
-                          child: CoverArt(
-                            url: track.albumArtUrl,
-                            artist: track.artist,
-                            album: track.album,
-                            title: track.title,
-                            borderRadius: 0,
-                            fallbackIcon: Icons.music_note,
-                            fallbackColor: context.bgCard,
-                          ),
-                        ),
-                        Positioned(
-                            right: 0,
-                            bottom: 0,
-                            child: Material(
-                              color: context.bgCard,
-                              borderRadius: BorderRadius.circular(20),
-                              child: LocalDownloadButton(
-                                  tracks: [track], compact: true),
-                            )),
-                      ]),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      track.title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: context.textPrimary,
-                        fontSize: 14,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    Text(
-                      track.artist,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style:
-                          TextStyle(color: context.textSecondary, fontSize: 12),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          );
-        },
-      ),
-    );
-  }
-
-  Widget _albumsCarousel() {
-    final nav = context.read<NavidromeService>();
-    return FutureBuilder<List<Album>>(
-      future: nav.getAlbums(),
-      builder: (context, snapshot) {
-        final albums = snapshot.data ?? [];
-        if (snapshot.connectionState == ConnectionState.waiting &&
-            albums.isEmpty) {
-          return SizedBox(
-            height: 160,
-            child: Center(
-              child: CircularProgressIndicator(
-                  strokeWidth: 2, color: context.accent),
-            ),
-          );
-        }
-        if (albums.isEmpty) {
-          return Text('Sin álbumes',
-              style: TextStyle(color: context.textSecondary));
-        }
-        return SizedBox(
-          height: 180 + _metadataExtraHeight(),
-          child: ListView.builder(
-            scrollDirection: Axis.horizontal,
-            itemCount: albums.length,
-            itemBuilder: (context, index) {
-              final album = albums[index];
-              return Padding(
-                padding: const EdgeInsets.only(right: 12),
-                child: HomeContentCard(
-                  onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                        builder: (_) => AlbumDetailScreen(album: album)),
-                  ),
-                  child: Container(
-                    width: 120,
-                    padding: const EdgeInsets.all(8),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(6),
-                            child: Container(
-                              width: double.infinity,
-                              color: context.bgCard,
-                              child: album.coverArtUrl != null
-                                  ? Image.network(
-                                      album.coverArtUrl!,
-                                      fit: BoxFit.cover,
-                                    )
-                                  : Icon(Icons.album,
-                                      color: context.textSecondary),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          album.title,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color: context.textPrimary,
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        Text(
-                          album.artist,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                              color: context.textSecondary, fontSize: 12),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              );
-            },
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _artistsCarousel() {
-    final nav = context.read<NavidromeService>();
-    return FutureBuilder<List<Artist>>(
-      future: nav.getArtists().then(
-            (raw) => raw
-                .map((e) => Artist.fromJson(e as Map<String, dynamic>))
-                .toList(),
-          ),
-      builder: (context, snapshot) {
-        final artists = snapshot.data ?? <Artist>[];
-        if (snapshot.connectionState == ConnectionState.waiting &&
-            artists.isEmpty) {
-          return SizedBox(
-            height: 140,
-            child: Center(
-              child: CircularProgressIndicator(
-                  strokeWidth: 2, color: context.accent),
-            ),
-          );
-        }
-        if (artists.isEmpty) {
-          return Text('Sin artistas',
-              style: TextStyle(color: context.textSecondary));
-        }
-        final showScrollbar = artists.length > 10;
-        return SizedBox(
-          height: (showScrollbar ? 165 : 145) + _metadataExtraHeight(),
-          child: Scrollbar(
-            controller: _artistsScrollController,
-            thumbVisibility: showScrollbar,
-            interactive: showScrollbar,
-            scrollbarOrientation: ScrollbarOrientation.bottom,
-            child: ListView.builder(
-              controller: _artistsScrollController,
-              scrollDirection: Axis.horizontal,
-              padding: EdgeInsets.only(bottom: showScrollbar ? 20 : 0),
-              itemCount: artists.length,
-              itemBuilder: (context, index) {
-                final artist = artists[index];
-                return Padding(
-                  padding: const EdgeInsets.only(right: 12),
-                  child: InkWell(
-                    onTap: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                          builder: (_) => ArtistScreen(artist: artist)),
-                    ),
-                    borderRadius: BorderRadius.circular(8),
-                    child: SizedBox(
-                      width: 100,
-                      child: Column(
-                        children: [
-                          Expanded(
-                            child: Container(
-                              width: 100,
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: context.bgElevated,
-                                border: Border.all(
-                                  color: context.accent.withValues(alpha: 0.35),
-                                  width: 1.2,
-                                ),
-                                image: artist.coverArtUrl != null
-                                    ? DecorationImage(
-                                        image:
-                                            NetworkImage(artist.coverArtUrl!),
-                                        fit: BoxFit.cover,
-                                      )
-                                    : null,
-                              ),
-                              child: artist.coverArtUrl == null
-                                  ? Center(
-                                      child: Icon(Icons.person,
-                                          color: context.textSecondary,
-                                          size: 32),
-                                    )
-                                  : null,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            artist.name,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              color: context.textPrimary,
-                              fontSize: 14,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _recentsList() {
-    final player = context.watch<PlayerController>();
-    final items = player.recentlyPlayed.take(5).toList();
-    if (items.isEmpty) {
-      return Padding(
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        child: Text(
-          'Todavía no has escuchado nada',
-          style: TextStyle(color: context.textSecondary, fontSize: 12),
-        ),
-      );
-    }
-    return Column(
-      children: [
-        for (final track in items)
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 4),
-            child: Row(
-              children: [
-                CoverArt(
-                  url: track.albumArtUrl,
-                  artist: track.artist,
-                  album: track.album,
-                  title: track.title,
-                  width: 38,
-                  height: 38,
-                  borderRadius: 6,
-                  fallbackIcon: Icons.music_note,
-                  fallbackIconSize: 18,
-                  fallbackColor: context.bgCard,
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        track.title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: context.textPrimary,
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      InteractiveArtistText(
-                        artistString: track.artist,
-                        fontSize: 12,
-                        color: context.textSecondary,
-                      ),
-                    ],
-                  ),
-                ),
-                IconButton(
-                  icon: Icon(Icons.play_circle_fill_rounded,
-                      color: context.accent, size: 26),
-                  onPressed: () {
-                    context
-                        .read<PlayerController>()
-                        .playQueue([track], startIndex: 0);
-                  },
-                ),
-              ],
-            ),
-          ),
-      ],
-    );
-  }
-
-  // ===========================================================================
-  // Pestaña Buscar (Mobile)
-  // ===========================================================================
-  Widget _buildSearchTab() {
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-          child: SearchExploreField(
-            controller: _searchController,
-            onSearch: _runSearch,
-            onExplore: _openExplore,
-            genreSuggestionsBuilder: (query) {
-              final genres = context.read<NavidromeService>().cachedGenres;
-              if (genres.isEmpty) return const [];
-              final q = query.toLowerCase();
-              return genres
-                  .where((g) => g.toLowerCase().startsWith(q))
-                  .toList();
-            },
-            onGenreSelected: _runGenreSearch,
-            searching: _searching,
-            exploring: _showExplore,
-            hintText: 'Canciones, álbumes o artistas',
-          ),
-        ),
-        if (_showExplore || _searchResults != null)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-            child: ConstrainedBox(
-              constraints: BoxConstraints(
-                  maxHeight: MediaQuery.sizeOf(context).height * 0.35),
-              child: SingleChildScrollView(child: _genreSelector()),
-            ),
-          ),
-        Expanded(
-          child: _showExplore
-              ? FutureBuilder<List<Track>>(
-                  future: _futureTracks,
-                  builder: (context, snapshot) {
-                    if (snapshot.connectionState == ConnectionState.waiting) {
-                      return const Center(child: CircularProgressIndicator());
-                    }
-                    if (snapshot.hasError) {
-                      return const Center(
-                          child: Text('Error al cargar contenido'));
-                    }
-                    final allTracks = snapshot.data ?? <Track>[];
-                    final tracks = _selectedGenre == null
-                        ? allTracks
-                        : context
-                            .read<NavidromeService>()
-                            .filterByGenre(allTracks, _selectedGenre!);
-                    return ExploreTracksView(
-                      tracks: tracks,
-                      pageSize: _explorePageSize,
-                      page: _explorePage,
-                      onPageSizeChanged: (size) => setState(() {
-                        _explorePageSize = size;
-                        _explorePage = 0;
-                      }),
-                      onPageChanged: (page) =>
-                          setState(() => _explorePage = page),
-                      onPlay: (index) => _openPlayer(tracks, index),
-                    );
-                  },
-                )
-              : _searchResults != null
-                  ? _buildSearchResults()
-                  : Center(
-                      child: Text(
-                        'Busca tus canciones o artistas favoritos',
-                        style:
-                            TextStyle(color: context.textMuted, fontSize: 12.5),
-                      ),
-                    ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildSearchResults() {
-    final results = _searchResults!;
-    if (_searching && results.isEmpty) {
-      return Center(
-        child: CircularProgressIndicator(
-          color: context.accent,
-          strokeWidth: 2,
-        ),
-      );
-    }
-    if (results.isEmpty) {
-      return Center(
-        child:
-            Text('Sin resultados', style: TextStyle(color: context.textMuted)),
-      );
-    }
-
-    final songs = results.songs;
-    final albums = results.albums;
-    final artists = results.artists;
-
-    return ListView(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      children: [
-        if (songs.isNotEmpty) ...[
-          const _ResultHeader('Canciones'),
-          for (final track in songs)
-            ListTile(
-              dense: true,
-              leading: CoverArt(
-                url: track.albumArtUrl,
-                artist: track.artist,
-                album: track.album,
-                title: track.title,
-                width: 38,
-                height: 38,
-                borderRadius: 4,
-                fallbackIcon: Icons.music_note,
-                fallbackIconSize: 18,
-                fallbackColor: context.bgCard,
-              ),
-              title: Text(track.title,
-                  style: TextStyle(color: context.textPrimary, fontSize: 13)),
-              subtitle: Text('${track.artist} · ${track.album}',
-                  style: TextStyle(color: context.textMuted, fontSize: 11)),
-              onTap: () {
-                context
-                    .read<PlayerController>()
-                    .playQueue([track], startIndex: 0);
-              },
-            ),
-        ],
-        if (albums.isNotEmpty) ...[
-          const _ResultHeader('Álbumes'),
-          for (final album in albums)
-            ListTile(
-              dense: true,
-              leading: CoverArt(
-                url: album.coverArtUrl,
-                width: 38,
-                height: 38,
-                borderRadius: 4,
-                fallbackIcon: Icons.album,
-                fallbackIconSize: 18,
-                fallbackColor: context.bgCard,
-              ),
-              title: Text(album.title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(color: context.textPrimary, fontSize: 13.5)),
-              subtitle: InteractiveArtistText(
-                  artistString: album.artist,
-                  fontSize: 11.5,
-                  color: context.textMuted),
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                    builder: (_) => AlbumDetailScreen(album: album)),
-              ),
-            ),
-        ],
-        if (artists.isNotEmpty) ...[
-          const _ResultHeader('Artistas'),
-          for (final artist in artists)
-            ListTile(
-              dense: true,
-              leading: CoverArt(
-                url: artist.coverArtUrl,
-                width: 38,
-                height: 38,
-                circle: true,
-                fallbackIcon: Icons.person,
-                fallbackIconSize: 18,
-                fallbackColor: context.bgCard,
-              ),
-              title: Text(artist.name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(color: context.textPrimary, fontSize: 13)),
-              subtitle: Text('Artista',
-                  style: TextStyle(color: context.textMuted, fontSize: 11)),
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => ArtistScreen(artist: artist)),
-              ),
-            ),
-        ],
-      ],
-    );
-  }
-
-  // ===========================================================================
-  // Pestaña Tu Biblioteca (Mobile)
-  // ===========================================================================
-  Widget _buildLibraryTab() {
-    final nav = context.watch<NavidromeService>();
-    return FutureBuilder<List<Playlist>>(
-      future: _futurePlaylists,
-      builder: (context, snapshot) {
-        final playlists = snapshot.data ?? [];
-        final sorted = [
-          ...playlists.where((p) => nav.isPinnedPlaylist(p.id)),
-          ...playlists.where((p) => !nav.isPinnedPlaylist(p.id)),
-        ];
-        final followedIds = nav.followedArtistIds;
-        return ListView(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          children: [
-            FilledButton.icon(
-              onPressed: _createPlaylist,
-              icon: const Icon(Icons.add_rounded, size: 19),
-              label: const Text('Crear playlist'),
-              style: FilledButton.styleFrom(
-                alignment: Alignment.centerLeft,
-                backgroundColor: context.bgCard,
-                foregroundColor: context.accent,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(9),
-                  side: BorderSide(color: context.borderSubtle),
-                ),
-              ),
-            ),
-            const SizedBox(height: 8),
-            ListTile(
-              contentPadding: EdgeInsets.zero,
-              leading: Container(
-                width: 44,
-                height: 44,
-                decoration: BoxDecoration(
-                  color: context.accent2,
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: Icon(Icons.favorite_rounded,
-                    color: context.textPrimary, size: 22),
-              ),
-              title: Text('Tus Me Gusta',
-                  style: TextStyle(
-                      color: context.textPrimary,
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold)),
-              subtitle: Text('Canciones favoritas',
-                  style: TextStyle(color: context.textMuted, fontSize: 12)),
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const LikedSongsScreen()),
-              ),
-            ),
-            if (followedIds.isNotEmpty) ...[
-              for (final artistId in followedIds)
-                _followedArtistTile(artistId, nav),
-            ],
-            Divider(color: context.bgCard),
-            for (final playlist in sorted) ...[
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: CoverArt(
-                  url: playlist.coverArtUrl,
-                  width: 44,
-                  height: 44,
-                  borderRadius: 6,
-                  fallbackIcon: Icons.queue_music,
-                  fallbackIconSize: 20,
-                  fallbackColor: context.bgCard,
-                ),
-                title: Text(playlist.name,
-                    style: TextStyle(
-                        color: context.textPrimary,
-                        fontSize: 13.5,
-                        fontWeight: FontWeight.w500)),
-                subtitle: Text(
-                  'Playlist · ${playlist.songCount} canciones',
-                  style: TextStyle(color: context.textMuted, fontSize: 11.5),
-                ),
-                trailing: nav.isPinnedPlaylist(playlist.id)
-                    ? Icon(Icons.push_pin, color: context.accent, size: 14)
-                    : null,
-                onTap: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => PlaylistDetailScreen(playlist: playlist),
-                  ),
-                ),
-              ),
-            ],
-          ],
-        );
-      },
-    );
-  }
-
-  Widget _followedArtistTile(String artistId, NavidromeService nav) {
-    final cached = nav.getCachedArtist(artistId);
-    if (cached != null) {
-      return _buildFollowedArtistItem(cached);
-    }
-
-    return FutureBuilder<Artist?>(
-      future: nav.getArtist(artistId),
-      builder: (context, snap) {
-        final artist = snap.data;
-        if (artist != null) {
-          return _buildFollowedArtistItem(artist);
-        }
-        return ListTile(
-          contentPadding: EdgeInsets.zero,
-          leading: CoverArt(
-            url: null,
-            width: 44,
-            height: 44,
-            borderRadius: 22,
-            circle: true,
-            fallbackIcon: Icons.person,
-            fallbackIconSize: 20,
-            fallbackColor: context.bgCard,
-          ),
-          title: Text(
-            snap.connectionState == ConnectionState.waiting
-                ? 'Cargando artista...'
-                : 'Artista',
-            style: TextStyle(
-              color: context.textPrimary,
-              fontSize: 13.5,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-          subtitle: Text(
-            'Artista · Siguiendo',
-            style: TextStyle(color: context.textMuted, fontSize: 11.5),
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildFollowedArtistItem(Artist artist) {
-    return ListTile(
-      contentPadding: EdgeInsets.zero,
-      leading: CoverArt(
-        url: artist.coverArtUrl,
-        width: 44,
-        height: 44,
-        borderRadius: 22,
-        circle: true,
-        fallbackIcon: Icons.person,
-        fallbackIconSize: 20,
-        fallbackColor: context.bgCard,
-      ),
-      title: Text(
-        artist.name,
-        style: TextStyle(
-          color: context.textPrimary,
-          fontSize: 13.5,
-          fontWeight: FontWeight.w500,
-        ),
-      ),
-      subtitle: Text(
-        'Artista · Siguiendo',
-        style: TextStyle(color: context.textMuted, fontSize: 11.5),
-      ),
-      onTap: () => Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => ArtistScreen(artist: artist),
-        ),
       ),
     );
   }
