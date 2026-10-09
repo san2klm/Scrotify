@@ -52,7 +52,7 @@ en verde, un commit por ítem y una línea en `tasks/todo.md`.
 
 ## Fase 4 — Cobertura
 
-### [~] 9. Tests de servicios sin cobertura directa (S)
+### [x] 9. Tests de servicios sin cobertura directa (S)
 - `replay_gain.dart`, `playlist_export_service.dart`, `connect/relay_transport.dart`, `connect/connect_mirror.dart`, `connect/player_connect_port.dart`.
 
 ### [ ] 10. Tests de widget de login, Inicio y reproductor
@@ -75,7 +75,7 @@ en verde, un commit por ítem y una línea en `tasks/todo.md`.
 
 ## Fase 7 — Limpieza
 
-### [ ] 16. Partir los archivos que siguen por encima de 1200 líneas
+### [~] 16. Partir los archivos que siguen por encima de 1200 líneas (S)
 - `pairing_panel.dart`, `jam_dialog.dart`, `track_context_menu.dart`, `mobile_home_screen.dart`.
 
 ### [x] 17. Ignorar `Scrotify-*.apk` en la raíz
@@ -94,3 +94,4 @@ en verde, un commit por ítem y una línea en `tasks/todo.md`.
 - **2** (sesión `Scrotify`, `7b6c820`) · 20/20 corridas completas sin fallos (antes 7 de 20). Causas: esperas de tiempo fijo en `offline_download_manager_test` (ahora por condición) y un reescaneo en segundo plano que escribía en la carpeta temporal mientras el `tearDown` la borraba (`LocalMusicService.settled()`, solo para tests). Verificado solo en Linux.
 - **3** · `unawaited_futures` y `cancel_subscriptions` activos. 22 llamadas asíncronas sin esperar, todas intencionales, ahora marcadas con `unawaited(...)` (sin cambio de comportamiento); `cancel_subscriptions` no encontró nada. `close_sinks` descartado: sus 8 avisos eran falsos positivos (sockets y controladores que se cierran en otro método). Los 91 `catch (_) {}` no se tocaron: ningún lint estándar los cubre y revisarlos uno por uno es otro ítem. Suite completa: 801 tests en verde.
 - **15** · `rxdart` 0.28: analyze limpio y 825 tests en verde; `lib/` no lo importa directamente, lo usan `just_audio` y `audio_service`, así que falta oírlo en un dispositivo. `web_socket_channel` 3 **revertido**: `jam_guest_history_test` («notificationInfo describe la sala…») falla siempre con la v3 y pasa con la v2. `joinSession` termina al llegar `join_response`, y con la v3 el `jam_state_snapshot` que crea la sesión se entrega un turno después, así que justo tras unirse `session` es `null`. Para subir de versión, antes hay que hacer que la unión espere al primer snapshot.
+- **9** (sesión `Scrotify`, `4796705`) · 75 tests nuevos en 5 archivos (`replay_gain_model`, `playlist_export_service`, `relay_transport`, `connect_mirror`, `player_connect_port`); suite en 852. `replay_gain.dart` ya tenía cobertura indirecta; los otros cuatro, ninguna. Comprobado por mutación. No destapó bugs. Solo Linux; el selector de archivos de Windows/macOS no se probó.
