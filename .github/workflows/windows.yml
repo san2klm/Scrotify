@@ -1,0 +1,75 @@
+name: Windows (EXE)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'lib/**'
+      - 'assets/**'
+      - 'third_party/**'
+      - 'pubspec.yaml'
+      - 'pubspec.lock'
+      - '.github/workflows/windows.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: windows-build
+  cancel-in-progress: true
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.47.4
+          cache: true
+
+      - name: Enable Windows Desktop & Create Platform Wrapper
+        run: |
+          flutter config --enable-windows-desktop
+          flutter create . --platforms=windows
+
+      - name: Get Dependencies
+        run: flutter pub get
+
+      - name: Build Windows (Release)
+        run: flutter build windows --release
+
+      - name: Package Release
+        shell: pwsh
+        run: |
+          $releaseDir = Get-ChildItem -Path "build\windows" -Filter "Release" -Recurse -Directory | Select-Object -First 1 -ExpandProperty FullName
+          Write-Host "Directorio Release encontrado: $releaseDir"
+          if (Test-Path "$releaseDir\navidrome_client.exe") {
+            Copy-Item "$releaseDir\navidrome_client.exe" "$releaseDir\Scrotify.exe" -Force
+          }
+          Compress-Archive -Path "$releaseDir\*" -DestinationPath "Scrotify-Windows-x64.zip" -Force
+          Get-Item "Scrotify-Windows-x64.zip" | Select-Object Name, Length
+
+      - name: Subir como artefacto
+        uses: actions/upload-artifact@v4
+        with:
+          name: Scrotify-Windows
+          path: Scrotify-Windows-x64.zip
+          retention-days: 30
+
+      - name: Publicar en la release windows-latest
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: pwsh
+        run: |
+          gh release delete windows-latest --yes --cleanup-tag 2>$null || $true
+          gh release create windows-latest Scrotify-Windows-x64.zip `
+            --target $env:GITHUB_SHA `
+            --title "Scrotify para Windows (última compilación)" `
+            --notes "Ejecutable nativo para Windows (x64) compilado desde $($env:GITHUB_SHA.Substring(0, 7)). Descomprimir y ejecutar Scrotify.exe."
