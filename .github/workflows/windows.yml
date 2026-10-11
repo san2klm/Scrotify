@@ -50,8 +50,17 @@ jobs:
       - name: Package Release
         shell: pwsh
         run: |
-          $releaseDir = Get-ChildItem -Path "build\windows" -Filter "Release" -Recurse -Directory | Select-Object -First 1 -ExpandProperty FullName
+          $releaseDir = "build\windows\x64\runner\Release"
+          if (-not (Test-Path $releaseDir)) {
+            $releaseDir = "build\windows\runner\Release"
+          }
+          if (-not (Test-Path $releaseDir)) {
+            $candidate = Get-ChildItem -Path "build\windows" -Filter "runner" -Recurse -Directory | Get-ChildItem -Filter "Release" -Directory | Select-Object -First 1
+            if ($candidate) { $releaseDir = $candidate.FullName }
+          }
           Write-Host "Directorio Release encontrado: $releaseDir"
+          Get-ChildItem -Path $releaseDir
+
           if (Test-Path "$releaseDir\navidrome_client.exe") {
             Copy-Item "$releaseDir\navidrome_client.exe" "$releaseDir\Scrotify.exe" -Force
           }
