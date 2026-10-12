@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Fondo negro AMOLED para la pantalla de inicio de Android -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="#FF121212" />
+        </shape>
+    </item>
+</layer-list>
