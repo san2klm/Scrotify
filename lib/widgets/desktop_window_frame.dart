@@ -192,6 +192,12 @@ class _DesktopWindowFrameState extends State<DesktopWindowFrame>
         const SingleActivator(LogicalKeyboardKey.escape): () {
           if (_fullScreen) WindowControls.setFullScreen(false);
         },
+        const SingleActivator(LogicalKeyboardKey.mediaPlayPause): () =>
+            _togglePlayPause(context),
+        const SingleActivator(LogicalKeyboardKey.mediaPlay): () =>
+            _togglePlayPause(context),
+        const SingleActivator(LogicalKeyboardKey.mediaPause): () =>
+            _togglePlayPause(context),
         const SingleActivator(LogicalKeyboardKey.mediaTrackNext): () =>
             _skipNext(context),
         const SingleActivator(LogicalKeyboardKey.mediaTrackPrevious): () =>
@@ -199,7 +205,7 @@ class _DesktopWindowFrameState extends State<DesktopWindowFrame>
         const SingleActivator(LogicalKeyboardKey.browserForward): () =>
             _skipNext(context),
         const SingleActivator(LogicalKeyboardKey.browserBack): () =>
-            _skipPrevious(context),
+            _togglePlayPause(context),
         const SingleActivator(LogicalKeyboardKey.arrowRight, alt: true): () =>
             _skipNext(context),
         const SingleActivator(LogicalKeyboardKey.arrowLeft, alt: true): () =>
@@ -211,10 +217,10 @@ class _DesktopWindowFrameState extends State<DesktopWindowFrame>
           behavior: HitTestBehavior.translucent,
           onPointerDown: (event) {
             // Botones laterales del mouse (XBUTTON1 y XBUTTON2):
-            // Back (0x08) -> pista anterior
-            // Forward (0x10) -> pista siguiente
+            // Back (0x08) -> alternar reproducir / pausar
+            // Forward (0x10) -> siguiente canción
             if ((event.buttons & kBackMouseButton) != 0) {
-              _skipPrevious(context);
+              _togglePlayPause(context);
             } else if ((event.buttons & kForwardMouseButton) != 0) {
               _skipNext(context);
             }
@@ -235,6 +241,29 @@ class _DesktopWindowFrameState extends State<DesktopWindowFrame>
     }
     _lastSkipTime = now;
     return true;
+  }
+
+  void _togglePlayPause(BuildContext context) {
+    if (!_canSkip()) return;
+    try {
+      final connect = context.read<ConnectService>();
+      if (connect.controlled != null) {
+        connect.command(ConnectCommand.toggle);
+        return;
+      }
+      final jam = context.read<JamController>();
+      if (jam.isGuest && !(jam.localParticipant?.canControlPlayback ?? false)) {
+        return;
+      }
+      if (jam.inJam) {
+        jam.playbackAction('toggle');
+        return;
+      }
+      final player = context.read<PlayerController>();
+      player.togglePlay();
+    } catch (e) {
+      debugPrint('[DesktopWindowFrame] togglePlayPause error: $e');
+    }
   }
 
   void _skipNext(BuildContext context) {

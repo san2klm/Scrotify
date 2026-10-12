@@ -51,6 +51,7 @@ android/app/src/main/res/*
 android/app/src/main/res/drawable/*
 !android/app/src/main/res/drawable/widget_*.xml
 !android/app/src/main/res/drawable/ic_widget_*.xml
+!android/app/src/main/res/drawable/tv_banner.xml
 # Reglas de conservación de recursos (audio_service en release).
 !android/app/src/main/res/raw/
 !android/app/src/main/res/values/

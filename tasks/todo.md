@@ -291,3 +291,14 @@ Cambio: Connect ya no depende de la clave de sincronización. Cada usuario de Na
 - [x] **14.3** Servidor de producción actualizado (backup previo de `data/`) con `navidromeUrl = https://navidrome.templo.cloud`; verificado el rechazo de claves falsas contra Navidrome real. APK instalado en el teléfono y AppImage regenerado.
 - [x] **14.5** Corregido: el servidor cortaba el WebSocket (1009) con tramas de más de `maxMessageBytes` (16 KB) y los mensajes de Connect con la cola lo superaban; ahora la trama admite hasta 128 KB y solo las salas Jam siguen limitadas. Una instancia desplazada por otra con el mismo id de dispositivo ya no reintenta en bucle.
 - [ ] **14.4** Pendiente: probar PC + teléfono con el mismo usuario. Cambiar la clave en Navidrome cambia la clave de cifrado: hay que volver a iniciar sesión en los demás dispositivos.
+
+## Soporte para Android TV y Versiones por Plataforma (2026-10-12)
+
+- [x] **15.1** Control lateral del mouse (`DesktopWindowFrame`): botón lateral trasero (Back / `kBackMouseButton` / `browserBack`) configurado para alternar Reproducir / Pausar (`_togglePlayPause`), y botón lateral delantero (Forward / `kForwardMouseButton` / `browserForward`) para pasar a la siguiente pista (`_skipNext`), además de bindings multimedia directos.
+- [x] **15.2** Soporte Android TV / Google TV (`AndroidManifest.xml` + `tv_banner.xml`): declaración de pantalla táctil opcional (`touchscreen=false`), `leanback=false`, banner horizontal de 320x180 y filtro `LEANBACK_LAUNCHER` para visualización nativa en pantallas de TV y soporte de D-Pad.
+- [x] **15.3** Workflows de GitHub Actions dedicados por plataforma:
+  - `android.yml` ➔ Compilación automática de `Scrotify-Android.apk` (Release `android-latest`).
+  - `tv.yml` ➔ Compilación automática de `Scrotify-TV.apk` (Release `tv-latest`).
+  - `linux.yml` ➔ Compilación automática de `Scrotify-Linux-x64.tar.gz` (Release `linux-latest`).
+  - `windows.yml` ➔ `Scrotify-Windows-x64.zip` (Release `windows-latest`).
+  - `ios.yml` ➔ `Scrotify.ipa` (Release `ios-latest`).
