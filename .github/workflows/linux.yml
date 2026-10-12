@@ -43,15 +43,15 @@ jobs:
       - name: Enable Linux Desktop
         run: flutter config --enable-linux-desktop
 
-      - name: Get Dependencies
-        run: flutter pub get
-
       - name: Create Platform Wrapper
         run: |
           mkdir -p /tmp/linux_backup
           cp -r linux/* /tmp/linux_backup/ 2>/dev/null || true
           flutter create --platforms=linux .
           cp -r /tmp/linux_backup/* linux/ 2>/dev/null || true
+
+      - name: Get Dependencies
+        run: flutter pub get
 
       - name: Build Linux (Release)
         run: flutter build linux --release
