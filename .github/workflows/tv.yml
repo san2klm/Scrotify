@@ -44,6 +44,15 @@ jobs:
       - name: Get Dependencies
         run: flutter pub get
 
+      - name: Create Platform Wrapper
+        run: |
+          cp -r android/app/src /tmp/android_src_backup
+          flutter create . --platforms=android --org=com.example
+          rm -rf android/app/src
+          cp -r /tmp/android_src_backup android/app/src
+          sed -i 's/minSdkVersion flutter.minSdkVersion/minSdkVersion 23/g' android/app/build.gradle 2>/dev/null || true
+          sed -i 's/minSdk = flutter.minSdkVersion/minSdk = 23/g' android/app/build.gradle 2>/dev/null || true
+
       - name: Build Android TV APK
         run: flutter build apk --release
 
