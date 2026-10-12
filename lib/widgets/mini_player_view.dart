@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -13,9 +14,24 @@ class MiniPlayerView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: context.bgApp,
-      child: Consumer2<PlayerController, NavidromeService>(
+    final player = context.watch<PlayerController>();
+    return Listener(
+      behavior: HitTestBehavior.translucent,
+      onPointerSignal: (pointerSignal) {
+        if (pointerSignal is PointerScrollEvent &&
+            pointerSignal.scrollDelta.dy != 0) {
+          final delta = pointerSignal.scrollDelta.dy < 0 ? 0.04 : -0.04;
+          player.setVolume((player.volume + delta).clamp(0.0, 1.0));
+        }
+      },
+      onPointerDown: (event) {
+        if ((event.buttons & kMiddleMouseButton) != 0) {
+          player.togglePlay();
+        }
+      },
+      child: Material(
+        color: context.bgApp,
+        child: Consumer2<PlayerController, NavidromeService>(
         builder: (context, player, nav, _) {
           final track = player.currentTrack;
           final liked = track != null && nav.isStarred(track.id);
@@ -147,6 +163,7 @@ class MiniPlayerView extends StatelessWidget {
           );
         },
       ),
-    );
-  }
+    ),
+  );
+}
 }

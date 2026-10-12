@@ -70,12 +70,8 @@ android/app/src/main/res/values/*
 !android/app/src/main/res/mipmap-xxxhdpi/
 !android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
 
-!linux/
-linux/*
-!linux/CMakeLists.txt
-!linux/runner/
-linux/runner/*
-!linux/runner/my_application.cc
+# Linux
+linux/flutter/ephemeral/
 
 # Proyecto iOS completo (permisos, icono y Podfile propios de Scrotify).
 # ios/.gitignore ya excluye Pods, Flutter/ephemeral y demás archivos generados.

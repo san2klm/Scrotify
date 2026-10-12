@@ -210,11 +210,29 @@ class _DesktopWindowFrameState extends State<DesktopWindowFrame>
             _skipNext(context),
         const SingleActivator(LogicalKeyboardKey.arrowLeft, alt: true): () =>
             _skipPrevious(context),
+        const SingleActivator(LogicalKeyboardKey.audioVolumeUp): () =>
+            _changeVolume(context, 0.04),
+        const SingleActivator(LogicalKeyboardKey.audioVolumeDown): () =>
+            _changeVolume(context, -0.04),
+        const SingleActivator(LogicalKeyboardKey.goBack): () =>
+            _togglePlayPause(context),
       },
       child: Focus(
         autofocus: true,
         child: Listener(
           behavior: HitTestBehavior.translucent,
+          onPointerSignal: (event) {
+            // Atajo global con rueda del mouse: si se mantiene Alt o Ctrl pulsado
+            // en cualquier parte de la ventana, la rueda sube/baja volumen (+-4%).
+            if (event is PointerScrollEvent && event.scrollDelta.dy != 0) {
+              final isModifier = HardwareKeyboard.instance.isAltPressed ||
+                  HardwareKeyboard.instance.isControlPressed;
+              if (isModifier) {
+                final delta = event.scrollDelta.dy < 0 ? 0.04 : -0.04;
+                _changeVolume(context, delta);
+              }
+            }
+          },
           onPointerDown: (event) {
             // Botones laterales del mouse (XBUTTON1 y XBUTTON2):
             // Back (0x08) -> alternar reproducir / pausar
@@ -229,6 +247,23 @@ class _DesktopWindowFrameState extends State<DesktopWindowFrame>
         ),
       ),
     );
+  }
+
+  void _changeVolume(BuildContext context, double delta) {
+    try {
+      final connect = context.read<ConnectService>();
+      if (connect.controlled != null) {
+        final current = connect.controlledState?.volume ?? 1.0;
+        final next = (current + delta).clamp(0.0, 1.0);
+        connect.command(ConnectCommand.volume, next);
+        return;
+      }
+      final player = context.read<PlayerController>();
+      final next = (player.volume + delta).clamp(0.0, 1.0);
+      player.setVolume(next);
+    } catch (e) {
+      debugPrint('[DesktopWindowFrame] changeVolume error: $e');
+    }
   }
 
   DateTime? _lastSkipTime;

@@ -754,10 +754,9 @@ class _PlayerVolumeBarState extends State<_PlayerVolumeBar> {
                   // Rueda del mouse → volumen
                   if (pointerSignal is PointerScrollEvent &&
                       pointerSignal.scrollDelta.dy != 0) {
-                    final newVolume = (volume -
-                            pointerSignal.scrollDelta.dy * 0.001)
-                        .clamp(0.0, 1.0);
-                    widget.player.setVolume(newVolume);
+                    final delta =
+                        pointerSignal.scrollDelta.dy < 0 ? 0.04 : -0.04;
+                    widget.player.setVolume((volume + delta).clamp(0.0, 1.0));
                     if (mounted) setState(() {});
                   }
                 },

@@ -46,6 +46,13 @@ jobs:
       - name: Get Dependencies
         run: flutter pub get
 
+      - name: Create Platform Wrapper
+        run: |
+          mkdir -p /tmp/linux_backup
+          cp -r linux/* /tmp/linux_backup/ 2>/dev/null || true
+          flutter create --platforms=linux .
+          cp -r /tmp/linux_backup/* linux/ 2>/dev/null || true
+
       - name: Build Linux (Release)
         run: flutter build linux --release
 

@@ -2016,6 +2016,7 @@ class PlayerController extends ChangeNotifier {
     // Bit-perfect: el volumen digital queda fijo al 100 %.
     if (volumeLocked) return;
     _volume = v.clamp(0.0, 1.0).toDouble();
+    notifyListeners();
     if (_karaokeMode && _karaokePlayer != null) {
       await _applyKaraokeVolume();
     } else {

@@ -86,12 +86,48 @@ class PersistentPlayerBar extends StatelessWidget {
     final remoteControlled = connect.controlled != null;
     final remoteState = connect.controlledState;
 
-    return Container(
-      height: 90,
-      color: context.bgPlayer,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        child: Row(
+    void adjustVolume(double delta) {
+      if (remoteControlled) {
+        final current = remoteState?.volume ?? 1.0;
+        final next = (current + delta).clamp(0.0, 1.0);
+        connect.command(ConnectCommand.volume, next);
+      } else {
+        final current = player.volume;
+        final next = (current + delta).clamp(0.0, 1.0);
+        player.setVolume(next);
+      }
+    }
+
+    return Listener(
+      behavior: HitTestBehavior.translucent,
+      onPointerSignal: (pointerSignal) {
+        if (pointerSignal is PointerScrollEvent &&
+            pointerSignal.scrollDelta.dy != 0) {
+          // Rueda del mouse sobre la barra del reproductor:
+          // Hacia arriba: subir volumen (+4%)
+          // Hacia abajo: bajar volumen (-4%)
+          final delta = pointerSignal.scrollDelta.dy < 0 ? 0.04 : -0.04;
+          adjustVolume(delta);
+        }
+      },
+      onPointerDown: (event) {
+        // Clic botón central (ruedita) sobre la barra: alternar reproducir / pausar
+        if ((event.buttons & kMiddleMouseButton) != 0) {
+          if (remoteControlled) {
+            connect.command(ConnectCommand.toggle);
+          } else if (jam.inJam) {
+            jam.playbackAction('toggle');
+          } else {
+            player.togglePlay();
+          }
+        }
+      },
+      child: Container(
+        height: 90,
+        color: context.bgPlayer,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Row(
           children: [
             // ── Left: artwork + track info (title, artist, favorite) ──
             _artwork(context, track),
@@ -186,8 +222,9 @@ class PersistentPlayerBar extends StatelessWidget {
           ],
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 
   // ---------------------------------------------------------------------------
   // Mobile layout — Spotify mobile style
@@ -847,44 +884,32 @@ class _VolumeBarState extends State<_VolumeBar> {
             ),
             SizedBox(
               width: 110,
-              child: Listener(
-                onPointerSignal: (pointerSignal) {
-                  // Rueda del mouse → volumen
-                  if (pointerSignal is PointerScrollEvent &&
-                      pointerSignal.scrollDelta.dy != 0) {
-                    final newVolume = (volume -
-                            pointerSignal.scrollDelta.dy * 0.001)
-                        .clamp(0.0, 1.0);
-                    apply(newVolume);
-                  }
-                },
-                child: SliderTheme(
-                  data: SliderThemeData(
-                    trackHeight: 3,
-                    activeTrackColor: context.volumeAccent,
-                    inactiveTrackColor: context.themeBorder,
-                    thumbColor: context.sliderThumb,
-                    thumbShape:
-                        const RoundSliderThumbShape(enabledThumbRadius: 5),
-                    overlayColor: context.accentDim,
-                    overlayShape:
-                        const RoundSliderOverlayShape(overlayRadius: 12),
-                  ),
-                  child: Slider(
-                    min: 0,
-                    max: 1,
-                    value: volume,
-                    // Aplicar en vivo mientras se arrastra: el audio sube/baja al
-                    // mismo tiempo que el pulgar, sin esperar a soltar.
-                    onChanged: (v) {
-                      setState(() => _dragValue = v);
-                      apply(v);
-                    },
-                    onChangeEnd: (v) {
-                      apply(v);
-                      if (mounted) setState(() => _dragValue = null);
-                    },
-                  ),
+              child: SliderTheme(
+                data: SliderThemeData(
+                  trackHeight: 3,
+                  activeTrackColor: context.volumeAccent,
+                  inactiveTrackColor: context.themeBorder,
+                  thumbColor: context.sliderThumb,
+                  thumbShape:
+                      const RoundSliderThumbShape(enabledThumbRadius: 5),
+                  overlayColor: context.accentDim,
+                  overlayShape:
+                      const RoundSliderOverlayShape(overlayRadius: 12),
+                ),
+                child: Slider(
+                  min: 0,
+                  max: 1,
+                  value: volume,
+                  // Aplicar en vivo mientras se arrastra: el audio sube/baja al
+                  // mismo tiempo que el pulgar, sin esperar a soltar.
+                  onChanged: (v) {
+                    setState(() => _dragValue = v);
+                    apply(v);
+                  },
+                  onChangeEnd: (v) {
+                    apply(v);
+                    if (mounted) setState(() => _dragValue = null);
+                  },
                 ),
               ),
             ),
