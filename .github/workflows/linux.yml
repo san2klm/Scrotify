@@ -1,0 +1,74 @@
+name: Linux (x64)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'lib/**'
+      - 'linux/**'
+      - 'assets/**'
+      - 'third_party/**'
+      - 'pubspec.yaml'
+      - 'pubspec.lock'
+      - '.github/workflows/linux.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: linux-build
+  cancel-in-progress: true
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Instalar dependencias de compilación Linux
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev libmpv-dev libsecret-1-dev libjsoncpp-dev
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.47.4
+          cache: true
+
+      - name: Enable Linux Desktop
+        run: flutter config --enable-linux-desktop
+
+      - name: Get Dependencies
+        run: flutter pub get
+
+      - name: Build Linux (Release)
+        run: flutter build linux --release
+
+      - name: Empaquetar Release
+        run: |
+          cd build/linux/x64/release/bundle
+          tar -czvf ../../../../../Scrotify-Linux-x64.tar.gz *
+          cd ../../../../..
+          ls -lh Scrotify-Linux-x64.tar.gz
+
+      - name: Subir como artefacto
+        uses: actions/upload-artifact@v4
+        with:
+          name: Scrotify-Linux
+          path: Scrotify-Linux-x64.tar.gz
+          retention-days: 30
+
+      - name: Publicar en la release linux-latest
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release delete linux-latest --yes --cleanup-tag || true
+          gh release create linux-latest Scrotify-Linux-x64.tar.gz \
+            --target "$GITHUB_SHA" \
+            --title "Scrotify para Linux x64 (última compilación)" \
+            --notes "Binario nativo para Linux x64 compilado desde ${GITHUB_SHA::7}. Descomprimir y ejecutar navidrome_client."

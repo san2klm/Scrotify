@@ -1,0 +1,70 @@
+name: Android TV (APK)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'lib/**'
+      - 'android/**'
+      - 'assets/**'
+      - 'third_party/**'
+      - 'pubspec.yaml'
+      - 'pubspec.lock'
+      - '.github/workflows/tv.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: tv-build
+  cancel-in-progress: true
+
+jobs:
+  build-tv:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.47.4
+          cache: true
+
+      - name: Get Dependencies
+        run: flutter pub get
+
+      - name: Build Android TV APK
+        run: flutter build apk --release
+
+      - name: Preparar instalador TV
+        run: |
+          cp build/app/outputs/flutter-apk/app-release.apk Scrotify-TV.apk
+          ls -lh Scrotify-TV.apk
+
+      - name: Subir como artefacto
+        uses: actions/upload-artifact@v4
+        with:
+          name: Scrotify-TV
+          path: Scrotify-TV.apk
+          retention-days: 30
+
+      - name: Publicar en la release tv-latest
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release delete tv-latest --yes --cleanup-tag || true
+          gh release create tv-latest Scrotify-TV.apk \
+            --target "$GITHUB_SHA" \
+            --title "Scrotify para Android TV / Google TV (última compilación)" \
+            --notes "APK para Smart TVs (Philips 4K, TCL, Xiaomi, Chromecast con Google TV, Fire TV). Compatible con control remoto D-Pad."
