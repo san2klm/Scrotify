@@ -73,6 +73,10 @@ android/app/src/main/res/values/*
 # Linux
 linux/flutter/ephemeral/
 
+# Windows
+!windows/
+windows/flutter/ephemeral/
+
 # Proyecto iOS completo (permisos, icono y Podfile propios de Scrotify).
 # ios/.gitignore ya excluye Pods, Flutter/ephemeral y demás archivos generados.
 !ios/

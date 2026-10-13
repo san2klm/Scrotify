@@ -32,6 +32,9 @@ class DesktopWindowFrame extends StatefulWidget {
 
 class _DesktopWindowFrameState extends State<DesktopWindowFrame>
     with WindowListener {
+  static const _mouseChannel =
+      MethodChannel('com.scrotify/global_mouse_hotkeys');
+
   bool _maximized = false;
   bool _fullScreen = false;
 
@@ -41,12 +44,23 @@ class _DesktopWindowFrameState extends State<DesktopWindowFrame>
     if (WindowControls.isDesktop) {
       windowManager.addListener(this);
       _syncState();
+      _mouseChannel.setMethodCallHandler((call) async {
+        if (!mounted) return;
+        if (call.method == 'togglePlayPause') {
+          _togglePlayPause(context);
+        } else if (call.method == 'skipNext') {
+          _skipNext(context);
+        }
+      });
     }
   }
 
   @override
   void dispose() {
-    if (WindowControls.isDesktop) windowManager.removeListener(this);
+    if (WindowControls.isDesktop) {
+      windowManager.removeListener(this);
+      _mouseChannel.setMethodCallHandler(null);
+    }
     super.dispose();
   }
 
