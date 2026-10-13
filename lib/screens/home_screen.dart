@@ -14,7 +14,6 @@ import '../services/home_navigation_controller.dart';
 import '../widgets/track_context_menu.dart';
 import '../widgets/local_download_button.dart';
 import '../widgets/offline_connection_banner.dart';
-import '../widgets/quick_actions_row.dart';
 import 'liked_songs_screen.dart';
 import 'playlist_detail_screen.dart';
 import 'album_detail_screen.dart';
@@ -285,6 +284,17 @@ class _HomeScreenState extends State<HomeScreen> {
   // ===========================================================================
   // BARRA SUPERIOR PERSISTENTE (GLOBAL HEADER)
   // ===========================================================================
+  Future<void> _shuffleAllTracks() async {
+    try {
+      final tracks = await _futureTracks;
+      if (tracks.isNotEmpty && mounted) {
+        context.read<PlayerController>().playShuffledQueue(tracks);
+      }
+    } catch (_) {
+      // Si ocurre un error al obtener las pistas, no interrumpir la interfaz.
+    }
+  }
+
   Widget _buildPersistentGlobalTopBar(NavidromeService nav) {
     return GlobalTopBar(
       searchController: _searchController,
@@ -293,6 +303,7 @@ class _HomeScreenState extends State<HomeScreen> {
       showBackButton: false,
       onSearch: _runSearch,
       onGenreSelected: _runGenreSearch,
+      onShuffle: _shuffleAllTracks,
       onSearchCleared: () {
         if (!mounted) return;
         setState(() {
@@ -1125,8 +1136,6 @@ class _HomeScreenState extends State<HomeScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const OfflineConnectionBanner(),
-          QuickActionsRow(tracks: filteredTracks),
-          const SizedBox(height: 20),
           _quickAccessGrid(),
           const SizedBox(height: 32),
           _sectionHeader(

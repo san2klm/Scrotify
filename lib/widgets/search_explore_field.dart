@@ -10,6 +10,7 @@ class SearchExploreField extends StatefulWidget {
     required this.controller,
     required this.onSearch,
     required this.onExplore,
+    this.onShuffle,
     this.onSubmitted,
     this.onGenreSelected,
     this.genreSuggestionsBuilder,
@@ -21,6 +22,7 @@ class SearchExploreField extends StatefulWidget {
   final TextEditingController controller;
   final ValueChanged<String> onSearch;
   final VoidCallback onExplore;
+  final VoidCallback? onShuffle;
   final ValueChanged<String>? onSubmitted;
   final ValueChanged<String>? onGenreSelected;
   final List<String> Function(String query)? genreSuggestionsBuilder;
@@ -87,7 +89,9 @@ class _SearchExploreFieldState extends State<SearchExploreField> {
     _overlayEntry = OverlayEntry(
       builder: (ctx) {
         return Positioned(
-          width: size.width > 0 ? size.width - 44 : 320,
+          width: size.width > 0
+              ? (size.width - (widget.onShuffle != null ? 88 : 44))
+              : 320,
           child: CompositedTransformFollower(
             link: _layerLink,
             showWhenUnlinked: false,
@@ -271,6 +275,18 @@ class _SearchExploreFieldState extends State<SearchExploreField> {
               size: 21,
             ),
           ),
+          if (widget.onShuffle != null) ...[
+            const SizedBox(width: 2),
+            IconButton(
+              tooltip: 'Mezclar todo',
+              onPressed: widget.onShuffle,
+              icon: Icon(
+                Icons.shuffle_rounded,
+                color: context.accent,
+                size: 21,
+              ),
+            ),
+          ],
         ],
       ),
     );

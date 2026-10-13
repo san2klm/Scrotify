@@ -26,6 +26,7 @@ class GlobalTopBar extends StatefulWidget implements PreferredSizeWidget {
   final VoidCallback? onLogoTap;
   final ValueChanged<String>? onGenreSelected;
   final bool showBackButton;
+  final VoidCallback? onShuffle;
 
   const GlobalTopBar({
     super.key,
@@ -39,6 +40,7 @@ class GlobalTopBar extends StatefulWidget implements PreferredSizeWidget {
     this.onNavIndexChanged,
     this.onLogoTap,
     this.showBackButton = true,
+    this.onShuffle,
   });
 
   @override
@@ -270,6 +272,7 @@ class _GlobalTopBarState extends State<GlobalTopBar> {
                   controller: _controller,
                   searching: widget.searching,
                   exploring: widget.activeNavIndex == 1,
+                  onShuffle: widget.onShuffle,
                   genreSuggestionsBuilder: (query) {
                     final genres = nav.cachedGenres;
                     if (genres.isEmpty) return const [];
