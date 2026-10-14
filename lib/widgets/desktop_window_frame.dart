@@ -1,3 +1,5 @@
+import 'dart:io' show Platform;
+
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -44,16 +46,18 @@ class _DesktopWindowFrameState extends State<DesktopWindowFrame>
     if (WindowControls.isDesktop) {
       windowManager.addListener(this);
       _syncState();
-      _mouseChannel.setMethodCallHandler((call) async {
-        if (!mounted) return;
-        if (call.method == 'togglePlayPause') {
-          _togglePlayPause(context);
-        } else if (call.method == 'skipNext') {
-          _skipNext(context);
-        } else if (call.method == 'skipPrevious') {
-          _skipPrevious(context);
-        }
-      });
+      if (Platform.isWindows) {
+        _mouseChannel.setMethodCallHandler((call) async {
+          if (!mounted) return;
+          if (call.method == 'togglePlayPause') {
+            _togglePlayPause(context);
+          } else if (call.method == 'skipNext') {
+            _skipNext(context);
+          } else if (call.method == 'skipPrevious') {
+            _skipPrevious(context);
+          }
+        });
+      }
     }
   }
 
@@ -95,7 +99,11 @@ class _DesktopWindowFrameState extends State<DesktopWindowFrame>
     final colors = Theme.of(context).colorScheme;
     final mini = context.watch<MiniPlayerController>();
     final player = context.watch<PlayerController>();
-    _mouseChannel.invokeMethod('setPlaying', player.playing);
+    if (Platform.isWindows) {
+      _mouseChannel
+          .invokeMethod('setPlaying', player.playing)
+          .catchError((_) {});
+    }
 
     final content = Column(
       children: [
