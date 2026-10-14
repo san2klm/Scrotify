@@ -9,6 +9,7 @@
 
 #include <memory>
 #include <string>
+#include <shobjidl.h>
 
 #include "win32_window.h"
 
@@ -20,6 +21,7 @@ class FlutterWindow : public Win32Window {
   virtual ~FlutterWindow();
 
   void SendMouseHotkey(const std::string& action);
+  void UpdateTaskbarPlayPause(bool is_playing);
 
  protected:
   // Win32Window:
@@ -29,14 +31,24 @@ class FlutterWindow : public Win32Window {
                          LPARAM const lparam) noexcept override;
 
  private:
+  void InitTaskbarToolbar();
+
   // The project to run.
   flutter::DartProject project_;
 
   // The Flutter instance hosted by this window.
   std::unique_ptr<flutter::FlutterViewController> flutter_controller_;
 
-  // Channel to notify Flutter about global mouse hotkeys.
+  // Channel to notify Flutter about global mouse hotkeys and taskbar events.
   std::unique_ptr<flutter::MethodChannel<flutter::EncodableValue>> mouse_channel_;
+
+  ITaskbarList3* taskbar_list_ = nullptr;
+  UINT taskbar_button_created_msg_ = 0;
+  bool is_playing_ = false;
+  HICON icon_prev_ = nullptr;
+  HICON icon_play_ = nullptr;
+  HICON icon_pause_ = nullptr;
+  HICON icon_next_ = nullptr;
 };
 
 #endif  // RUNNER_FLUTTER_WINDOW_H_

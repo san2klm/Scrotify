@@ -88,9 +88,26 @@ class ThemeController extends ChangeNotifier {
     }
   }
 
-  /// Sin carpeta elegida, se muestra y usa la carpeta real de importados.
+  /// Sin carpeta elegida, se muestra y usa la carpeta real de importados o la carpeta de descargas.
   Future<void> _resolveDefaultDir() async {
-    if (_themesDir.isNotEmpty) return;
+    if (_themesDir.isNotEmpty && await Directory(_themesDir).exists()) return;
+
+    if (Platform.isWindows) {
+      final userProfile = Platform.environment['USERPROFILE'];
+      if (userProfile != null) {
+        final candidates = [
+          '$userProfile\\Downloads\\temas-Scrotify-20261006T210310Z-1-001',
+          '$userProfile\\Downloads\\temas-Scrotify',
+          '$userProfile\\Downloads\\fondos',
+        ];
+        for (final candidate in candidates) {
+          if (await Directory(candidate).exists()) {
+            _themesDir = candidate;
+            return;
+          }
+        }
+      }
+    }
     _themesDir = (await _importsDir()).path;
   }
 

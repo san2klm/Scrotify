@@ -50,6 +50,8 @@ class _DesktopWindowFrameState extends State<DesktopWindowFrame>
           _togglePlayPause(context);
         } else if (call.method == 'skipNext') {
           _skipNext(context);
+        } else if (call.method == 'skipPrevious') {
+          _skipPrevious(context);
         }
       });
     }
@@ -92,6 +94,8 @@ class _DesktopWindowFrameState extends State<DesktopWindowFrame>
     if (!WindowControls.isDesktop) return widget.child;
     final colors = Theme.of(context).colorScheme;
     final mini = context.watch<MiniPlayerController>();
+    final player = context.watch<PlayerController>();
+    _mouseChannel.invokeMethod('setPlaying', player.playing);
 
     final content = Column(
       children: [
