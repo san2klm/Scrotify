@@ -179,6 +179,27 @@ class _ThemesSectionState extends State<ThemesSection> {
                     label: 'Añadir .zip',
                     primary: true,
                     onTap: () => _pickZip(context, themes)),
+                _FolderButton(
+                    icon: Icons.auto_awesome_rounded,
+                    label: 'Temas incluidos',
+                    onTap: () async {
+                      final count =
+                          await themes.restoreBundledThemes(overwrite: true);
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              count > 0
+                                  ? '$count temas incluidos listos'
+                                  : 'Todos los temas incluidos ya están listos',
+                              style: TextStyle(color: context.textPrimary),
+                            ),
+                            backgroundColor: context.bgCard,
+                            behavior: SnackBarBehavior.floating,
+                          ),
+                        );
+                      }
+                    }),
               ]),
             ],
           ),

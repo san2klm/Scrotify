@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:archive/archive.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart' show rootBundle, ByteData;
 import 'package:path_provider/path_provider.dart';
 
 import 'app_theme.dart';
@@ -183,8 +184,62 @@ class ThemeController extends ChangeNotifier {
     try {
       await _resolveDefaultDir();
     } catch (_) {}
+    try {
+      await _ensureBundledThemes();
+    } catch (_) {}
     notifyListeners();
     await rescan();
+  }
+
+  /// Extrae automáticamente los temas incluidos en el bundle de la app en la
+  /// primera ejecución si la carpeta de importados no los tiene instalados.
+  Future<void> _ensureBundledThemes() async {
+    try {
+      final imports = await _importsDir();
+      final marker = File('${imports.path}/.bundled_installed_v1');
+      if (await marker.exists()) return;
+
+      final count = await restoreBundledThemes(overwrite: false);
+      if (count >= 0) {
+        await marker.writeAsString('v1');
+      }
+    } catch (err) {
+      debugPrint('theme_controller: _ensureBundledThemes ignorado: $err');
+    }
+  }
+
+  /// Extrae o restablece los temas empaquetados en la app (assets/themes/bundled_themes.zip).
+  /// Retorna la cantidad de temas extraídos/actualizados.
+  Future<int> restoreBundledThemes({bool overwrite = false}) async {
+    try {
+      final imports = await _importsDir();
+      final ByteData data;
+      try {
+        data = await rootBundle.load('assets/themes/bundled_themes.zip');
+      } catch (_) {
+        return 0;
+      }
+      final bytes = data.buffer.asUint8List();
+      final archive = ZipDecoder().decodeBytes(bytes);
+      int count = 0;
+      for (final file in archive) {
+        if (!file.isFile) continue;
+        final name = file.name.split('/').last.split('\\').last;
+        if (!name.toLowerCase().endsWith('.zip')) continue;
+        final target = File('${imports.path}/$name');
+        if (overwrite || !await target.exists()) {
+          await target.writeAsBytes(file.content as List<int>, flush: true);
+          count++;
+        }
+      }
+      final marker = File('${imports.path}/.bundled_installed_v1');
+      await marker.writeAsString('v1');
+      await rescan();
+      return count;
+    } catch (e) {
+      debugPrint('theme_controller: restoreBundledThemes error: $e');
+      return 0;
+    }
   }
 
   Future<void> _saveConfig() async {
@@ -231,6 +286,7 @@ class ThemeController extends ChangeNotifier {
 
       final thumbs = await _thumbDir();
       final loaded = <AppTheme>[];
+      final seenThemeIds = <String>{};
       for (final zip in zips) {
         try {
           final bytes = await zip.readAsBytes();
@@ -249,7 +305,9 @@ class ThemeController extends ChangeNotifier {
             thumbnailPath: thumbPath,
           );
           if (theme != null) {
-            loaded.add(theme);
+            if (seenThemeIds.add(theme.id)) {
+              loaded.add(theme);
+            }
           } else {
             _skippedInvalid++;
           }
