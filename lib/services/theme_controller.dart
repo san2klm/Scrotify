@@ -196,12 +196,12 @@ class ThemeController extends ChangeNotifier {
   Future<void> _ensureBundledThemes() async {
     try {
       final imports = await _importsDir();
-      final marker = File('${imports.path}/.bundled_installed_v1');
+      final marker = File('${imports.path}/.bundled_installed_v2');
       if (await marker.exists()) return;
 
-      final count = await restoreBundledThemes(overwrite: false);
+      final count = await restoreBundledThemes(overwrite: true);
       if (count >= 0) {
-        await marker.writeAsString('v1');
+        await marker.writeAsString('v2');
       }
     } catch (err) {
       debugPrint('theme_controller: _ensureBundledThemes ignorado: $err');
@@ -232,8 +232,8 @@ class ThemeController extends ChangeNotifier {
           count++;
         }
       }
-      final marker = File('${imports.path}/.bundled_installed_v1');
-      await marker.writeAsString('v1');
+      final marker = File('${imports.path}/.bundled_installed_v2');
+      await marker.writeAsString('v2');
       await rescan();
       return count;
     } catch (e) {
