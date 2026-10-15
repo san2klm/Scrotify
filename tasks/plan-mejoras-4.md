@@ -158,7 +158,7 @@ El test va en el archivo de pruebas del servicio, si ya existe.
   - Test: el mensaje `add_to_queue` del invitado no contiene `t=`, `s=` ni `u=`.
   - Test equivalente para el codec de Connect.
 
-### [ ] 7. Emparejamiento por código sin autenticar al PC (R)
+### [x] 7. Emparejamiento por código sin autenticar al PC (R)
 - **Dónde:** `lib/services/pairing_client.dart:227` (`http://$host:$port/pair/claim`).
   - El móvil manda un `find` por UDP y acepta el primer `here` que responda.
 - **Ataque:** un equipo en la misma red responde antes, recibe el código de
@@ -189,7 +189,7 @@ El test va en el archivo de pruebas del servicio, si ya existe.
 - **Arreglo:** `allowBackup="false"` + `fullBackupContent="false"` +
   `dataExtractionRules` vacías.
 
-### [ ] 10. Respaldo de credenciales en texto plano (R)
+### [x] 10. Respaldo de credenciales en texto plano (R)
 - **Dónde:** `lib/services/secure_storage.dart:51-89`.
   - El JSON de respaldo no lleva `chmod` en Windows.
   - `secureRead` (~l.103) lo consulta aunque el keyring funcione.
@@ -201,7 +201,7 @@ El test va en el archivo de pruebas del servicio, si ya existe.
 - **Aceptación:** tests de migración (respaldo presente + keyring OK →
   respaldo borrado).
 
-### [ ] 11. El anfitrión Jam en LAN no limita los mensajes (R)
+### [x] 11. El anfitrión Jam en LAN no limita los mensajes (R)
 - **Dónde:** `lib/services/jam_host_service.dart:~405-410` hace `utf8.decode`
   + `jsonDecode` del frame tal como llega.
 - **Arreglo:**
@@ -211,7 +211,7 @@ El test va en el archivo de pruebas del servicio, si ya existe.
 - **Aceptación:** test con un frame de 1 MB: el socket se cierra y el anfitrión
   sigue atendiendo a los demás.
 
-### [ ] 12. Emparejamiento: datos expuestos y bloqueo global (R)
+### [~] 12. Emparejamiento: datos expuestos y bloqueo global (R)
 - **Datos expuestos:** el `discover` (`pairing_server.dart`, final de
   `_handleDiscoveryDatagram`) y `/pair/status` exponen `serverUrl`. Quitarlo.
 - **Bloqueo global:**
@@ -223,7 +223,7 @@ El test va en el archivo de pruebas del servicio, si ya existe.
   (`Future.delayed(500ms, stop)`) puede cerrar una sesión nueva. Usar un
   `Timer` cancelable o un contador de generación.
 
-### [ ] 13. Bloqueo de PIN de Jam LAN sin distinguir IP (R)
+### [x] 13. Bloqueo de PIN de Jam LAN sin distinguir IP (R)
 - **Dónde:** `jam_host_service.dart:456-462` + `jam_security.dart:13-33`.
   - 10 fallos por minuto de cualquiera bloquean todas las uniones, incluidas
     las reconexiones con token válido.
@@ -231,7 +231,7 @@ El test va en el archivo de pruebas del servicio, si ya existe.
   - Contar por `remoteAddress`.
   - La ruta `participantId + reconnectToken` no pasa por el bloqueo de PIN.
 
-### [ ] 14. jam-server: primer admin sin protección (R)
+### [x] 14. jam-server: primer admin sin protección (R)
 - **Problema:** `docker-compose.yml:8` deja `ADMIN_PASSWORD` vacío y
   `admin.js` acepta `POST /admin/api/setup` mientras no haya admin. Tras
   desplegar, cualquiera puede apropiarse del panel y cambiar `navidromeUrl`.
@@ -724,3 +724,10 @@ robustez y las funciones nuevas.
   - 37 (parcial): Dockerfile usa `node src/server.js` y healthcheck con `${PORT}`.
   - 45: CI con jobs `windows` y `android`, Flutter 3.47.5 fijo (no ejecutado aún).
   - Pairing: estado `paired` antes de responder; cierre con `Timer` cancelable (parte del 12).
+
+- 2026-10-15 (2) — Resto de la Fase 1 (Windows: 890 tests verdes; jam-server 56).
+  - 7: el `find` UDP lleva un nonce y el PC responde con `HMAC(código, nonce)`; el código ya no viaja ni se repite en la respuesta. Un PC falso es ignorado (test). El claim por HTTP sigue enviando el código, pero solo al host verificado. Sin QR con huella (no hizo falta).
+  - 12 (parcial): `serverUrl` fuera de `discover` y `/pair/status`; fallos por IP (5) y cierre de sesión solo a los 50 totales. Falta contar por remitente en el relé (ntfy).
+  - 11: frames > 64 KB cierran con 1009; saludo en 5 s o se cierra. 13: bloqueo de PIN por IP; la reconexión con token válido no pasa por él.
+  - 14: sin administrador, `/admin/api/setup` exige un token de un solo uso que se imprime en el registro (la UI tiene un campo); `Secure` de la cookie respeta `trustProxy`.
+  - 10: respaldo cifrado con DPAPI en Windows; con el keyring funcionando, la escritura/lectura borra el respaldo. Falta el aviso en Ajustes → Diagnóstico cuando `SecureStorage.usingFallback` es verdadero.

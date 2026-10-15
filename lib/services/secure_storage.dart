@@ -5,6 +5,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:path_provider/path_provider.dart';
 
+import '../utils/dpapi.dart';
+
 /// Wrapper tipado sobre `flutter_secure_storage` para credenciales de Navidrome.
 ///
 /// En Linux `flutter_secure_storage` usa libsecret y necesita el servicio
@@ -18,6 +20,16 @@ import 'package:path_provider/path_provider.dart';
 /// respaldo (`fallback`) con permisos 600. Es menos seguro que el keyring,
 /// pero evita el crash y permite seguir usando la app.
 class SecureStorage {
+  /// Sustituye el almacén del sistema y el archivo de respaldo en pruebas.
+  @visibleForTesting
+  static SecureStorageBackend? backendOverride;
+
+  @visibleForTesting
+  static File? fallbackFileOverride;
+
+  static SecureStorageBackend get _backend =>
+      backendOverride ?? _FlutterBackend();
+
   static const _storage = FlutterSecureStorage(
     aOptions: AndroidOptions(),
     iOptions: IOSOptions(
@@ -33,6 +45,7 @@ class SecureStorage {
   static const _kHasCredentials = 'scrotify.has_credentials';
 
   static const _fallbackFileName = 'scrotify_credentials_fallback.json';
+  static const _dpapiPrefix = 'dpapi:';
   static bool _fallbackWarned = false;
 
   /// `true` si ya tuvimos que usar el archivo de respaldo (keyring no usable).
@@ -49,6 +62,8 @@ class SecureStorage {
   }
 
   static Future<File> _fallbackFile() async {
+    final override = fallbackFileOverride;
+    if (override != null) return override;
     final dir = await getApplicationSupportDirectory();
     return File('${dir.path}/$_fallbackFileName');
   }
@@ -57,8 +72,13 @@ class SecureStorage {
     try {
       final file = await _fallbackFile();
       if (!await file.exists()) return {};
-      final raw = await file.readAsString();
+      var raw = await file.readAsString();
       if (raw.isEmpty) return {};
+      if (raw.startsWith(_dpapiPrefix)) {
+        // Respaldo cifrado con DPAPI (Windows).
+        final blob = base64Decode(raw.substring(_dpapiPrefix.length));
+        raw = utf8.decode(Dpapi.unprotect(Uint8List.fromList(blob)));
+      }
       final decoded = jsonDecode(raw) as Map<String, dynamic>;
       return decoded.map((k, v) => MapEntry(k, v.toString()));
     } catch (_) {
@@ -83,7 +103,14 @@ class SecureStorage {
           }
         }
       }
-      await file.writeAsString(jsonEncode(data), flush: true);
+      var contents = jsonEncode(data);
+      if (Dpapi.isSupported) {
+        // En Windows no hay `chmod`: el respaldo se cifra con DPAPI para que
+        // solo este usuario pueda leerlo.
+        final blob = Dpapi.protect(Uint8List.fromList(utf8.encode(contents)));
+        contents = '$_dpapiPrefix${base64Encode(blob)}';
+      }
+      await file.writeAsString(contents, flush: true);
     } catch (e) {
       debugPrint('SecureStorage: no se pudo escribir fallback: $e');
     }
@@ -98,10 +125,13 @@ class SecureStorage {
       return inMemoryTestStore![key];
     }
     try {
-      final value = await _storage.read(key: key);
+      final value = await _backend.read(key);
       // Si el keyring responde, úsalo. Si está vacío, mira también
       // el fallback (por si se guardó antes sin keyring).
-      if (value != null) return value;
+      if (value != null) {
+        await _dropFromFallback(key); // migración: ya no hace falta el respaldo
+        return value;
+      }
       final fallback = await _loadFallback();
       return fallback[key];
     } catch (e) {
@@ -117,7 +147,9 @@ class SecureStorage {
       return;
     }
     try {
-      await _storage.write(key: key, value: value);
+      await _backend.write(key, value);
+      // El keyring funciona: el respaldo en disco ya no debe guardar el secreto.
+      await _dropFromFallback(key);
     } catch (e) {
       _noteFallback(e);
       final fallback = await _loadFallback();
@@ -132,7 +164,7 @@ class SecureStorage {
       return;
     }
     try {
-      await _storage.delete(key: key);
+      await _backend.delete(key);
     } catch (e) {
       _noteFallback(e);
     }
@@ -145,6 +177,23 @@ class SecureStorage {
     } catch (e) {
       debugPrint(
           'SecureStorage: no se pudo actualizar el respaldo al borrar una clave: $e');
+    }
+  }
+
+  /// Quita [key] del archivo de respaldo y lo borra si queda vacío.
+  static Future<void> _dropFromFallback(String key) async {
+    try {
+      final file = await _fallbackFile();
+      if (!await file.exists()) return;
+      final fallback = await _loadFallback();
+      if (fallback.remove(key) == null) return;
+      if (fallback.isEmpty) {
+        await file.delete();
+      } else {
+        await _saveFallback(fallback);
+      }
+    } catch (e) {
+      debugPrint('SecureStorage: no se pudo limpiar el respaldo: $e');
     }
   }
 
@@ -207,4 +256,23 @@ class SecureStorage {
       password: password,
     );
   }
+}
+
+/// Almacén seguro del sistema (keyring / Keychain / Credential Locker).
+abstract class SecureStorageBackend {
+  Future<String?> read(String key);
+  Future<void> write(String key, String value);
+  Future<void> delete(String key);
+}
+
+class _FlutterBackend implements SecureStorageBackend {
+  @override
+  Future<String?> read(String key) => SecureStorage._storage.read(key: key);
+
+  @override
+  Future<void> write(String key, String value) =>
+      SecureStorage._storage.write(key: key, value: value);
+
+  @override
+  Future<void> delete(String key) => SecureStorage._storage.delete(key: key);
 }
