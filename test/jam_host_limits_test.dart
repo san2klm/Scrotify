@@ -4,6 +4,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:navidrome_client/models/jam_models.dart';
+import 'package:navidrome_client/services/jam_guest_service.dart';
 import 'package:navidrome_client/services/jam_host_service.dart';
 
 void main() {
@@ -47,5 +48,45 @@ void main() {
     final idle = await open();
     final code = await closeCodeOf(idle, const Duration(seconds: 8));
     expect(code, WebSocketStatus.policyViolation);
+  });
+
+  Future<Map<String, dynamic>> joinWith(WebSocket socket, String pin) async {
+    final reply = socket
+        .map((d) => jsonDecode(d as String) as Map<String, dynamic>)
+        .firstWhere((m) => m['op'] == 'join_response');
+    socket.add(jsonEncode({
+      'op': 'join_request',
+      'pin': pin,
+      'name': 'Ana',
+      'avatarColorValue': 0xFF10B981,
+    }));
+    return reply.timeout(const Duration(seconds: 3));
+  }
+
+  test('un PIN erróneo se rechaza con código tipado bad_pin', () async {
+    final socket = await open();
+    final reply = await joinWith(socket, 'ZZZZZZ');
+    expect(reply['accepted'], isFalse);
+    expect(reply['code'], 'bad_pin');
+  });
+
+  test('un invitado en gracia no es desalojado por el heartbeat', () async {
+    final socket = await open();
+    final reply = await joinWith(socket, 'JK94MN');
+    expect(reply['accepted'], isTrue);
+    expect(host.participants, hasLength(1));
+
+    await socket.close();
+    await Future<void>.delayed(const Duration(milliseconds: 200));
+    // Pasan 40 s: más que ping + pong (25 s), menos que la gracia efectiva.
+    host.checkHeartbeatAndPing(DateTime.now().add(const Duration(seconds: 40)));
+    expect(host.participants, hasLength(1));
+  });
+
+  test('la gracia del anfitrión cubre el silencio que tolera el invitado', () {
+    // Si la gracia fuera menor, el anfitrión descartaría al invitado mientras
+    // éste aún está reconectando.
+    expect(host.disconnectGracePeriod,
+        greaterThanOrEqualTo(JamGuestService().hostSilenceTimeout));
   });
 }

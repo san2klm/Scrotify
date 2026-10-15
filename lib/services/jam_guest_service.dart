@@ -116,6 +116,23 @@ class JamGuestService {
   /// Último motivo de fallo de [connect], en lenguaje legible para mostrar en UI.
   String? lastError;
 
+  /// Código tipado del último rechazo del anfitrión (ver `_rejectJoin`).
+  String? lastRejectCode;
+
+  /// Desde cuándo se intenta reconectar; pasado [reconnectGiveUp] se renuncia.
+  DateTime? _reconnectStartedAt;
+  Duration reconnectGiveUp = const Duration(minutes: 5);
+
+  /// Rechazos que no se arreglan reintentando.
+  static const _terminalRejectCodes = {
+    'bad_pin',
+    'bad_password',
+    'expired',
+    'kicked',
+    'full',
+    'already_joined',
+  };
+
   // ---------------------------------------------------------------------------
   // Descubrimiento UDP en Red Local (Radar)
   // ---------------------------------------------------------------------------
@@ -396,6 +413,7 @@ class JamGuestService {
   }) async {
     _isExplicitDisconnect = false;
     _reconnectAttempts = 0;
+    _reconnectStartedAt = null;
     _isReconnecting = false;
     _reconnectTimer?.cancel();
     _reconnectTimer = null;
@@ -442,6 +460,7 @@ class JamGuestService {
       _isConnected = false;
     }
     lastError = null;
+    lastRejectCode = null;
 
     if (host.trim().isEmpty || port <= 0 || port > 65535) {
       lastError = 'IP o puerto inválido.';
@@ -536,6 +555,9 @@ class JamGuestService {
                 final accepted = msg['accepted'] as bool? ?? false;
                 if (accepted) {
                   joinAccepted = true;
+                  lastRejectCode = null;
+                  // Una respuesta tardía no debe dejar un reintento en marcha.
+                  _reconnectTimer?.cancel();
                   final receivedToken = msg['token'] as String?;
                   if (receivedToken != null) {
                     _savedReconnectToken = receivedToken;
@@ -573,6 +595,7 @@ class JamGuestService {
 
                   _isConnected = true;
                   _reconnectAttempts = 0;
+                  _reconnectStartedAt = null;
                   _updateConnectionState(JamConnectionState.connected);
                   _startSilenceDetection();
                   _startClockSync();
@@ -590,6 +613,7 @@ class JamGuestService {
                   final reason = msg['reason'] as String? ??
                       'El anfitrión rechazó la conexión.';
                   lastError = reason;
+                  lastRejectCode = msg['code'] as String?;
                   onError?.call(reason);
                   if (!completer.isCompleted) {
                     completer.complete(false);
@@ -623,6 +647,7 @@ class JamGuestService {
 
                   _isConnected = true;
                   _reconnectAttempts = 0;
+                  _reconnectStartedAt = null;
                   _updateConnectionState(JamConnectionState.connected);
                   _startSilenceDetection();
                   _startClockSync();
@@ -826,6 +851,9 @@ class JamGuestService {
       if (!connected && !isReconnect) {
         lastError ??= 'Conexión cerrada sin respuesta del host.';
         await disconnect();
+      } else if (!connected) {
+        // Vencido el plazo: no dejar vivo el socket del intento fallido.
+        _teardownSocket();
       }
       return connected;
     } on TimeoutException {
@@ -921,6 +949,13 @@ class JamGuestService {
   void _scheduleReconnect() {
     if (_isExplicitDisconnect || _isReconnecting) return;
     _reconnectTimer?.cancel();
+    final startedAt = _reconnectStartedAt ??= DateTime.now();
+    if (DateTime.now().difference(startedAt) > reconnectGiveUp) {
+      lastError ??= 'No se pudo reconectar con el anfitrión.';
+      _updateConnectionState(JamConnectionState.failed);
+      _teardownSocket();
+      return;
+    }
 
     final int baseSeconds;
     if (_reconnectAttempts < 5) {
@@ -971,11 +1006,18 @@ class JamGuestService {
     _isReconnecting = false;
     if (success) {
       _reconnectAttempts = 0;
+      _reconnectStartedAt = null;
       _updateConnectionState(JamConnectionState.connected);
     } else if (!_isExplicitDisconnect) {
-      if (lastError != null &&
-          (lastError!.contains('inválido') ||
-              lastError!.contains('expirada'))) {
+      final code = lastRejectCode;
+      // Con código tipado se decide por él; el texto solo sirve de respaldo
+      // con anfitriones antiguos que no lo envían.
+      final terminal = code != null
+          ? _terminalRejectCodes.contains(code)
+          : (lastError != null &&
+              (lastError!.contains('inválido') ||
+                  lastError!.contains('expirada')));
+      if (terminal) {
         _updateConnectionState(JamConnectionState.failed);
       } else {
         _scheduleReconnect();
@@ -1080,6 +1122,7 @@ class JamGuestService {
     _silenceTimer = null;
     _isReconnecting = false;
     _reconnectAttempts = 0;
+    _reconnectStartedAt = null;
 
     if (_isConnected) {
       try {

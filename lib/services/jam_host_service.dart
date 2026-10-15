@@ -181,7 +181,6 @@ abstract class _JamHostBase {
   bool chatEnabled = true;
 
   OnJamParticipantLeft? onParticipantLeft;
-
 }
 
 /// Servidor de sesión Jam que corre en el dispositivo Anfitrión (Host).
@@ -416,7 +415,8 @@ class JamHostService extends _JamHostBase with _JamHostDiscovery {
     // Sin saludo en pocos segundos: conexión inútil (o un sondeo lento).
     final helloTimer = Timer(_JamHostBase.helloTimeout, () {
       if (participantId == null) {
-        unawaited(socket.close(WebSocketStatus.policyViolation, 'hello timeout')
+        unawaited(socket
+            .close(WebSocketStatus.policyViolation, 'hello timeout')
             .catchError((Object _) {}));
       }
     });
@@ -485,14 +485,16 @@ class JamHostService extends _JamHostBase with _JamHostDiscovery {
               final validReconnect = bypassToken != null &&
                   bypassId != null &&
                   _participantTokens[bypassId] != null &&
-                  constantTimeEquals(bypassToken, _participantTokens[bypassId]!);
+                  constantTimeEquals(
+                      bypassToken, _participantTokens[bypassId]!);
               if (!validReconnect && joinFailures.isBlocked()) {
-                _rejectJoin(socket, 'Demasiados intentos. Prueba más tarde.');
+                _rejectJoin(socket, 'Demasiados intentos. Prueba más tarde.',
+                    code: 'rate_limited');
                 return;
               }
               if (pin == null || pin != _pinCode?.value) {
                 joinFailures.recordFailure();
-                _rejectJoin(socket, 'PIN incorrecto.');
+                _rejectJoin(socket, 'PIN incorrecto.', code: 'bad_pin');
                 return;
               }
 
@@ -544,14 +546,16 @@ class JamHostService extends _JamHostBase with _JamHostDiscovery {
                   }));
                   return;
                 } else {
-                  _rejectJoin(socket,
-                      'Token de reconexión inválido o sesión expirada.');
+                  _rejectJoin(
+                      socket, 'Token de reconexión inválido o sesión expirada.',
+                      code: 'expired');
                   return;
                 }
               }
 
               if (participantId != null) {
-                _rejectJoin(socket, 'Esta conexión ya está unida a la sesión.');
+                _rejectJoin(socket, 'Esta conexión ya está unida a la sesión.',
+                    code: 'already_joined');
                 return;
               }
 
@@ -561,7 +565,7 @@ class JamHostService extends _JamHostBase with _JamHostDiscovery {
                 final given = msg['password'];
                 if (given is! String || !constantTimeEquals(given, expected)) {
                   joinFailures.recordFailure();
-                  _rejectJoin(socket, 'PIN incorrecto.');
+                  _rejectJoin(socket, 'PIN incorrecto.', code: 'bad_password');
                   return;
                 }
               }
@@ -572,6 +576,7 @@ class JamHostService extends _JamHostBase with _JamHostDiscovery {
                 _rejectJoin(
                   socket,
                   'La sesión alcanzó el límite de $_maxParticipants participantes.',
+                  code: 'full',
                 );
                 return;
               }
@@ -583,7 +588,8 @@ class JamHostService extends _JamHostBase with _JamHostDiscovery {
                       ? requestedName.substring(0, 48)
                       : requestedName;
               if (_kickedNames.contains(name.toLowerCase())) {
-                _rejectJoin(socket, 'Has sido expulsado de esta sesión.');
+                _rejectJoin(socket, 'Has sido expulsado de esta sesión.',
+                    code: 'kicked');
                 return;
               }
               final color =
@@ -612,7 +618,8 @@ class JamHostService extends _JamHostBase with _JamHostDiscovery {
                 final accepted = await onJoinRequested!(participant, socket);
                 if (!accepted) {
                   _removeParticipant(id);
-                  _rejectJoin(socket, 'El anfitrión rechazó la solicitud.');
+                  _rejectJoin(socket, 'El anfitrión rechazó la solicitud.',
+                      code: 'rejected');
                 } else {
                   final currentSessionState =
                       getCurrentSessionState?.call() ?? _lastSessionState;
@@ -891,6 +898,9 @@ class JamHostService extends _JamHostBase with _JamHostDiscovery {
     final timeoutThreshold = pingInterval + pongTimeout;
 
     for (final id in _participants.keys.toList()) {
+      // Quien está en gracia (socket caído) se desaloja al vencer su temporizador,
+      // no antes: `pingInterval + pongTimeout` es menor que la gracia.
+      if (_graceTimers.containsKey(id)) continue;
       final lastSeen = _lastInboundActivity[id] ?? now;
       if (now.difference(lastSeen) > timeoutThreshold) {
         debugPrint(
@@ -935,11 +945,16 @@ class JamHostService extends _JamHostBase with _JamHostDiscovery {
         'queueRevision': _lastSessionState?.queueRevision ?? 0,
       };
 
-  void _rejectJoin(WebSocket socket, String reason) {
+  /// [code] es el motivo tipado (`bad_pin`, `bad_password`, `expired`,
+  /// `kicked`, `full`, `rate_limited`, `already_joined`, `rejected`): el
+  /// cliente decide con él si reintenta, sin buscar texto en [reason].
+  void _rejectJoin(WebSocket socket, String reason,
+      {String code = 'rejected'}) {
     socket.add(jsonEncode({
       'op': 'join_response',
       'accepted': false,
       'reason': reason,
+      'code': code,
     }));
     unawaited(socket.close());
   }
@@ -1002,7 +1017,8 @@ class JamHostService extends _JamHostBase with _JamHostDiscovery {
         }
       } catch (e) {
         // Ese invitado se queda con el estado anterior hasta reconectar.
-        debugPrint('JamHostService: no se pudo enviar el estado a un invitado: $e');
+        debugPrint(
+            'JamHostService: no se pudo enviar el estado a un invitado: $e');
       }
     }
   }
