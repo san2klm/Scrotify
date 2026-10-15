@@ -1281,6 +1281,49 @@ class PlayerController extends ChangeNotifier {
     );
   }
 
+  /// Inicia el modo Radio a partir de una pista semilla y una lista de canciones similares.
+  /// Si la pista semilla ya se está reproduciendo, mantiene la reproducción fluida sin reiniciar
+  /// desde cero y reemplaza el resto de la cola con la emisora.
+  Future<void> playRadio(
+    Track seedTrack,
+    List<Track> similarTracks, {
+    bool forceRestart = false,
+  }) async {
+    final tracks = <Track>[seedTrack];
+    final seen = <String>{seedTrack.id};
+    for (final t in similarTracks) {
+      if (seen.add(t.id)) {
+        tracks.add(t);
+      }
+    }
+
+    final radioPlaylist = Playlist(
+      id: 'radio_${seedTrack.id}',
+      name: 'Radio: ${seedTrack.title}',
+      coverArtUrl: seedTrack.albumArtUrl,
+      songCount: tracks.length,
+      duration: 0,
+    );
+
+    if (_mirror) {
+      _remote!.playQueue(tracks, 0);
+      return;
+    }
+
+    if (!forceRestart && currentTrack?.id == seedTrack.id && playing) {
+      _cancelFade();
+      _sourcePlaylist = radioPlaylist;
+      _queue = List.of(tracks);
+      _order = List.generate(tracks.length, (i) => i);
+      _pos = 0;
+      _prepareNextForSkip();
+      notifyListeners();
+      return;
+    }
+
+    await playQueue(tracks, startIndex: 0, sourcePlaylist: radioPlaylist);
+  }
+
   /// Añade una pista al final de la cola de reproducción.
   /// Si no hay nada reproduciéndose, empieza a reproducirla.
   Future<void> addToQueue(Track track) async {

@@ -13,6 +13,7 @@ import '../services/player_controller.dart';
 import '../services/theme_controller.dart';
 import 'cover_art.dart';
 import 'interactive_artist_text.dart';
+import 'jam_queue_panel.dart';
 import 'rating_stars.dart';
 import 'server_activity_panel.dart';
 import '../utils/app_colors.dart';
@@ -35,6 +36,101 @@ class TrackContextMenu extends StatelessWidget {
       ),
       builder: (ctx) => TrackContextMenu(track: track, playlistId: playlistId),
     );
+  }
+
+  /// Inicia el modo Radio para una canción: obtiene canciones similares del servidor
+  /// o de la biblioteca y las carga en la cola de reproducción.
+  static Future<void> startSongRadio(BuildContext context, Track track) async {
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    final theme = context.read<ThemeController>().active;
+    final nav = context.read<NavidromeService>();
+    final player = context.read<PlayerController>();
+    final jam = context.read<JamController>();
+
+    if (jam.isGuest && !(jam.localParticipant?.canManageQueue ?? false)) {
+      messenger?.showSnackBar(
+        SnackBar(
+          content: const Text(
+              'Solo el anfitrión puede iniciar la radio en una sesión Jam'),
+          backgroundColor: theme.bgElevated,
+          duration: const Duration(seconds: 3),
+        ),
+      );
+      return;
+    }
+
+    messenger?.showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: theme.accent,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                'Iniciando radio de "${track.title}"...',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ),
+        duration: const Duration(seconds: 2),
+        backgroundColor: theme.bgElevated,
+      ),
+    );
+
+    try {
+      final similar = await nav.getSimilarSongs(track, count: 50);
+      if (similar.isEmpty) {
+        messenger?.hideCurrentSnackBar();
+        messenger?.showSnackBar(
+          SnackBar(
+            content: Text(
+                'No se encontraron canciones similares para "${track.title}"'),
+            backgroundColor: theme.bgElevated,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+        return;
+      }
+
+      await player.playRadio(track, similar);
+
+      messenger?.hideCurrentSnackBar();
+      messenger?.showSnackBar(
+        SnackBar(
+          content: Text(
+              'Radio de "${track.title}" iniciada (${similar.length + 1} canciones)'),
+          backgroundColor: theme.bgElevated,
+          duration: const Duration(seconds: 4),
+          action: SnackBarAction(
+            label: 'Ver cola',
+            textColor: theme.accent,
+            onPressed: () {
+              if (context.mounted) {
+                JamQueuePanel.show(context);
+              }
+            },
+          ),
+        ),
+      );
+    } catch (e) {
+      debugPrint('Error iniciando radio de la canción: $e');
+      messenger?.hideCurrentSnackBar();
+      messenger?.showSnackBar(
+        SnackBar(
+          content: Text('Error al iniciar la radio: $e'),
+          backgroundColor: theme.bgElevated,
+        ),
+      );
+    }
   }
 
   @override
@@ -519,12 +615,7 @@ class TrackContextMenu extends StatelessWidget {
                 ),
                 onTap: () {
                   Navigator.of(context).pop();
-                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                    content:
-                        const Text('Ir a radio de la canción (Próximamente)'),
-                    backgroundColor:
-                        context.read<ThemeController>().active.bgElevated,
-                  ));
+                  startSongRadio(context, track);
                 },
               ),
 

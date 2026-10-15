@@ -266,6 +266,19 @@ class _PlayerScreenState extends State<PlayerScreen> {
                                   }),
                                 ),
                                 IconButton(
+                                  icon: Icon(Icons.radio_rounded,
+                                      color: (player.sourcePlaylist?.id
+                                                  .startsWith('radio_') ??
+                                              false)
+                                          ? context.accent
+                                          : context.textSecondary,
+                                      size: 24),
+                                  tooltip: 'Radio de la canción',
+                                  onPressed: () =>
+                                      TrackContextMenu.startSongRadio(
+                                          context, track),
+                                ),
+                                IconButton(
                                   icon: Icon(Icons.queue_music_rounded,
                                       color: context.textSecondary, size: 24),
                                   tooltip: 'Cola de reproducción',

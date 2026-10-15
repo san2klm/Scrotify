@@ -2416,6 +2416,247 @@ class NavidromeService with ChangeNotifier {
     return const [];
   }
 
+  /// Obtiene canciones aleatorias del servidor (`getRandomSongs.view`).
+  /// Admite filtrar opcionalmente por [genre].
+  Future<List<Track>> getRandomSongs({int size = 50, String? genre}) async {
+    if (!_connected || _offlineMode) {
+      final downloaded =
+          localMusic?.downloadedTracks(userScope ?? serverScope) ?? [];
+      if (downloaded.isEmpty) return const [];
+      var pool = List<Track>.of(downloaded);
+      if (genre != null && genre.trim().isNotEmpty) {
+        final g = genre.trim().toLowerCase();
+        pool = pool
+            .where((t) => t.genre != null && t.genre!.trim().toLowerCase() == g)
+            .toList();
+      }
+      pool.shuffle();
+      return pool.take(size).toList();
+    }
+
+    final (salt, token) = _auth();
+    final queryParams = <String, String>{
+      'size': size.toString(),
+      'u': _user!,
+      's': salt,
+      't': token,
+      'v': '1.16.1',
+      'c': 'Psysonic',
+      'f': 'json',
+    };
+    if (genre != null && genre.trim().isNotEmpty) {
+      queryParams['genre'] = genre.trim();
+    }
+
+    try {
+      final uri = Uri.parse('$_url/rest/getRandomSongs.view')
+          .replace(queryParameters: queryParams);
+      final response = await _client.get(uri);
+      if (response.statusCode != 200) return const [];
+      final data = jsonDecode(response.body);
+      final list = data['subsonic-response']?['randomSongs']?['song'];
+      if (list == null) return const [];
+      return _asList(list)
+          .whereType<Map<String, dynamic>>()
+          .map((j) => Track.fromJson(
+                j,
+                albumArtUrl: _coverArtUrl(j['coverArt'], salt, token),
+              ))
+          .toList();
+    } catch (e) {
+      debugPrint('NavidromeService.getRandomSongs error: $e');
+      return const [];
+    }
+  }
+
+  /// Obtiene canciones similares a una pista dada (`getSimilarSongs2.view` con fallback a `getSimilarSongs.view`).
+  /// Si el servidor devuelve pocas canciones (música sin metadatos en Last.fm / Spotify),
+  /// se complementa inteligentemente con temas del mismo género (`getRandomSongs` con género),
+  /// del mismo artista (`getArtistTracks`), o canciones aleatorias de la biblioteca.
+  /// Si está sin conexión, busca dentro de las pistas descargadas.
+  Future<List<Track>> getSimilarSongs(Track track, {int count = 50}) async {
+    final results = <Track>[];
+    final seenIds = <String>{track.id};
+
+    // 1. Modo offline o desconectado
+    if (!_connected || _offlineMode) {
+      final downloaded =
+          localMusic?.downloadedTracks(userScope ?? serverScope) ?? [];
+      if (downloaded.isEmpty) return const [];
+
+      // Mismo artista
+      final sameArtist = downloaded
+          .where((t) =>
+              t.id != track.id &&
+              t.artist.trim().toLowerCase() == track.artist.trim().toLowerCase())
+          .toList();
+      for (final t in sameArtist) {
+        if (seenIds.add(t.id)) results.add(t);
+      }
+
+      // Mismo género
+      if (track.genre != null && track.genre!.trim().isNotEmpty) {
+        final g = track.genre!.trim().toLowerCase();
+        final sameGenre = downloaded
+            .where((t) =>
+                t.id != track.id &&
+                t.genre != null &&
+                t.genre!.trim().toLowerCase() == g)
+            .toList();
+        sameGenre.shuffle();
+        for (final t in sameGenre) {
+          if (seenIds.add(t.id)) results.add(t);
+        }
+      }
+
+      // Resto de pistas descargadas aleatorias
+      if (results.length < count) {
+        final rest = downloaded.where((t) => !seenIds.contains(t.id)).toList()
+          ..shuffle();
+        for (final t in rest) {
+          if (seenIds.add(t.id)) results.add(t);
+          if (results.length >= count) break;
+        }
+      }
+
+      return results.take(count).toList();
+    }
+
+    // 2. Conectado: Intentar getSimilarSongs2.view primero
+    final (salt, token) = _auth();
+    try {
+      final uri = Uri.parse('$_url/rest/getSimilarSongs2.view').replace(
+        queryParameters: {
+          'id': track.id,
+          'count': count.toString(),
+          'u': _user!,
+          's': salt,
+          't': token,
+          'v': '1.16.1',
+          'c': 'Psysonic',
+          'f': 'json',
+        },
+      );
+      final response = await _client.get(uri);
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final list = data['subsonic-response']?['similarSongs2']?['song'];
+        if (list != null) {
+          for (final j in _asList(list)) {
+            if (j is Map<String, dynamic>) {
+              final t = Track.fromJson(j,
+                  albumArtUrl: _coverArtUrl(j['coverArt'], salt, token));
+              if (seenIds.add(t.id)) {
+                results.add(t);
+              }
+            }
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('NavidromeService.getSimilarSongs (similarSongs2) error: $e');
+    }
+
+    // 3. Fallback a getSimilarSongs.view si similarSongs2 trajo muy pocas
+    if (results.length < 10) {
+      try {
+        final uri = Uri.parse('$_url/rest/getSimilarSongs.view').replace(
+          queryParameters: {
+            'id': track.id,
+            'count': count.toString(),
+            'u': _user!,
+            's': salt,
+            't': token,
+            'v': '1.16.1',
+            'c': 'Psysonic',
+            'f': 'json',
+          },
+        );
+        final response = await _client.get(uri);
+        if (response.statusCode == 200) {
+          final data = jsonDecode(response.body);
+          final list = data['subsonic-response']?['similarSongs']?['song'];
+          if (list != null) {
+            for (final j in _asList(list)) {
+              if (j is Map<String, dynamic>) {
+                final t = Track.fromJson(j,
+                    albumArtUrl: _coverArtUrl(j['coverArt'], salt, token));
+                if (seenIds.add(t.id)) {
+                  results.add(t);
+                }
+              }
+            }
+          }
+        }
+      } catch (e) {
+        debugPrint('NavidromeService.getSimilarSongs (similarSongs) error: $e');
+      }
+    }
+
+    // 4. Complementar con pistas del mismo artista si faltan canciones
+    if (results.length < 15) {
+      try {
+        List<Track> artistTracks = [];
+        if (track.artistId != null && track.artistId!.isNotEmpty) {
+          artistTracks = await getArtistTracks(track.artistId!);
+        } else if (track.artist.isNotEmpty && track.artist != 'Unknown') {
+          final searchRes = await search(track.artist);
+          artistTracks = searchRes.songs
+              .where((t) =>
+                  t.artist.trim().toLowerCase() ==
+                  track.artist.trim().toLowerCase())
+              .toList();
+        }
+        artistTracks.shuffle();
+        for (final t in artistTracks) {
+          if (seenIds.add(t.id)) {
+            results.add(t);
+            if (results.length >= count) break;
+          }
+        }
+      } catch (e) {
+        debugPrint('NavidromeService.getSimilarSongs artist fallback error: $e');
+      }
+    }
+
+    // 5. Complementar con pistas del mismo género si aún no llega a 15
+    if (results.length < 15 &&
+        track.genre != null &&
+        track.genre!.trim().isNotEmpty) {
+      try {
+        final genreTracks = await getRandomSongs(
+          size: count - results.length + 10,
+          genre: track.genre!.trim(),
+        );
+        for (final t in genreTracks) {
+          if (seenIds.add(t.id)) {
+            results.add(t);
+            if (results.length >= count) break;
+          }
+        }
+      } catch (e) {
+        debugPrint('NavidromeService.getSimilarSongs genre fallback error: $e');
+      }
+    }
+
+    // 6. Relleno con canciones aleatorias si la biblioteca es pequeña o no clasificada
+    if (results.length < 5) {
+      try {
+        final randomTracks = await getRandomSongs(size: count - results.length);
+        for (final t in randomTracks) {
+          if (seenIds.add(t.id)) {
+            results.add(t);
+            if (results.length >= count) break;
+          }
+        }
+      } catch (e) {
+        debugPrint('NavidromeService.getSimilarSongs random fallback error: $e');
+      }
+    }
+
+    return results.take(count).toList();
+  }
+
   /// Obtiene una lista de géneros disponibles en la biblioteca.
   /// Protegido contra desconexiones y cacheado en memoria para evitar
   /// peticiones redundantes.
