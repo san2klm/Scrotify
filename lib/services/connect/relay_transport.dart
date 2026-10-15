@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math';
 
 import 'package:flutter/foundation.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
@@ -125,7 +126,22 @@ class RelayTransport implements ConnectTransport {
     }
     _problem ??= 'Sin conexión con el servidor Jam.';
     _retry?.cancel();
-    _retry = Timer(retryDelay, _open);
+    _retry = Timer(nextRetryDelay(), _open);
+  }
+
+  int _failures = 0;
+  final _random = Random();
+
+  /// Espera exponencial (base [retryDelay], tope 60 s) con jitter de hasta la
+  /// mitad de la base: si el servidor se reinicia, todos los clientes no
+  /// vuelven a la vez y chocan con su límite de conexiones.
+  @visibleForTesting
+  Duration nextRetryDelay() {
+    final capMs = max(60000, retryDelay.inMilliseconds);
+    final factor = 1 << min(_failures++, 6);
+    final baseMs = min(capMs, retryDelay.inMilliseconds * factor);
+    final jitter = _random.nextInt(max(1, retryDelay.inMilliseconds ~/ 2));
+    return Duration(milliseconds: baseMs + jitter);
   }
 
   void _onData(dynamic raw) {
@@ -134,6 +150,7 @@ class RelayTransport implements ConnectTransport {
       if (data['status'] == 'connect_joined' ||
           data['event'] == 'connect_devices') {
         _joined = true;
+        _failures = 0;
         _problem = null;
         _publish(data['devices'] as List? ?? const []);
       } else if (data['status'] == 'connect_error') {

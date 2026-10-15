@@ -315,4 +315,16 @@ void main() {
     await Future<void>.delayed(const Duration(milliseconds: 100));
     expect(channels.length, 1);
   });
+
+  test('el reintento crece de forma exponencial, con jitter y tope de 60 s', () {
+    final relay = make(retry: const Duration(seconds: 5));
+    final waits = [for (var i = 0; i < 8; i++) relay.nextRetryDelay()];
+    expect(waits.first.inMilliseconds, inInclusiveRange(5000, 7500));
+    expect(waits[1].inMilliseconds, inInclusiveRange(10000, 12500));
+    expect(waits[2].inMilliseconds, inInclusiveRange(20000, 22500));
+    for (final w in waits) {
+      expect(w.inMilliseconds, lessThanOrEqualTo(60000 + 2500));
+    }
+    expect(waits.last.inMilliseconds, greaterThanOrEqualTo(60000));
+  });
 }

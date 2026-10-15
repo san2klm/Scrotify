@@ -269,44 +269,51 @@ class LanTransport implements ConnectTransport {
       }));
     }());
 
-    socket.listen(
-      (raw) async {
-        if (raw is! String || raw.length > _maxFrameChars) {
-          await socket.close();
-          return;
-        }
-        try {
-          final frame = jsonDecode(raw) as Map<String, dynamic>;
-          if (peer == null) {
-            final hello = frame['hello'];
-            if (hello is! String) {
-              await socket.close();
-              return;
-            }
-            final info = jsonDecode(
-                    utf8.decode(await crypto.decrypt(hello, docKey: _helloKey)))
-                as Map<String, dynamic>;
-            final id = info['id'];
-            if (id is! String || id == selfId) {
-              await socket.close();
-              return;
-            }
-            timeout.cancel();
-            settle();
-            peer = _Peer(
-              id,
-              (info['name'] as String?) ?? 'Dispositivo',
-              connectKindFrom(info['kind'] as String?),
-              socket,
-              outgoing,
-            );
-            _register(peer!);
-          } else if (frame['msg'] is String) {
-            _messages.add((from: peer!.id, blob: frame['msg'] as String));
+    // Los frames se procesan en serie: uno que llega mientras se descifra el
+    // `hello` esperaba con `peer == null` y cerraba el socket.
+    var chain = Future<void>.value();
+    Future<void> handle(dynamic raw) async {
+      if (raw is! String || raw.length > _maxFrameChars) {
+        await socket.close();
+        return;
+      }
+      try {
+        final frame = jsonDecode(raw) as Map<String, dynamic>;
+        if (peer == null) {
+          final hello = frame['hello'];
+          if (hello is! String) {
+            await socket.close();
+            return;
           }
-        } catch (_) {
-          await socket.close(); // No es de nuestro grupo o está corrupto.
+          final info = jsonDecode(
+                  utf8.decode(await crypto.decrypt(hello, docKey: _helloKey)))
+              as Map<String, dynamic>;
+          final id = info['id'];
+          if (id is! String || id == selfId) {
+            await socket.close();
+            return;
+          }
+          timeout.cancel();
+          settle();
+          peer = _Peer(
+            id,
+            (info['name'] as String?) ?? 'Dispositivo',
+            connectKindFrom(info['kind'] as String?),
+            socket,
+            outgoing,
+          );
+          _register(peer!);
+        } else if (frame['msg'] is String) {
+          _messages.add((from: peer!.id, blob: frame['msg'] as String));
         }
+      } catch (_) {
+        await socket.close(); // No es de nuestro grupo o está corrupto.
+      }
+    }
+
+    socket.listen(
+      (raw) {
+        chain = chain.then((_) => handle(raw));
       },
       onDone: () {
         timeout.cancel();
