@@ -71,9 +71,8 @@ mixin _JamHostSession on _JamBase {
     _currentTrackAddedBy = _localParticipant;
 
     // La contraseña solo aplica a salas persistentes (PIN fijo).
-    final password = fixedPin?.trim().isNotEmpty == true
-        ? roomPassword?.trim()
-        : null;
+    final password =
+        fixedPin?.trim().isNotEmpty == true ? roomPassword?.trim() : null;
     _hasRoomPassword = password != null && password.isNotEmpty;
     _remoteService.roomPassword = _hasRoomPassword ? password : null;
     await _hostService.start(
@@ -142,11 +141,15 @@ mixin _JamHostSession on _JamBase {
   /// servidor embebido (ver `migrateToCloud`, no disponible aún).
   bool transferHostTo(JamParticipant participant) {
     if (!isHost || !_remoteService.isConnected) {
-      _reportActionError('Solo se puede transferir el anfitrión en una sala en la nube.');
+      _reportActionError(
+          'Solo se puede transferir el anfitrión en una sala en la nube.');
       return false;
     }
     final ok = _remoteService.transferHost(participant.name);
-    if (!ok) _reportActionError('No se pudo transferir: el invitado no está registrado en el relay.');
+    if (!ok) {
+      _reportActionError(
+          'No se pudo transferir: el invitado no está registrado en el relay.');
+    }
     return ok;
   }
 
@@ -357,7 +360,7 @@ mixin _JamHostSession on _JamBase {
       debugPrint('JamController: Creación en servidor remoto: $ok');
       if (!isHost || _hostService.pinCode?.value != pin) {
         // La sesión terminó mientras se conectaba: no dejar la sala huérfana.
-        await _remoteService.disconnect();
+        await _remoteService.disconnect(endRoom: true);
         return;
       }
       _remoteCreateFailures = ok ? 0 : _remoteCreateFailures + 1;

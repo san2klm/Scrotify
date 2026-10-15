@@ -398,7 +398,8 @@ class JamController extends _JamBase
     return _savePlaylist(entries, 'Jam');
   }
 
-  Future<int> _savePlaylist(List<JamHistoryEntry> entries, String prefix) async {
+  Future<int> _savePlaylist(
+      List<JamHistoryEntry> entries, String prefix) async {
     if (entries.isEmpty) return 0;
     final now = DateTime.now();
     final date =
@@ -431,9 +432,8 @@ class JamController extends _JamBase
       .toList();
 
   /// Mi voto (−1/0/+1) sobre un ítem de la cola.
-  int myVoteFor(String itemId) => isHost
-      ? _votes.myVote(itemId, 'host_local')
-      : (_myVotes[itemId] ?? 0);
+  int myVoteFor(String itemId) =>
+      isHost ? _votes.myVote(itemId, 'host_local') : (_myVotes[itemId] ?? 0);
 
   JamConnectionState get connectionState => _guestService.connectionState;
 
@@ -648,7 +648,7 @@ class JamController extends _JamBase
 
     if (_role == JamRole.host) {
       await _hostService.stop();
-      await _remoteService.disconnect();
+      await _remoteService.disconnect(endRoom: true);
     } else if (_role == JamRole.guest) {
       await _guestService.disconnect();
       await _remoteService.disconnect();

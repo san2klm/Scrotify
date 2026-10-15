@@ -23,7 +23,9 @@
     <uses-feature android:name="android.hardware.microphone" android:required="false" />
 
     <application
-        android:requestLegacyExternalStorage="true"
+        android:allowBackup="false"
+        android:fullBackupContent="false"
+        android:dataExtractionRules="@xml/data_extraction_rules"
         android:label="${appLabel}"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"

@@ -700,7 +700,19 @@ class RemoteJamService {
     return true;
   }
 
-  Future<void> disconnect() async {
+  /// Mensaje con el que el anfitrión termina la sala a propósito.
+  @visibleForTesting
+  static const Map<String, dynamic> closeRoomMessage = {'action': 'close_room'};
+
+  /// Cierra la conexión. Con [endRoom] el anfitrión avisa al servidor para que
+  /// cierre la sala (los invitados reciben `room_closed`) en vez de tratarlo
+  /// como una caída y abrir el failover.
+  Future<void> disconnect({bool endRoom = false}) async {
+    if (endRoom && _isHost && _isConnected) {
+      try {
+        _channel?.sink.add(jsonEncode(closeRoomMessage));
+      } catch (_) {}
+    }
     _clockTimer?.cancel();
     _clockTimer = null;
     _isConnected = false;

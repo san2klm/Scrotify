@@ -26,7 +26,7 @@ El test va en el archivo de pruebas del servicio, si ya existe.
 
 ## Fase 0 — Urgente
 
-### [!] 1. Credenciales reales publicadas (V)
+### [~] 1. Credenciales reales publicadas (V)
 - **Evidencia:** `git grep Proyecto123 origin/main` devuelve:
   - `lib/main_preview.dart:22`
   - `lib/screens/desktop_login_screen.dart:25` (`this.initialPass = 'Proyecto123'`)
@@ -52,7 +52,7 @@ El test va en el archivo de pruebas del servicio, si ya existe.
     test necesita una URL, usar `example.invalid`.
   - Test de widget: el login arranca con campos vacíos.
 
-### [ ] 2. El repositorio no compila desde un clon limpio (V)
+### [x] 2. El repositorio no compila desde un clon limpio (V)
 - **Android:**
   - `.gitignore:51-57` ignora `res/values/*` y `res/drawable/*`.
   - Faltan en git `res/values/styles.xml` (`LaunchTheme` y `NormalTheme`,
@@ -81,7 +81,7 @@ El test va en el archivo de pruebas del servicio, si ya existe.
     compilan sin copiar nada a mano.
   - El punto 31 (CI) lo comprueba en cada push.
 
-### [ ] 3. `installer/` sin ignorar (V)
+### [x] 3. `installer/` sin ignorar (V)
 - **Problema:** `git check-ignore installer/output` no devuelve nada. Un
   `git add .` subiría `Scrotify-Setup-1.0.0.exe` (86 MB, por encima del límite
   de 50 MB de GitHub) y `installer/stage/` entero.
@@ -89,7 +89,7 @@ El test va en el archivo de pruebas del servicio, si ya existe.
   `installer/scrotify.iss`.
 - **Aceptación:** `git status --porcelain` muestra solo `installer/scrotify.iss`.
 
-### [ ] 4. En Windows se guardan rutas y nombres en minúsculas (V)
+### [x] 4. En Windows se guardan rutas y nombres en minúsculas (V)
 - **Causa:** `p.canonicalize` en Windows convierte toda la ruta a minúsculas.
 - **Usos:**
   - `lib/services/offline_cache_service.dart:481,483,630-631,660-661,677-678,692-693,721,784`
@@ -118,7 +118,7 @@ El test va en el archivo de pruebas del servicio, si ya existe.
 - **Aceptación:** los 5 tests afectados pasan en Windows y siguen pasando en
   Linux (CI).
 
-### [ ] 5. Los otros 3 tests rojos en Windows (V)
+### [x] 5. Los otros 3 tests rojos en Windows (V)
 - `offline_artwork_test.dart:66`: `Deletion failed ... El directorio no está
   vacío` / `está siendo utilizado por otro proceso`.
   - Queda algún `File`/`RandomAccessFile`/`IOSink`/base sqflite abierto al
@@ -136,7 +136,7 @@ El test va en el archivo de pruebas del servicio, si ya existe.
 
 ## Fase 1 — Seguridad
 
-### [ ] 6. El invitado de Jam en LAN filtra su token Subsonic (V)
+### [x] 6. El invitado de Jam en LAN filtra su token Subsonic (V)
 - **Dónde:** `lib/services/jam_guest_service.dart:1004` envía
   `'albumArtUrl': track.albumArtUrl` sin limpiar.
   - La URL de carátula lleva `u`, `s` y `t` (`navidrome_service.dart:375-381`).
@@ -182,7 +182,7 @@ El test va en el archivo de pruebas del servicio, si ya existe.
     `cleartext_url_warning`) y guardar ese consentimiento por servidor.
 - **Decisión de diseño:** listar las opciones antes de implementar.
 
-### [ ] 9. Copias de seguridad de Android (R)
+### [x] 9. Copias de seguridad de Android (R)
 - **Problema:** no hay `android:allowBackup` ni `dataExtractionRules` en
   `<application>`. Base sqflite, preferencias y caché pueden ir a la copia en
   la nube o salir por `adb backup`.
@@ -246,7 +246,7 @@ El test va en el archivo de pruebas del servicio, si ya existe.
 
 ## Fase 2 — Reproducción y cola
 
-### [ ] 15. Un corte de red vacía la cola (V)
+### [x] 15. Un corte de red vacía la cola (V)
 - **Dónde:** `lib/services/player_stats.dart:228-232`. `_currentMostPlayedSession`
   devuelve `null` si `!_service.connected`, y `_onServiceChanged` (l.249-252)
   hace `clearQueue()` + `_recentlyPlayed.clear()` cuando la sesión cambia.
@@ -273,7 +273,7 @@ El test va en el archivo de pruebas del servicio, si ya existe.
   - Test: una pista desde playlist genera scrobble.
   - Test: tres scrobbles offline se envían al reconectar con su timestamp.
 
-### [ ] 17. `addNextInQueue` no descarta la precarga (V)
+### [x] 17. `addNextInQueue` no descarta la precarga (V)
 - **Dónde:** `lib/services/player_queue.dart:87-94`. Inserta en `_order` sin
   `_cancelFade()` / `_prepareNextForSkip()`.
 - **Efecto:** el reproductor B ya tenía cargada la siguiente pista;
@@ -284,7 +284,7 @@ El test va en el archivo de pruebas del servicio, si ya existe.
 - **Aceptación:** test con reproductores falsos: precargar, insertar, avanzar →
   suena la pista insertada.
 
-### [ ] 18. `toggleShuffle` revive pistas quitadas y desincroniza `_pos` (V)
+### [x] 18. `toggleShuffle` revive pistas quitadas y desincroniza `_pos` (V)
 - **Dónde:** `player_queue.dart:171-180` reconstruye con `List.generate(n)`
   sobre todo `_queue`, pero `removeFromQueue` solo quita de `_order`.
   - Al activar el aleatorio no fija `_pos`.
@@ -433,7 +433,7 @@ El test va en el archivo de pruebas del servicio, si ya existe.
 
 ## Fase 4 — Jam, Connect y Sync
 
-### [ ] 31. «Terminar» una Jam remota no cierra la sala (R)
+### [x] 31. «Terminar» una Jam remota no cierra la sala (R)
 - **Dónde:** `remote_jam_service.dart:666-676`, `jam-server/src/server.js:481-487,779-800`.
   - El servidor no tiene acción para cerrar la sala.
   - Lo trata como caída: `host_away`, espera de 60 s y nombra anfitrión a
@@ -445,7 +445,7 @@ El test va en el archivo de pruebas del servicio, si ya existe.
   - Test `node --test`: `close_room` notifica a los invitados y borra la sala.
   - Test Dart: el mensaje se envía.
 
-### [ ] 32. El invitado remoto no envía la contraseña de la sala (V)
+### [x] 32. El invitado remoto no envía la contraseña de la sala (V)
 - **Dónde:** `remote_jam_service.dart:345-349` (`{action, pin, guestName}`),
   aunque `jam_join.dart:323` guarda `roomPassword`.
 - **Arreglo:** añadir `'roomPassword'`.
@@ -590,7 +590,7 @@ El test va en el archivo de pruebas del servicio, si ya existe.
 
 ## Fase 6 — Build, CI y dependencias
 
-### [ ] 45. CI que compile todas las plataformas (V)
+### [x] 45. CI que compile todas las plataformas (V)
 - **Problema:** `.github/workflows/ci.yml` solo tiene jobs en ubuntu.
 - **Añadir:**
   - Job Android: `setup-java` 17, `flutter build apk --flavor phone --debug`.
@@ -711,3 +711,16 @@ robustez y las funciones nuevas.
   probar en un dispositivo real.
 
 ## Bitácora
+
+- 2026-10-15 — Fase 0 y parte de 1–4 (Windows: `flutter test` 884 verdes, 0 rojos).
+  - 1 (código): sin credenciales por defecto en los logins; `main_preview.dart` usa `--dart-define`. **Pendiente del usuario:** cambiar la clave en Navidrome y decidir `git filter-repo`.
+  - 2: android/linux/windows versionados; `flutter build windows --debug` compila. Falta comprobar APK y Linux desde un clon limpio (lo vigila el CI).
+  - 3: `installer/output` y `installer/stage` ignorados.
+  - 4/5: `normalizePathKeepCase`; fuga de `LocalMusicService` en reescaneo tras `dispose`; `ThemeController` notificaba tras `dispose`. El borrado del temporal en `offline_artwork_test` es de mejor esfuerzo en Windows (el decodificador de imágenes retiene el archivo).
+  - 6, 32: `addToQueueTrackJson`/codec de Connect con `sanitizeArtUrl`; `roomPassword` en `join_room`.
+  - 15, 17, 18: cola intacta ante cortes de red; precarga descartada al insertar; `removeFromQueue` compacta `_queue`; `toggleShuffle` fija `_pos`. Harness nuevo `test/support/fake_audio_player.dart`.
+  - 31: `close_room` en jam-server (+2 tests `node --test`) y cliente (`disconnect(endRoom: true)`). Sin probar con un servidor real.
+  - 9: `allowBackup=false` + reglas de extracción (sin probar en dispositivo). 47: quitado `requestLegacyExternalStorage`.
+  - 37 (parcial): Dockerfile usa `node src/server.js` y healthcheck con `${PORT}`.
+  - 45: CI con jobs `windows` y `android`, Flutter 3.47.5 fijo (no ejecutado aún).
+  - Pairing: estado `paired` antes de responder; cierre con `Timer` cancelable (parte del 12).

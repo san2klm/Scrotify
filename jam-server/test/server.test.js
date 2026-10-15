@@ -738,6 +738,31 @@ test('without failover the room closes when the host leaves (as before)', async 
   guest.close();
 });
 
+test('close_room: the host ends the room on purpose, guests get room_closed (no failover)', async () => {
+  const server = await startServer({ hostFailoverMs: 5000 });
+  const { host, guest } = await roomWithGuest(server, 'CLS123', { failover: true });
+  let away = false;
+  guest.on('message', (d) => { if (JSON.parse(d.toString()).event === 'host_away') away = true; });
+  const closed = waitFor(guest, (m) => m.event === 'room_closed');
+  const ack = await ask(host, { action: 'close_room' });
+  assert.equal(ack.status, 'room_closed');
+  await closed;
+  assert.equal(away, false);
+  assert.equal((await http(server, 'GET', '/health')).json.rooms, 0);
+  host.close();
+  guest.close();
+});
+
+test('close_room: a guest cannot close the room', async () => {
+  const server = await startServer();
+  const { host, guest } = await roomWithGuest(server, 'CLS456');
+  const reply = await ask(guest, { action: 'close_room' });
+  assert.equal(reply.status, 'error');
+  assert.equal((await http(server, 'GET', '/health')).json.rooms, 1);
+  host.close();
+  guest.close();
+});
+
 test('persistent rooms: reserved PIN, owner claim, config survives restart', async () => {
   const { mkdtempSync, rmSync } = await import('node:fs');
   const { tmpdir } = await import('node:os');

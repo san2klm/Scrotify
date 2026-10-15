@@ -425,11 +425,28 @@ export function createJamServer({
     clearTimeout(room.failoverTimer);
     persistRoomConfig(room);
     for (const guest of room.guests) {
+      socketRooms.delete(guest.socket);
       send(guest.socket, { event: 'room_closed', message: reason });
       guest.socket.close(1000, 'Room closed');
     }
     room.guests.clear();
+    if (room.host) socketRooms.delete(room.host);
     console.info('Jam room closed');
+  }
+
+  /// El anfitrión termina la sala a propósito: no es una caída, así que no hay
+  /// `host_away` ni espera de failover; los invitados reciben `room_closed`.
+  function closeRoomByHost(socket) {
+    const membership = socketRooms.get(socket);
+    if (!membership || membership.role !== 'host') {
+      return serverError(socket, 'Solo el anfitrión puede cerrar la sala.');
+    }
+    const room = rooms.get(membership.pin);
+    if (!room || room.host !== socket) {
+      return serverError(socket, 'Solo el anfitrión puede cerrar la sala.');
+    }
+    closeRoom(room);
+    send(socket, { status: 'room_closed' });
   }
 
   function roster(room) {
@@ -778,6 +795,7 @@ export function createJamServer({
       }
       switch (message.action) {
         case 'create_room': return createRoom(socket, message);
+        case 'close_room': return closeRoomByHost(socket);
         case 'join_room': return joinRoom(socket, message);
         case 'update_state': return updateState(socket, message);
         case 'guest_action': return relayGuestAction(socket, message);
