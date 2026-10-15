@@ -144,6 +144,8 @@ class PairingServer {
 
   /// Detiene el servidor y limpia estado.
   Future<void> stop() async {
+    _closeTimer?.cancel();
+    _closeTimer = null;
     _expiryTimer?.cancel();
     _expiryTimer = null;
 
@@ -257,7 +259,7 @@ class PairingServer {
       _statusController.add(_status);
       _expiryTimer?.cancel();
       _stopDiscoveryBeacon();
-      Future.delayed(const Duration(milliseconds: 500), () => stop());
+      _scheduleStop();
     } catch (error) {
       debugPrint('PairingServer relay claim failed: $error');
     }
@@ -386,19 +388,18 @@ class PairingServer {
       plaintext: Uint8List.fromList(plaintext),
     );
 
-    // Responder primero
-    req.response.headers.contentType = ContentType.json;
-    req.response.write(jsonEncode(responseMap));
-    await req.response.close();
-
-    // Luego marcar como emparejado y detener servidor tras un breve respiro
+    // Marcar como emparejado antes de responder: cuando el cliente recibe la
+    // respuesta, el estado ya es coherente.
     _status = PairingStatus.paired;
     _statusController.add(_status);
     _expiryTimer?.cancel();
     _stopDiscoveryBeacon();
 
-    // Detener completamente en segundo plano tras 500ms para asegurar el flush HTTP
-    Future.delayed(const Duration(milliseconds: 500), () => stop());
+    req.response.headers.contentType = ContentType.json;
+    req.response.write(jsonEncode(responseMap));
+    await req.response.close();
+
+    _scheduleStop();
   }
 
   void _expire() {
@@ -505,6 +506,16 @@ class PairingServer {
             'PairingServer: replied to presence discovery from ${dg.address.address}:${dg.port}');
       }
     } catch (_) {}
+  }
+
+  Timer? _closeTimer;
+
+  /// Cierra el servidor tras un breve respiro (para que se envíe la respuesta).
+  /// Es cancelable: `start()` lo anula para que no cierre una sesión nueva.
+  void _scheduleStop() {
+    _closeTimer?.cancel();
+    _closeTimer =
+        Timer(const Duration(milliseconds: 500), () => unawaited(stop()));
   }
 
   void _stopDiscoveryBeacon() {
