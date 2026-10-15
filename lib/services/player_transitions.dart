@@ -292,13 +292,15 @@ mixin _PlayerTransitions on _PlayerBase {
     final crossfade = _crossfade;
     if (crossfade == null || crossfade <= Duration.zero) return;
     final token = ++_fadeGen;
-    _fading = true;
     final lead = _lead;
     final other = _fade;
     final remaining = _remainingToPlay();
     var fadeDur = crossfade;
     if (remaining != null && remaining < crossfade) fadeDur = remaining;
+    // Salir antes de marcar `_fading`: si no, quedaba en true y bloqueaba
+    // `setVolume` y los crossfades siguientes.
     if (fadeDur < const Duration(milliseconds: 50)) return;
+    _fading = true;
 
     try {
       // Cobertura: si la pre-carga no llegó a hacerse, cargar ahora.

@@ -270,6 +270,7 @@ abstract class _PlayerBase extends ChangeNotifier {
   NavidromeService get _service;
   SettingsController get _settings;
   AudioSource _sourceFor(Track t);
+  String _mediaLocationFor(Track t);
   ListeningStatsService? get _statsService;
   void cancelSleepTimer({bool silent = false});
   void clearQueue();
@@ -807,6 +808,13 @@ class PlayerController extends _PlayerBase
   // Carga de fuentes
   // ---------------------------------------------------------------------------
 
+  /// Archivo local si la pista está descargada; si no, la URL de streaming.
+  /// Lo usa el reproductor de karaoke (media_kit), que no pasa por `_sourceFor`.
+  @override
+  String _mediaLocationFor(Track t) =>
+      localFileResolver?.call(t.id) ??
+      _service.getPlaybackStreamUrl(t.id, quality: _settings.effectiveQuality);
+
   @override
   AudioSource _sourceFor(Track t) {
     final path = localFileResolver?.call(t.id);
@@ -992,8 +1000,7 @@ class PlayerController extends _PlayerBase
     if (_karaokeMode && _karaokePlayer != null) {
       final t = currentTrack;
       if (t != null) {
-        final url = _service.getPlaybackStreamUrl(t.id,
-            quality: _settings.effectiveQuality);
+        final url = _mediaLocationFor(t);
         await _applyKaraokeVolume();
         await _karaokePlayer!.open(mk.Media(url), play: true);
         _recordRecent(t);

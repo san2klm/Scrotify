@@ -6,6 +6,8 @@ mixin _PlayerKaraoke on _PlayerBase {
   // Modo Karaoke & Reducción de Voz (Desktop / media_kit)
   // ---------------------------------------------------------------------------
 
+  DateTime? _lastKaraokeNotify;
+
   Future<void> _initKaraokePlayer() async {
     if (_karaokePlayer != null) return;
     final p = mk.Player(
@@ -19,7 +21,15 @@ mixin _PlayerKaraoke on _PlayerBase {
       if (_karaokeMode) {
         _karaokePositionController.add(pos);
         _checkPlayQualification(pos, p.state.duration);
-        notifyListeners();
+        // La barra se alimenta de `positionStream`; notificar a todos los
+        // oyentes en cada evento reconstruía media app. Máximo una vez/segundo.
+        final now = DateTime.now();
+        final last = _lastKaraokeNotify;
+        if (last == null ||
+            now.difference(last) >= const Duration(seconds: 1)) {
+          _lastKaraokeNotify = now;
+          notifyListeners();
+        }
       }
     });
     _karaokeDurSub = p.stream.duration.listen((dur) {
@@ -76,8 +86,7 @@ mixin _PlayerKaraoke on _PlayerBase {
       await _initKaraokePlayer();
       _karaokeMode = true;
       if (currentTr != null) {
-        final streamUrl = _service.getPlaybackStreamUrl(currentTr.id,
-            quality: _settings.effectiveQuality);
+        final streamUrl = _mediaLocationFor(currentTr);
         await _applyVocalFilter(_vocalReduction);
         await _applyKaraokeVolume();
         await _karaokePlayer!.open(mk.Media(streamUrl), play: wasPlaying);
@@ -115,7 +124,10 @@ mixin _PlayerKaraoke on _PlayerBase {
   }
 
   Future<void> _applyVocalFilter(bool enabled) async {
-    if (_karaokePlayer == null || !PlayerController.isVocalReductionSupported) return;
+    if (_karaokePlayer == null ||
+        !PlayerController.isVocalReductionSupported) {
+      return;
+    }
     try {
       final platform = _karaokePlayer!.platform;
       if (platform is mk.NativePlayer) {

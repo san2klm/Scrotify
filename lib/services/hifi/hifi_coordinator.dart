@@ -108,6 +108,8 @@ class HifiCoordinator extends ChangeNotifier {
 
   @override
   void dispose() {
+    _disposed = true;
+    _refreshGen++;
     if (_started) _settings.removeListener(_onSettingsChanged);
     _started = false;
     super.dispose();
@@ -127,7 +129,11 @@ class HifiCoordinator extends ChangeNotifier {
       );
 
   /// Recalcula y aplica el plan si algo relevante cambió.
+  bool _disposed = false;
+  int _refreshGen = 0;
+
   Future<void> refresh({bool force = false}) async {
+    if (_disposed) return;
     final key = (
       _settings.fidelityMode,
       _settings.losslessOnMobileData,
@@ -136,12 +142,14 @@ class HifiCoordinator extends ChangeNotifier {
     );
     if (!force && key == _lastKey) return;
     _lastKey = key;
+    final gen = ++_refreshGen;
 
     final wanted = _settings.audioOutputDevice;
     var device = wanted;
     _outputDeviceMissing = false;
     if (wanted != null && platform == HifiPlatform.linux && mpvEngine) {
       final present = await directOutputDevices();
+      if (gen != _refreshGen || _disposed) return;
       // Con la lista vacía (no se pudo leer) se intenta igualmente: mpv avisará.
       if (present.isNotEmpty && !present.any((d) => d.name == wanted)) {
         device = null;
@@ -162,6 +170,8 @@ class HifiCoordinator extends ChangeNotifier {
     } catch (e) {
       debugPrint('HifiCoordinator: no se pudo aplicar el plan ($e)');
     }
+    // Una llamada más nueva o un dispose ya sustituyó a esta.
+    if (gen != _refreshGen || _disposed) return;
     notifyListeners();
   }
 
