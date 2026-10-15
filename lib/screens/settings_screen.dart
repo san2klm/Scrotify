@@ -8,6 +8,7 @@ import '../services/pairing_server.dart';
 import '../services/hifi/hifi_coordinator.dart';
 import '../services/hifi/hifi_profiles.dart';
 import '../services/settings_controller.dart';
+import '../services/window_controls.dart';
 import '../widgets/pairing_panel.dart';
 import '../widgets/sync_settings.dart';
 import '../widgets/theme_grid.dart';
@@ -358,6 +359,42 @@ class _SettingsScreenState extends State<SettingsScreen> {
             onChanged: settings.setSmartMixEnabled,
           ),
         ]),
+        if (WindowControls.isDesktop) ...[
+          _sectionTitle('Controles con el Mouse (Escritorio)'),
+          _card(children: [
+            _switchTile(
+              title: 'Atajos con botones del mouse',
+              subtitle:
+                  'Permite pasar canciones y pausar con los botones laterales y rueda del mouse',
+              value: settings.mouseControlsEnabled,
+              onChanged: settings.setMouseControlsEnabled,
+            ),
+            if (settings.mouseControlsEnabled) ...[
+              _switchTile(
+                title: 'Atajos globales (fuera de la app)',
+                subtitle:
+                    'Controla la reproducción aunque Scrotify esté minimizado o en segundo plano',
+                value: settings.mouseGlobalEnabled,
+                onChanged: settings.setMouseGlobalEnabled,
+              ),
+              _switchTile(
+                title: 'Pausar con clic de la rueda (botón central)',
+                subtitle:
+                    'Al hacer clic con la rueda del mouse sobre la ventana de Scrotify',
+                value: settings.mouseMiddleClickEnabled,
+                onChanged: settings.setMouseMiddleClickEnabled,
+              ),
+              const SizedBox(height: 6),
+              const _InfoText(
+                'Guía de atajos del mouse:\n'
+                '• Botón lateral adelante (XButton 2): Siguiente canción\n'
+                '• Botón lateral atrás (XButton 1): Pausar / Reanudar (un clic) o Canción anterior (doble clic)\n'
+                '• Botón central (rueda): Pausar / Reanudar sobre la ventana de Scrotify\n'
+                '• Alt + Rueda arriba/abajo: Subir o bajar volumen en cualquier parte de la ventana',
+              ),
+            ],
+          ]),
+        ],
       ];
 
   List<Widget> _appearancePage(SettingsController settings) => [

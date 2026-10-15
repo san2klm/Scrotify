@@ -7,31 +7,69 @@
 
 static HHOOK g_mouse_hook = nullptr;
 static FlutterWindow* g_current_window = nullptr;
-static ULONGLONG g_last_action_time = 0;
+
+static bool g_mouse_enabled = true;
+static bool g_mouse_global = true;
+static bool g_mouse_middle_enabled = true;
+
+static ULONGLONG g_last_xbutton1_time = 0;
+static ULONGLONG g_last_xbutton2_time = 0;
+static ULONGLONG g_last_mbutton_time = 0;
 
 static LRESULT CALLBACK LowLevelMouseProc(int nCode, WPARAM wParam, LPARAM lParam) {
-  if (nCode >= 0 && g_current_window != nullptr) {
+  if (nCode >= 0 && g_current_window != nullptr && g_mouse_enabled) {
     MSLLHOOKSTRUCT* pMouse = reinterpret_cast<MSLLHOOKSTRUCT*>(lParam);
     if (pMouse != nullptr) {
+      HWND hwnd = g_current_window->GetHandle();
+      HWND target = WindowFromPoint(pMouse->pt);
+      bool is_over_scrotify = (target != nullptr) && (target == hwnd || IsChild(hwnd, target));
+
+      // Si no están habilitados los atajos globales y el puntero no está sobre la ventana de Scrotify,
+      // dejamos que el sistema procese el evento normalmente.
+      if (!g_mouse_global && !is_over_scrotify) {
+        return CallNextHookEx(g_mouse_hook, nCode, wParam, lParam);
+      }
+
       WORD xbutton = HIWORD(pMouse->mouseData);
+      ULONGLONG now = GetTickCount64();
+
       if (wParam == WM_XBUTTONDOWN || wParam == WM_NCXBUTTONDOWN) {
         if (xbutton == XBUTTON1) {
-          ULONGLONG now = GetTickCount64();
-          if (now - g_last_action_time >= 250) {
-            g_last_action_time = now;
+          // Botón lateral Atrás:
+          // Un clic: alternar Play / Pausa
+          // Doble clic rápido (< 380ms): Canción anterior
+          if (now - g_last_xbutton1_time < 380) {
+            g_last_xbutton1_time = 0;
+            g_current_window->SendMouseHotkey("skipPrevious");
+          } else {
+            g_last_xbutton1_time = now;
             g_current_window->SendMouseHotkey("togglePlayPause");
           }
           return 1;
         } else if (xbutton == XBUTTON2) {
-          ULONGLONG now = GetTickCount64();
-          if (now - g_last_action_time >= 250) {
-            g_last_action_time = now;
+          // Botón lateral Adelante: Siguiente canción (debounce de 250ms)
+          if (now - g_last_xbutton2_time >= 250) {
+            g_last_xbutton2_time = now;
             g_current_window->SendMouseHotkey("skipNext");
           }
           return 1;
         }
       } else if (wParam == WM_XBUTTONUP || wParam == WM_NCXBUTTONUP) {
         if (xbutton == XBUTTON1 || xbutton == XBUTTON2) {
+          return 1;
+        }
+      } else if (wParam == WM_MBUTTONDOWN) {
+        // Clic de rueda: Play / Pausa SOLO cuando el puntero está sobre la ventana de Scrotify
+        // para no romper pestañas de navegadores web u otros programas.
+        if (g_mouse_middle_enabled && is_over_scrotify) {
+          if (now - g_last_mbutton_time >= 250) {
+            g_last_mbutton_time = now;
+            g_current_window->SendMouseHotkey("togglePlayPause");
+          }
+          return 1;
+        }
+      } else if (wParam == WM_MBUTTONUP) {
+        if (g_mouse_middle_enabled && is_over_scrotify) {
           return 1;
         }
       }
@@ -223,6 +261,22 @@ bool FlutterWindow::OnCreate() {
             UpdateTaskbarPlayPause(*val);
           }
           result->Success();
+        } else if (call.method_name() == "setMouseConfig") {
+          if (const auto* args = std::get_if<flutter::EncodableMap>(call.arguments())) {
+            auto it_en = args->find(flutter::EncodableValue("enabled"));
+            if (it_en != args->end() && std::holds_alternative<bool>(it_en->second)) {
+              g_mouse_enabled = std::get<bool>(it_en->second);
+            }
+            auto it_gl = args->find(flutter::EncodableValue("global"));
+            if (it_gl != args->end() && std::holds_alternative<bool>(it_gl->second)) {
+              g_mouse_global = std::get<bool>(it_gl->second);
+            }
+            auto it_mid = args->find(flutter::EncodableValue("middleClick"));
+            if (it_mid != args->end() && std::holds_alternative<bool>(it_mid->second)) {
+              g_mouse_middle_enabled = std::get<bool>(it_mid->second);
+            }
+          }
+          result->Success();
         } else {
           result->NotImplemented();
         }
@@ -290,6 +344,21 @@ FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
     } else if (id == kThbNext) {
       SendMouseHotkey("skipNext");
       return 0;
+    }
+  }
+
+  if (message == WM_APPCOMMAND) {
+    short cmd = GET_APPCOMMAND_LPARAM(lparam);
+    if (cmd == APPCOMMAND_MEDIA_PLAY_PAUSE || cmd == APPCOMMAND_MEDIA_PLAY ||
+        cmd == APPCOMMAND_MEDIA_PAUSE) {
+      SendMouseHotkey("togglePlayPause");
+      return TRUE;
+    } else if (cmd == APPCOMMAND_MEDIA_NEXTTRACK) {
+      SendMouseHotkey("skipNext");
+      return TRUE;
+    } else if (cmd == APPCOMMAND_MEDIA_PREVIOUSTRACK) {
+      SendMouseHotkey("skipPrevious");
+      return TRUE;
     }
   }
 

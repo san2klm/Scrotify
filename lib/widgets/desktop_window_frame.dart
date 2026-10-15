@@ -11,6 +11,7 @@ import '../services/connect/connect_service.dart';
 import '../services/jam_controller.dart';
 import '../services/mini_player_controller.dart';
 import '../services/player_controller.dart';
+import '../services/settings_controller.dart';
 import '../services/window_controls.dart';
 import 'mini_player_view.dart';
 
@@ -99,10 +100,16 @@ class _DesktopWindowFrameState extends State<DesktopWindowFrame>
     final colors = Theme.of(context).colorScheme;
     final mini = context.watch<MiniPlayerController>();
     final player = context.watch<PlayerController>();
+    final settings = context.watch<SettingsController>();
     if (Platform.isWindows) {
       _mouseChannel
           .invokeMethod('setPlaying', player.playing)
           .catchError((_) {});
+      _mouseChannel.invokeMethod('setMouseConfig', {
+        'enabled': settings.mouseControlsEnabled,
+        'global': settings.mouseGlobalEnabled,
+        'middleClick': settings.mouseMiddleClickEnabled,
+      }).catchError((_) {});
     }
 
     final content = Column(
@@ -260,13 +267,28 @@ class _DesktopWindowFrameState extends State<DesktopWindowFrame>
             }
           },
           onPointerDown: (event) {
+            final settings = context.read<SettingsController>();
+            if (!settings.mouseControlsEnabled) return;
+
             // Botones laterales del mouse (XBUTTON1 y XBUTTON2):
-            // Back (0x08) -> alternar reproducir / pausar
+            // Back (0x08) -> alternar reproducir / pausar (un clic) o anterior (doble clic)
             // Forward (0x10) -> siguiente canción
+            // Central / Rueda (0x04) -> alternar reproducir / pausar
             if ((event.buttons & kBackMouseButton) != 0) {
-              _togglePlayPause(context);
+              final now = DateTime.now();
+              if (_lastBackClickTime != null &&
+                  now.difference(_lastBackClickTime!).inMilliseconds < 380) {
+                _lastBackClickTime = null;
+                _skipPrevious(context);
+              } else {
+                _lastBackClickTime = now;
+                _togglePlayPause(context);
+              }
             } else if ((event.buttons & kForwardMouseButton) != 0) {
               _skipNext(context);
+            } else if ((event.buttons & kMiddleMouseButton) != 0 &&
+                settings.mouseMiddleClickEnabled) {
+              _togglePlayPause(context);
             }
           },
           child: framed,
@@ -292,20 +314,22 @@ class _DesktopWindowFrameState extends State<DesktopWindowFrame>
     }
   }
 
-  DateTime? _lastSkipTime;
+  DateTime? _lastPlayPauseTime;
+  DateTime? _lastNextTime;
+  DateTime? _lastPrevTime;
+  DateTime? _lastBackClickTime;
 
-  bool _canSkip() {
+  bool _canTrigger(DateTime? last, [int cooldownMs = 200]) {
     final now = DateTime.now();
-    if (_lastSkipTime != null &&
-        now.difference(_lastSkipTime!).inMilliseconds < 250) {
+    if (last != null && now.difference(last).inMilliseconds < cooldownMs) {
       return false;
     }
-    _lastSkipTime = now;
     return true;
   }
 
   void _togglePlayPause(BuildContext context) {
-    if (!_canSkip()) return;
+    if (!_canTrigger(_lastPlayPauseTime, 200)) return;
+    _lastPlayPauseTime = DateTime.now();
     try {
       final connect = context.read<ConnectService>();
       if (connect.controlled != null) {
@@ -328,7 +352,8 @@ class _DesktopWindowFrameState extends State<DesktopWindowFrame>
   }
 
   void _skipNext(BuildContext context) {
-    if (!_canSkip()) return;
+    if (!_canTrigger(_lastNextTime, 200)) return;
+    _lastNextTime = DateTime.now();
     try {
       final connect = context.read<ConnectService>();
       if (connect.controlled != null) {
@@ -351,7 +376,8 @@ class _DesktopWindowFrameState extends State<DesktopWindowFrame>
   }
 
   void _skipPrevious(BuildContext context) {
-    if (!_canSkip()) return;
+    if (!_canTrigger(_lastPrevTime, 200)) return;
+    _lastPrevTime = DateTime.now();
     try {
       final connect = context.read<ConnectService>();
       if (connect.controlled != null) {
@@ -368,6 +394,9 @@ class _DesktopWindowFrameState extends State<DesktopWindowFrame>
       }
       final player = context.read<PlayerController>();
       player.skipPrevious();
+      if (!player.playing) {
+        player.play();
+      }
     } catch (e) {
       debugPrint('[DesktopWindowFrame] skipPrevious error: $e');
     }

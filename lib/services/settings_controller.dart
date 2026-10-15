@@ -73,6 +73,9 @@ class SettingsController extends ChangeNotifier {
   String _jamServerUrl = kDefaultRemoteJamEndpoint;
   AudioFidelityMode _fidelityMode = AudioFidelityMode.standard;
   bool _losslessOnMobileData = false;
+  bool _mouseControlsEnabled = true;
+  bool _mouseGlobalEnabled = true;
+  bool _mouseMiddleClickEnabled = true;
 
   // Red actual detectada. Si no se puede saber (sin NetworkManager, etc.) se
   // asume "casa" para no degradar la calidad sin motivo.
@@ -256,6 +259,35 @@ class SettingsController extends ChangeNotifier {
   }
 
   // ---------------------------------------------------------------------------
+  // Controles del mouse (Escritorio / Windows)
+  // ---------------------------------------------------------------------------
+
+  bool get mouseControlsEnabled => _mouseControlsEnabled;
+  bool get mouseGlobalEnabled => _mouseGlobalEnabled;
+  bool get mouseMiddleClickEnabled => _mouseMiddleClickEnabled;
+
+  void setMouseControlsEnabled(bool value) {
+    if (value == _mouseControlsEnabled) return;
+    _mouseControlsEnabled = value;
+    _save();
+    notifyListeners();
+  }
+
+  void setMouseGlobalEnabled(bool value) {
+    if (value == _mouseGlobalEnabled) return;
+    _mouseGlobalEnabled = value;
+    _save();
+    notifyListeners();
+  }
+
+  void setMouseMiddleClickEnabled(bool value) {
+    if (value == _mouseMiddleClickEnabled) return;
+    _mouseMiddleClickEnabled = value;
+    _save();
+    notifyListeners();
+  }
+
+  // ---------------------------------------------------------------------------
   // Red
   // ---------------------------------------------------------------------------
 
@@ -331,6 +363,10 @@ class SettingsController extends ChangeNotifier {
         orElse: () => AudioFidelityMode.standard,
       );
       _losslessOnMobileData = data['losslessOnMobileData'] as bool? ?? false;
+      _mouseControlsEnabled = data['mouseControlsEnabled'] as bool? ?? true;
+      _mouseGlobalEnabled = data['mouseGlobalEnabled'] as bool? ?? true;
+      _mouseMiddleClickEnabled =
+          data['mouseMiddleClickEnabled'] as bool? ?? true;
       final jamUrl =
           JamServerEndpoint.parse(data['jamServerUrl'] as String? ?? '');
       _jamServerUrl = jamUrl.url ?? kDefaultRemoteJamEndpoint;
@@ -360,6 +396,9 @@ class SettingsController extends ChangeNotifier {
         'jamServerUrl': _jamServerUrl,
         'fidelityMode': _fidelityMode.name,
         'losslessOnMobileData': _losslessOnMobileData,
+        'mouseControlsEnabled': _mouseControlsEnabled,
+        'mouseGlobalEnabled': _mouseGlobalEnabled,
+        'mouseMiddleClickEnabled': _mouseMiddleClickEnabled,
       }));
     } catch (err) {
       debugPrint('settings_controller:304 ignorado: $err');
