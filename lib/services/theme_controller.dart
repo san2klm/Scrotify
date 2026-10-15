@@ -147,6 +147,14 @@ class ThemeController extends ChangeNotifier {
     return null;
   }
 
+  bool _disposed = false;
+
+  @override
+  void dispose() {
+    _disposed = true;
+    super.dispose();
+  }
+
   Future<void> _load() async {
     try {
       final file = await _configFile();
@@ -166,6 +174,7 @@ class ThemeController extends ChangeNotifier {
     try {
       await _resolveDefaultDir();
     } catch (_) {}
+    if (_disposed) return;
     notifyListeners();
     await rescan();
   }

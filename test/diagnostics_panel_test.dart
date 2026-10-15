@@ -61,7 +61,15 @@ void main() {
 
     await tester.runAsync(() async {
       await tester.tap(find.text('Guardar en archivo'));
-      await Future<void>.delayed(const Duration(milliseconds: 200));
+      // Esperar la condición (el archivo escrito), no un tiempo fijo.
+      for (var i = 0; i < 100; i++) {
+        final written = tmp
+            .listSync()
+            .whereType<File>()
+            .any((f) => f.readAsStringSync().contains('una línea'));
+        if (written) break;
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+      }
     });
     await tester.pump();
 

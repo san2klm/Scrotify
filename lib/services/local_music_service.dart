@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import '../utils/path_utils.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
@@ -538,7 +539,7 @@ class LocalMusicService extends ChangeNotifier {
   Future<void> changeFolder(String path) async {
     await initialize();
     await AndroidMusicStorage.requireAccess();
-    final next = Directory(p.canonicalize(p.absolute(path)));
+    final next = Directory(normalizePathKeepCase(path));
     await next.create(recursive: true);
     final probe = File(p.join(
         next.path, '.scrotify-probe-${DateTime.now().microsecondsSinceEpoch}'));
@@ -967,6 +968,8 @@ class LocalMusicService extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
+    // Un reescaneo en segundo plano no debe seguir escribiendo el estado.
+    _cancelRequested = true;
     _artwork?.dispose();
     super.dispose();
   }

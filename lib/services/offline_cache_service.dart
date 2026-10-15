@@ -5,6 +5,7 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:crypto/crypto.dart';
+import '../utils/path_utils.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:sqflite/sqflite.dart';
@@ -718,7 +719,7 @@ class OfflineCacheService {
     final scopeDir = safeScopeSegment(serverScope);
     final trackFile = safeTrackSegment(trackId, extension);
     final filePath =
-        p.canonicalize(p.join(root.path, 'audio', scopeDir, trackFile));
+        normalizePathKeepCase(p.join(root.path, 'audio', scopeDir, trackFile));
     _validatePathWithinRoot(filePath, root);
     return filePath;
   }
@@ -781,7 +782,7 @@ class OfflineCacheService {
     final entry = OfflineCacheEntry(
       serverScope: canonicalScope,
       trackId: trackId,
-      localPath: p.canonicalize(p.absolute(localPath)),
+      localPath: normalizePathKeepCase(localPath),
       title: title,
       artist: artist,
       album: album,

@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import '../utils/path_utils.dart';
 import 'package:path/path.dart' as p;
 
 import 'navidrome_service.dart';
@@ -447,7 +448,8 @@ class OfflineDownloadManager extends ChangeNotifier {
     final scope = OfflineCacheService.safeScopeSegment(serverScope);
     final safeTrack = OfflineCacheService.safeTrackSegment(trackId, '.tmp');
     final tempFileName = '${scope}_$safeTrack';
-    final tempFilePath = p.canonicalize(p.join(tmpDir.path, tempFileName));
+    final tempFilePath =
+        normalizePathKeepCase(p.join(tmpDir.path, tempFileName));
     return File(tempFilePath);
   }
 
@@ -816,7 +818,7 @@ class OfflineDownloadManager extends ChangeNotifier {
         await targetDir.create(recursive: true);
       }
 
-      final backupPath = p.canonicalize(
+      final backupPath = normalizePathKeepCase(
           p.join(targetDir.path, '${p.basename(targetPath)}.bak'));
       final backupFile = File(backupPath);
       final bool hadExistingTarget = await targetFile.exists();

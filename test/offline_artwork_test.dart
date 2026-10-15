@@ -40,11 +40,15 @@ void main() {
   OfflineCacheService newCache() => OfflineCacheService(
       cacheRootDir: Directory(p.join(temp.path, 'cache')),
       metadataStore: InMemoryOfflineCacheMetadataStore());
-  LocalMusicService newMusic(OfflineCacheService cache, http.Client client) =>
-      LocalMusicService(cache,
-          stateFile: File(p.join(temp.path, 'biblioteca.json')),
-          defaultRoot: Directory(p.join(temp.path, 'Music')),
-          artworkClient: client);
+  final created = <LocalMusicService>[];
+  LocalMusicService newMusic(OfflineCacheService cache, http.Client client) {
+    final music = LocalMusicService(cache,
+        stateFile: File(p.join(temp.path, 'biblioteca.json')),
+        defaultRoot: Directory(p.join(temp.path, 'Music')),
+        artworkClient: client);
+    created.add(music);
+    return music;
+  }
 
   Future<void> seed(LocalMusicService music, OfflineCacheService cache) async {
     await music.initialize();
@@ -63,7 +67,28 @@ void main() {
 
   setUp(() async =>
       temp = await Directory.systemTemp.createTemp('scrotify-artwork-'));
-  tearDown(() async => await temp.delete(recursive: true));
+  tearDown(() async {
+    // Esperar el reescaneo en segundo plano antes de borrar la carpeta.
+    for (final music in created) {
+      await music.settled();
+    }
+    created.clear();
+    // En Windows el decodificador de imágenes suelta el archivo un poco
+    // después de que el widget desaparece: reintentar el borrado.
+    for (var attempt = 0;; attempt++) {
+      try {
+        await temp.delete(recursive: true);
+        break;
+      } on FileSystemException {
+        if (attempt >= 5) {
+          // Limpieza de mejor esfuerzo: la carpeta está en el temporal del sistema.
+          if (Platform.isWindows) break;
+          rethrow;
+        }
+        await Future<void>.delayed(const Duration(milliseconds: 100));
+      }
+    }
+  });
 
   test(
       'Reiniciar sin internet conserva portadas y metadatos en canciones, likes y playlists',
@@ -246,5 +271,10 @@ void main() {
     nav.dispose();
     music.dispose();
     await tester.runAsync(cache.close);
+    // Windows no borra la carpeta mientras la imagen decodificada la usa.
+    imageCache.clear();
+    imageCache.clearLiveImages();
+    await tester.runAsync(() async =>
+        await Future<void>.delayed(const Duration(milliseconds: 50)));
   });
 }
