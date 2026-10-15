@@ -79,6 +79,10 @@ mixin _PlayerQueue on _PlayerBase {
       unawaited(_loadCurrentTrackWaveform());
       _prepareNextForSkip();
       _ensureWatchdog();
+    } else {
+      // Si la cola estaba en su última pista, la añadida pasa a ser la siguiente.
+      _cancelFade();
+      _prepareNextForSkip();
     }
     notifyListeners();
   }
@@ -90,6 +94,9 @@ mixin _PlayerQueue on _PlayerBase {
     final newRealIndex = _queue.length - 1;
     if (_pos >= 0 && _pos < _order.length) {
       _order.insert(_pos + 1, newRealIndex);
+      // La siguiente pista cambió: descartar la que estaba precargada.
+      _cancelFade();
+      _prepareNextForSkip();
     } else {
       _order.add(newRealIndex);
     }
@@ -111,7 +118,12 @@ mixin _PlayerQueue on _PlayerBase {
     if (_mirror) return _remote!.removeFromQueue(orderIndex);
     if (orderIndex < 0 || orderIndex >= _order.length) return;
     if (orderIndex == _pos) return; // No eliminar la canción que está sonando
-    _order.removeAt(orderIndex);
+    final realIndex = _order.removeAt(orderIndex);
+    // Compactar `_queue`: si no, el aleatorio resucitaría pistas quitadas.
+    _queue.removeAt(realIndex);
+    for (var i = 0; i < _order.length; i++) {
+      if (_order[i] > realIndex) _order[i]--;
+    }
     if (orderIndex < _pos) {
       _pos--;
     }
@@ -169,7 +181,10 @@ mixin _PlayerQueue on _PlayerBase {
     final n = _queue.length;
     if (n == 0) return;
     if (_shuffleEnabled) {
-      _order = _randomOrderKeeping(_currentIndex, n);
+      final keep = _currentIndex;
+      _order = _randomOrderKeeping(keep, n);
+      // La pista actual queda en la posición `keep` del nuevo orden.
+      if (keep >= 0) _pos = keep;
     } else {
       _pos = _currentIndex;
       _order = List.generate(n, (i) => i);

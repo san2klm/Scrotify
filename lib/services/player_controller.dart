@@ -680,11 +680,16 @@ class PlayerController extends _PlayerBase
   }
 
   void _listenPlayers() {
-    _a.playerStateStream.listen((s) => _onPlayerState(_a, s));
-    _b.playerStateStream.listen((s) => _onPlayerState(_b, s));
-    _a.positionStream.listen((pos) => _onPositionChanged(_a, pos));
-    _b.positionStream.listen((pos) => _onPositionChanged(_b, pos));
+    _playerSubs
+      ..add(_a.playerStateStream.listen((s) => _onPlayerState(_a, s)))
+      ..add(_b.playerStateStream.listen((s) => _onPlayerState(_b, s)))
+      ..add(_a.positionStream.listen((pos) => _onPositionChanged(_a, pos)))
+      ..add(_b.positionStream.listen((pos) => _onPositionChanged(_b, pos)));
   }
+
+  /// Suscripciones a los dos reproductores; se cancelan en [dispose] para que
+  /// un evento tardío no notifique a un controlador ya liberado.
+  final List<StreamSubscription<dynamic>> _playerSubs = [];
 
   void _onPositionChanged(AudioPlayer player, Duration pos) {
     if (!identical(player, _lead) || !player.playing) return;
@@ -1070,6 +1075,9 @@ class PlayerController extends _PlayerBase
     _karaokePlayerStateController.close();
     _settings.removeListener(_onSettingsChanged);
     _service.removeListener(_onServiceChanged);
+    for (final sub in _playerSubs) {
+      sub.cancel();
+    }
     _a.dispose();
     _b.dispose();
     super.dispose();

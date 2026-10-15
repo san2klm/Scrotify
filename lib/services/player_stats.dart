@@ -228,7 +228,7 @@ mixin _PlayerStats on _PlayerBase {
   String? get _currentMostPlayedSession {
     final url = _service.serverUrl;
     final username = _service.username;
-    if (!_service.connected || url == null || username == null) return null;
+    if (url == null || username == null) return null;
     return '$url|$username';
   }
 
