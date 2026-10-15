@@ -128,7 +128,7 @@ void main() {
       }
     });
 
-    test('tras 5 códigos erróneos la sesión de pairing se invalida', () async {
+    test('5 códigos erróneos bloquean a esa IP sin cerrar la sesión', () async {
       final server = PairingServer(useRelay: false);
       final http = HttpClient();
       try {
@@ -148,7 +148,8 @@ void main() {
         }
         expect(lastStatus, HttpStatus.tooManyRequests);
         await Future<void>.delayed(const Duration(milliseconds: 100));
-        expect(server.isActive, isFalse);
+        // La sesión sigue activa: un atacante no la corta para los demás.
+        expect(server.isActive, isTrue);
       } finally {
         http.close(force: true);
         await server.stop();
@@ -199,9 +200,44 @@ void main() {
         expect(list.isNotEmpty, isTrue);
         final found = list.firstWhere((p) => p.port == server.port);
         expect(found.deviceName, 'Mi-Super-PC');
-        expect(found.serverUrl, 'https://navidrome.example.invalid');
+        // El radar no revela a qué servidor está conectado el PC.
+        expect(found.serverUrl, isEmpty);
       } finally {
         await server.stop();
+      }
+    });
+
+    test('un PC falso que responde sin conocer el código es ignorado',
+        () async {
+      final fake = await RawDatagramSocket.bind(
+          InternetAddress.loopbackIPv4, kPairingDiscoveryPort,
+          reuseAddress: true);
+      final seen = <String>[];
+      fake.listen((event) {
+        if (event != RawSocketEvent.read) return;
+        final dg = fake.receive();
+        if (dg == null) return;
+        seen.add(utf8.decode(dg.data));
+        fake.send(
+            utf8.encode(jsonEncode({
+              'app': kPairingDiscoveryAppTag,
+              'op': 'here',
+              'proof': 'f' * 64,
+              'port': 4242,
+              'deviceName': 'Impostor',
+            })),
+            dg.address,
+            dg.port);
+      });
+      try {
+        final found = await PairingClient.findPcByCode('ABC234',
+            timeout: const Duration(seconds: 2));
+        expect(found, isNull);
+        expect(seen, isNotEmpty);
+        // El código nunca sale del móvil en la búsqueda.
+        expect(seen.any((m) => m.contains('ABC234')), isFalse);
+      } finally {
+        fake.close();
       }
     });
 

@@ -8,6 +8,7 @@ import 'package:http/http.dart' as http;
 
 import '../models/pairing_models.dart';
 import '../utils/crypto_helper.dart';
+import '../utils/pairing_proof.dart';
 
 /// Cliente de emparejamiento para el teléfono.
 ///
@@ -119,6 +120,7 @@ class PairingClient {
     RawDatagramSocket? socket;
     Timer? timeoutTimer;
     final completer = Completer<DiscoveredPc?>();
+    final nonce = _randomRequestId();
 
     try {
       socket = await RawDatagramSocket.bind(InternetAddress.anyIPv4, 0);
@@ -132,10 +134,14 @@ class PairingClient {
           try {
             final text = utf8.decode(dg.data);
             final json = jsonDecode(text) as Map<String, dynamic>;
+            final proof = json['proof'];
+            // Solo cuenta quien demuestra conocer el código (HMAC del nonce).
             if (json['app'] == kPairingDiscoveryAppTag &&
                 json['op'] == 'here' &&
-                (json['code'] as String?)?.toUpperCase() == cleanCode) {
-              final pc = DiscoveredPc.fromJson(json, dg.address.address);
+                proof is String &&
+                pairingProofEquals(proof, pairingProof(cleanCode, nonce))) {
+              final pc = DiscoveredPc.fromJson(
+                  {...json, 'code': cleanCode}, dg.address.address);
               if (pc.port > 0 && !completer.isCompleted) {
                 completer.complete(pc);
               }
@@ -148,7 +154,7 @@ class PairingClient {
       final queryPayload = jsonEncode({
         'app': kPairingDiscoveryAppTag,
         'op': 'find',
-        'code': cleanCode,
+        'nonce': nonce,
       });
       final bytes = utf8.encode(queryPayload);
 

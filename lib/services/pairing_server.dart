@@ -9,6 +9,7 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 
 import '../models/pairing_models.dart';
 import '../utils/crypto_helper.dart';
+import '../utils/pairing_proof.dart';
 
 /// Servidor de emparejamiento LAN que corre en el PC.
 ///
@@ -23,6 +24,10 @@ class PairingServer {
   /// Intentos de código erróneos tolerados antes de invalidar la sesión.
   static const int _maxFailedClaims = 5;
   int _failedClaims = 0;
+
+  /// Total de fallos (de cualquier IP) que invalida la sesión.
+  static const int _maxTotalFailedClaims = 50;
+  final Map<String, int> _failedClaimsByIp = {};
 
   /// Sólo se desactiva en tests de la antigua vía LAN. En la app, todo QR usa
   /// el relay temporal gratuito de ntfy.sh.
@@ -95,6 +100,7 @@ class PairingServer {
 
     // Generar código y clave efímera
     _failedClaims = 0;
+    _failedClaimsByIp.clear();
     _currentCode = PairCode.generate();
     _ephemeralKeyPair = await generateKeyPair();
     _relayTopic = useRelay ? _newRelayTopic() : null;
@@ -308,7 +314,6 @@ class PairingServer {
   Future<void> _handleStatus(HttpRequest req) async {
     final body = jsonEncode({
       'deviceName': _deviceName,
-      'serverUrl': _serverUrl,
       'status': _status.name,
       'expiresIn': remainingSeconds,
     });
@@ -345,16 +350,32 @@ class PairingServer {
 
     final request = PairClaimRequest.fromJson(json);
 
+    // Fallos por IP: quien adivina códigos queda bloqueado sin cerrar la
+    // sesión para los demás. Solo un total muy alto la invalida.
+    final ip = req.connectionInfo?.remoteAddress.address ?? '?';
+    if ((_failedClaimsByIp[ip] ?? 0) >= _maxFailedClaims) {
+      req.response.statusCode = HttpStatus.tooManyRequests;
+      req.response.write('{"error": "Too many attempts"}');
+      await req.response.close();
+      return;
+    }
+
     // Validar código
     if (request.code.toUpperCase() != _currentCode!.value) {
-      if (++_failedClaims >= _maxFailedClaims) {
-        // Anti fuerza bruta: se cierra la sesión y hay que generar otro código.
+      _failedClaimsByIp[ip] = (_failedClaimsByIp[ip] ?? 0) + 1;
+      if (++_failedClaims >= _maxTotalFailedClaims) {
         req.response.statusCode = HttpStatus.tooManyRequests;
         req.response.write('{"error": "Too many attempts"}');
         await req.response.close();
         _status = PairingStatus.expired;
         _statusController.add(_status);
         unawaited(stop());
+        return;
+      }
+      if (_failedClaimsByIp[ip]! >= _maxFailedClaims) {
+        req.response.statusCode = HttpStatus.tooManyRequests;
+        req.response.write('{"error": "Too many attempts"}');
+        await req.response.close();
         return;
       }
       req.response.statusCode = HttpStatus.unauthorized;
@@ -471,16 +492,17 @@ class PairingServer {
 
       // 1. Búsqueda específica por código
       if (op == 'find') {
-        final requestedCode = (json['code'] as String?)?.toUpperCase();
-        if (requestedCode == _currentCode!.value) {
+        // El `find` lleva un nonce, no el código. Se responde con una
+        // prueba HMAC que solo puede calcular quien conoce el código.
+        final nonce = json['nonce'];
+        if (nonce is String && nonce.isNotEmpty && nonce.length <= 64) {
           final responsePayload = jsonEncode({
             'app': kPairingDiscoveryAppTag,
             'op': 'here',
-            'code': _currentCode!.value,
+            'proof': pairingProof(_currentCode!.value, nonce),
             'port': _port,
             'host': _hostIp,
             'deviceName': _deviceName,
-            'serverUrl': _serverUrl,
             'expiresIn': remainingSeconds,
           });
           final bytes = utf8.encode(responsePayload);
@@ -495,7 +517,6 @@ class PairingServer {
           'app': kPairingDiscoveryAppTag,
           'op': 'presence',
           'deviceName': _deviceName,
-          'serverUrl': _serverUrl,
           'port': _port,
           'host': _hostIp,
           'expiresIn': remainingSeconds,
