@@ -83,23 +83,19 @@ mixin _PlayerStats on _PlayerBase {
   }
 
   Future<void> _loadHistory() async {
+    final gen = ++_historyGen;
     try {
       final dir = await getAppDataDirectory();
       final session = _mostPlayedSession;
-      File file;
-      if (session != null) {
-        final scoped = File('${dir.path}/${_historyFileName(session)}');
-        if (await scoped.exists()) {
-          file = scoped;
-        } else {
-          file = File('${dir.path}/recently_played.json');
-        }
-      } else {
-        file = File('${dir.path}/recently_played.json');
-      }
+      // Con sesión solo cuenta el archivo del perfil: el global es de otro
+      // servidor o usuario y no debe mezclarse.
+      final file = File(session != null
+          ? '${dir.path}/${_historyFileName(session)}'
+          : '${dir.path}/recently_played.json');
 
       if (await file.exists()) {
         final content = await file.readAsString();
+        if (gen != _historyGen) return; // cambió el perfil mientras se leía
         final list = jsonDecode(content) as List;
         _recentlyPlayed = list
             .map((j) =>
@@ -107,6 +103,7 @@ mixin _PlayerStats on _PlayerBase {
             .toList();
         notifyListeners();
       } else {
+        if (gen != _historyGen) return;
         _recentlyPlayed = [];
         notifyListeners();
       }
@@ -115,19 +112,28 @@ mixin _PlayerStats on _PlayerBase {
     }
   }
 
-  Future<void> _saveHistory() async {
-    try {
-      final dir = await getAppDataDirectory();
-      final session = _mostPlayedSession;
-      final fileName =
-          session != null ? _historyFileName(session) : 'recently_played.json';
-      final file = File('${dir.path}/$fileName');
-      await file.writeAsString(jsonEncode(
-          _recentlyPlayed.map(PlayerController._trackToJson).toList()));
-    } catch (e) {
-      debugPrint(
-          'PlayerController: no se pudo guardar el historial reciente: $e');
-    }
+  /// Escritura atómica (`.tmp` + rename) y en orden: una instantánea vieja
+  /// nunca pisa a una nueva. El contenido se captura al llamar.
+  Future<void> _saveHistory() {
+    final session = _mostPlayedSession;
+    final contents =
+        jsonEncode(_recentlyPlayed.map(PlayerController._trackToJson).toList());
+    _historyWrite = _historyWrite.catchError((Object _) {}).then((_) async {
+      try {
+        final dir = await getAppDataDirectory();
+        final fileName = session != null
+            ? _historyFileName(session)
+            : 'recently_played.json';
+        final file = File('${dir.path}/$fileName');
+        final temp = File('${file.path}.tmp');
+        await temp.writeAsString(contents, flush: true);
+        await temp.rename(file.path);
+      } catch (e) {
+        debugPrint(
+            'PlayerController: no se pudo guardar el historial reciente: $e');
+      }
+    });
+    return _historyWrite;
   }
 
   // ---------------------------------------------------------------------------

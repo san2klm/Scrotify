@@ -162,6 +162,10 @@ abstract class _PlayerBase extends ChangeNotifier {
 
   int _mostPlayedLoadGeneration = 0;
 
+  /// Descarta cargas de historial de un perfil anterior y serializa escrituras.
+  int _historyGen = 0;
+  Future<void> _historyWrite = Future.value();
+
   bool _shuffleEnabled = false;
 
   LoopMode _repeatMode = LoopMode.off;
@@ -659,9 +663,11 @@ class PlayerController extends _PlayerBase
   )   : _a = playerA ?? _createPlayer(),
         _b = playerB ?? _createPlayer() {
     _listenPlayers();
-    _loadHistory();
     _service.addListener(_onServiceChanged);
     _onServiceChanged();
+    // Con sesión, `_onServiceChanged` ya cargó el historial del perfil; sin
+    // sesión no hay cambio que lo dispare.
+    if (_mostPlayedSession == null) _loadHistory();
     _lastAppliedQuality = _settings.effectiveQuality;
     _volume = _settings.initialVolume;
     _lastAppliedVolume = _settings.initialVolume;

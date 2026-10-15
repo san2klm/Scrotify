@@ -197,7 +197,9 @@ class ListeningStatsService extends ChangeNotifier {
   List<ListeningEvent> _filteredEvents([String? scope]) {
     final targetScope = scope ?? _currentServerScope;
     if (targetScope == null || targetScope.isEmpty) {
-      return _events;
+      // Sin perfil activo no se mezclan los eventos de otros perfiles: solo los
+      // que nunca se asignaron a uno.
+      return _events.where((e) => e.serverScope == null).toList();
     }
     final scoped = _events.where((e) => e.serverScope == targetScope).toList();
     // Si no hay datos específicos del perfil actual, incluimos los no asignados
