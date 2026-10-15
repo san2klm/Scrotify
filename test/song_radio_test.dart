@@ -1,10 +1,14 @@
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:just_audio/just_audio.dart';
 import 'package:navidrome_client/services/local_music_service.dart';
 import 'package:navidrome_client/services/navidrome_service.dart';
 import 'package:navidrome_client/services/offline_cache_service.dart';
 import 'package:navidrome_client/services/player_controller.dart';
+import 'package:navidrome_client/services/remote_playback.dart';
 import 'package:navidrome_client/services/settings_controller.dart';
 
 import 'support/app_fakes.dart';
@@ -21,10 +25,68 @@ class _FakeLocalMusic extends LocalMusicService {
   List<Track> downloadedTracks(String? scope) => tracks;
 }
 
-class _TestNavidrome extends FakeNavidrome {
+class FakeRemoteRadio extends FakeRemote {
+  List<Track>? lastQueue;
+  int? lastStartIndex;
+
   @override
-  String getPlaybackStreamUrl(String trackId, {AudioQuality? quality}) =>
-      'https://example.com/stream/$trackId';
+  void playQueue(List<Track> tracks, int startIndex, {bool shuffle = false}) {
+    super.playQueue(tracks, startIndex, shuffle: shuffle);
+    lastQueue = List.of(tracks);
+    lastStartIndex = startIndex;
+  }
+}
+
+class FakeRemote extends ChangeNotifier implements RemotePlayback {
+  @override
+  bool active = false;
+  @override
+  List<Track> queue = [];
+  @override
+  int index = 0;
+  @override
+  bool playing = false;
+  @override
+  Duration position = Duration.zero;
+  @override
+  Duration? duration = Duration.zero;
+  @override
+  double volume = 0.5;
+  @override
+  bool shuffle = false;
+  @override
+  LoopMode repeat = LoopMode.off;
+
+  @override
+  void playQueue(List<Track> tracks, int startIndex, {bool shuffle = false}) {}
+  @override
+  void addToQueue(Track t) {}
+  @override
+  void addNext(Track t) {}
+  @override
+  void removeFromQueue(int i) {}
+  @override
+  void reorderQueue(int a, int b) {}
+  @override
+  void clearQueue() {}
+  @override
+  void toggle() {}
+  @override
+  void play() {}
+  @override
+  void pause() {}
+  @override
+  void next() {}
+  @override
+  void previous() {}
+  @override
+  void seek(Duration t) {}
+  @override
+  void setVolume(double v) {}
+  @override
+  void toggleShuffle() {}
+  @override
+  void toggleRepeat() {}
 }
 
 void main() {
@@ -75,38 +137,22 @@ void main() {
     genre: 'Pop',
   );
 
-  group('Song Radio - PlayerController.playRadio', () {
-    test('arma la cola con la semilla y las similares sin duplicados', () async {
-      final player = PlayerController(_TestNavidrome(), SettingsController());
-      addTearDown(player.dispose);
+  group('Song Radio - PlayerController.playRadio (Mirror / Remote)', () {
+    test('en modo remoto/mirror delega la cola completa con la semilla en index 0',
+        () async {
+      final player = PlayerController(FakeNavidrome(), SettingsController());
+      final remote = FakeRemoteRadio();
+      player.remote = remote;
+      remote.active = true;
 
       await player.playRadio(seedTrack, [similar1, similar2, seedTrack]);
 
-      expect(player.queue.length, 3);
-      expect(player.queue[0].id, 'seed_1');
-      expect(player.queue[1].id, 'sim_1');
-      expect(player.queue[2].id, 'sim_2');
-      expect(player.sourcePlaylist, isNotNull);
-      expect(player.sourcePlaylist!.id, 'radio_seed_1');
-      expect(player.sourcePlaylist!.name, 'Radio: Imposible');
-    });
-
-    test('reemplaza la cola fluidamente si la pista semilla ya estaba en reproducción',
-        () async {
-      final player = PlayerController(_TestNavidrome(), SettingsController());
-      addTearDown(player.dispose);
-
-      // Cargamos y reproducimos la pista semilla
-      await player.playQueue([seedTrack], startIndex: 0);
-      expect(player.currentTrack?.id, 'seed_1');
-
-      // Iniciamos el modo Radio con la misma canción
-      await player.playRadio(seedTrack, [similar1, similar2]);
-
-      expect(player.queue.length, 3);
-      expect(player.currentTrack?.id, 'seed_1');
-      expect(player.sourcePlaylist?.id, 'radio_seed_1');
-      expect(player.orderedQueue[1].id, 'sim_1');
+      expect(remote.lastQueue, isNotNull);
+      expect(remote.lastQueue!.length, 3);
+      expect(remote.lastQueue![0].id, 'seed_1');
+      expect(remote.lastQueue![1].id, 'sim_1');
+      expect(remote.lastQueue![2].id, 'sim_2');
+      expect(remote.lastStartIndex, 0);
     });
   });
 
