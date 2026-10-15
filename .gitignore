@@ -5,12 +5,9 @@
 *.log
 
 # Flutter related
-**/android
 **/ios
 **/web
 **/macos
-**/linux
-**/windows
 **/.idea
 **/.vscode
 **/.gradle
@@ -20,59 +17,17 @@
 **/.pub-cache
 **/.pub
 
-# Los directorios de plataforma se regeneran en general, pero estos archivos
-# forman parte de la identidad visual nativa de Scrotify y deben versionarse.
-!android/
-android/*
-!android/app/
-android/app/*
-!android/app/src/
-android/app/src/*
-!android/app/src/main/
-android/app/src/main/*
-!android/app/src/main/AndroidManifest.xml
-!android/app/src/main/kotlin/
-android/app/src/main/kotlin/*
-!android/app/src/main/kotlin/com/
-android/app/src/main/kotlin/com/*
-!android/app/src/main/kotlin/com/example/
-android/app/src/main/kotlin/com/example/*
-!android/app/src/main/kotlin/com/example/navidrome_client/
-android/app/src/main/kotlin/com/example/navidrome_client/*
-!android/app/src/main/kotlin/com/example/navidrome_client/MainActivity.kt
-!android/app/src/main/kotlin/com/example/navidrome_client/ScrotifyWidgetProvider.kt
-!android/app/src/main/kotlin/com/example/navidrome_client/*.kt
-!android/app/src/main/res/
-android/app/src/main/res/*
-# Widget de pantalla de inicio
-!android/app/src/main/res/layout/
-!android/app/src/main/res/xml/
-!android/app/src/main/res/drawable/
-android/app/src/main/res/drawable/*
-!android/app/src/main/res/drawable/widget_*.xml
-!android/app/src/main/res/drawable/ic_widget_*.xml
-# Reglas de conservación de recursos (audio_service en release).
-!android/app/src/main/res/raw/
-!android/app/src/main/res/values/
-android/app/src/main/res/values/*
-!android/app/src/main/res/values/widget_strings.xml
-!android/app/src/main/res/mipmap-mdpi/
-!android/app/src/main/res/mipmap-mdpi/ic_launcher.png
-!android/app/src/main/res/mipmap-hdpi/
-!android/app/src/main/res/mipmap-hdpi/ic_launcher.png
-!android/app/src/main/res/mipmap-xhdpi/
-!android/app/src/main/res/mipmap-xhdpi/ic_launcher.png
-!android/app/src/main/res/mipmap-xxhdpi/
-!android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png
-!android/app/src/main/res/mipmap-xxxhdpi/
-!android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
-
-!linux/
-linux/*
-!linux/CMakeLists.txt
-!linux/runner/
-linux/runner/*
-!linux/runner/my_application.cc
+# Plataformas versionadas (android, linux, windows). Solo se ignora lo generado.
+android/local.properties
+android/.gradle/
+android/app/build/
+android/app/.cxx/
+android/captures/
+linux/flutter/ephemeral/
+windows/flutter/ephemeral/
+**/generated_plugin_registrant.*
+**/GeneratedPluginRegistrant.*
+**/generated_plugins.cmake
 
 # Node.js dependencies
 **/node_modules/
