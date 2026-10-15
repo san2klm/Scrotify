@@ -24,11 +24,24 @@ function validPassword(p) {
 
 /// Panel y API de administración. No conoce nada de las salas salvo lo que
 /// expone `getStatus()`; nunca registra contraseñas, hashes ni tokens.
-export function createAdmin({ store, adminPassword, getStatus, loginMaxFailures = 5, logs }) {
+export function createAdmin({ store, adminPassword, getStatus, loginMaxFailures = 5, logs, setupToken, trustProxy = 'none' }) {
   const sessions = new Map(); // token -> { csrf, expires }
   const failures = new Map(); // ip -> [timestamps]
 
   if (!store.getAdmin() && validPassword(adminPassword)) setPassword(adminPassword);
+
+  // Sin administrador ni ADMIN_PASSWORD, el alta exige un token de un solo uso
+  // que solo ve quien tiene acceso al registro del servidor.
+  let pendingSetupToken = null;
+  if (!store.getAdmin()) {
+    pendingSetupToken = typeof setupToken === 'string' && setupToken ? setupToken : crypto.randomBytes(16).toString('hex');
+    console.info(`Scrotify Jam: primer arranque sin administrador. Token de configuración (un solo uso): ${pendingSetupToken}`);
+  }
+
+  function setupTokenOk(given) {
+    if (!pendingSetupToken || typeof given !== 'string' || given.length !== pendingSetupToken.length) return false;
+    return crypto.timingSafeEqual(Buffer.from(given), Buffer.from(pendingSetupToken));
+  }
 
   function setPassword(password) {
     const salt = crypto.randomBytes(16).toString('hex');
@@ -72,7 +85,9 @@ export function createAdmin({ store, adminPassword, getStatus, loginMaxFailures 
     const token = crypto.randomBytes(32).toString('hex');
     const csrf = crypto.randomBytes(24).toString('hex');
     sessions.set(token, { csrf, expires: Date.now() + SESSION_TTL_MS });
-    const secure = response.req?.socket?.encrypted || response.req?.headers['x-forwarded-proto'] === 'https';
+    // La cabecera de proxy solo cuenta si el despliegue declara un proxy de confianza.
+    const secure = response.req?.socket?.encrypted ||
+      (trustProxy !== 'none' && response.req?.headers['x-forwarded-proto'] === 'https');
     response.setHeader('set-cookie',
       `${COOKIE}=${token}; HttpOnly; SameSite=Strict; Path=/admin; Max-Age=${SESSION_TTL_MS / 1000}${secure ? '; Secure' : ''}`);
     return csrf;
@@ -131,7 +146,9 @@ export function createAdmin({ store, adminPassword, getStatus, loginMaxFailures 
         if (route === 'setup') {
           if (store.getAdmin()) return json(response, 409, { error: 'El administrador ya está configurado' }), true;
           if (!validPassword(body.password)) return json(response, 400, { error: 'La contraseña debe tener al menos 8 caracteres' }), true;
+          if (!setupTokenOk(body.setupToken)) return json(response, 403, { error: 'Token de configuración inválido (míralo en el registro del servidor)' }), true;
           setPassword(body.password);
+          pendingSetupToken = null;
         } else {
           if (recentFailures(clientIp).length >= loginMaxFailures) {
             response.setHeader('retry-after', String(LOGIN_WINDOW_MS / 1000));

@@ -353,12 +353,15 @@ test('proxy headers are ignored unless trustProxy is set', async () => {
 });
 
 test('first-run setup creates the admin only once', async () => {
-  const server = await startServer();
+  const server = await startServer({ setupToken: 'tok-test-123' });
   const session = await http(server, 'GET', '/admin/api/session');
   assert.equal(session.json.configured, false);
-  assert.equal((await http(server, 'POST', '/admin/api/setup', { body: { password: 'short' } })).status, 400);
-  assert.equal((await http(server, 'POST', '/admin/api/setup', { body: { password: 'supersecret1' } })).status, 200);
-  assert.equal((await http(server, 'POST', '/admin/api/setup', { body: { password: 'otherpass99' } })).status, 409);
+  // Sin token válido nadie puede apropiarse del panel.
+  assert.equal((await http(server, 'POST', '/admin/api/setup', { body: { password: 'supersecret1' } })).status, 403);
+  assert.equal((await http(server, 'POST', '/admin/api/setup', { body: { password: 'supersecret1', setupToken: 'otro' } })).status, 403);
+  assert.equal((await http(server, 'POST', '/admin/api/setup', { body: { password: 'short', setupToken: 'tok-test-123' } })).status, 400);
+  assert.equal((await http(server, 'POST', '/admin/api/setup', { body: { password: 'supersecret1', setupToken: 'tok-test-123' } })).status, 200);
+  assert.equal((await http(server, 'POST', '/admin/api/setup', { body: { password: 'otherpass99', setupToken: 'tok-test-123' } })).status, 409);
 });
 
 test('settings changes need CSRF and apply without restart', async () => {

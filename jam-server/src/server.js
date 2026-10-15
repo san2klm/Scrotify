@@ -185,6 +185,7 @@ export function createJamServer({
   dbPath = ':memory:',
   adminPassword,
   trustProxy = 'none',
+  setupToken,
   loginMaxFailures,
   navidromeAuth,
   ...overrides
@@ -209,6 +210,8 @@ export function createJamServer({
   const admin = createAdmin({
     store,
     adminPassword,
+    setupToken,
+    trustProxy,
     loginMaxFailures,
     logs,
     getStatus: () => {

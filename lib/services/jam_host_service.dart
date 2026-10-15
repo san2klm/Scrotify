@@ -133,7 +133,17 @@ abstract class _JamHostBase {
   /// Contraseña opcional de la sala (solo en RAM del host).
   String? roomPassword;
 
-  final JamFailureBlocker _joinFailures = JamFailureBlocker();
+  /// Fallos de unión por IP: un equipo que adivina PINs no bloquea al resto.
+  final Map<String, JamFailureBlocker> _joinFailuresByIp = {};
+
+  JamFailureBlocker _blockerFor(String ip) =>
+      _joinFailuresByIp.putIfAbsent(ip, JamFailureBlocker.new);
+
+  /// Tamaño máximo de un mensaje de cliente (se cierra con 1009 si lo supera).
+  static const int maxClientFrameBytes = 64 * 1024;
+
+  /// Tiempo máximo para mandar `join_request` tras abrir el socket.
+  static const Duration helloTimeout = Duration(seconds: 5);
 
   bool _allowGuestControls = true;
 
@@ -370,7 +380,8 @@ class JamHostService extends _JamHostBase with _JamHostDiscovery {
       if (path == '/jam/ws') {
         if (WebSocketTransformer.isUpgradeRequest(req)) {
           final socket = await WebSocketTransformer.upgrade(req);
-          _handleWebSocketClient(socket);
+          _handleWebSocketClient(
+              socket, req.connectionInfo?.remoteAddress.address ?? '?');
         } else {
           req.response.statusCode = HttpStatus.badRequest;
           req.response.write('Expected WebSocket upgrade');
@@ -398,12 +409,28 @@ class JamHostService extends _JamHostBase with _JamHostDiscovery {
     }
   }
 
-  void _handleWebSocketClient(WebSocket socket) {
+  void _handleWebSocketClient(WebSocket socket, String remoteIp) {
     String? participantId;
+    final joinFailures = _blockerFor(remoteIp);
+
+    // Sin saludo en pocos segundos: conexión inútil (o un sondeo lento).
+    final helloTimer = Timer(_JamHostBase.helloTimeout, () {
+      if (participantId == null) {
+        unawaited(socket.close(WebSocketStatus.policyViolation, 'hello timeout')
+            .catchError((Object _) {}));
+      }
+    });
 
     socket.listen(
       (data) async {
         try {
+          final size = data is String ? data.length : (data as List).length;
+          if (size > _JamHostBase.maxClientFrameBytes) {
+            unawaited(socket
+                .close(WebSocketStatus.messageTooBig, 'frame too large')
+                .catchError((Object _) {}));
+            return;
+          }
           final raw = data is String ? data : utf8.decode(data as List<int>);
           final msg = jsonDecode(raw) as Map<String, dynamic>;
           final op = msg['op'] as String?;
@@ -453,12 +480,18 @@ class JamHostService extends _JamHostBase with _JamHostDiscovery {
               final rawPin = msg['pin'] as String?;
               final pin =
                   rawPin?.toUpperCase().replaceAll(RegExp(r'[^A-Z0-9]'), '');
-              if (_joinFailures.isBlocked()) {
+              final bypassToken = msg['token'] as String?;
+              final bypassId = msg['participantId'] as String?;
+              final validReconnect = bypassToken != null &&
+                  bypassId != null &&
+                  _participantTokens[bypassId] != null &&
+                  constantTimeEquals(bypassToken, _participantTokens[bypassId]!);
+              if (!validReconnect && joinFailures.isBlocked()) {
                 _rejectJoin(socket, 'Demasiados intentos. Prueba más tarde.');
                 return;
               }
               if (pin == null || pin != _pinCode?.value) {
-                _joinFailures.recordFailure();
+                joinFailures.recordFailure();
                 _rejectJoin(socket, 'PIN incorrecto.');
                 return;
               }
@@ -527,7 +560,7 @@ class JamHostService extends _JamHostBase with _JamHostDiscovery {
               if (expected != null && expected.isNotEmpty) {
                 final given = msg['password'];
                 if (given is! String || !constantTimeEquals(given, expected)) {
-                  _joinFailures.recordFailure();
+                  joinFailures.recordFailure();
                   _rejectJoin(socket, 'PIN incorrecto.');
                   return;
                 }
@@ -825,7 +858,10 @@ class JamHostService extends _JamHostBase with _JamHostDiscovery {
           debugPrint('JamHostService WebSocket error parsing msg: $e');
         }
       },
-      onDone: () => _handleSocketDisconnect(participantId, socket),
+      onDone: () {
+        helloTimer.cancel();
+        _handleSocketDisconnect(participantId, socket);
+      },
       onError: (_) => _handleSocketDisconnect(participantId, socket),
     );
   }
@@ -1064,7 +1100,7 @@ class JamHostService extends _JamHostBase with _JamHostDiscovery {
     _kickedNames.clear();
     _kickedParticipantIds.clear();
     roomPassword = null;
-    _joinFailures.reset();
+    _joinFailuresByIp.clear();
     hostParticipant = null;
     _lastInboundActivity.clear();
     _participantTokens.clear();

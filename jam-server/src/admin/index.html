@@ -27,6 +27,7 @@
   <section id="auth" class="card" hidden>
     <p id="authHint" class="muted"></p>
     <label>Contraseña <input id="pw" type="password" autocomplete="current-password"></label>
+    <label id="tokenRow" hidden>Token de configuración (está en el registro del servidor) <input id="setupToken" type="password" autocomplete="off"></label>
     <button id="authBtn" class="primary"></button>
   </section>
 
@@ -75,12 +76,13 @@ async function boot() {
   if (!s.authenticated) {
     $('authHint').textContent = configured ? 'Introduce la contraseña de administrador.' : 'Primer arranque: elige una contraseña de administrador (mín. 8 caracteres).';
     $('authBtn').textContent = configured ? 'Entrar' : 'Crear contraseña';
+    $('tokenRow').hidden = configured;
   } else { render(); }
 }
 
 $('authBtn').onclick = async () => {
   try {
-    const r = await api('POST', configured ? 'login' : 'setup', { password: $('pw').value });
+    const r = await api('POST', configured ? 'login' : 'setup', configured ? { password: $('pw').value } : { password: $('pw').value, setupToken: $('setupToken').value });
     csrf = r.csrf; $('pw').value = ''; say(''); await boot();
   } catch (e) { say(e.message, true); }
 };
