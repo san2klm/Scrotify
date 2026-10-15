@@ -516,11 +516,13 @@ class _AmoledCodeGroupChip extends StatelessWidget {
 class PairingJoinPanel extends StatefulWidget {
   final Future<void> Function(PairCredentials creds) onCredentialsReceived;
   final bool autoOpenScanner;
+  final bool isTv;
 
   const PairingJoinPanel({
     super.key,
     required this.onCredentialsReceived,
     this.autoOpenScanner = false,
+    this.isTv = false,
   });
 
   @override
@@ -889,23 +891,26 @@ class _PairingJoinPanelState extends State<PairingJoinPanel> {
 
         const SizedBox(height: 14),
 
-        // Botón Escanear QR
-        OutlinedButton.icon(
-          onPressed: _loading ? null : _openQrScanner,
-          style: OutlinedButton.styleFrom(
-            foregroundColor: context.textPrimary,
-            side: BorderSide(color: context.bgElevated),
-            padding: const EdgeInsets.symmetric(vertical: 12),
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        // Botón Escanear QR (solo en dispositivos móviles con cámara)
+        if (!widget.isTv) ...[
+          OutlinedButton.icon(
+            onPressed: _loading ? null : _openQrScanner,
+            style: OutlinedButton.styleFrom(
+              foregroundColor: context.textPrimary,
+              side: BorderSide(color: context.bgElevated),
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              shape:
+                  RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            icon: Icon(Icons.qr_code_scanner_rounded,
+                size: 19, color: context.accent),
+            label: const Text(
+              'Escanear código QR con la cámara',
+              style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12.5),
+            ),
           ),
-          icon: Icon(Icons.qr_code_scanner_rounded,
-              size: 19, color: context.accent),
-          label: const Text(
-            'Escanear código QR con la cámara',
-            style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12.5),
-          ),
-        ),
+          const SizedBox(height: 6),
+        ],
 
         // Desplegable conexión manual por IP
         Center(
@@ -988,34 +993,46 @@ class _PairingJoinPanelState extends State<PairingJoinPanel> {
   Widget _buildSubTab(int index, IconData icon, String label) {
     final isSelected = _activeTab == index;
     return Expanded(
-      child: GestureDetector(
-        onTap: () => setState(() => _activeTab = index),
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 7),
-          decoration: BoxDecoration(
-            color: isSelected ? context.bgElevated : Colors.transparent,
-            borderRadius: BorderRadius.circular(8),
-            border: isSelected
-                ? Border.all(
-                    color: context.accent.withValues(alpha: 0.4), width: 1)
-                : null,
+      child: FocusableActionDetector(
+        actions: {
+          ActivateIntent: CallbackAction<ActivateIntent>(
+            onInvoke: (_) => setState(() => _activeTab = index),
           ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(icon,
+        },
+        child: InkWell(
+          borderRadius: BorderRadius.circular(8),
+          onTap: () => setState(() => _activeTab = index),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 180),
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            decoration: BoxDecoration(
+              color: isSelected ? context.bgElevated : Colors.transparent,
+              borderRadius: BorderRadius.circular(8),
+              border: isSelected
+                  ? Border.all(
+                      color: context.accent.withValues(alpha: 0.5), width: 1.2)
+                  : null,
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  icon,
                   size: 15,
-                  color: isSelected ? context.accent : context.textMuted),
-              const SizedBox(width: 6),
-              Text(
-                label,
-                style: TextStyle(
-                  color: isSelected ? context.textPrimary : context.textMuted,
-                  fontSize: 12,
-                  fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                  color: isSelected ? context.accent : context.textMuted,
                 ),
-              ),
-            ],
+                const SizedBox(width: 6),
+                Text(
+                  label,
+                  style: TextStyle(
+                    color: isSelected ? context.textPrimary : context.textMuted,
+                    fontSize: 12,
+                    fontWeight:
+                        isSelected ? FontWeight.bold : FontWeight.normal,
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -1097,69 +1114,87 @@ class _PairingJoinPanelState extends State<PairingJoinPanel> {
           )
         else
           ..._nearbyDevices.map((pc) {
-            return Container(
-              margin: const EdgeInsets.only(bottom: 8),
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: context.bgApp,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: context.accent.withValues(alpha: 0.35),
+            return FocusableActionDetector(
+              actions: {
+                ActivateIntent: CallbackAction<ActivateIntent>(
+                  onInvoke: (_) =>
+                      _loading ? null : _connectToDiscoveredDevice(pc),
                 ),
-              ),
-              child: Row(
-                children: [
-                  Container(
-                    width: 36,
-                    height: 36,
+              },
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(12),
+                  onTap: _loading
+                      ? null
+                      : () => _connectToDiscoveredDevice(pc),
+                  child: Container(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: context.bgElevated,
+                      color: context.bgApp,
+                      borderRadius: BorderRadius.circular(12),
                       border: Border.all(
-                          color: context.accent.withValues(alpha: 0.4)),
+                        color: context.accent.withValues(alpha: 0.35),
+                      ),
                     ),
-                    child: Icon(Icons.laptop_rounded,
-                        color: context.accent, size: 19),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                    child: Row(
                       children: [
-                        Text(
-                          pc.deviceName,
-                          style: TextStyle(
-                            color: context.textPrimary,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 13.5,
+                        Container(
+                          width: 36,
+                          height: 36,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: context.bgElevated,
+                            border: Border.all(
+                                color: context.accent.withValues(alpha: 0.4)),
+                          ),
+                          child: Icon(Icons.laptop_rounded,
+                              color: context.accent, size: 19),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                pc.deviceName,
+                                style: TextStyle(
+                                  color: context.textPrimary,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 13.5,
+                                ),
+                              ),
+                              Text(
+                                '${pc.host}:${pc.port}',
+                                style: TextStyle(
+                                  color: context.textMuted,
+                                  fontSize: 10.5,
+                                  fontFamily: 'monospace',
+                                ),
+                              ),
+                            ],
                           ),
                         ),
-                        Text(
-                          '${pc.host}:${pc.port}',
-                          style: TextStyle(
-                            color: context.textMuted,
-                            fontSize: 10.5,
-                            fontFamily: 'monospace',
+                        const SizedBox(width: 8),
+                        FilledButton(
+                          onPressed: _loading
+                              ? null
+                              : () => _connectToDiscoveredDevice(pc),
+                          style: FilledButton.styleFrom(
+                            backgroundColor: context.accent2,
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 6),
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8)),
                           ),
+                          child: const Text('Vincular',
+                              style: TextStyle(fontSize: 11.5)),
                         ),
                       ],
                     ),
                   ),
-                  const SizedBox(width: 8),
-                  FilledButton(
-                    onPressed:
-                        _loading ? null : () => _connectToDiscoveredDevice(pc),
-                    style: FilledButton.styleFrom(
-                      backgroundColor: context.accent2,
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 6),
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8)),
-                    ),
-                    child: const Text('Vincular',
-                        style: TextStyle(fontSize: 11.5)),
-                  ),
-                ],
+                ),
               ),
             );
           }),

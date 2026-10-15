@@ -68,6 +68,11 @@ class _LoginScreenState extends State<LoginScreen> {
         }
       }
 
+      // Si no hay credenciales guardadas (primer inicio), usar las de Rubia
+      _savedUrl ??= 'https://navidrome.templo.cloud';
+      _savedUser ??= 'Rubia';
+      _savedPass ??= 'Rubia';
+
       if (_savedUrl != null && _savedUser != null && _savedPass != null) {
         if (mounted) {
           final nav = context.read<NavidromeService>();
@@ -81,7 +86,17 @@ class _LoginScreenState extends State<LoginScreen> {
             }
           }
           if (mounted) {
+            final profilesCtrl = context.read<ServerProfilesController>();
+            if (profilesCtrl.profiles.isEmpty) {
+              await profilesCtrl.addProfile(ServerProfile(
+                url: _savedUrl!,
+                username: _savedUser!,
+                password: _savedPass!,
+                nickname: 'Templo Navidrome',
+              ));
+            }
             openedLibrary = true;
+            if (!mounted) return;
             Navigator.pushReplacement(
               context,
               MaterialPageRoute(builder: (_) => const HomeShell()),
@@ -99,6 +114,14 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
+  bool _isTV(BuildContext context) {
+    if (!kIsWeb && Platform.isAndroid) {
+      final size = MediaQuery.sizeOf(context);
+      return size.width >= 700 && size.width > size.height;
+    }
+    return false;
+  }
+
   bool _isMobilePlatform(BuildContext context) {
     if (!kIsWeb && (Platform.isAndroid || Platform.isIOS)) {
       return true;
@@ -114,16 +137,19 @@ class _LoginScreenState extends State<LoginScreen> {
       return const _AmoledSplashScreen();
     }
 
+    final isTv = _isTV(context);
     final isMobile = _isMobilePlatform(context);
     final defaultUrl = _savedUrl ?? 'https://navidrome.templo.cloud';
-    final defaultUser = _savedUser ?? 'Proyecto';
-    final defaultPass = _savedPass ?? 'Proyecto123';
+    final defaultUser = _savedUser ?? 'Rubia';
+    final defaultPass = _savedPass ?? 'Rubia';
 
     if (isMobile) {
       return MobileLoginScreen(
         initialUrl: defaultUrl,
         initialUser: defaultUser,
         initialPass: defaultPass,
+        isTv: isTv,
+        initialTab: isTv ? 1 : 0,
       );
     }
 

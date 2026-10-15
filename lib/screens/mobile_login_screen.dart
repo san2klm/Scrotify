@@ -17,6 +17,8 @@ class MobileLoginScreen extends StatefulWidget {
   final String initialUrl;
   final String initialUser;
   final String initialPass;
+  final bool isTv;
+  final int initialTab;
   final BiometricAuthService? biometricService;
 
   const MobileLoginScreen({
@@ -24,6 +26,8 @@ class MobileLoginScreen extends StatefulWidget {
     this.initialUrl = '',
     this.initialUser = '',
     this.initialPass = '',
+    this.isTv = false,
+    this.initialTab = 0,
     this.biometricService,
   });
 
@@ -39,7 +43,7 @@ class _MobileLoginScreenState extends State<MobileLoginScreen> {
 
   bool _obscurePass = true;
   bool _loading = false;
-  int _selectedTab = 0; // 0 = Cuenta (Servidor), 1 = Vincular con PC
+  late int _selectedTab; // 0 = Cuenta (Servidor), 1 = Vincular con PC
 
   late final BiometricAuthService _biometricAuth;
   bool _canUseBiometrics = false;
@@ -48,6 +52,7 @@ class _MobileLoginScreenState extends State<MobileLoginScreen> {
   @override
   void initState() {
     super.initState();
+    _selectedTab = widget.initialTab;
     _biometricAuth = widget.biometricService ?? BiometricAuthService();
     _urlController = TextEditingController(text: widget.initialUrl);
     _userController = TextEditingController(text: widget.initialUser);
@@ -236,15 +241,15 @@ class _MobileLoginScreenState extends State<MobileLoginScreen> {
           child: SingleChildScrollView(
             padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 20),
             child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 440),
+              constraints: BoxConstraints(maxWidth: widget.isTv ? 520 : 440),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  // Header de marca móvil
+                  // Header de marca móvil / TV
                   _buildMobileHeader(),
                   const SizedBox(height: 20),
 
-                  // Tarjeta AMOLED móvil
+                  // Tarjeta AMOLED móvil / TV
                   Container(
                     padding: const EdgeInsets.all(18),
                     decoration: BoxDecoration(
@@ -275,6 +280,7 @@ class _MobileLoginScreenState extends State<MobileLoginScreen> {
                         else
                           PairingJoinPanel(
                             onCredentialsReceived: _onPairCredentialsReceived,
+                            isTv: widget.isTv,
                           ),
                       ],
                     ),
@@ -294,7 +300,9 @@ class _MobileLoginScreenState extends State<MobileLoginScreen> {
                       ),
                       const SizedBox(width: 6),
                       Text(
-                        'Scrotify Mobile · Cifrado E2E X25519',
+                        widget.isTv
+                            ? 'Scrotify TV · Cifrado E2E X25519'
+                            : 'Scrotify Mobile · Cifrado E2E X25519',
                         style: TextStyle(
                           color: context.textPrimary.withValues(alpha: 0.35),
                           fontSize: 11,
@@ -313,30 +321,33 @@ class _MobileLoginScreenState extends State<MobileLoginScreen> {
   }
 
   Widget _buildMobileHeader() {
+    final isTv = widget.isTv;
     return Column(
       children: [
         Image.asset(
           'assets/icons/scrotify_app_icon.png',
-          width: 52,
-          height: 52,
+          width: isTv ? 60 : 52,
+          height: isTv ? 60 : 52,
           semanticLabel: 'Logo de Scrotify',
         ),
         const SizedBox(height: 10),
         Text(
-          'SCROTIFY',
+          isTv ? 'SCROTIFY TV' : 'SCROTIFY',
           style: TextStyle(
             color: context.textPrimary,
-            fontSize: 22,
+            fontSize: isTv ? 24 : 22,
             fontWeight: FontWeight.w900,
             letterSpacing: 2,
           ),
         ),
         const SizedBox(height: 2),
         Text(
-          'Tu música de Navidrome en tu celular',
+          isTv
+              ? 'Vincular con tu computadora o servidor'
+              : 'Tu música de Navidrome en tu celular',
           style: TextStyle(
             color: context.textPrimary.withValues(alpha: 0.5),
-            fontSize: 12,
+            fontSize: isTv ? 13 : 12,
           ),
         ),
       ],
@@ -363,37 +374,45 @@ class _MobileLoginScreenState extends State<MobileLoginScreen> {
   Widget _buildTabItem(int index, IconData icon, String label) {
     final isSelected = _selectedTab == index;
     return Expanded(
-      child: GestureDetector(
-        onTap: () => setState(() => _selectedTab = index),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 180),
-          padding: const EdgeInsets.symmetric(vertical: 9),
-          decoration: BoxDecoration(
-            color: isSelected ? context.bgElevated : Colors.transparent,
-            borderRadius: BorderRadius.circular(10),
-            border: isSelected
-                ? Border.all(
-                    color: context.accent.withValues(alpha: 0.4), width: 1)
-                : null,
+      child: FocusableActionDetector(
+        actions: {
+          ActivateIntent: CallbackAction<ActivateIntent>(
+            onInvoke: (_) => setState(() => _selectedTab = index),
           ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                icon,
-                size: 16,
-                color: isSelected ? context.accent : context.textMuted,
-              ),
-              const SizedBox(width: 6),
-              Text(
-                label,
-                style: TextStyle(
-                  color: isSelected ? context.textPrimary : context.textMuted,
-                  fontSize: 12.5,
-                  fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+        },
+        child: InkWell(
+          borderRadius: BorderRadius.circular(10),
+          onTap: () => setState(() => _selectedTab = index),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 180),
+            padding: const EdgeInsets.symmetric(vertical: 9),
+            decoration: BoxDecoration(
+              color: isSelected ? context.bgElevated : Colors.transparent,
+              borderRadius: BorderRadius.circular(10),
+              border: isSelected
+                  ? Border.all(
+                      color: context.accent.withValues(alpha: 0.6), width: 1.2)
+                  : null,
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  icon,
+                  size: 16,
+                  color: isSelected ? context.accent : context.textMuted,
                 ),
-              ),
-            ],
+                const SizedBox(width: 6),
+                Text(
+                  label,
+                  style: TextStyle(
+                    color: isSelected ? context.textPrimary : context.textMuted,
+                    fontSize: 12.5,
+                    fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
