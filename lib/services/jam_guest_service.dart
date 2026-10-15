@@ -97,6 +97,7 @@ class JamGuestService {
       }
     });
   }
+
   void Function(JamConnectionState state)? onConnectionStateChanged;
 
   bool get isConnected => _isConnected;
@@ -502,8 +503,8 @@ class JamGuestService {
                 break;
 
               case 'reaction':
-                onReaction?.call(
-                    msg['from']?.toString() ?? '', msg['emoji']?.toString() ?? '');
+                onReaction?.call(msg['from']?.toString() ?? '',
+                    msg['emoji']?.toString() ?? '');
                 break;
 
               case 'chat':
@@ -986,6 +987,18 @@ class JamGuestService {
   // Acciones Colaborativas
   // ---------------------------------------------------------------------------
 
+  /// Pista para `add_to_queue`: la carátula va sin `u`/`s`/`t`, que son la
+  /// sesión Subsonic del invitado y no deben llegar al anfitrión.
+  @visibleForTesting
+  static Map<String, dynamic> addToQueueTrackJson(Track track) => {
+        'id': track.id,
+        'title': track.title,
+        'artist': track.artist,
+        'album': track.album,
+        'duration': track.duration,
+        'albumArtUrl': sanitizeArtUrl(track.albumArtUrl),
+      };
+
   void addToQueue(Track track, {bool playNext = false}) {
     if (_localParticipant != null && !_localParticipant!.canManageQueue) {
       const msg = 'El anfitrión ha deshabilitado la gestión de cola.';
@@ -995,14 +1008,7 @@ class JamGuestService {
     }
     _send({
       'op': 'add_to_queue',
-      'track': {
-        'id': track.id,
-        'title': track.title,
-        'artist': track.artist,
-        'album': track.album,
-        'duration': track.duration,
-        'albumArtUrl': track.albumArtUrl,
-      },
+      'track': addToQueueTrackJson(track),
       'playNext': playNext,
     });
   }

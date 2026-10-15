@@ -9,7 +9,8 @@ import '../models/jam_models.dart';
 import 'jam_clock.dart';
 
 typedef OnRemoteStateSync = void Function(Map<String, dynamic> state);
-typedef OnRemoteGuestJoined = void Function(String guestName, int totalParticipants);
+typedef OnRemoteGuestJoined = void Function(
+    String guestName, int totalParticipants);
 
 /// El relay cambió de anfitrión (transferencia o failover). [state]/[guests]
 /// solo vienen para el nuevo anfitrión.
@@ -19,7 +20,8 @@ typedef OnRemoteHostChanged = void Function(
   Map<String, dynamic>? state,
   List<Map<String, dynamic>> guests,
 );
-typedef OnRemoteGuestAction = void Function(String fromGuest, String actionType, dynamic payload);
+typedef OnRemoteGuestAction = void Function(
+    String fromGuest, String actionType, dynamic payload);
 typedef OnRemoteRoomClosed = void Function(String reason);
 typedef OnRemoteError = void Function(String error);
 
@@ -150,7 +152,8 @@ class RemoteJamService {
     hostToken = keepToken;
     _lastError = null;
     final targetEndpoint = customEndpoint ?? _endpoint;
-    final normalizedPin = pin.toUpperCase().replaceAll(RegExp(r'[^A-Z0-9]'), '');
+    final normalizedPin =
+        pin.toUpperCase().replaceAll(RegExp(r'[^A-Z0-9]'), '');
 
     try {
       final uri = Uri.parse(targetEndpoint);
@@ -161,26 +164,31 @@ class RemoteJamService {
       _subscription = _channel!.stream.listen(
         (data) {
           try {
-            final text = data is List<int> ? utf8.decode(data) : data.toString();
+            final text =
+                data is List<int> ? utf8.decode(data) : data.toString();
             final json = jsonDecode(text) as Map<String, dynamic>;
             if (_handleClockMessage(json)) return;
 
             if (json['status'] == 'room_created' ||
                 json['status'] == 'host_resumed') {
-              if (json['hostToken'] is String) hostToken = json['hostToken'] as String;
+              if (json['hostToken'] is String) {
+                hostToken = json['hostToken'] as String;
+              }
               _isConnected = true;
               _isHost = true;
               _pin = normalizedPin;
               _startClockSync();
               timeoutTimer?.cancel();
               if (!completer.isCompleted) completer.complete(true);
-              debugPrint('RemoteJamService: Sala creada exitosamente en $targetEndpoint con PIN $normalizedPin');
+              debugPrint(
+                  'RemoteJamService: Sala creada exitosamente en $targetEndpoint con PIN $normalizedPin');
               return;
             }
 
             if (json['status'] == 'error') {
               debugPrint('RemoteJamService error: ${json['message']}');
-              _lastError = json['message']?.toString() ?? 'Error al crear la sala';
+              _lastError =
+                  json['message']?.toString() ?? 'Error al crear la sala';
               onError?.call(_lastError!);
               timeoutTimer?.cancel();
               if (!completer.isCompleted) completer.complete(false);
@@ -210,7 +218,11 @@ class RemoteJamService {
 
       // Enviar create_room
       _channel!.sink.add(jsonEncode(resume && keepToken != null
-          ? {'action': 'resume_host', 'pin': normalizedPin, 'hostToken': keepToken}
+          ? {
+              'action': 'resume_host',
+              'pin': normalizedPin,
+              'hostToken': keepToken
+            }
           : {
               'action': 'create_room',
               'pin': normalizedPin,
@@ -227,7 +239,8 @@ class RemoteJamService {
       timeoutTimer = Timer(const Duration(seconds: 6), () {
         if (!completer.isCompleted) {
           debugPrint('RemoteJamService: timeout al crear sala');
-          _lastError ??= 'Tiempo de espera agotado al conectar con el servidor Jam central.';
+          _lastError ??=
+              'Tiempo de espera agotado al conectar con el servidor Jam central.';
           completer.complete(false);
         }
       });
@@ -276,6 +289,21 @@ class RemoteJamService {
   // ---------------------------------------------------------------------------
 
   /// Conecta como Invitado (Guest) a una sala remota mediante su PIN.
+  /// Mensaje `join_room`; incluye la clave de la sala cuando la hay.
+  @visibleForTesting
+  static Map<String, dynamic> buildJoinRoomMessage({
+    required String pin,
+    required String guestName,
+    String? roomPassword,
+  }) =>
+      {
+        'action': 'join_room',
+        'pin': pin,
+        'guestName': guestName,
+        if (roomPassword != null && roomPassword.isNotEmpty)
+          'roomPassword': roomPassword,
+      };
+
   Future<Map<String, dynamic>?> joinRoom({
     required String pin,
     required String guestName,
@@ -284,7 +312,8 @@ class RemoteJamService {
     await disconnect();
     _lastError = null;
     final targetEndpoint = customEndpoint ?? _endpoint;
-    final normalizedPin = pin.toUpperCase().replaceAll(RegExp(r'[^A-Z0-9]'), '');
+    final normalizedPin =
+        pin.toUpperCase().replaceAll(RegExp(r'[^A-Z0-9]'), '');
 
     try {
       final uri = Uri.parse(targetEndpoint);
@@ -295,7 +324,8 @@ class RemoteJamService {
       _subscription = _channel!.stream.listen(
         (data) {
           try {
-            final text = data is List<int> ? utf8.decode(data) : data.toString();
+            final text =
+                data is List<int> ? utf8.decode(data) : data.toString();
             final json = jsonDecode(text) as Map<String, dynamic>;
             if (_handleClockMessage(json)) return;
 
@@ -342,16 +372,17 @@ class RemoteJamService {
       );
 
       // Enviar join_room
-      _channel!.sink.add(jsonEncode({
-        'action': 'join_room',
-        'pin': normalizedPin,
-        'guestName': guestName,
-      }));
+      _channel!.sink.add(jsonEncode(buildJoinRoomMessage(
+        pin: normalizedPin,
+        guestName: guestName,
+        roomPassword: roomPassword,
+      )));
 
       timeoutTimer = Timer(const Duration(seconds: 6), () {
         if (!completer.isCompleted) {
           debugPrint('RemoteJamService: timeout al unirse a la sala');
-          _lastError ??= 'Tiempo de espera agotado al conectar a la sala remota.';
+          _lastError ??=
+              'Tiempo de espera agotado al conectar a la sala remota.';
           completer.complete(null);
         }
       });
@@ -384,21 +415,24 @@ class RemoteJamService {
   // ---------------------------------------------------------------------------
 
   /// Consulta al servidor si una sala con [pin] está activa sin unirse formalmente.
-  Future<Map<String, dynamic>?> checkRoom(String pin, {String? customEndpoint}) async {
+  Future<Map<String, dynamic>?> checkRoom(String pin,
+      {String? customEndpoint}) async {
     final targetEndpoint = customEndpoint ?? _endpoint;
-    final normalizedPin = pin.toUpperCase().replaceAll(RegExp(r'[^A-Z0-9]'), '');
+    final normalizedPin =
+        pin.toUpperCase().replaceAll(RegExp(r'[^A-Z0-9]'), '');
 
     try {
       final uri = Uri.parse(targetEndpoint);
       final tempChannel = WebSocketChannel.connect(uri);
-      final completer = Completer<Map<String, dynamic>?> ();
+      final completer = Completer<Map<String, dynamic>?>();
       Timer? timeoutTimer;
       StreamSubscription? tempSub;
 
       tempSub = tempChannel.stream.listen(
         (data) {
           try {
-            final text = data is List<int> ? utf8.decode(data) : data.toString();
+            final text =
+                data is List<int> ? utf8.decode(data) : data.toString();
             final json = jsonDecode(text) as Map<String, dynamic>;
             if (_handleClockMessage(json)) return;
 
@@ -443,14 +477,16 @@ class RemoteJamService {
   }
 
   /// Obtiene la lista de salas Jam activas y públicas desde el servidor central HTTP (`/rooms`).
-  Future<List<DiscoveredJamSession>> getActiveRooms({String? customEndpoint}) async {
+  Future<List<DiscoveredJamSession>> getActiveRooms(
+      {String? customEndpoint}) async {
     final target = customEndpoint ?? _endpoint;
     try {
       final parsed = JamServerEndpoint.parse(target);
       if (!parsed.isValid) return [];
       final uri = parsed.httpBase.replace(path: '/rooms');
 
-      final client = HttpClient()..connectionTimeout = const Duration(seconds: 4);
+      final client = HttpClient()
+        ..connectionTimeout = const Duration(seconds: 4);
       final request = await client.getUrl(uri);
       final response =
           await request.close().timeout(const Duration(seconds: 4));
@@ -544,12 +580,14 @@ class RemoteJamService {
       case 'host_back':
         onHostBack?.call();
       case 'reaction':
-        onReaction?.call(json['from']?.toString() ?? '', json['emoji']?.toString() ?? '');
+        onReaction?.call(
+            json['from']?.toString() ?? '', json['emoji']?.toString() ?? '');
       case 'chat':
         onChat?.call(
           json['from']?.toString() ?? '',
           json['text']?.toString() ?? '',
-          (json['ts'] as num?)?.toInt() ?? DateTime.now().millisecondsSinceEpoch,
+          (json['ts'] as num?)?.toInt() ??
+              DateTime.now().millisecondsSinceEpoch,
         );
       case 'chat_state':
         onChatState?.call(json['enabled'] != false);
@@ -584,8 +622,7 @@ class RemoteJamService {
 
   /// Funciones que el admin del relay permite (`GET /api/capabilities`).
   /// `null` si el servidor es antiguo o no responde (usar valores por defecto).
-  static Future<JamCapabilities?> fetchCapabilities(
-      String endpoint) async {
+  static Future<JamCapabilities?> fetchCapabilities(String endpoint) async {
     final parsed = JamServerEndpoint.parse(endpoint);
     if (!parsed.isValid) return null;
     final client = HttpClient()..connectionTimeout = const Duration(seconds: 3);
@@ -610,8 +647,8 @@ class RemoteJamService {
     final p = _pin;
     if (!_isHost || id == null || p == null) return false;
     try {
-      _channel?.sink.add(jsonEncode(
-          {'action': 'transfer_host', 'pin': p, 'toGuestId': id}));
+      _channel?.sink.add(
+          jsonEncode({'action': 'transfer_host', 'pin': p, 'toGuestId': id}));
       return true;
     } catch (_) {
       return false;

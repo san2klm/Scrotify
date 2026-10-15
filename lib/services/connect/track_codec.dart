@@ -1,3 +1,4 @@
+import '../../models/jam_models.dart' show sanitizeArtUrl;
 import '../navidrome_service.dart';
 
 /// `Track` ⇄ JSON para los mensajes de Connect (subconjunto que basta para
@@ -8,7 +9,7 @@ Map<String, dynamic> trackToConnectJson(Track t) => {
       'artist': t.artist,
       'album': t.album,
       'duration': t.duration,
-      'albumArtUrl': t.albumArtUrl,
+      'albumArtUrl': sanitizeArtUrl(t.albumArtUrl),
       'suffix': t.suffix,
       'artistId': t.artistId,
       'albumId': t.albumId,
