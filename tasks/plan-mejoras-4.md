@@ -259,7 +259,7 @@ El test va en el archivo de pruebas del servicio, si ya existe.
   conectado deja la cola y la pista actual intactas; cambiar de usuario sí
   la limpia.
 
-### [ ] 16. Scrobbles perdidos (R)
+### [x] 16. Scrobbles perdidos (R)
 - **Desde playlists:** en `player_stats.dart:41-45` solo se llama a
   `_recordPlaylistPlay`, y `_recordTrackPlay` (l.137) sale antes si hay
   `_sourcePlaylist`.
@@ -296,7 +296,7 @@ El test va en el archivo de pruebas del servicio, si ya existe.
 - **Aceptación:** test: quitar 2 pistas, activar y desactivar el aleatorio →
   siguen fuera y la pista actual no cambia.
 
-### [ ] 19. La barra de progreso sigue al reproductor viejo tras un crossfade (R)
+### [x] 19. La barra de progreso sigue al reproductor viejo tras un crossfade (R)
 - **Dónde:**
   - `player_controller.dart:552`: `positionStream` devuelve
     `_lead.positionStream` del momento en que alguien se suscribe.
@@ -308,14 +308,14 @@ El test va en el archivo de pruebas del servicio, si ya existe.
 - **Aceptación:** test: crossfade y luego seek → el stream emite la nueva
   posición.
 
-### [ ] 20. `playQueue` / `addAllToQueue` sin protección (R)
+### [x] 20. `playQueue` / `addAllToQueue` sin protección (R)
 - **Dónde:** `player_queue.dart:25,75,98`: `await _loadTrackOn` sin try ni
   `_loadGen`.
 - **Efecto:** sin red o con dos toques rápidos queda la cola cambiada, sin
   `notifyListeners` y sin vigilancia.
 - **Arreglo:** el mismo patrón que `_loadCurrentAndPlay`.
 
-### [ ] 21. Temporizador de apagado (R)
+### [x] 21. Temporizador de apagado (R)
 - **Dónde:** `player_sleep_timer.dart:83-108`.
 - **Problemas:**
   - El fundido de 5 s ignora la cancelación.
@@ -323,7 +323,7 @@ El test va en el archivo de pruebas del servicio, si ya existe.
   - Si cambia el `lead`, baja el volumen del reproductor equivocado.
 - **Arreglo:** token de cancelación y `identical(_lead, p)` en cada paso.
 
-### [ ] 22. Otros de reproducción (R)
+### [x] 22. Otros de reproducción (R)
 - `player_transitions.dart:295-301`: `_beginFadeRamp` puede dejar
   `_fading = true` (salida por `fadeDur < 50ms` o `!_preloaded`), y eso
   bloquea `setVolume` y los crossfades siguientes.
@@ -340,7 +340,7 @@ El test va en el archivo de pruebas del servicio, si ya existe.
 
 ## Fase 3 — Descargas y red
 
-### [ ] 23. Pausar y reanudar rápido corrompe la descarga (R)
+### [x] 23. Pausar y reanudar rápido corrompe la descarga (R)
 - **Dónde:** `offline_download_manager.dart:577-588,618-626,795-797,969`.
   - La descarga vieja borra el `.tmp` de la nueva.
   - El `finally` quita el token de la nueva.
@@ -351,7 +351,7 @@ El test va en el archivo de pruebas del servicio, si ya existe.
 - **Aceptación:** test con `fake_async`: pausar y reanudar sin esperar → una
   sola descarga termina y sigue siendo cancelable.
 
-### [ ] 24. Timeout de toda la transferencia en lugar de inactividad (R)
+### [~] 24. Timeout de toda la transferencia en lugar de inactividad (R)
 - **Dónde:** `navidrome_library.dart:523` (`completer.future.timeout(30s)`).
   - Un FLAC grande en red lenta falla siempre y reintenta desde 0.
 - **Arreglo:**
@@ -359,7 +359,7 @@ El test va en el archivo de pruebas del servicio, si ya existe.
   - Reanudar con `Range` si el servidor lo admite (Navidrome sí, con `raw`).
     Si no, empezar de 0.
 
-### [ ] 25. Un error de Subsonic guardado como audio (R)
+### [x] 25. Un error de Subsonic guardado como audio (R)
 - **Problema:** `stream.view` puede responder 200 con JSON o XML de error.
   - Solo se mira el código (`navidrome_library.dart:450`) y que el tamaño no
     sea 0 (`offline_download_manager.dart:803`).
@@ -368,7 +368,7 @@ El test va en el archivo de pruebas del servicio, si ya existe.
   - Comprobar los primeros bytes (`{`, `<?xml`) antes de dar el archivo
     por bueno.
 
-### [ ] 26. Peticiones sin timeout ni comprobación de estado (R)
+### [~] 26. Peticiones sin timeout ni comprobación de estado (R)
 - **Dónde:**
   - `navidrome_library.dart:126,177,210,240,553,585`
   - `navidrome_playlists.dart:26,70,152…`
@@ -380,7 +380,7 @@ El test va en el archivo de pruebas del servicio, si ya existe.
   - Error tipado (`SubsonicException`) con el `code` de Subsonic.
   - Migrar todas las llamadas.
 
-### [ ] 27. Compatibilidad con otros servidores Subsonic (R)
+### [x] 27. Compatibilidad con otros servidores Subsonic (R)
 - **Dónde:** `navidrome_library.dart:246` (`(entries as List)`) falla cuando
   Subsonic/Airsonic devuelve un objeto suelto (álbum de una pista).
 - **Arreglo:**
@@ -389,7 +389,7 @@ El test va en el archivo de pruebas del servicio, si ya existe.
 - **Aceptación:** tests con respuestas mínimas: un elemento suelto,
   campos opcionales ausentes.
 
-### [ ] 28. Waveform: red innecesaria y fuga del token (R)
+### [x] 28. Waveform: red innecesaria y fuga del token (R)
 - **Dónde:**
   - `player_controller.dart:491` usa `getStreamUrl` aunque la pista esté
     descargada.
@@ -405,7 +405,7 @@ El test va en el archivo de pruebas del servicio, si ya existe.
   - Cancelar al cambiar de pista.
   - Pasar el error por `redactSecrets`.
 
-### [ ] 29. Historial y estadísticas (R)
+### [~] 29. Historial y estadísticas (R)
 - **Historial:**
   - `player_stats.dart:122`: `_saveHistory` escribe sin `.tmp` ni rename, y
     sin serializar las escrituras.
@@ -422,7 +422,7 @@ El test va en el archivo de pruebas del servicio, si ya existe.
   - `_filteredEvents` con perfil vacío muestra eventos de otros perfiles
     (l.205-206).
 
-### [ ] 30. Caché offline sin límite (R)
+### [!] 30. Caché offline sin límite (R)
 - **Problema:** no hay tope de tamaño ni desalojo en `offline_cache_service.dart`.
 - **Arreglo:**
   - Ajuste «tamaño máximo de caché de streaming».
@@ -731,3 +731,14 @@ robustez y las funciones nuevas.
   - 11: frames > 64 KB cierran con 1009; saludo en 5 s o se cierra. 13: bloqueo de PIN por IP; la reconexión con token válido no pasa por él.
   - 14: sin administrador, `/admin/api/setup` exige un token de un solo uso que se imprime en el registro (la UI tiene un campo); `Secure` de la cookie respeta `trustProxy`.
   - 10: respaldo cifrado con DPAPI en Windows; con el keyring funcionando, la escritura/lectura borra el respaldo. Falta el aviso en Ajustes → Diagnóstico cuando `SecureStorage.usingFallback` es verdadero.
+
+- 2026-10-15 (3) — Fases 2 y 3 (Windows: 901 tests verdes).
+  - 16: la escucha siempre se informa (también desde playlists); `ScrobbleQueue` persistente por perfil, con la hora original, se vacía al reconectar. 3 tests.
+  - 19: `positionStream`/`playerStateStream` salen de controladores estables alimentados por el `lead` actual. 20: `playQueue`/`add*` con `_startCurrentTrack` (try + `_loadGen`). 21: el fundido de apagado se aborta al cancelar o cambiar de `lead` y restaura el volumen.
+  - 22: `_fading` ya no queda en true; notificaciones de karaoke máx. 1/s; `HifiCoordinator.refresh` con generación y `dispose`; karaoke usa el archivo local.
+  - 23: temporal único por intento y token propio. 25: se rechazan Content-Type JSON/XML/text y cuerpos que empiezan por `{`/`<`.
+  - 24 (parcial): timeout por inactividad. **Falta** reanudar con `Range`: el manager reinicia desde 0 al reanudar.
+  - 26 (parcial): `_get` con timeout (20 s) en todas las peticiones GET de `navidrome_*`. **Falta** el helper tipado `SubsonicException` y comprobar `statusCode`/`Content-Type` en cada sitio. 27: `as List?` sobre respuestas → `_asListOrNull` (+2 tests con servidores que devuelven un objeto suelto).
+  - 28: waveform usa el archivo local, corta por `Content-Length` y pasa los errores por `redactSecrets`. **Falta** cancelar la descarga al cambiar de pista.
+  - 29 (parcial): historial con escritura atómica, serializada, sin cargar dos veces ni mezclar perfiles. Estadísticas: sin perfil ya no se muestran eventos de otros. **Falta** acotar el crecimiento de `events` (compactar por día o sqflite).
+  - 30: **sin objeto hoy.** `registerFile` solo se llama desde descargas explícitas y la biblioteca local; no existe caché de streaming que desalojar. Si se quiere, es una función nueva (decidir antes).
