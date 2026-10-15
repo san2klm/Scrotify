@@ -77,17 +77,29 @@ mixin _PlayerSleepTimer on _PlayerBase {
   Future<void> _executeSleepFadeAndPause() async {
     _cancelFade();
 
-    // Efecto Fade Out: bajar volumen gradualmente en los últimos segundos
-    double startVol = _volume;
-    int steps = 20;
-    for (int i = 0; i < steps; i++) {
-      double currentVol = _computeEffectivePlayerVolume(
+    // Efecto Fade Out: bajar volumen gradualmente en los últimos segundos.
+    // Se aborta si se cancela el temporizador o cambia el reproductor líder.
+    final gen = ++_sleepFadeGen;
+    final player = _lead;
+    final startVol = _volume;
+    const steps = 20;
+    bool stale() => gen != _sleepFadeGen || !identical(_lead, player);
+    for (var i = 0; i < steps; i++) {
+      if (stale()) {
+        await _restoreAfterAbortedFade(player, startVol);
+        return;
+      }
+      final currentVol = _computeEffectivePlayerVolume(
         baseVolume: startVol * (1 - (i / steps)),
         crossfadeFactor: 1.0,
         gainResult: _leadGain,
       );
-      await _lead.setVolume(currentVol);
+      await player.setVolume(currentVol);
       await Future.delayed(const Duration(milliseconds: 250));
+    }
+    if (stale()) {
+      await _restoreAfterAbortedFade(player, startVol);
+      return;
     }
 
     try {
@@ -108,9 +120,20 @@ mixin _PlayerSleepTimer on _PlayerBase {
     cancelSleepTimer();
   }
 
+  Future<void> _restoreAfterAbortedFade(AudioPlayer player, double vol) async {
+    try {
+      await player.setVolume(_computeEffectivePlayerVolume(
+        baseVolume: vol,
+        crossfadeFactor: 1.0,
+        gainResult: identical(player, _lead) ? _leadGain : null,
+      ));
+    } catch (_) {}
+  }
+
   /// Cancela el apagado automático programado, si lo hay.
   @override
   void cancelSleepTimer({bool silent = false}) {
+    _sleepFadeGen++;
     _sleepTimer?.cancel();
     _sleepTimer = null;
     _sleepTicker?.cancel();

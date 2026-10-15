@@ -19,6 +19,7 @@ class SessionNavidrome extends FakeNavidrome {
   String? url = 'https://a.example.invalid';
   String? user = 'ana';
   bool isConnected = true;
+  bool failStream = false;
 
   @override
   String? get serverUrl => url;
@@ -29,7 +30,9 @@ class SessionNavidrome extends FakeNavidrome {
 
   @override
   String getPlaybackStreamUrl(String trackId, {AudioQuality? quality}) =>
-      'https://a.example.invalid/stream/$trackId';
+      failStream
+          ? throw StateError('sin red')
+          : 'https://a.example.invalid/stream/$trackId';
 
   void changed() => notifyListeners();
 }
@@ -99,5 +102,49 @@ void main() {
     expect(player.currentTrack?.id, 'x');
     final loaded = [...a.loaded, ...b.loaded];
     expect(loaded.last, endsWith('/x'));
+  });
+
+  test('positionStream sigue al reproductor que conduce tras cambiar de pista',
+      () async {
+    await player.playQueue([t('1'), t('2'), t('3')]);
+    await Future<void>.delayed(const Duration(milliseconds: 20));
+    final received = <Duration>[];
+    final sub = player.positionStream.listen(received.add);
+    await player.skipNext();
+    await Future<void>.delayed(const Duration(milliseconds: 20));
+    final lead = a.playing ? a : b;
+    final other = identical(lead, a) ? b : a;
+    received.clear();
+    other.emitPosition(const Duration(seconds: 1));
+    lead.emitPosition(const Duration(seconds: 2));
+    await Future<void>.delayed(const Duration(milliseconds: 20));
+    expect(received, [const Duration(seconds: 2)]);
+    await sub.cancel();
+  });
+
+  test('playQueue sin red no lanza y deja la cola consistente', () async {
+    service.failStream = true;
+    await player.playQueue([t('1'), t('2')]);
+    expect(player.queue, hasLength(2));
+    // Dos toques rápidos tampoco rompen nada.
+    await Future.wait([
+      player.playQueue([t('3')]),
+      player.addAllToQueue([t('4')]),
+    ]);
+  });
+
+  test('cancelar el temporizador aborta el fundido y restaura el volumen',
+      () async {
+    await player.playQueue([t('1'), t('2')]);
+    await Future<void>.delayed(const Duration(milliseconds: 20));
+    final lead = a.playing ? a : b;
+    final base = lead.volume;
+    player.setSleepTimer(const Duration(milliseconds: 10));
+    await Future<void>.delayed(const Duration(milliseconds: 600));
+    expect(lead.volume, lessThan(base)); // el fundido empezó
+    player.cancelSleepTimer();
+    await Future<void>.delayed(const Duration(milliseconds: 600));
+    expect(lead.playing, isTrue); // no se pausó
+    expect(lead.volume, closeTo(base, 0.001)); // volumen restaurado
   });
 }

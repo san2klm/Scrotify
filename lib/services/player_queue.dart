@@ -22,14 +22,32 @@ mixin _PlayerQueue on _PlayerBase {
     if (_shuffleEnabled) {
       _order = _randomOrderKeeping(start, n);
     }
-    await _loadTrackOn(_lead, _currentIndex);
+    if (!await _startCurrentTrack()) return;
+    notifyListeners();
+  }
+
+  /// Carga y reproduce la pista actual desde `playQueue`/`add*`.
+  ///
+  /// Devuelve `false` si falló la carga (p. ej. sin red) o si otra petición la
+  /// reemplazó mientras tanto; en ambos casos la cola queda consistente y la UI
+  /// se refresca, en vez de quedar a medias sin `notifyListeners`.
+  Future<bool> _startCurrentTrack() async {
+    final gen = ++_loadGen;
+    try {
+      await _loadTrackOn(_lead, _currentIndex);
+    } catch (e) {
+      debugPrint('PlayerController: no se pudo cargar la pista: $e');
+      if (gen == _loadGen) notifyListeners();
+      return false;
+    }
+    if (gen != _loadGen) return false;
     unawaited(_lead.play().catchError((_) {}));
     _recordRecent(currentTrack!);
     _resetPlayTracking();
     unawaited(_loadCurrentTrackWaveform());
     _prepareNextForSkip();
     _ensureWatchdog();
-    notifyListeners();
+    return true;
   }
 
   /// Inicia una cola con un tema inicial elegido al azar y deja activo el
@@ -72,13 +90,7 @@ mixin _PlayerQueue on _PlayerBase {
     }
     if (_pos == -1) {
       _pos = 0;
-      await _loadTrackOn(_lead, _currentIndex);
-      unawaited(_lead.play().catchError((_) {}));
-      _recordRecent(currentTrack!);
-      _resetPlayTracking();
-      unawaited(_loadCurrentTrackWaveform());
-      _prepareNextForSkip();
-      _ensureWatchdog();
+      if (!await _startCurrentTrack()) return;
     } else {
       // Si la cola estaba en su última pista, la añadida pasa a ser la siguiente.
       _cancelFade();
@@ -102,13 +114,7 @@ mixin _PlayerQueue on _PlayerBase {
     }
     if (_pos == -1) {
       _pos = 0;
-      await _loadTrackOn(_lead, _currentIndex);
-      unawaited(_lead.play().catchError((_) {}));
-      _recordRecent(currentTrack!);
-      _resetPlayTracking();
-      unawaited(_loadCurrentTrackWaveform());
-      _prepareNextForSkip();
-      _ensureWatchdog();
+      if (!await _startCurrentTrack()) return;
     }
     notifyListeners();
   }

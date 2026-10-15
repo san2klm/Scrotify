@@ -23,6 +23,12 @@ class FakeAudioPlayer extends Fake implements AudioPlayer {
   final Duration _dur = const Duration(minutes: 3);
   ProcessingState _processing = ProcessingState.idle;
 
+  /// Emite una posición como lo haría el motor de audio.
+  void emitPosition(Duration d) {
+    _pos = d;
+    _position.add(d);
+  }
+
   /// Fuente cargada en último lugar (URI de la pista).
   String? get currentUri => loaded.isEmpty ? null : loaded.last;
 

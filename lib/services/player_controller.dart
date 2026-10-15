@@ -192,6 +192,9 @@ abstract class _PlayerBase extends ChangeNotifier {
 
   int _loadGen = 0;
 
+  /// Invalida un fundido de apagado en curso al cancelar el temporizador.
+  int _sleepFadeGen = 0;
+
   Duration? _usefulStart;
 
   Duration? _usefulEnd;
@@ -546,11 +549,13 @@ class PlayerController extends _PlayerBase
   Stream<PlayerState> get playerStateStream => _modal(
       _karaokeMode
           ? _karaokePlayerStateController.stream
-          : _lead.playerStateStream,
+          : _leadStateController.stream,
       () => PlayerState(_remote!.playing, ProcessingState.ready));
 
   Stream<Duration> get positionStream => _modal(
-      _karaokeMode ? _karaokePositionController.stream : _lead.positionStream,
+      _karaokeMode
+          ? _karaokePositionController.stream
+          : _leadPositionController.stream,
       () => _remote!.position);
 
   Stream<Duration?> get durationStream => _modal(
@@ -691,7 +696,15 @@ class PlayerController extends _PlayerBase
   /// un evento tardío no notifique a un controlador ya liberado.
   final List<StreamSubscription<dynamic>> _playerSubs = [];
 
+  /// Streams estables del reproductor que conduce: tras un crossfade el rol
+  /// A/B se intercambia, y quien ya estaba suscrito seguiría al viejo.
+  final StreamController<Duration> _leadPositionController =
+      StreamController<Duration>.broadcast();
+  final StreamController<PlayerState> _leadStateController =
+      StreamController<PlayerState>.broadcast();
+
   void _onPositionChanged(AudioPlayer player, Duration pos) {
+    if (identical(player, _lead)) _leadPositionController.add(pos);
     if (!identical(player, _lead) || !player.playing) return;
     final last = _lastNowPlayingAt;
     if (last != null &&
@@ -704,6 +717,7 @@ class PlayerController extends _PlayerBase
   void _onPlayerState(AudioPlayer p, PlayerState state) {
     // Solo el lead alimenta la UI; el reproductor de fundido se gestiona aparte.
     if (!identical(p, _lead)) return;
+    _leadStateController.add(state);
     notifyListeners();
     if (state.processingState == ProcessingState.completed) {
       _checkPlayQualification(_lead.position, _lead.duration, completed: true);
@@ -1061,6 +1075,7 @@ class PlayerController extends _PlayerBase
     _remote?.removeListener(_onRemoteChanged);
     _audioHandler?.detachPlayerController();
     _audioHandler = null;
+    _sleepFadeGen++;
     _watchdog?.cancel();
     _sleepTimer?.cancel();
     _sleepTicker?.cancel();
@@ -1078,6 +1093,8 @@ class PlayerController extends _PlayerBase
     for (final sub in _playerSubs) {
       sub.cancel();
     }
+    _leadPositionController.close();
+    _leadStateController.close();
     _a.dispose();
     _b.dispose();
     super.dispose();
