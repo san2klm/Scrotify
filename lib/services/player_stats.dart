@@ -38,6 +38,9 @@ mixin _PlayerStats on _PlayerBase {
       serverScope: _currentMostPlayedSession,
     );
 
+    // El servidor siempre recibe la escucha; la estadística local de la
+    // playlist va aparte.
+    unawaited(_service.scrobble(track.id));
     if (_sourcePlaylist != null) {
       _recordPlaylistPlay(_sourcePlaylist!);
     } else {
@@ -136,7 +139,6 @@ mixin _PlayerStats on _PlayerBase {
   void _recordTrackPlay(Track track) {
     if (_sourcePlaylist != null) return;
     _incrementMostPlayed(MostPlayedItem.track(track));
-    unawaited(_service.scrobble(track.id));
   }
 
   /// Integra los contadores de Navidrome al abrir la biblioteca en este

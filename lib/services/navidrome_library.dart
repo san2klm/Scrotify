@@ -48,7 +48,8 @@ mixin _NavidromeLibrary on _NavidromeBase {
     if (!forceRefresh &&
         cached != null &&
         cached.session == session &&
-        recoveryClock().difference(cached.at) < NavidromeService.recoveryCatalogTtl) {
+        recoveryClock().difference(cached.at) <
+            NavidromeService.recoveryCatalogTtl) {
       return cached.tracks;
     }
     final inFlight = _recoveryInFlight;
@@ -565,8 +566,29 @@ mixin _NavidromeLibrary on _NavidromeBase {
     } catch (_) {}
   }
 
-  Future<void> scrobble(String trackId) async {
-    if (!_connected) return;
+  /// Cola persistente por perfil (`scrobble_queue_<scope>.json`).
+  ScrobbleQueue? _scrobbleQueue;
+  String? _scrobbleQueueScope;
+
+  /// Archivo de la cola en pruebas (sin path_provider).
+  @visibleForTesting
+  File? scrobbleQueueFileOverride;
+
+  Future<ScrobbleQueue?> _scrobbleQueueFor() async {
+    final scope = _scopedName('scrobble_queue.json');
+    if (_scrobbleQueue != null && _scrobbleQueueScope == scope) {
+      return _scrobbleQueue;
+    }
+    final file = scrobbleQueueFileOverride ??
+        await _resolveScopedFile('scrobble_queue.json');
+    if (file == null) return null;
+    _scrobbleQueueScope = scope;
+    return _scrobbleQueue = ScrobbleQueue(file);
+  }
+
+  /// Envía una escucha con su hora original. `true` si el servidor la aceptó.
+  Future<bool> _sendScrobble(String trackId, int timeMs) async {
+    if (!_connected) return false;
     try {
       final (salt, token) = _auth();
       final uri = Uri.parse('$_url/rest/scrobble.view').replace(
@@ -578,13 +600,39 @@ mixin _NavidromeLibrary on _NavidromeBase {
           'c': 'Scrotify',
           'f': 'json',
           'id': trackId,
-          'time': DateTime.now().millisecondsSinceEpoch.toString(),
+          'time': timeMs.toString(),
           'submission': 'true',
         },
       );
-      await _client.get(uri);
+      final response =
+          await _client.get(uri).timeout(const Duration(seconds: 15));
+      return response.statusCode >= 200 && response.statusCode < 300;
     } catch (_) {
       // Un fallo de red al informar una escucha no debe cortar el audio.
+      return false;
     }
+  }
+
+  /// Informa una escucha. Si no hay conexión o falla, queda en cola y se envía
+  /// al reconectar (con la hora en que ocurrió).
+  Future<void> scrobble(String trackId) async {
+    final timeMs = DateTime.now().millisecondsSinceEpoch;
+    final queue = await _scrobbleQueueFor();
+    if (queue != null && queue.length > 0) {
+      // Mantener el orden: primero lo pendiente.
+      await queue.add(trackId, timeMs);
+      await flushScrobbles();
+      return;
+    }
+    if (await _sendScrobble(trackId, timeMs)) return;
+    await queue?.add(trackId, timeMs);
+  }
+
+  /// Vacía la cola de scrobbles pendientes (al reconectar).
+  Future<int> flushScrobbles() async {
+    if (!_connected) return 0;
+    final queue = await _scrobbleQueueFor();
+    if (queue == null) return 0;
+    return queue.flush((item) => _sendScrobble(item.trackId, item.timeMs));
   }
 }

@@ -15,6 +15,7 @@ import 'local_music_service.dart';
 import 'offline_download_manager.dart';
 import 'hifi/hifi_profiles.dart' show StreamQuality;
 import 'replay_gain.dart';
+import 'scrobble_queue.dart';
 import 'server_profiles_controller.dart';
 import 'settings_controller.dart';
 
@@ -437,6 +438,7 @@ class NavidromeService extends _NavidromeBase with _NavidromePlaylists, _Navidro
           _connected = true;
           _offlineMode = false;
           _stopAutoReconnect();
+          unawaited(flushScrobbles());
           _sessionVersion++;
           _starredIds.clear();
           _starredSongOrder.clear();
