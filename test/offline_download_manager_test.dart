@@ -731,6 +731,30 @@ void main() {
       );
     });
 
+    test('downloadTrackStream rechaza un 200 que trae JSON/XML de error',
+        () async {
+      for (final body in [
+        '{"subsonic-response":{"status":"failed"}}',
+        '<?xml version="1.0"?><subsonic-response status="failed"/>',
+      ]) {
+        final client = _MockStreamingHttpClient((request) async {
+          return http.StreamedResponse(Stream.value(utf8.encode(body)), 200);
+        });
+        final nav = NavidromeService()
+          ..setConnectedForTesting(
+              url: 'https://test-navidrome.local:4533',
+              username: 'alice',
+              password: 'password123',
+              client: client);
+        final dest = File(p.join(tempDir.path, 'error_body.audio'));
+        await expectLater(
+          nav.downloadTrackStream(trackId: 't', destinationFile: dest),
+          throwsA(isA<DownloadException>().having((e) => e.category, 'category',
+              DownloadFailureCategory.serverError)),
+        );
+      }
+    });
+
     test(
         'NavidromeService.downloadTrackStream: isolated unit tests with mock client',
         () async {

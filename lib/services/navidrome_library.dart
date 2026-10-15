@@ -461,8 +461,21 @@ mixin _NavidromeLibrary on _NavidromeBase {
       );
     }
 
+    // Subsonic responde 200 con JSON/XML cuando falla (credenciales, id...):
+    // eso no es audio y no debe guardarse como tal.
+    final contentType = (response.headers['content-type'] ?? '').toLowerCase();
+    if (contentType.contains('json') ||
+        contentType.contains('xml') ||
+        contentType.startsWith('text/')) {
+      throw const DownloadException(
+        'Server returned an error instead of audio',
+        category: DownloadFailureCategory.serverError,
+      );
+    }
+
     final totalBytes = response.contentLength;
     int receivedBytes = 0;
+    var checkedFirstChunk = false;
 
     IOSink? sink;
     StreamSubscription<List<int>>? subscription;
@@ -474,8 +487,41 @@ mixin _NavidromeLibrary on _NavidromeBase {
 
       final completer = Completer<void>();
 
+      // Timeout por inactividad (sin datos durante [timeout]), no de toda la
+      // transferencia: un FLAC grande en una red lenta debe poder terminar.
+      Timer? idleTimer;
+      void armIdleTimer() {
+        idleTimer?.cancel();
+        idleTimer = Timer(timeout, () {
+          subscription?.cancel();
+          if (!completer.isCompleted) {
+            completer.completeError(TimeoutException('idle', timeout));
+          }
+        });
+      }
+
+      armIdleTimer();
       subscription = response.stream.listen(
         (chunk) {
+          armIdleTimer();
+          if (!checkedFirstChunk && chunk.isNotEmpty) {
+            checkedFirstChunk = true;
+            // Ningún formato de audio empieza por `{` ni `<` (JSON/XML de error).
+            var i = 0;
+            while (i < chunk.length && (chunk[i] <= 0x20)) {
+              i++;
+            }
+            if (i < chunk.length && (chunk[i] == 0x7B || chunk[i] == 0x3C)) {
+              subscription?.cancel();
+              if (!completer.isCompleted) {
+                completer.completeError(const DownloadException(
+                  'Server returned an error instead of audio',
+                  category: DownloadFailureCategory.serverError,
+                ));
+              }
+              return;
+            }
+          }
           if (isCancelled != null && isCancelled()) {
             subscription?.cancel();
             if (!completer.isCompleted) {
@@ -521,7 +567,11 @@ mixin _NavidromeLibrary on _NavidromeBase {
         cancelOnError: true,
       );
 
-      await completer.future.timeout(timeout);
+      try {
+        await completer.future;
+      } finally {
+        idleTimer?.cancel();
+      }
       await sink.flush();
     } on TimeoutException {
       throw const DownloadException(
