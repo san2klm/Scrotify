@@ -2,11 +2,13 @@ import '../utils/app_data_dir.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
+import 'diagnostics_log.dart' show redactSecrets;
 import 'ffmpeg_waveform_decoder.dart';
 import 'pcm_waveform_analyzer.dart';
 import 'wav_decoder.dart';
@@ -217,22 +219,34 @@ class AudioWaveformService implements WaveformService {
     }
     // URL remota (stream Navidrome con auth por query).
     try {
-      final response = await _http
-          .get(Uri.parse(trimmed))
+      final streamed = await _http
+          .send(http.Request('GET', Uri.parse(trimmed)))
           .timeout(const Duration(seconds: 25));
-      if (response.statusCode != 200) {
+      if (streamed.statusCode != 200) {
         throw WaveformDecodeException(
-            'Audio download failed: HTTP ${response.statusCode}');
+            'Audio download failed: HTTP ${streamed.statusCode}');
       }
-      if (response.bodyBytes.isEmpty) {
-        throw const WaveformDecodeException('Downloaded audio is empty');
-      }
-      if (response.bodyBytes.length > _maxDownloadBytes) {
+      // Cortar por Content-Length ANTES de bajar nada a memoria.
+      final declared = streamed.contentLength;
+      if (declared != null && declared > _maxDownloadBytes) {
         throw const WaveformDecodeException(
             'Audio file too large for waveform analysis');
       }
+      final builder = BytesBuilder(copy: false);
+      await for (final chunk
+          in streamed.stream.timeout(const Duration(seconds: 25))) {
+        builder.add(chunk);
+        if (builder.length > _maxDownloadBytes) {
+          throw const WaveformDecodeException(
+              'Audio file too large for waveform analysis');
+        }
+      }
+      final bytes = builder.takeBytes();
+      if (bytes.isEmpty) {
+        throw const WaveformDecodeException('Downloaded audio is empty');
+      }
       return (
-        bytes: response.bodyBytes,
+        bytes: bytes,
         fileNameHint: _fileNameFromUrl(trimmed),
       );
     } on TimeoutException {
@@ -240,7 +254,9 @@ class AudioWaveformService implements WaveformService {
     } on WaveformDecodeException {
       rethrow;
     } catch (e) {
-      throw WaveformDecodeException('Audio download failed: $e');
+      // El error de http incluye la URI con u/t/s: nunca debe llegar al log.
+      throw WaveformDecodeException(
+          'Audio download failed: ${redactSecrets(e.toString())}');
     }
   }
 
@@ -296,7 +312,8 @@ class AudioWaveformService implements WaveformService {
       if (dir == null) return null;
       final file = File('${dir.path}/track_${_sanitize(trackId)}.json');
       if (!await file.exists()) return null;
-      return _parseCacheJson(await file.readAsString(), expectedTrackId: trackId);
+      return _parseCacheJson(await file.readAsString(),
+          expectedTrackId: trackId);
     } catch (_) {
       return null;
     }
@@ -311,8 +328,8 @@ class AudioWaveformService implements WaveformService {
       final dir = await _cacheDir();
       if (dir == null) return;
       final file = File('${dir.path}/track_${_sanitize(trackId)}.json');
-      await file.writeAsString(jsonEncode(_toCacheJson(data,
-          audioFingerprint: audioFingerprint)));
+      await file.writeAsString(
+          jsonEncode(_toCacheJson(data, audioFingerprint: audioFingerprint)));
     } catch (e) {
       if (kDebugMode) debugPrint('Waveform cache save failed: $e');
     }
@@ -323,8 +340,8 @@ class AudioWaveformService implements WaveformService {
     try {
       final dir = await _cacheDir();
       if (dir == null) return null;
-      final file = File(
-          '${dir.path}/bytes_${_sanitize(trackId)}_$fingerprint.json');
+      final file =
+          File('${dir.path}/bytes_${_sanitize(trackId)}_$fingerprint.json');
       if (!await file.exists()) return null;
       return _parseCacheJson(await file.readAsString(),
           expectedTrackId: trackId);
@@ -340,10 +357,10 @@ class AudioWaveformService implements WaveformService {
     try {
       final dir = await _cacheDir();
       if (dir == null) return;
-      final file = File(
-          '${dir.path}/bytes_${_sanitize(trackId)}_$fingerprint.json');
-      await file.writeAsString(jsonEncode(
-          _toCacheJson(data, audioFingerprint: fingerprint)));
+      final file =
+          File('${dir.path}/bytes_${_sanitize(trackId)}_$fingerprint.json');
+      await file.writeAsString(
+          jsonEncode(_toCacheJson(data, audioFingerprint: fingerprint)));
     } catch (e) {
       if (kDebugMode) debugPrint('Waveform bytes-cache save failed: $e');
     }
@@ -370,9 +387,8 @@ class AudioWaveformService implements WaveformService {
     if (durationMs == null || durationMs <= 0) return null;
     final rawSamples = json['samples'] as List?;
     if (rawSamples == null || rawSamples.isEmpty) return null;
-    final amplitudes = rawSamples
-        .map((e) => (e as num).toDouble().clamp(0.0, 1.0))
-        .toList();
+    final amplitudes =
+        rawSamples.map((e) => (e as num).toDouble().clamp(0.0, 1.0)).toList();
     return WaveformData(
       trackId: trackId,
       duration: Duration(milliseconds: durationMs),
@@ -402,8 +418,7 @@ class AudioWaveformService implements WaveformService {
   static String? _fileNameFromUrl(String url) {
     try {
       final uri = Uri.parse(url);
-      final seg =
-          uri.pathSegments.isEmpty ? '' : uri.pathSegments.last;
+      final seg = uri.pathSegments.isEmpty ? '' : uri.pathSegments.last;
       if (seg.contains('.')) return seg;
       // Navidrome stream.view no trae extensión; el Content-Type real se
       // detecta por magia de bytes (WAV) o por sniffing de ffmpeg.

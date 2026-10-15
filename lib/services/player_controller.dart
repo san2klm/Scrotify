@@ -8,6 +8,7 @@ import 'package:flutter/foundation.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:media_kit/media_kit.dart' as mk;
 
+import 'diagnostics_log.dart' show redactSecrets;
 import 'hifi/hifi_native.dart';
 import 'hifi/hifi_profiles.dart';
 import 'navidrome_service.dart';
@@ -492,8 +493,10 @@ class PlayerController extends _PlayerBase
       }
       String streamUrl;
       try {
-        streamUrl = _service.getStreamUrl(track.id,
-            quality: _settings.effectiveQuality);
+        // Descargada: analizar el archivo local, sin red ni token.
+        streamUrl = localFileResolver?.call(track.id) ??
+            _service.getStreamUrl(track.id,
+                quality: _settings.effectiveQuality);
       } catch (_) {
         return; // Sin URL (offline): sin waveform, nunca sintética.
       }
@@ -508,7 +511,7 @@ class PlayerController extends _PlayerBase
       }
     } catch (e) {
       if (kDebugMode) {
-        debugPrint('Error loading real waveform: $e');
+        debugPrint('Error loading real waveform: ${redactSecrets('$e')}');
       }
       if (gen == _waveformGen && currentTrack?.id == track.id) {
         _waveformData = null; // Sin datos: estado neutro, nunca sintético.
