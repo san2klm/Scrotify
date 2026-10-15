@@ -83,7 +83,7 @@ void main() {
       try {
         // Iniciar servidor
         await server.start(
-          serverUrl: 'https://navidrome.templo.cloud',
+          serverUrl: 'https://navidrome.example.invalid',
           username: 'demoUser',
           password: 'demoPassword',
         );
@@ -102,7 +102,7 @@ void main() {
           code: code,
         );
 
-        expect(creds.url, 'https://navidrome.templo.cloud');
+        expect(creds.url, 'https://navidrome.example.invalid');
         expect(creds.username, 'demoUser');
         expect(creds.password, 'demoPassword');
         expect(server.status, PairingStatus.paired);
@@ -160,7 +160,7 @@ void main() {
 
       try {
         await server.start(
-          serverUrl: 'https://navidrome.templo.cloud',
+          serverUrl: 'https://navidrome.example.invalid',
           username: 'demoUser',
           password: 'demoPassword',
         );
@@ -186,7 +186,7 @@ void main() {
 
       try {
         await server.start(
-          serverUrl: 'https://navidrome.templo.cloud',
+          serverUrl: 'https://navidrome.example.invalid',
           username: 'demoUser',
           password: 'demoPassword',
           customDeviceName: 'Mi-Super-PC',
@@ -199,7 +199,7 @@ void main() {
         expect(list.isNotEmpty, isTrue);
         final found = list.firstWhere((p) => p.port == server.port);
         expect(found.deviceName, 'Mi-Super-PC');
-        expect(found.serverUrl, 'https://navidrome.templo.cloud');
+        expect(found.serverUrl, 'https://navidrome.example.invalid');
       } finally {
         await server.stop();
       }
@@ -210,7 +210,7 @@ void main() {
 
       try {
         await server.start(
-          serverUrl: 'https://navidrome.templo.cloud',
+          serverUrl: 'https://navidrome.example.invalid',
           username: 'demoUser',
           password: 'demoPassword',
         );

@@ -115,9 +115,9 @@ class _LoginScreenState extends State<LoginScreen> {
     }
 
     final isMobile = _isMobilePlatform(context);
-    final defaultUrl = _savedUrl ?? 'https://navidrome.templo.cloud';
-    final defaultUser = _savedUser ?? 'Proyecto';
-    final defaultPass = _savedPass ?? 'Proyecto123';
+    final defaultUrl = _savedUrl ?? '';
+    final defaultUser = _savedUser ?? '';
+    final defaultPass = _savedPass ?? '';
 
     if (isMobile) {
       return MobileLoginScreen(

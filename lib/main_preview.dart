@@ -16,11 +16,12 @@ void main() async {
   JustAudioMediaKit.ensureInitialized();
   final settings = SettingsController();
   final service = NavidromeService(settings: settings);
-  await service.connectByUrl(
-    'https://navidrome.templo.cloud',
-    'Proyecto',
-    'Proyecto123',
-  );
+  const url = String.fromEnvironment('PREVIEW_URL');
+  const user = String.fromEnvironment('PREVIEW_USER');
+  const pass = String.fromEnvironment('PREVIEW_PASS');
+  if (url.isNotEmpty && user.isNotEmpty) {
+    await service.connectByUrl(url, user, pass);
+  }
   runApp(_PreviewApp(service: service, settings: settings));
 }
 
