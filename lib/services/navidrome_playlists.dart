@@ -23,9 +23,9 @@ mixin _NavidromePlaylists on _NavidromeBase {
       'f': 'json',
     });
 
-    final response = await _client.get(uri);
+    final response = await _get(uri);
     final body = _playlistResponse(response);
-    final list = body['playlists']?['playlist'] as List?;
+    final list = NavidromeService._asListOrNull(body['playlists']?['playlist']);
 
     if (list == null) return [];
 
@@ -67,7 +67,7 @@ mixin _NavidromePlaylists on _NavidromeBase {
       'f': 'json',
       'name': cleanName,
     });
-    final data = _playlistResponse(await _client.get(uri));
+    final data = _playlistResponse(await _get(uri));
     final p = data['playlist'] as Map<String, dynamic>?;
     if (p == null || (p['id'] as String? ?? '').isEmpty) {
       throw Exception('El servidor no devolvió la playlist creada.');
@@ -197,7 +197,7 @@ mixin _NavidromePlaylists on _NavidromeBase {
       buffer.write('&songIndexToRemove=$index');
     }
 
-    _playlistResponse(await _client.get(Uri.parse(buffer.toString())));
+    _playlistResponse(await _get(Uri.parse(buffer.toString())));
     bumpPlaylists();
   }
 
@@ -221,7 +221,7 @@ mixin _NavidromePlaylists on _NavidromeBase {
     for (final id in orderedSongIds) {
       buffer.write('&songId=${Uri.encodeQueryComponent(id)}');
     }
-    _playlistResponse(await _client.get(Uri.parse(buffer.toString())));
+    _playlistResponse(await _get(Uri.parse(buffer.toString())));
     bumpPlaylists();
   }
 
@@ -238,7 +238,7 @@ mixin _NavidromePlaylists on _NavidromeBase {
       'f': 'json',
       'id': playlistId,
     });
-    await _client.get(uri);
+    await _get(uri);
   }
 
   Future<Playlist?> getPlaylist(String playlistId) => _readLibrary(
@@ -263,7 +263,7 @@ mixin _NavidromePlaylists on _NavidromeBase {
       'f': 'json',
       'id': playlistId,
     });
-    final response = await _client.get(uri);
+    final response = await _get(uri);
     final data = _playlistResponse(response);
     final p = data['playlist'];
     if (p == null) return null;
@@ -291,9 +291,9 @@ mixin _NavidromePlaylists on _NavidromeBase {
       'f': 'json',
       'id': playlistId,
     });
-    final response = await _client.get(uri);
+    final response = await _get(uri);
     final data = _playlistResponse(response);
-    final entries = data['playlist']?['entry'] as List?;
+    final entries = NavidromeService._asListOrNull(data['playlist']?['entry']);
     if (entries == null) return [];
     return entries
         .map((j) => Track.fromJson(j as Map<String, dynamic>,

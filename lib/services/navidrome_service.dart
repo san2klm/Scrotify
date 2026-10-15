@@ -27,10 +27,14 @@ part 'navidrome_favorites.dart';
 part 'navidrome_library.dart';
 part 'navidrome_extras.dart';
 
-
 /// Estado de [NavidromeService]. Vive en una clase base para que las áreas de la API
 /// (en archivos aparte) puedan ser mixins sobre el mismo estado.
 abstract class _NavidromeBase with ChangeNotifier {
+  /// GET con timeout. Un servidor que no responde ya no deja la UI esperando.
+  Future<http.Response> _get(Uri uri,
+          {Duration timeout = const Duration(seconds: 20)}) =>
+      _client.get(uri).timeout(timeout);
+
   ServerProfilesController? _profilesController;
 
   String? _url;
@@ -138,7 +142,7 @@ abstract class _NavidromeBase with ChangeNotifier {
     Future<T> Function() fetch,
     T Function(LocalMusicService music, String scope, String user) fallback, {
     Future<void> Function(LocalMusicService music, String user, T data)?
-    remember,
+        remember,
   });
   Future<File?> _resolveScopedFile(String name);
   String _scopedName(String name);
@@ -161,7 +165,12 @@ abstract class _NavidromeBase with ChangeNotifier {
   String? get serverScope;
 }
 
-class NavidromeService extends _NavidromeBase with _NavidromePlaylists, _NavidromeFavorites, _NavidromeLibrary, _NavidromeExtras {
+class NavidromeService extends _NavidromeBase
+    with
+        _NavidromePlaylists,
+        _NavidromeFavorites,
+        _NavidromeLibrary,
+        _NavidromeExtras {
   NavidromeService(
       {SettingsController? settings,
       http.Client? httpClient,
@@ -420,8 +429,7 @@ class NavidromeService extends _NavidromeBase with _NavidromePlaylists, _Navidro
         'f': 'json',
       });
 
-      final response =
-          await _client.get(uri).timeout(const Duration(seconds: 8));
+      final response = await _get(uri).timeout(const Duration(seconds: 8));
 
       debugPrint('Auth response status: ${response.statusCode}');
 
@@ -646,9 +654,9 @@ class NavidromeService extends _NavidromeBase with _NavidromePlaylists, _Navidro
       'f': 'json',
     });
 
-    final response = await _client.get(uri);
+    final response = await _get(uri);
     final data = jsonDecode(response.body);
-    final folders = data['subsonic-response']['musicFolder'] as List?;
+    final folders = _asListOrNull(data['subsonic-response']['musicFolder']);
     return folders ?? [];
   }
 
@@ -667,7 +675,7 @@ class NavidromeService extends _NavidromeBase with _NavidromePlaylists, _Navidro
       'f': 'json',
     });
 
-    final response = await _client.get(uri);
+    final response = await _get(uri);
     final data = jsonDecode(response.body);
 
     dynamic indexes = data['subsonic-response']['artists']?['index'];
@@ -718,7 +726,7 @@ class NavidromeService extends _NavidromeBase with _NavidromePlaylists, _Navidro
       'f': 'json',
     });
 
-    final response = await _client.get(uri);
+    final response = await _get(uri);
     final data = jsonDecode(response.body);
 
     dynamic indexes = data['subsonic-response']['indexes'];
@@ -728,7 +736,7 @@ class NavidromeService extends _NavidromeBase with _NavidromePlaylists, _Navidro
     }
 
     if (indexes is Map && indexes.containsKey('index')) {
-      final list = indexes['index'] as List?;
+      final list = _asListOrNull(indexes['index']);
       return list ?? [];
     }
 
@@ -759,7 +767,7 @@ class NavidromeService extends _NavidromeBase with _NavidromePlaylists, _Navidro
       'c': 'Psysonic',
       'f': 'json',
     });
-    final response = await _client.get(uri);
+    final response = await _get(uri);
     final resp = jsonDecode(response.body)['subsonic-response'];
     final song = resp?['song'];
     if (resp?['status'] == 'failed' || song is! Map<String, dynamic>) {
@@ -788,7 +796,7 @@ class NavidromeService extends _NavidromeBase with _NavidromePlaylists, _Navidro
     final uri =
         Uri.parse('$_url/rest/search3.view').replace(queryParameters: params);
 
-    final response = await _client.get(uri);
+    final response = await _get(uri);
     final data = jsonDecode(response.body);
     final result =
         data['subsonic-response']?['searchResult3'] as Map<String, dynamic>?;
@@ -815,6 +823,9 @@ class NavidromeService extends _NavidromeBase with _NavidromePlaylists, _Navidro
       artists: _asList(result['artist']).map(mapArtist).toList(),
     );
   }
+
+  static List<dynamic>? _asListOrNull(dynamic value) =>
+      value == null ? null : _asList(value);
 
   static List<dynamic> _asList(dynamic value) {
     if (value == null) return [];

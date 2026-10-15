@@ -18,8 +18,7 @@ mixin _NavidromeLibrary on _NavidromeBase {
       'f': 'json',
     });
     try {
-      final response =
-          await _client.get(uri).timeout(const Duration(seconds: 20));
+      final response = await _get(uri).timeout(const Duration(seconds: 20));
       if (response.statusCode != 200) return null;
       final body = jsonDecode(response.body)['subsonic-response'];
       if (body?['status'] != 'ok' || body?['scanStatus']?['scanning'] == true) {
@@ -124,7 +123,7 @@ mixin _NavidromeLibrary on _NavidromeBase {
       'songOffset': offset.toString(),
     });
 
-    final response = await _client.get(uri);
+    final response = await _get(uri);
     debugPrint('getTracks search3 status: ${response.statusCode}');
 
     final String raw = response.body;
@@ -145,7 +144,8 @@ mixin _NavidromeLibrary on _NavidromeBase {
       throw Exception('Server error: ${err?['message'] ?? err}');
     }
 
-    final songsList = subsonicResp['searchResult3']?['song'] as List?;
+    final songsList =
+        NavidromeService._asListOrNull(subsonicResp['searchResult3']?['song']);
     if (songsList == null) return [];
 
     final List<Track> tracks = [];
@@ -175,7 +175,7 @@ mixin _NavidromeLibrary on _NavidromeBase {
       'id': albumId,
     });
 
-    final response = await _client.get(uri);
+    final response = await _get(uri);
     final data = jsonDecode(response.body);
     final albumData = data['subsonic-response']?['album'];
 
@@ -208,10 +208,10 @@ mixin _NavidromeLibrary on _NavidromeBase {
       'offset': offset.toString(),
     });
 
-    final response = await _client.get(uri);
+    final response = await _get(uri);
     final data = jsonDecode(response.body);
-    final albumsList =
-        data['subsonic-response']?['albumList2']?['album'] as List?;
+    final albumsList = NavidromeService._asListOrNull(
+        data['subsonic-response']?['albumList2']?['album']);
 
     if (albumsList == null) return [];
 
@@ -238,13 +238,14 @@ mixin _NavidromeLibrary on _NavidromeBase {
       'f': 'json',
       'id': albumId,
     });
-    final response = await _client.get(uri);
+    final response = await _get(uri);
     final data = jsonDecode(response.body);
     final album = data['subsonic-response']?['album'] as Map<String, dynamic>?;
     if (album == null) return [];
-    final entries = album['song'] ?? album['entry'] as List?;
+    final entries =
+        NavidromeService._asListOrNull(album['song'] ?? album['entry']);
     if (entries == null) return [];
-    return (entries as List)
+    return entries
         .map((j) => Track.fromJson(j as Map<String, dynamic>,
             albumArtUrl: _coverArtUrl(j['coverArt'], salt, token)))
         .toList();
@@ -268,7 +269,7 @@ mixin _NavidromeLibrary on _NavidromeBase {
         'f': 'json',
         'id': artistId,
       });
-      final response = await _client.get(uri);
+      final response = await _get(uri);
       final data = jsonDecode(response.body);
       final artistJson =
           data['subsonic-response']?['artist'] as Map<String, dynamic>?;
@@ -299,12 +300,12 @@ mixin _NavidromeLibrary on _NavidromeBase {
       'f': 'json',
       'id': artistId,
     });
-    final response = await _client.get(uri);
+    final response = await _get(uri);
     final data = jsonDecode(response.body);
     final artist =
         data['subsonic-response']?['artist'] as Map<String, dynamic>?;
     if (artist == null) return [];
-    final list = artist['album'] as List?;
+    final list = NavidromeService._asListOrNull(artist['album']);
     if (list == null) return [];
     return list
         .map((j) => Album.fromJson(j as Map<String, dynamic>,
@@ -327,7 +328,7 @@ mixin _NavidromeLibrary on _NavidromeBase {
       'f': 'json',
       'id': artistId,
     });
-    final response = await _client.get(uri);
+    final response = await _get(uri);
     final data = jsonDecode(response.body);
     final artist =
         data['subsonic-response']?['artist'] as Map<String, dynamic>?;
@@ -348,7 +349,7 @@ mixin _NavidromeLibrary on _NavidromeBase {
       'albumCount': '0',
       'artistCount': '0',
     });
-    final searchResponse = await _client.get(searchUri);
+    final searchResponse = await _get(searchUri);
     final searchData = jsonDecode(searchResponse.body);
     final result = searchData['subsonic-response']?['searchResult3']
         as Map<String, dynamic>?;
@@ -601,7 +602,7 @@ mixin _NavidromeLibrary on _NavidromeBase {
     if (!_connected) return;
     try {
       final (salt, token) = _auth();
-      await _client.get(Uri.parse('$_url/rest/scrobble.view').replace(
+      await _get(Uri.parse('$_url/rest/scrobble.view').replace(
         queryParameters: {
           'u': _user!,
           's': salt,
@@ -654,8 +655,7 @@ mixin _NavidromeLibrary on _NavidromeBase {
           'submission': 'true',
         },
       );
-      final response =
-          await _client.get(uri).timeout(const Duration(seconds: 15));
+      final response = await _get(uri).timeout(const Duration(seconds: 15));
       return response.statusCode >= 200 && response.statusCode < 300;
     } catch (_) {
       // Un fallo de red al informar una escucha no debe cortar el audio.

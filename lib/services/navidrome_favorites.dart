@@ -37,7 +37,7 @@ mixin _NavidromeFavorites on _NavidromeBase {
 
     final uri =
         Uri.parse('$_url/rest/$endpoint').replace(queryParameters: params);
-    final response = await _client.get(uri);
+    final response = await _get(uri);
     if (response.statusCode != 200) {
       throw Exception('Failed request (HTTP ${response.statusCode})');
     }
@@ -59,9 +59,9 @@ mixin _NavidromeFavorites on _NavidromeBase {
       'c': 'Psysonic',
       'f': 'json',
     });
-    final response = await _client.get(uri);
+    final response = await _get(uri);
     final body = _playlistResponse(response);
-    final songs = body['starred2']?['song'] as List?;
+    final songs = NavidromeService._asListOrNull(body['starred2']?['song']);
     if (songs == null) return [];
     final tracks = songs
         .map((j) => Track.fromJson(j as Map<String, dynamic>,
@@ -287,7 +287,7 @@ mixin _NavidromeFavorites on _NavidromeBase {
         'id': trackId,
         'rating': clampedRating.toString(),
       });
-      await _client.get(uri);
+      await _get(uri);
     } catch (e) {
       debugPrint('NavidromeService.setRating error: $e');
     }

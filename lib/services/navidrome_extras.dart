@@ -24,7 +24,7 @@ mixin _NavidromeExtras on _NavidromeBase {
     });
 
     try {
-      final response = await _client.get(uri);
+      final response = await _get(uri);
       if (response.statusCode != 200) return [];
       final data = jsonDecode(response.body);
       final lyricsList =
@@ -170,7 +170,7 @@ mixin _NavidromeExtras on _NavidromeBase {
         'artistCount': '0',
       });
 
-      final response = await _client.get(uri);
+      final response = await _get(uri);
       final data = jsonDecode(response.body);
       final result =
           data['subsonic-response']?['searchResult3'] as Map<String, dynamic>?;
@@ -224,7 +224,7 @@ mixin _NavidromeExtras on _NavidromeBase {
         'f': 'json',
       });
 
-      final response = await _client.get(uri);
+      final response = await _get(uri);
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         final genresList = data['subsonic-response']?['genres']?['genre'];
@@ -286,11 +286,11 @@ mixin _NavidromeExtras on _NavidromeBase {
     });
 
     try {
-      final response = await _client.get(uri);
+      final response = await _get(uri);
       if (response.statusCode != 200) return [];
       final data = jsonDecode(response.body);
-      final entries =
-          data['subsonic-response']?['nowPlaying']?['entry'] as List?;
+      final entries = NavidromeService._asListOrNull(
+          data['subsonic-response']?['nowPlaying']?['entry']);
       if (entries == null) return [];
 
       return entries
@@ -372,11 +372,11 @@ mixin _NavidromeExtras on _NavidromeBase {
         .replace(queryParameters: params);
 
     try {
-      final response = await _client.get(uri);
+      final response = await _get(uri);
       if (response.statusCode != 200) return [];
       final data = jsonDecode(response.body);
-      final rawList =
-          data['subsonic-response']?['chatMessages']?['chatMessage'] as List?;
+      final rawList = NavidromeService._asListOrNull(
+          data['subsonic-response']?['chatMessages']?['chatMessage']);
       if (rawList == null) return [];
 
       return rawList
@@ -405,7 +405,7 @@ mixin _NavidromeExtras on _NavidromeBase {
     });
 
     try {
-      final response = await _client.get(uri);
+      final response = await _get(uri);
       return response.statusCode == 200;
     } catch (e) {
       debugPrint('NavidromeService.addChatMessage error: $e');
