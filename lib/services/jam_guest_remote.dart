@@ -205,7 +205,8 @@ mixin _JamGuestRemote on _JamBase {
               final trackMap = payload['track'];
               final playNext = payload['playNext'] == true;
               if (trackMap is Map) {
-                final track = Track.fromJson(Map<String, dynamic>.from(trackMap));
+                final track =
+                    Track.fromJson(Map<String, dynamic>.from(trackMap));
                 await _addTrackAsHost(track, p, playNext: playNext);
               } else if (payload['trackId'] != null) {
                 final trackId = payload['trackId'].toString();
@@ -258,6 +259,19 @@ mixin _JamGuestRemote on _JamBase {
     _remoteService.onError = (message) {
       lastActionError = message;
       notifyListeners();
+    };
+
+    // Caída silenciosa del relé: avisar y dejar que el servicio reconecte.
+    _remoteService.onConnectionLost = () {
+      lastActionError =
+          'Se perdió la conexión con el servidor Jam central. Reconectando…';
+      notifyListeners();
+    };
+    _remoteService.onReconnecting = (reconnecting) {
+      if (!reconnecting && _remoteService.isConnected) {
+        lastActionError = null;
+        notifyListeners();
+      }
     };
 
     _remoteService.onStateSync = (state) {

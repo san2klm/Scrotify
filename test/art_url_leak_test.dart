@@ -46,4 +46,17 @@ void main() {
   test('terminar la Jam remota envía close_room', () {
     expect(RemoteJamService.closeRoomMessage['action'], 'close_room');
   });
+
+  test('la espera de reconexión crece, lleva jitter y se topa en 60 s', () {
+    final ms = [
+      for (var i = 0; i < 10; i++)
+        RemoteJamService.reconnectDelay(i).inMilliseconds
+    ];
+    expect(ms[0], inInclusiveRange(1000, 2000));
+    expect(ms[3], inInclusiveRange(8000, 9000));
+    for (final x in ms) {
+      expect(x, lessThanOrEqualTo(61000));
+    }
+    expect(ms[9], greaterThanOrEqualTo(60000));
+  });
 }

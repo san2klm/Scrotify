@@ -1,7 +1,9 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
 import 'package:flutter/foundation.dart';
+import 'package:web_socket_channel/io.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
 import '../models/jam_capabilities.dart';
@@ -53,6 +55,56 @@ class RemoteJamService {
   OnRemoteGuestAction? onGuestAction;
   OnRemoteRoomClosed? onRoomClosed;
   OnRemoteError? onError;
+
+  /// Se llamó a [disconnect] a propósito: la caída no es un fallo.
+  bool _intentionalClose = false;
+
+  /// La conexión establecida se cayó sin que nadie la cerrara.
+  void Function()? onConnectionLost;
+
+  /// Avisa de que la reconexión automática empezó (`true`) o terminó (`false`).
+  void Function(bool reconnecting)? onReconnecting;
+
+  Timer? _reconnectTimer;
+  int _reconnectAttempt = 0;
+  _ReconnectPlan? _plan;
+
+  /// Espera antes del intento [attempt] (0, 1, 2…): exponencial con jitter,
+  /// tope de 60 s. Evita que todos los clientes choquen a la vez tras reiniciar
+  /// el servidor.
+  static Duration reconnectDelay(int attempt, {Random? random}) {
+    final base = min(60, 1 << min(attempt, 6)); // 1,2,4…,60 s
+    final jitterMs = (random ?? Random()).nextInt(1000);
+    return Duration(milliseconds: base * 1000 + jitterMs);
+  }
+
+  void _notifyConnectionLost() {
+    if (_intentionalClose) return;
+    onConnectionLost?.call();
+    _scheduleReconnect();
+  }
+
+  void _scheduleReconnect() {
+    final plan = _plan;
+    if (plan == null) {
+      onReconnecting?.call(false);
+      return;
+    }
+    if (_reconnectTimer != null) return;
+    onReconnecting?.call(true);
+    _reconnectTimer = Timer(reconnectDelay(_reconnectAttempt++), () async {
+      _reconnectTimer = null;
+      if (_intentionalClose) return;
+      final ok = await plan.run(this);
+      if (ok) {
+        _reconnectAttempt = 0;
+        onReconnecting?.call(false);
+      } else if (!_intentionalClose) {
+        _scheduleReconnect();
+      }
+    });
+  }
+
   OnRemoteHostChanged? onHostChanged;
   void Function(int failoverMs)? onHostAway;
   void Function()? onHostBack;
@@ -148,7 +200,8 @@ class RemoteJamService {
     bool isPublic = true,
   }) async {
     final keepToken = resume ? hostToken : null;
-    await disconnect();
+    await _teardown();
+    _intentionalClose = false;
     hostToken = keepToken;
     _lastError = null;
     final targetEndpoint = customEndpoint ?? _endpoint;
@@ -157,7 +210,8 @@ class RemoteJamService {
 
     try {
       final uri = Uri.parse(targetEndpoint);
-      _channel = WebSocketChannel.connect(uri);
+      _channel =
+          IOWebSocketChannel.connect(uri, pingInterval: kRemotePingInterval);
       final completer = Completer<bool>();
       Timer? timeoutTimer;
 
@@ -177,6 +231,13 @@ class RemoteJamService {
               _isConnected = true;
               _isHost = true;
               _pin = normalizedPin;
+              _lastHostState = initialState;
+              _plan = _ReconnectPlan.host(
+                pin: normalizedPin,
+                hostName: hostName,
+                endpoint: targetEndpoint,
+                isPublic: isPublic,
+              );
               _startClockSync();
               timeoutTimer?.cancel();
               if (!completer.isCompleted) completer.complete(true);
@@ -189,6 +250,7 @@ class RemoteJamService {
               debugPrint('RemoteJamService error: ${json['message']}');
               _lastError =
                   json['message']?.toString() ?? 'Error al crear la sala';
+              _plan = null;
               onError?.call(_lastError!);
               timeoutTimer?.cancel();
               if (!completer.isCompleted) completer.complete(false);
@@ -202,14 +264,18 @@ class RemoteJamService {
         },
         onError: (err) {
           debugPrint('RemoteJamService host WS error: $err');
+          final wasUp = _isConnected;
           _isConnected = false;
+          if (wasUp) _notifyConnectionLost();
           _lastError ??= 'Error de conexión con el servidor Jam central.';
           timeoutTimer?.cancel();
           if (!completer.isCompleted) completer.complete(false);
         },
         onDone: () {
           debugPrint('RemoteJamService host WS closed');
+          final wasUp = _isConnected;
           _isConnected = false;
+          if (wasUp) _notifyConnectionLost();
           timeoutTimer?.cancel();
           if (!completer.isCompleted) completer.complete(false);
         },
@@ -254,8 +320,12 @@ class RemoteJamService {
     }
   }
 
+  /// Último estado publicado: con él se reanuda la sala tras una caída.
+  Map<String, dynamic> _lastHostState = const {};
+
   /// Actualiza el estado de reproducción en la sala remota (sólo Host).
   void updateState(Map<String, dynamic> state) {
+    _lastHostState = state;
     if (!_isConnected || !_isHost || _channel == null || _pin == null) return;
     try {
       _channel!.sink.add(jsonEncode({
@@ -309,7 +379,8 @@ class RemoteJamService {
     required String guestName,
     String? customEndpoint,
   }) async {
-    await disconnect();
+    await _teardown();
+    _intentionalClose = false;
     _lastError = null;
     final targetEndpoint = customEndpoint ?? _endpoint;
     final normalizedPin =
@@ -317,7 +388,8 @@ class RemoteJamService {
 
     try {
       final uri = Uri.parse(targetEndpoint);
-      _channel = WebSocketChannel.connect(uri);
+      _channel =
+          IOWebSocketChannel.connect(uri, pingInterval: kRemotePingInterval);
       final completer = Completer<Map<String, dynamic>?>();
       Timer? timeoutTimer;
 
@@ -333,6 +405,11 @@ class RemoteJamService {
               _isConnected = true;
               _isHost = false;
               _pin = normalizedPin;
+              _plan = _ReconnectPlan.guest(
+                pin: normalizedPin,
+                guestName: guestName,
+                endpoint: targetEndpoint,
+              );
               _startClockSync();
               timeoutTimer?.cancel();
               final state = json['state'] as Map<String, dynamic>? ?? {};
@@ -344,6 +421,8 @@ class RemoteJamService {
             if (json['status'] == 'error') {
               debugPrint('RemoteJamService join error: ${json['message']}');
               _lastError = json['message']?.toString() ?? 'Error al unirse';
+              _plan =
+                  null; // un rechazo del servidor no se arregla reintentando
               onError?.call(_lastError!);
               timeoutTimer?.cancel();
               if (!completer.isCompleted) completer.complete(null);
@@ -357,14 +436,18 @@ class RemoteJamService {
         },
         onError: (err) {
           debugPrint('RemoteJamService guest WS error: $err');
+          final wasUp = _isConnected;
           _isConnected = false;
+          if (wasUp) _notifyConnectionLost();
           _lastError ??= 'Error de conexión con el servidor Jam central.';
           timeoutTimer?.cancel();
           if (!completer.isCompleted) completer.complete(null);
         },
         onDone: () {
           debugPrint('RemoteJamService guest WS closed');
+          final wasUp = _isConnected;
           _isConnected = false;
+          if (wasUp) _notifyConnectionLost();
           timeoutTimer?.cancel();
           if (!completer.isCompleted) completer.complete(null);
         },
@@ -713,6 +796,16 @@ class RemoteJamService {
         _channel?.sink.add(jsonEncode(closeRoomMessage));
       } catch (_) {}
     }
+    _intentionalClose = true;
+    _plan = null;
+    _reconnectTimer?.cancel();
+    _reconnectTimer = null;
+    _reconnectAttempt = 0;
+    await _teardown();
+  }
+
+  /// Cierra el canal sin tocar el plan de reconexión.
+  Future<void> _teardown() async {
     _clockTimer?.cancel();
     _clockTimer = null;
     _isConnected = false;
@@ -724,3 +817,52 @@ class RemoteJamService {
     _channel = null;
   }
 }
+
+/// Qué repetir para volver a la sala tras una caída de la conexión.
+class _ReconnectPlan {
+  _ReconnectPlan.host({
+    required this.pin,
+    required this.hostName,
+    required this.endpoint,
+    required this.isPublic,
+  })  : isHost = true,
+        guestName = null;
+
+  _ReconnectPlan.guest({
+    required this.pin,
+    required this.guestName,
+    required this.endpoint,
+  })  : isHost = false,
+        hostName = null,
+        isPublic = true;
+
+  final bool isHost;
+  final String pin;
+  final String? hostName;
+  final String? guestName;
+  final String endpoint;
+  final bool isPublic;
+
+  Future<bool> run(RemoteJamService service) async {
+    if (isHost) {
+      return service.createRoom(
+        pin: pin,
+        hostName: hostName ?? 'Host',
+        initialState: service._lastHostState,
+        customEndpoint: endpoint,
+        resume: true,
+        isPublic: isPublic,
+      );
+    }
+    final result = await service.joinRoom(
+      pin: pin,
+      guestName: guestName ?? 'Invitado',
+      customEndpoint: endpoint,
+    );
+    return result != null;
+  }
+}
+
+/// Intervalo de ping del WebSocket con el servidor central: detecta caídas
+/// silenciosas (cambio de red, NAT) en segundos en vez de minutos.
+const Duration kRemotePingInterval = Duration(seconds: 15);
