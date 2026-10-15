@@ -453,7 +453,7 @@ El test va en el archivo de pruebas del servicio, si ya existe.
   - Test Dart del mensaje.
   - Test del servidor: la sala con clave admite la clave correcta.
 
-### [ ] 33. El anfitrión LAN echa al invitado antes de que acabe la gracia (R)
+### [x] 33. El anfitrión LAN echa al invitado antes de que acabe la gracia (R)
 - **Dónde:** `jam_host_service.dart:855-864` desaloja a los 25 s
   (`pingInterval + pongTimeout`), pero `disconnectGracePeriod` es de 30 s
   (l.101).
@@ -462,7 +462,7 @@ El test va en el archivo de pruebas del servicio, si ya existe.
   - Garantizar `grace > hostSilenceTimeout + backoff máximo` con un `assert`
     o un test.
 
-### [ ] 34. Reconexión del invitado LAN (R)
+### [x] 34. Reconexión del invitado LAN (R)
 - **Dónde:** `jam_guest_service.dart:920-983`.
 - **Problemas:**
   - No tiene límite de intentos.
@@ -475,7 +475,7 @@ El test va en el archivo de pruebas del servicio, si ya existe.
   - `_teardownSocket()` al vencer el timeout.
   - Cancelar `_reconnectTimer` al aceptar.
 
-### [ ] 35. El cliente remoto (relé) no detecta caídas (R)
+### [x] 35. El cliente remoto (relé) no detecta caídas (R)
 - **Dónde:** `remote_jam_service.dart:157,202-207,291,335-340`.
   - Sin `pingInterval`.
   - `onDone` solo baja una bandera.
@@ -485,7 +485,7 @@ El test va en el archivo de pruebas del servicio, si ya existe.
     (reutilizar la lógica del invitado LAN).
   - Avisar en la UI.
 
-### [ ] 36. Connect (R)
+### [x] 36. Connect (R)
 - `connect/lan_transport.dart:272-309`: listener `async`. Un frame que llega
   durante `await crypto.decrypt(hello)` se procesa con `peer == null` y cierra
   el socket. Procesar los frames en serie (`StreamQueue` o una cadena de
@@ -494,7 +494,7 @@ El test va en el archivo de pruebas del servicio, si ya existe.
   backoff exponencial con jitter y tope de 60 s; si no, al reiniciar el
   servidor todos chocan con el límite de `connect.js:96`.
 
-### [ ] 37. jam-server (R)
+### [x] 37. jam-server (R)
 - `server.js:422-433`: `closeRoom` no avisa al socket del anfitrión ni borra
   `socketRooms`.
 - `guard.js:11-16`: por encima de 5000 claves, `prune()` recorre los mapas en
@@ -502,7 +502,7 @@ El test va en el archivo de pruebas del servicio, si ya existe.
 - `Dockerfile:22`: `CMD ["npm","start"]` → `CMD ["node","src/server.js"]`.
 - Healthcheck con el puerto 8080 fijo: usar `${PORT}`.
 
-### [ ] 38. Sync y modelos (R)
+### [~] 38. Sync y modelos (R)
 - `sync_service.dart:395`: decide conflictos comparando el mtime local con el
   `updatedAt` remoto, que son relojes de dispositivos distintos. Usar versión
   o contador por documento.
@@ -742,3 +742,11 @@ robustez y las funciones nuevas.
   - 28: waveform usa el archivo local, corta por `Content-Length` y pasa los errores por `redactSecrets`. **Falta** cancelar la descarga al cambiar de pista.
   - 29 (parcial): historial con escritura atómica, serializada, sin cargar dos veces ni mezclar perfiles. Estadísticas: sin perfil ya no se muestran eventos de otros. **Falta** acotar el crecimiento de `events` (compactar por día o sqflite).
   - 30: **sin objeto hoy.** `registerFile` solo se llama desde descargas explícitas y la biblioteca local; no existe caché de streaming que desalojar. Si se quiere, es una función nueva (decidir antes).
+
+- 2026-10-15 (4) — Fase 4 (Jam, Connect y Sync).
+  - 33: el heartbeat no desaloja a quien está en gracia; test que fija `gracia >= hostSilenceTimeout`.
+  - 34: `join_response` lleva `code` tipado (`bad_pin`, `bad_password`, `expired`, `kicked`, `full`, `rate_limited`, `already_joined`); el invitado decide por el código (el texto queda de respaldo), renuncia a los 5 min y desmonta el socket al vencer el plazo y cancela el reintento al aceptar.
+  - 35: `IOWebSocketChannel` con ping de 15 s; `onConnectionLost`/`onReconnecting`; reconexión con backoff exponencial + jitter (tope 60 s) que reanuda la sala (host con `hostToken` y último estado; invitado con `joinRoom`). Un `error` del servidor cancela el plan. **Sin probar contra un servidor real.**
+  - 36: frames de Connect LAN en serie; relé con backoff + jitter y tope de 60 s.
+  - 37: `closeRoom` avisa al anfitrión y limpia `socketRooms`; poda del guard por intervalo; Dockerfile/healthcheck (ya hechos).
+  - 38 (parcial): sin resucitar temas tras purgar el aviso (test); `JamSessionState.fromJson` descarta solo el elemento malo; RTT del reloj con `Stopwatch`. **Falta** el conflicto de sync por versión/contador: hoy compara el mtime local con `updatedAt` del servidor (relojes distintos) y requiere un cambio de protocolo en `jam-server/src/sync.js`.

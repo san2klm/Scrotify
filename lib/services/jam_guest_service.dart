@@ -83,7 +83,7 @@ class JamGuestService {
         if (_isConnected) {
           _send({
             'op': 'time_ping',
-            'clientTs': DateTime.now().millisecondsSinceEpoch,
+            'clientTs': jamMonotonicMs(),
           });
         }
       });
@@ -92,7 +92,7 @@ class JamGuestService {
       if (_isConnected) {
         _send({
           'op': 'time_ping',
-          'clientTs': DateTime.now().millisecondsSinceEpoch,
+          'clientTs': jamMonotonicMs(),
         });
       }
     });
@@ -515,7 +515,8 @@ class JamGuestService {
                 if (sent != null && server != null) {
                   clock.add(JamClockSample.fromExchange(
                     sentAt: sent,
-                    receivedAt: DateTime.now().millisecondsSinceEpoch,
+                    receivedAt: jamMonotonicMs(),
+                    receivedWallMs: DateTime.now().millisecondsSinceEpoch,
                     serverNow: server,
                   ));
                 }

@@ -5,6 +5,12 @@ const double kJamDriftSpeedDelta = 0.02;
 const int kJamClockSamples = 5;
 const Duration kJamClockResync = Duration(seconds: 60);
 
+final Stopwatch _jamMonotonic = Stopwatch()..start();
+
+/// Milisegundos de un reloj monótono (no salta con cambios de hora ni NTP).
+/// Se usa para medir el RTT; el reloj de pared solo para el offset.
+int jamMonotonicMs() => _jamMonotonic.elapsedMilliseconds;
+
 /// Muestra de un intercambio `time_ping`/`time_pong`.
 class JamClockSample {
   final int rttMs;
@@ -16,13 +22,19 @@ class JamClockSample {
 
   /// [sentAt]/[receivedAt]: reloj local al enviar/recibir; [serverNow]: hora
   /// de referencia en el pong. Se asume trayecto simétrico (rtt/2).
+  ///
+  /// [sentAt] y [receivedAt] deben venir del mismo reloj (idealmente
+  /// [jamMonotonicMs]); [receivedWallMs] es la hora de pared al recibir y se
+  /// usa solo para el offset (por defecto, [receivedAt]).
   factory JamClockSample.fromExchange({
     required int sentAt,
     required int receivedAt,
     required int serverNow,
+    int? receivedWallMs,
   }) {
     final rtt = receivedAt - sentAt;
-    return JamClockSample(rtt, serverNow + rtt ~/ 2 - receivedAt);
+    return JamClockSample(
+        rtt, serverNow + rtt ~/ 2 - (receivedWallMs ?? receivedAt));
   }
 }
 

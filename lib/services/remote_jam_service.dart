@@ -751,7 +751,7 @@ class RemoteJamService {
     try {
       _channel?.sink.add(jsonEncode({
         'action': 'time_ping',
-        'clientTs': DateTime.now().millisecondsSinceEpoch,
+        'clientTs': jamMonotonicMs(),
       }));
     } catch (_) {}
   }
@@ -776,7 +776,8 @@ class RemoteJamService {
     if (sent != null && server != null) {
       clock.add(JamClockSample.fromExchange(
         sentAt: sent,
-        receivedAt: DateTime.now().millisecondsSinceEpoch,
+        receivedAt: jamMonotonicMs(),
+        receivedWallMs: DateTime.now().millisecondsSinceEpoch,
         serverNow: server,
       ));
     }

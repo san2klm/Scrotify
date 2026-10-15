@@ -385,7 +385,13 @@ class SyncService extends ChangeNotifier {
       }
       return _Action.pull;
     }
-    if (r == null) return _Action.push;
+    if (r == null) {
+      // Un tema que ya estaba sincronizado, sin cambios locales y que falta en
+      // el servidor, se borró en otro dispositivo cuyo aviso ya se purgó:
+      // subirlo lo resucitaría.
+      if (theme && st != null && st['hash'] == l.hash) return _Action.none;
+      return _Action.push;
+    }
     // Primer contacto de este dispositivo con la bóveda: se adopta lo que ya
     // hay (los valores por defecto recién creados no deben pisar los datos).
     if (st == null) return _Action.pull;

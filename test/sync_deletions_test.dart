@@ -79,6 +79,27 @@ void main() {
       expect(saved.single.readAsBytesSync(), zip(1));
     });
 
+    test('tras purgar el aviso, un dispositivo atrasado no resucita el tema',
+        () async {
+      final a = device('a');
+      addTheme(a, 'Mi Tema.zip', 1);
+      await link(a);
+      final b = device('b');
+      await link(b);
+      final docKey = await crypto.docKey('Mi Tema.zip');
+
+      theme(a, 'Mi Tema.zip').deleteSync();
+      await confirmedSync(a);
+      // El servidor purga el aviso antes de que b (sin conexión) lo vea.
+      vault.docs.remove(await tombstoneKeyOf('Mi Tema.zip'));
+      expect(vault.docs.containsKey(docKey), isFalse);
+
+      await fullSync(b.service);
+      await fullSync(b.service);
+      expect(vault.docs.containsKey(docKey), isFalse,
+          reason: 'no se vuelve a subir');
+    });
+
     test('no resucita en el dispositivo que lo borró', () async {
       final a = device('a');
       addTheme(a, 'Mi Tema.zip', 1);

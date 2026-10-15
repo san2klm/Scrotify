@@ -86,7 +86,8 @@ class JamServerEndpoint {
     if (scheme == 'ws') {
       if (!isPrivateHost(uri.host)) {
         return const JamServerEndpoint._(
-            error: 'ws:// sin cifrado solo se permite en red local. Usa wss://.');
+            error:
+                'ws:// sin cifrado solo se permite en red local. Usa wss://.');
       }
       warning = 'Conexión sin cifrar (ws://): úsala solo en tu red local.';
     }
@@ -645,12 +646,8 @@ class JamSessionState {
       positionMs: (json['positionMs'] as num?)?.toInt() ?? 0,
       updatedAtMs: (json['updatedAtMs'] as num?)?.toInt() ??
           DateTime.now().millisecondsSinceEpoch,
-      queue: qList
-          .map((e) => JamQueueItem.fromJson(e as Map<String, dynamic>))
-          .toList(),
-      participants: pList
-          .map((e) => JamParticipant.fromJson(e as Map<String, dynamic>))
-          .toList(),
+      queue: _parseEach(qList, 'cola', JamQueueItem.fromJson),
+      participants: _parseEach(pList, 'participantes', JamParticipant.fromJson),
       allowGuestControls: json['allowGuestControls'] as bool? ?? true,
       allowGuestQueueManage: json['allowGuestQueueManage'] as bool? ?? true,
       remoteHost: json['remoteHost'] as String?,
@@ -838,4 +835,19 @@ class DiscoveredJamSession {
         if (tlsFingerprint != null) 'transport': 'wss',
         if (tlsFingerprint != null) 'tlsFingerprint': tlsFingerprint,
       };
+}
+
+/// Convierte cada elemento por separado: uno mal formado se descarta (y queda
+/// anotado en el diagnóstico) en vez de tirar el snapshot entero.
+List<T> _parseEach<T>(
+    List<dynamic> raw, String what, T Function(Map<String, dynamic>) parse) {
+  final out = <T>[];
+  for (var i = 0; i < raw.length; i++) {
+    try {
+      out.add(parse(Map<String, dynamic>.from(raw[i] as Map)));
+    } catch (e) {
+      debugPrint('Jam: elemento $i de «$what» inválido, se descarta ($e)');
+    }
+  }
+  return out;
 }

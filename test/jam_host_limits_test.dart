@@ -89,4 +89,24 @@ void main() {
     expect(host.disconnectGracePeriod,
         greaterThanOrEqualTo(JamGuestService().hostSilenceTimeout));
   });
+
+  test('un elemento mal formado no descarta el snapshot entero', () {
+    final state = JamSessionState.fromJson({
+      'sessionId': 's',
+      'pinCode': 'JK94MN',
+      'participants': [
+        {'id': 'p1', 'name': 'Ana'},
+        {'id': 7, 'name': null}, // mal formado
+        {'id': 'p2', 'name': 'Luis'},
+      ],
+      'queue': [
+        'basura',
+        {
+          'queueItemId': 'q1',
+          'track': {'id': 't1', 'title': 'T'}
+        },
+      ],
+    });
+    expect(state.participants.map((p) => p.id), ['p1', 'p2']);
+  });
 }
