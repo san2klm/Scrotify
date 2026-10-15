@@ -439,7 +439,11 @@ class OfflineDownloadManager extends ChangeNotifier {
 
   /// Returns the deterministic, filesystem-safe temporary [File] path for a download task.
   /// Basename is derived exclusively from opaque safe scope and [OfflineCacheService.safeTrackSegment].
-  Future<File> getTempFile(String serverScope, String trackId) async {
+  ///
+  /// Con [attemptId] el nombre es único por intento: pausar y reanudar rápido
+  /// no deja que el intento viejo borre el temporal del nuevo.
+  Future<File> getTempFile(String serverScope, String trackId,
+      {String? attemptId}) async {
     final root = await _cacheService.getCacheRootDir();
     final tmpDir = Directory(p.join(root.path, 'download_tmp'));
     if (!await tmpDir.exists()) {
@@ -447,7 +451,9 @@ class OfflineDownloadManager extends ChangeNotifier {
     }
     final scope = OfflineCacheService.safeScopeSegment(serverScope);
     final safeTrack = OfflineCacheService.safeTrackSegment(trackId, '.tmp');
-    final tempFileName = '${scope}_$safeTrack';
+    final tempFileName = attemptId == null
+        ? '${scope}_$safeTrack'
+        : '${scope}_$safeTrack.$attemptId.tmp';
     final tempFilePath =
         normalizePathKeepCase(p.join(tmpDir.path, tempFileName));
     return File(tempFilePath);
@@ -737,6 +743,7 @@ class OfflineDownloadManager extends ChangeNotifier {
     final key = task.compoundKey;
     final cancelToken = _CancellationToken();
     _activeCancellations[key] = cancelToken;
+    final attemptId = '${++_attemptSeq}';
 
     File? tempFile;
     try {
@@ -760,7 +767,8 @@ class OfflineDownloadManager extends ChangeNotifier {
       final resolvedTarget =
           destinationResolver != null ? await destinationResolver!(task) : null;
       if (cancelToken.isCancelled) return;
-      tempFile = await getTempFile(task.serverScope, task.trackId);
+      tempFile = await getTempFile(task.serverScope, task.trackId,
+          attemptId: attemptId);
       if (await tempFile.exists()) {
         try {
           await tempFile.delete();
@@ -968,10 +976,15 @@ class OfflineDownloadManager extends ChangeNotifier {
         );
       }
     } finally {
-      _activeCancellations.remove(key);
+      // Solo quitar el propio token: una reanudación rápida ya registró el suyo.
+      if (identical(_activeCancellations[key], cancelToken)) {
+        _activeCancellations.remove(key);
+      }
       _processQueue();
     }
   }
+
+  int _attemptSeq = 0;
 
   Future<File> _getPersistenceFile() async {
     if (_persistenceFile != null) return _persistenceFile!;

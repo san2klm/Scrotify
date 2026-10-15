@@ -458,6 +458,27 @@ void main() {
       expect(await cacheService.lookup(serverScope, trackId), isNotNull);
     });
 
+    test(
+        'pausar y reanudar sin esperar: el intento viejo no borra el temporal ni el token del nuevo',
+        () async {
+      const serverScope = 'https://server-rapid.local';
+      const trackId = 'rapid-track';
+      final gate = fakeTransport.gate(trackId);
+      await manager.queueTrack(createTestTrack(id: trackId),
+          serverScope: serverScope);
+      await started(trackId);
+
+      expect(await manager.pauseTask(serverScope, trackId), isTrue);
+      expect(await manager.resumeTask(serverScope, trackId), isTrue);
+      gate.complete();
+
+      await waitDone(serverScope, trackId);
+      expect(manager.getTask(serverScope, trackId)!.status,
+          DownloadTaskStatus.completed);
+      expect(await cacheService.lookup(serverScope, trackId), isNotNull);
+      await transportIdle();
+    });
+
     test('cancel: removes partial file and leaves no C1 cache entry', () async {
       const serverScope = 'https://server-cancel.local';
       const trackId = 'cancel-track';
@@ -579,9 +600,7 @@ void main() {
 
       await waitUntil(
           () =>
-              secondManager
-                  .getTask(serverScope, 'interrupted-track')
-                  ?.status ==
+              secondManager.getTask(serverScope, 'interrupted-track')?.status ==
               DownloadTaskStatus.completed,
           'la tarea reanudada se completa');
       expect(secondManager.getTask(serverScope, 'interrupted-track')!.status,
