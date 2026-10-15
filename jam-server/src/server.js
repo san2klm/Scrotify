@@ -433,7 +433,11 @@ export function createJamServer({
       guest.socket.close(1000, 'Room closed');
     }
     room.guests.clear();
-    if (room.host) socketRooms.delete(room.host);
+    if (room.host) {
+      // El anfitrión también debe enterarse (caducidad, apagado del servidor).
+      send(room.host, { event: 'room_closed', message: reason });
+      socketRooms.delete(room.host);
+    }
     console.info('Jam room closed');
   }
 
@@ -448,8 +452,8 @@ export function createJamServer({
     if (!room || room.host !== socket) {
       return serverError(socket, 'Solo el anfitrión puede cerrar la sala.');
     }
-    closeRoom(room);
     send(socket, { status: 'room_closed' });
+    closeRoom(room);
   }
 
   function roster(room) {

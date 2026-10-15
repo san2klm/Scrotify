@@ -8,9 +8,16 @@ export function createGuard({ now = () => Date.now() } = {}) {
   const BASE_BLOCK_MS = 60 * 1000;
   const MAX_BLOCK_MS = 60 * 60 * 1000;
 
+  const PRUNE_EVERY_MS = 60 * 1000;
+  let lastPrune = 0;
+
   function prune() {
     if (attempts.size + failures.size < 5000) return;
     const t = now();
+    // Por intervalo: con >5000 claves vivas, recorrer los mapas en cada
+    // intento convertía el guard en un coste lineal por petición.
+    if (t - lastPrune < PRUNE_EVERY_MS) return;
+    lastPrune = t;
     for (const [ip, list] of attempts) if (!list.some((x) => t - x < 3600_000)) attempts.delete(ip);
     for (const [ip, f] of failures) if (f.blockedUntil < t && t - f.lastFail > FAIL_MEMORY_MS) failures.delete(ip);
   }
