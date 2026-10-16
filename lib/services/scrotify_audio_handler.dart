@@ -5,7 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:just_audio/just_audio.dart' show LoopMode, ProcessingState;
 
 import 'jam_notification.dart';
-import 'navidrome_service.dart' show Track;
+import 'navidrome_service.dart' show Playlist, Track;
 import 'player_controller.dart';
 
 /// Controlador del servicio de medios en segundo plano para Scrotify.
@@ -34,6 +34,95 @@ class ScrotifyAudioHandler extends BaseAudioHandler with SeekHandler {
 
   PlayerController? _player;
   VoidCallback? _removeListener;
+
+  // ---------------------------------------------------------------------------
+  // Árbol de navegación (Android Auto, Wear OS, Bluetooth con pantalla)
+  // ---------------------------------------------------------------------------
+
+  /// Playlists del servidor. Las inyecta `main` para no atar el handler a
+  /// `NavidromeService`.
+  Future<List<Playlist>> Function()? playlistsLoader;
+  Future<List<Track>> Function(String playlistId)? playlistTracksLoader;
+
+  static const browseRecents = 'recents';
+  static const browseMostPlayed = 'mostPlayed';
+  static const browsePlaylists = 'playlists';
+  static const _trackPrefix = 'track:';
+  static const _playlistPrefix = 'playlist:';
+
+  /// Pistas de la última carpeta que se abrió: al reproducir una, se usa la
+  /// carpeta entera como cola (como espera Android Auto).
+  List<Track> _lastBrowsed = const [];
+
+  static MediaItem _folder(String id, String title) =>
+      MediaItem(id: id, title: title, playable: false);
+
+  MediaItem _playableItem(Track t) => MediaItem(
+        id: '$_trackPrefix${t.id}',
+        title: t.title,
+        artist: t.artist,
+        album: t.album,
+        duration: _parseDuration(t.duration),
+        artUri: _coverUriFor(t),
+        playable: true,
+      );
+
+  @override
+  Future<List<MediaItem>> getChildren(String parentMediaId,
+      [Map<String, dynamic>? options]) async {
+    final player = _player;
+    switch (parentMediaId) {
+      case AudioService.browsableRootId:
+        return [
+          _folder(browseRecents, 'Recientes'),
+          _folder(browseMostPlayed, 'Más escuchadas'),
+          _folder(browsePlaylists, 'Playlists'),
+        ];
+      case browseRecents:
+        _lastBrowsed = player?.recentlyPlayed.take(50).toList() ?? const [];
+        return _lastBrowsed.map(_playableItem).toList();
+      case browseMostPlayed:
+        _lastBrowsed = [
+          for (final item in player?.mostPlayed ?? const <MostPlayedItem>[])
+            if (item.track != null) item.track!,
+        ].take(50).toList();
+        return _lastBrowsed.map(_playableItem).toList();
+      case browsePlaylists:
+        final playlists =
+            await (playlistsLoader?.call() ?? Future.value(const <Playlist>[]));
+        return [
+          for (final p in playlists) _folder('$_playlistPrefix${p.id}', p.name),
+        ];
+    }
+    if (parentMediaId.startsWith(_playlistPrefix)) {
+      final id = parentMediaId.substring(_playlistPrefix.length);
+      _lastBrowsed = await (playlistTracksLoader?.call(id) ??
+          Future.value(const <Track>[]));
+      return _lastBrowsed.map(_playableItem).toList();
+    }
+    return const [];
+  }
+
+  @override
+  Future<MediaItem?> getMediaItem(String mediaId) async {
+    if (!mediaId.startsWith(_trackPrefix)) return null;
+    final id = mediaId.substring(_trackPrefix.length);
+    for (final t in _lastBrowsed) {
+      if (t.id == id) return _playableItem(t);
+    }
+    return null;
+  }
+
+  @override
+  Future<void> playFromMediaId(String mediaId,
+      [Map<String, dynamic>? extras]) async {
+    final player = _player;
+    if (player == null || !mediaId.startsWith(_trackPrefix)) return;
+    final id = mediaId.substring(_trackPrefix.length);
+    final index = _lastBrowsed.indexWhere((t) => t.id == id);
+    if (index < 0) return;
+    await player.playQueue(_lastBrowsed, startIndex: index);
+  }
 
   PlayerController? get player => _player;
 

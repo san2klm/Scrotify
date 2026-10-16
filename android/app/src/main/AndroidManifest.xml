@@ -81,6 +81,11 @@
             </intent-filter>
         </service>
 
+        <!-- Android Auto: la app es una fuente de medios navegable. -->
+        <meta-data
+            android:name="com.google.android.gms.car.application"
+            android:resource="@xml/automotive_app_desc" />
+
         <receiver
             android:name="com.ryanheise.audioservice.MediaButtonReceiver"
             android:exported="true"

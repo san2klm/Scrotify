@@ -287,6 +287,11 @@ class MyApp extends StatelessWidget {
               final scope = ctx.read<NavidromeService>().serverScope;
               return scope == null ? null : music.localPath(scope, id);
             };
+            // Navegación para Android Auto: playlists del servidor.
+            final browseLibrary = ctx.read<NavidromeService>();
+            audioHandler?.playlistsLoader = browseLibrary.getPlaylists;
+            audioHandler?.playlistTracksLoader =
+                browseLibrary.getPlaylistTracks;
             // Widget de pantalla de inicio (solo Android).
             if (HomeWidgetService.isSupported) {
               final library = ctx.read<NavidromeService>();
