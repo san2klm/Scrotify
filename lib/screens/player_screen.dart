@@ -1,6 +1,7 @@
 import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:provider/provider.dart';
 
@@ -761,29 +762,41 @@ class _PlayerVolumeBarState extends State<_PlayerVolumeBar> {
             ),
             SizedBox(
               width: 75,
-              child: SliderTheme(
-                data: SliderThemeData(
-                  trackHeight: 2.5,
-                  activeTrackColor: context.volumeAccent,
-                  inactiveTrackColor: context.waveformUnplayed,
-                  thumbColor: context.sliderThumb,
-                  thumbShape:
-                      const RoundSliderThumbShape(enabledThumbRadius: 4),
-                  overlayColor: context.accentDim,
-                  overlayShape: const RoundSliderOverlayShape(overlayRadius: 8),
-                ),
-                child: Slider(
-                  min: 0,
-                  max: 1,
-                  value: volume,
-                  onChanged: (v) {
-                    setState(() => _dragValue = v);
-                    widget.player.setVolume(v);
-                  },
-                  onChangeEnd: (v) {
-                    widget.player.setVolume(v);
-                    if (mounted) setState(() => _dragValue = null);
-                  },
+              child: Listener(
+                onPointerSignal: (pointerSignal) {
+                  // Rueda del mouse → volumen
+                  if (pointerSignal is PointerScrollEvent &&
+                      pointerSignal.scrollDelta.dy != 0) {
+                    final delta =
+                        pointerSignal.scrollDelta.dy < 0 ? 0.04 : -0.04;
+                    widget.player.setVolume((volume + delta).clamp(0.0, 1.0));
+                    if (mounted) setState(() {});
+                  }
+                },
+                child: SliderTheme(
+                  data: SliderThemeData(
+                    trackHeight: 2.5,
+                    activeTrackColor: context.volumeAccent,
+                    inactiveTrackColor: context.waveformUnplayed,
+                    thumbColor: context.sliderThumb,
+                    thumbShape:
+                        const RoundSliderThumbShape(enabledThumbRadius: 4),
+                    overlayColor: context.accentDim,
+                    overlayShape: const RoundSliderOverlayShape(overlayRadius: 8),
+                  ),
+                  child: Slider(
+                    min: 0,
+                    max: 1,
+                    value: volume,
+                    onChanged: (v) {
+                      setState(() => _dragValue = v);
+                      widget.player.setVolume(v);
+                    },
+                    onChangeEnd: (v) {
+                      widget.player.setVolume(v);
+                      if (mounted) setState(() => _dragValue = null);
+                    },
+                  ),
                 ),
               ),
             ),
@@ -801,3 +814,4 @@ class _PlayerVolumeBarState extends State<_PlayerVolumeBar> {
     );
   }
 }
+

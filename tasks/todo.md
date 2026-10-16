@@ -346,3 +346,20 @@ El mismo APK sirve para teléfono y tele. En una tele se activa un modo con la i
 
 ## Mejoras, tanda 3 (plan en `tasks/plan-mejoras-3.md`)
 - [x] 2 instalación segura · 3 build identificable · 4 recuadro de error · 5 humo de Ajustes · 6 arranque real · 9 APK por ABI · 10 catches · 11 unión a Jam + web_socket_channel 3 · 12 jam_host_service. Suite: 886 verdes (2026-10-09).
+## Soporte para Android TV y Versiones por Plataforma (2026-10-12)
+
+- [x] **15.1** Control lateral del mouse (`DesktopWindowFrame`): botón lateral trasero (Back / `kBackMouseButton` / `browserBack`) configurado para alternar Reproducir / Pausar (`_togglePlayPause`), y botón lateral delantero (Forward / `kForwardMouseButton` / `browserForward`) para pasar a la siguiente pista (`_skipNext`), además de bindings multimedia directos.
+- [x] **15.2** Soporte Android TV / Google TV (`AndroidManifest.xml` + `tv_banner.xml`): declaración de pantalla táctil opcional (`touchscreen=false`), `leanback=false`, banner horizontal de 320x180 y filtro `LEANBACK_LAUNCHER` para visualización nativa en pantallas de TV y soporte de D-Pad.
+- [x] **15.3** Workflows de GitHub Actions dedicados por plataforma:
+  - `android.yml` ➔ Compilación automática de `Scrotify-Android.apk` (Release `android-latest`).
+  - `tv.yml` ➔ Compilación automática de `Scrotify-TV.apk` (Release `tv-latest`).
+  - `linux.yml` ➔ Compilación automática de `Scrotify-Linux-x64.tar.gz` (Release `linux-latest`).
+  - `windows.yml` ➔ `Scrotify-Windows-x64.zip` (Release `windows-latest`).
+  - `ios.yml` ➔ `Scrotify.ipa` (Release `ios-latest`).
+
+## Integración de las ramas Lau y santi (2026-10-16)
+
+- [x] `Lau` entró por avance rápido (42 commits: radios, Discord, MPRIS, Chromecast, Android Auto…).
+- [x] `santi` fusionada (23 commits: Windows ThumbBar y botones laterales del ratón, rueda de volumen, 124 temas empaquetados, CI por plataforma, accesos rápidos de escritorio). Conflictos: Android TV, `.gitignore`, `main.cpp` y `Runner.rc` se quedaron con lo de `main` (sabores `phone`/`tv`, marca Scrotify); `flutter_window.*` y el fondo oscuro del splash, de santi.
+- [x] Ajuste tras la fusión: el botón «Mezclar todo» se oculta si el campo de búsqueda mide menos de 260 px (desbordaba 2,5 px a 720 px con texto 1,5); `await` en `_shuffleAllTracks`.
+- [x] `flutter analyze` limpio y 964 pruebas aprobadas. Falta compilar y probar el runner de Windows (ThumbBar, botones del ratón) en una máquina Windows.

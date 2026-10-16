@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:archive/archive.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/painting.dart' show Color;
+import 'package:flutter/services.dart' show rootBundle, ByteData;
 import 'package:path_provider/path_provider.dart';
 
 import 'app_theme.dart';
@@ -116,9 +117,26 @@ class ThemeController extends ChangeNotifier {
     }
   }
 
-  /// Sin carpeta elegida, se muestra y usa la carpeta real de importados.
+  /// Sin carpeta elegida, se muestra y usa la carpeta real de importados o la carpeta de descargas.
   Future<void> _resolveDefaultDir() async {
-    if (_themesDir.isNotEmpty) return;
+    if (_themesDir.isNotEmpty && await Directory(_themesDir).exists()) return;
+
+    if (Platform.isWindows) {
+      final userProfile = Platform.environment['USERPROFILE'];
+      if (userProfile != null) {
+        final candidates = [
+          '$userProfile\\Downloads\\temas-Scrotify-20261006T210310Z-1-001',
+          '$userProfile\\Downloads\\temas-Scrotify',
+          '$userProfile\\Downloads\\fondos',
+        ];
+        for (final candidate in candidates) {
+          if (await Directory(candidate).exists()) {
+            _themesDir = candidate;
+            return;
+          }
+        }
+      }
+    }
     _themesDir = (await _importsDir()).path;
   }
 
@@ -204,8 +222,62 @@ class ThemeController extends ChangeNotifier {
       await _resolveDefaultDir();
     } catch (_) {}
     if (_disposed) return;
+    try {
+      await _ensureBundledThemes();
+    } catch (_) {}
     notifyListeners();
     await rescan();
+  }
+
+  /// Extrae automáticamente los temas incluidos en el bundle de la app en la
+  /// primera ejecución si la carpeta de importados no los tiene instalados.
+  Future<void> _ensureBundledThemes() async {
+    try {
+      final imports = await _importsDir();
+      final marker = File('${imports.path}/.bundled_installed_v2');
+      if (await marker.exists()) return;
+
+      final count = await restoreBundledThemes(overwrite: true);
+      if (count >= 0) {
+        await marker.writeAsString('v2');
+      }
+    } catch (err) {
+      debugPrint('theme_controller: _ensureBundledThemes ignorado: $err');
+    }
+  }
+
+  /// Extrae o restablece los temas empaquetados en la app (assets/themes/bundled_themes.zip).
+  /// Retorna la cantidad de temas extraídos/actualizados.
+  Future<int> restoreBundledThemes({bool overwrite = false}) async {
+    try {
+      final imports = await _importsDir();
+      final ByteData data;
+      try {
+        data = await rootBundle.load('assets/themes/bundled_themes.zip');
+      } catch (_) {
+        return 0;
+      }
+      final bytes = data.buffer.asUint8List();
+      final archive = ZipDecoder().decodeBytes(bytes);
+      int count = 0;
+      for (final file in archive) {
+        if (!file.isFile) continue;
+        final name = file.name.split('/').last.split('\\').last;
+        if (!name.toLowerCase().endsWith('.zip')) continue;
+        final target = File('${imports.path}/$name');
+        if (overwrite || !await target.exists()) {
+          await target.writeAsBytes(file.content as List<int>, flush: true);
+          count++;
+        }
+      }
+      final marker = File('${imports.path}/.bundled_installed_v2');
+      await marker.writeAsString('v2');
+      await rescan();
+      return count;
+    } catch (e) {
+      debugPrint('theme_controller: restoreBundledThemes error: $e');
+      return 0;
+    }
   }
 
   Future<void> _saveConfig() async {
@@ -253,6 +325,7 @@ class ThemeController extends ChangeNotifier {
 
       final thumbs = await _thumbDir();
       final loaded = <AppTheme>[];
+      final seenThemeIds = <String>{};
       for (final zip in zips) {
         try {
           final bytes = await zip.readAsBytes();
@@ -271,7 +344,9 @@ class ThemeController extends ChangeNotifier {
             thumbnailPath: thumbPath,
           );
           if (theme != null) {
-            loaded.add(theme);
+            if (seenThemeIds.add(theme.id)) {
+              loaded.add(theme);
+            }
           } else {
             _skippedInvalid++;
           }

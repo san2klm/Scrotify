@@ -1,9 +1,16 @@
+import 'dart:io' show Platform;
+
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:window_manager/window_manager.dart';
 
+import '../services/connect/connect_protocol.dart';
+import '../services/connect/connect_service.dart';
+import '../services/jam_controller.dart';
 import '../services/mini_player_controller.dart';
+import '../services/player_controller.dart';
 import '../services/window_controls.dart';
 import 'mini_player_view.dart';
 
@@ -27,6 +34,9 @@ class DesktopWindowFrame extends StatefulWidget {
 
 class _DesktopWindowFrameState extends State<DesktopWindowFrame>
     with WindowListener {
+  static const _mouseChannel =
+      MethodChannel('com.scrotify/global_mouse_hotkeys');
+
   bool _maximized = false;
   bool _fullScreen = false;
 
@@ -36,12 +46,27 @@ class _DesktopWindowFrameState extends State<DesktopWindowFrame>
     if (WindowControls.isDesktop) {
       windowManager.addListener(this);
       _syncState();
+      if (Platform.isWindows) {
+        _mouseChannel.setMethodCallHandler((call) async {
+          if (!mounted) return;
+          if (call.method == 'togglePlayPause') {
+            _togglePlayPause(context);
+          } else if (call.method == 'skipNext') {
+            _skipNext(context);
+          } else if (call.method == 'skipPrevious') {
+            _skipPrevious(context);
+          }
+        });
+      }
     }
   }
 
   @override
   void dispose() {
-    if (WindowControls.isDesktop) windowManager.removeListener(this);
+    if (WindowControls.isDesktop) {
+      windowManager.removeListener(this);
+      _mouseChannel.setMethodCallHandler(null);
+    }
     super.dispose();
   }
 
@@ -73,6 +98,12 @@ class _DesktopWindowFrameState extends State<DesktopWindowFrame>
     if (!WindowControls.isDesktop) return widget.child;
     final colors = Theme.of(context).colorScheme;
     final mini = context.watch<MiniPlayerController>();
+    final player = context.watch<PlayerController>();
+    if (Platform.isWindows) {
+      _mouseChannel
+          .invokeMethod('setPlaying', player.playing)
+          .catchError((_) {});
+    }
 
     final content = Column(
       children: [
@@ -187,9 +218,159 @@ class _DesktopWindowFrameState extends State<DesktopWindowFrame>
         const SingleActivator(LogicalKeyboardKey.escape): () {
           if (_fullScreen) WindowControls.setFullScreen(false);
         },
+        const SingleActivator(LogicalKeyboardKey.mediaPlayPause): () =>
+            _togglePlayPause(context),
+        const SingleActivator(LogicalKeyboardKey.mediaPlay): () =>
+            _togglePlayPause(context),
+        const SingleActivator(LogicalKeyboardKey.mediaPause): () =>
+            _togglePlayPause(context),
+        const SingleActivator(LogicalKeyboardKey.mediaTrackNext): () =>
+            _skipNext(context),
+        const SingleActivator(LogicalKeyboardKey.mediaTrackPrevious): () =>
+            _skipPrevious(context),
+        const SingleActivator(LogicalKeyboardKey.browserForward): () =>
+            _skipNext(context),
+        const SingleActivator(LogicalKeyboardKey.browserBack): () =>
+            _togglePlayPause(context),
+        const SingleActivator(LogicalKeyboardKey.arrowRight, alt: true): () =>
+            _skipNext(context),
+        const SingleActivator(LogicalKeyboardKey.arrowLeft, alt: true): () =>
+            _skipPrevious(context),
+        const SingleActivator(LogicalKeyboardKey.audioVolumeUp): () =>
+            _changeVolume(context, 0.04),
+        const SingleActivator(LogicalKeyboardKey.audioVolumeDown): () =>
+            _changeVolume(context, -0.04),
+        const SingleActivator(LogicalKeyboardKey.goBack): () =>
+            _togglePlayPause(context),
       },
-      child: Focus(autofocus: true, child: framed),
+      child: Focus(
+        autofocus: true,
+        child: Listener(
+          behavior: HitTestBehavior.translucent,
+          onPointerSignal: (event) {
+            // Atajo global con rueda del mouse: si se mantiene Alt o Ctrl pulsado
+            // en cualquier parte de la ventana, la rueda sube/baja volumen (+-4%).
+            if (event is PointerScrollEvent && event.scrollDelta.dy != 0) {
+              final isModifier = HardwareKeyboard.instance.isAltPressed ||
+                  HardwareKeyboard.instance.isControlPressed;
+              if (isModifier) {
+                final delta = event.scrollDelta.dy < 0 ? 0.04 : -0.04;
+                _changeVolume(context, delta);
+              }
+            }
+          },
+          onPointerDown: (event) {
+            // Botones laterales del mouse (XBUTTON1 y XBUTTON2):
+            // Back (0x08) -> alternar reproducir / pausar
+            // Forward (0x10) -> siguiente canción
+            if ((event.buttons & kBackMouseButton) != 0) {
+              _togglePlayPause(context);
+            } else if ((event.buttons & kForwardMouseButton) != 0) {
+              _skipNext(context);
+            }
+          },
+          child: framed,
+        ),
+      ),
     );
+  }
+
+  void _changeVolume(BuildContext context, double delta) {
+    try {
+      final connect = context.read<ConnectService>();
+      if (connect.controlled != null) {
+        final current = connect.controlledState?.volume ?? 1.0;
+        final next = (current + delta).clamp(0.0, 1.0);
+        connect.command(ConnectCommand.volume, next);
+        return;
+      }
+      final player = context.read<PlayerController>();
+      final next = (player.volume + delta).clamp(0.0, 1.0);
+      player.setVolume(next);
+    } catch (e) {
+      debugPrint('[DesktopWindowFrame] changeVolume error: $e');
+    }
+  }
+
+  DateTime? _lastSkipTime;
+
+  bool _canSkip() {
+    final now = DateTime.now();
+    if (_lastSkipTime != null &&
+        now.difference(_lastSkipTime!).inMilliseconds < 250) {
+      return false;
+    }
+    _lastSkipTime = now;
+    return true;
+  }
+
+  void _togglePlayPause(BuildContext context) {
+    if (!_canSkip()) return;
+    try {
+      final connect = context.read<ConnectService>();
+      if (connect.controlled != null) {
+        connect.command(ConnectCommand.toggle);
+        return;
+      }
+      final jam = context.read<JamController>();
+      if (jam.isGuest && !(jam.localParticipant?.canControlPlayback ?? false)) {
+        return;
+      }
+      if (jam.inJam) {
+        jam.playbackAction('toggle');
+        return;
+      }
+      final player = context.read<PlayerController>();
+      player.togglePlay();
+    } catch (e) {
+      debugPrint('[DesktopWindowFrame] togglePlayPause error: $e');
+    }
+  }
+
+  void _skipNext(BuildContext context) {
+    if (!_canSkip()) return;
+    try {
+      final connect = context.read<ConnectService>();
+      if (connect.controlled != null) {
+        connect.command(ConnectCommand.next);
+        return;
+      }
+      final jam = context.read<JamController>();
+      if (jam.isGuest && !(jam.localParticipant?.canControlPlayback ?? false)) {
+        return;
+      }
+      if (jam.inJam) {
+        jam.playbackAction('skip_next');
+        return;
+      }
+      final player = context.read<PlayerController>();
+      player.skipNext();
+    } catch (e) {
+      debugPrint('[DesktopWindowFrame] skipNext error: $e');
+    }
+  }
+
+  void _skipPrevious(BuildContext context) {
+    if (!_canSkip()) return;
+    try {
+      final connect = context.read<ConnectService>();
+      if (connect.controlled != null) {
+        connect.command(ConnectCommand.previous);
+        return;
+      }
+      final jam = context.read<JamController>();
+      if (jam.isGuest && !(jam.localParticipant?.canControlPlayback ?? false)) {
+        return;
+      }
+      if (jam.inJam) {
+        jam.playbackAction('skip_previous');
+        return;
+      }
+      final player = context.read<PlayerController>();
+      player.skipPrevious();
+    } catch (e) {
+      debugPrint('[DesktopWindowFrame] skipPrevious error: $e');
+    }
   }
 }
 

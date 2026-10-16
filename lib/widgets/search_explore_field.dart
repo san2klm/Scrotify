@@ -10,6 +10,7 @@ class SearchExploreField extends StatefulWidget {
     required this.controller,
     required this.onSearch,
     required this.onExplore,
+    this.onShuffle,
     this.onSubmitted,
     this.onGenreSelected,
     this.genreSuggestionsBuilder,
@@ -21,6 +22,7 @@ class SearchExploreField extends StatefulWidget {
   final TextEditingController controller;
   final ValueChanged<String> onSearch;
   final VoidCallback onExplore;
+  final VoidCallback? onShuffle;
   final ValueChanged<String>? onSubmitted;
   final ValueChanged<String>? onGenreSelected;
   final List<String> Function(String query)? genreSuggestionsBuilder;
@@ -33,6 +35,8 @@ class SearchExploreField extends StatefulWidget {
 }
 
 class _SearchExploreFieldState extends State<SearchExploreField> {
+  static const _shuffleMinWidth = 260.0;
+  bool _showShuffle = false;
   final LayerLink _layerLink = LayerLink();
   final FocusNode _focusNode = FocusNode();
   OverlayEntry? _overlayEntry;
@@ -87,7 +91,7 @@ class _SearchExploreFieldState extends State<SearchExploreField> {
     _overlayEntry = OverlayEntry(
       builder: (ctx) {
         return Positioned(
-          width: size.width > 0 ? size.width - 44 : 320,
+          width: size.width > 0 ? (size.width - (_showShuffle ? 88 : 44)) : 320,
           child: CompositedTransformFollower(
             link: _layerLink,
             showWhenUnlinked: false,
@@ -186,6 +190,16 @@ class _SearchExploreFieldState extends State<SearchExploreField> {
 
   @override
   Widget build(BuildContext context) {
+    return LayoutBuilder(builder: (context, constraints) {
+      // Con poco ancho (ventana chica o texto grande) el botón de mezclar no
+      // cabe junto al campo y a Explorar: se omite en vez de desbordar la fila.
+      _showShuffle =
+          widget.onShuffle != null && constraints.maxWidth >= _shuffleMinWidth;
+      return _buildField(context);
+    });
+  }
+
+  Widget _buildField(BuildContext context) {
     return CompositedTransformTarget(
       link: _layerLink,
       child: Row(
@@ -271,6 +285,18 @@ class _SearchExploreFieldState extends State<SearchExploreField> {
               size: 21,
             ),
           ),
+          if (_showShuffle) ...[
+            const SizedBox(width: 2),
+            IconButton(
+              tooltip: 'Mezclar todo',
+              onPressed: widget.onShuffle,
+              icon: Icon(
+                Icons.shuffle_rounded,
+                color: context.accent,
+                size: 21,
+              ),
+            ),
+          ],
         ],
       ),
     );

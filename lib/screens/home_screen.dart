@@ -309,6 +309,17 @@ class _HomeScreenState extends _HomeStateBase
   // ===========================================================================
   // BARRA SUPERIOR PERSISTENTE (GLOBAL HEADER)
   // ===========================================================================
+  Future<void> _shuffleAllTracks() async {
+    try {
+      final tracks = await _futureTracks;
+      if (tracks.isNotEmpty && mounted) {
+        await context.read<PlayerController>().playShuffledQueue(tracks);
+      }
+    } catch (_) {
+      // Si ocurre un error al obtener las pistas, no interrumpir la interfaz.
+    }
+  }
+
   Widget _buildPersistentGlobalTopBar(NavidromeService nav) {
     return GlobalTopBar(
       searchController: _searchController,
@@ -317,6 +328,7 @@ class _HomeScreenState extends _HomeStateBase
       showBackButton: false,
       onSearch: _runSearch,
       onGenreSelected: _runGenreSearch,
+      onShuffle: _shuffleAllTracks,
       onSearchCleared: () {
         if (!mounted) return;
         setState(() {

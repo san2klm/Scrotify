@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:provider/provider.dart';
@@ -15,6 +16,8 @@ import 'jam_dialog.dart';
 import 'connect_panel.dart';
 import 'track_context_menu.dart';
 import 'interactive_artist_text.dart';
+import '../services/mini_player_controller.dart';
+import '../services/window_controls.dart';
 import '../utils/app_colors.dart';
 import '../utils/playback_time.dart';
 
@@ -85,12 +88,48 @@ class PersistentPlayerBar extends StatelessWidget {
     final remoteControlled = connect.controlled != null;
     final remoteState = connect.controlledState;
 
-    return Container(
-      height: 90,
-      color: context.bgPlayer,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        child: Row(
+    void adjustVolume(double delta) {
+      if (remoteControlled) {
+        final current = remoteState?.volume ?? 1.0;
+        final next = (current + delta).clamp(0.0, 1.0);
+        connect.command(ConnectCommand.volume, next);
+      } else {
+        final current = player.volume;
+        final next = (current + delta).clamp(0.0, 1.0);
+        player.setVolume(next);
+      }
+    }
+
+    return Listener(
+      behavior: HitTestBehavior.translucent,
+      onPointerSignal: (pointerSignal) {
+        if (pointerSignal is PointerScrollEvent &&
+            pointerSignal.scrollDelta.dy != 0) {
+          // Rueda del mouse sobre la barra del reproductor:
+          // Hacia arriba: subir volumen (+4%)
+          // Hacia abajo: bajar volumen (-4%)
+          final delta = pointerSignal.scrollDelta.dy < 0 ? 0.04 : -0.04;
+          adjustVolume(delta);
+        }
+      },
+      onPointerDown: (event) {
+        // Clic botón central (ruedita) sobre la barra: alternar reproducir / pausar
+        if ((event.buttons & kMiddleMouseButton) != 0) {
+          if (remoteControlled) {
+            connect.command(ConnectCommand.toggle);
+          } else if (jam.inJam) {
+            jam.playbackAction('toggle');
+          } else {
+            player.togglePlay();
+          }
+        }
+      },
+      child: Container(
+        height: 90,
+        color: context.bgPlayer,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Row(
           children: [
             // ── Left: artwork + track info (title, artist, favorite) ──
             _artwork(context, track),
@@ -184,13 +223,23 @@ class PersistentPlayerBar extends StatelessWidget {
               const SizedBox(width: 8),
               _openFullButton(context),
             ],
+            if (WindowControls.isDesktop) ...[
+              const SizedBox(width: 4),
+              IconButton(
+                icon: const Icon(Icons.picture_in_picture_alt_rounded, size: 18),
+                color: context.textSecondary,
+                tooltip: 'Widget / Mini reproductor',
+                onPressed: () => context.read<MiniPlayerController>().toggle(),
+              ),
+            ],
             const SizedBox(width: 4),
             _threeDotsMenu(context, track),
           ],
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 
   // ---------------------------------------------------------------------------
   // Mobile layout — Spotify mobile style

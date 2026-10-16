@@ -28,6 +28,16 @@ class ThemeValidation {
     'mode',
     'tags',
     'minAppVersion',
+    'changelog',
+    'homepage',
+    'license',
+    'preview',
+    'accentColor',
+    'repository',
+    'source',
+    'bugs',
+    'funding',
+    'email',
   };
 
   static final _kebab = RegExp(r'^[a-z0-9]+(-[a-z0-9]+)*$');
