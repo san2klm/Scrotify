@@ -1,11 +1,11 @@
 import 'dart:async';
-import 'dart:convert';
-import 'package:http/http.dart' as http;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import "../widgets/server_activity_panel.dart";
+import '../services/artist_image_service.dart';
 import '../services/navidrome_service.dart';
+import '../services/settings_controller.dart';
 import '../services/player_controller.dart';
 import '../services/theme_controller.dart';
 import '../widgets/cover_art.dart';
@@ -55,52 +55,23 @@ class _ArtistScreenState extends State<ArtistScreen> {
   }
 
   Future<void> _fetchBetterArtistImage() async {
-    final artistName = widget.artist.name;
-    try {
-      // 1. Intentar TheAudioDB (prioridad para Fanart apaisado real)
-      final uri = Uri.parse(
-          'https://www.theaudiodb.com/api/v1/json/2/search.php?s=${Uri.encodeQueryComponent(artistName)}');
-      final res = await http.get(uri);
-      if (res.statusCode == 200) {
-        final data = json.decode(res.body);
-        final artists = data['artists'];
-        if (artists != null && artists.isNotEmpty) {
-          final fanart = artists[0]['strArtistFanart'];
-          if (fanart != null && fanart.toString().trim().isNotEmpty) {
-            if (mounted) setState(() => _bannerImageUrl = fanart);
-            return;
-          }
-        }
-      }
-    } catch (err) {
-      debugPrint('artist_screen:71 ignorado: $err');
-    }
-
-    try {
-      // 2. Fallback a Deezer (picture_xl es una foto real del artista, no portada cuadrada de disco)
-      final uri = Uri.parse(
-          'https://api.deezer.com/search/artist?q=${Uri.encodeQueryComponent(artistName)}');
-      final res = await http.get(uri);
-      if (res.statusCode == 200) {
-        final data = json.decode(res.body);
-        final items = data['data'];
-        if (items != null && items.isNotEmpty) {
-          final img = items[0]['picture_xl'] ?? items[0]['picture_big'];
-          if (img != null && img.toString().trim().isNotEmpty) {
-            if (mounted) setState(() => _bannerImageUrl = img);
-            return;
-          }
-        }
-      }
-    } catch (err) {
-      debugPrint('artist_screen:89 ignorado: $err');
-    }
-
-    // 3. Fallback original Navidrome
-    if (mounted && widget.artist.coverArtUrl != null) {
+    final nav = context.read<NavidromeService>();
+    final allowThirdParty =
+        context.read<SettingsController>().thirdPartyArtistImages;
+    final url = await _imageService.lookup(
+      widget.artist.name,
+      serverLookup: () => nav.getArtistImageUrl(widget.artist.id),
+      allowThirdParty: allowThirdParty,
+    );
+    if (!mounted) return;
+    if (url != null) {
+      setState(() => _bannerImageUrl = url);
+    } else if (widget.artist.coverArtUrl != null) {
       setState(() => _bannerImageUrl = widget.artist.coverArtUrl);
     }
   }
+
+  static final ArtistImageService _imageService = ArtistImageService();
 
   @override
   Widget build(BuildContext context) {

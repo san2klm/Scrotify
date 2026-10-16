@@ -67,6 +67,7 @@ class SettingsController extends ChangeNotifier {
   bool _gapless = false;
   Duration _crossfade = Duration.zero;
   bool _silenceRemovalEnabled = false;
+  bool _thirdPartyArtistImages = false;
   bool _isSmartMixEnabled = true;
   ReplayGainMode _replayGainMode = ReplayGainMode.off;
   double _replayGainPreamp = 0.0;
@@ -120,6 +121,17 @@ class SettingsController extends ChangeNotifier {
 
   /// Estado de la eliminación de silencios.
   bool get silenceRemovalEnabled => _silenceRemovalEnabled;
+
+  /// Permite buscar fotos de artista en TheAudioDB y Deezer (reciben el nombre
+  /// del artista). Desactivado por defecto.
+  bool get thirdPartyArtistImages => _thirdPartyArtistImages;
+
+  void setThirdPartyArtistImages(bool enabled) {
+    if (_thirdPartyArtistImages == enabled) return;
+    _thirdPartyArtistImages = enabled;
+    _save();
+    notifyListeners();
+  }
 
   /// Estado del modo Smart Mix.
   bool get isSmartMixEnabled => _isSmartMixEnabled;
@@ -360,6 +372,7 @@ class SettingsController extends ChangeNotifier {
       final rawCf = (data['crossfade'] as num?)?.toInt() ?? 0;
       _crossfade = Duration(milliseconds: rawCf.clamp(0, 10000));
       _silenceRemovalEnabled = data['silenceRemovalEnabled'] as bool? ?? false;
+      _thirdPartyArtistImages = data['thirdPartyArtistImages'] as bool? ?? false;
       _isSmartMixEnabled = data['smartMixEnabled'] as bool? ?? true;
       _replayGainMode =
           ReplayGainMode.fromString(data['replayGainMode'] as String?);
@@ -402,6 +415,7 @@ class SettingsController extends ChangeNotifier {
         'gapless': _gapless,
         'crossfade': _crossfade.inMilliseconds,
         'silenceRemovalEnabled': _silenceRemovalEnabled,
+        'thirdPartyArtistImages': _thirdPartyArtistImages,
         'smartMixEnabled': _isSmartMixEnabled,
         'replayGainMode': _replayGainMode.name,
         'replayGainPreamp': _replayGainPreamp,

@@ -373,6 +373,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
             onChanged: settings.setSilenceRemovalEnabled,
           ),
           _switchTile(
+            title: 'Fotos de artista de internet',
+            subtitle:
+                'Busca la foto en TheAudioDB y Deezer; envía el nombre del artista a esos servicios',
+            value: settings.thirdPartyArtistImages,
+            onChanged: settings.setThirdPartyArtistImages,
+          ),
+          _switchTile(
             title: 'Mezcla inteligente',
             subtitle:
                 'Evita repetir el mismo artista seguido en modo aleatorio',

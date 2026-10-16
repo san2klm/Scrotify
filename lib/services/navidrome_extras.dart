@@ -7,6 +7,32 @@ mixin _NavidromeExtras on _NavidromeBase {
   // Usa letras embebidas o .lrc externos ya escaneados por el servidor.
   // ---------------------------------------------------------------------------
 
+  /// Imagen grande del artista según el servidor (`getArtistInfo2`), o `null`.
+  Future<String?> getArtistImageUrl(String artistId) async {
+    if (!_connected) return null;
+    final (salt, token) = _auth();
+    final uri =
+        Uri.parse('$_url/rest/getArtistInfo2.view').replace(queryParameters: {
+      'u': _user!,
+      's': salt,
+      't': token,
+      'v': '1.16.1',
+      'c': 'Scrotify',
+      'f': 'json',
+      'id': artistId,
+    });
+    try {
+      final response = await _get(uri);
+      if (response.statusCode != 200) return null;
+      final info = jsonDecode(response.body)['subsonic-response']
+          ?['artistInfo2'] as Map<String, dynamic>?;
+      final url = (info?['largeImageUrl'] ?? info?['mediumImageUrl']) as String?;
+      return (url == null || url.trim().isEmpty) ? null : url;
+    } catch (_) {
+      return null;
+    }
+  }
+
   /// Devuelve los bloques de letra estructurada para una canción.
   /// Lista vacía si el servidor no tiene letra para ese `songId`.
   Future<List<StructuredLyricBlock>> getLyricsBySongId(String songId) async {
