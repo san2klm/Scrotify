@@ -211,7 +211,15 @@ mixin _NavidromeDiscovery on _NavidromeBase {
     return NavidromeService._asList(body?['podcasts']?['channel'])
         .whereType<Map>()
         .map((c) {
-          final episodes = _tracksFrom(c['episode']);
+          // Un episodio se reproduce por su `streamId`, no por el id del episodio.
+          final episodes = _tracksFrom([
+            for (final e in NavidromeService._asList(c['episode']))
+              if (e is Map)
+                {
+                  ...Map<String, dynamic>.from(e),
+                  if (e['streamId'] != null) 'id': e['streamId'].toString(),
+                },
+          ]);
           return PodcastChannel(
             id: c['id']?.toString() ?? '',
             title: c['title']?.toString() ?? '',

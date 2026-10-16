@@ -183,4 +183,12 @@ void main() {
     service.toRestore = null;
     expect(await player.restoreSavedQueue(), isNull);
   });
+
+  test('una radio de internet suena desde su URL directa', () async {
+    await player.playInternetRadio(
+        'r1', 'Radio Uno', 'https://radio.example.invalid/stream.mp3');
+    expect(player.currentTrack?.title, 'Radio Uno');
+    expect([...a.loaded, ...b.loaded],
+        contains('https://radio.example.invalid/stream.mp3'));
+  });
 }

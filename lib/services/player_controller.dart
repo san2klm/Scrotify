@@ -203,6 +203,9 @@ abstract class _PlayerBase extends ChangeNotifier {
   /// Guardado diferido de la cola en el servidor.
   Timer? _queueSaveTimer;
 
+  /// Pistas que no pasan por `stream.view` (radios de internet): id → URL.
+  final Map<String, String> _directStreams = {};
+
   Duration? _usefulStart;
 
   Duration? _usefulEnd;
@@ -850,11 +853,14 @@ class PlayerController extends _PlayerBase
   /// Lo usa el reproductor de karaoke (media_kit), que no pasa por `_sourceFor`.
   @override
   String _mediaLocationFor(Track t) =>
+      _directStreams[t.id] ??
       localFileResolver?.call(t.id) ??
       _service.getPlaybackStreamUrl(t.id, quality: _settings.effectiveQuality);
 
   @override
   AudioSource _sourceFor(Track t) {
+    final direct = _directStreams[t.id];
+    if (direct != null) return AudioSource.uri(Uri.parse(direct));
     final path = localFileResolver?.call(t.id);
     return AudioSource.uri(path != null
         ? Uri.file(path)

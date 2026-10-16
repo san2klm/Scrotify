@@ -263,6 +263,20 @@ mixin _MobileSearchLibraryTabs on _MobileHomeBase {
                 MaterialPageRoute(builder: (_) => const LikedSongsScreen()),
               ),
             ),
+            ListTile(
+              leading: Icon(Icons.radio, color: context.accent),
+              title: Text('Radios y podcasts',
+                  style: TextStyle(
+                      color: context.textPrimary,
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold)),
+              subtitle: Text('Del servidor',
+                  style: TextStyle(color: context.textMuted, fontSize: 12)),
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const RadioPodcastsScreen()),
+              ),
+            ),
             if (followedIds.isNotEmpty) ...[
               for (final artistId in followedIds)
                 _followedArtistTile(artistId, nav),

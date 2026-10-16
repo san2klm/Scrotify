@@ -71,6 +71,19 @@ mixin _PlayerQueue on _PlayerBase {
     );
   }
 
+  /// Reproduce una radio de internet: un stream continuo, sin duración.
+  Future<void> playInternetRadio(String id, String name, String streamUrl) {
+    final track = Track(
+      id: 'radio:$id',
+      title: name,
+      artist: 'Radio por internet',
+      album: '',
+      duration: '0',
+    );
+    _directStreams[track.id] = streamUrl;
+    return playQueue([track]);
+  }
+
   /// Añade una pista al final de la cola de reproducción.
   /// Si no hay nada reproduciéndose, empieza a reproducirla.
   Future<void> addToQueue(Track track) => addAllToQueue([track]);

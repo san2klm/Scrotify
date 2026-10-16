@@ -244,6 +244,16 @@ mixin _HomeLibraryPanel on _HomeStateBase {
                 MaterialPageRoute(builder: (_) => const LikedSongsScreen()),
               ),
             ),
+            _libraryTile(
+              icon: Icons.radio,
+              title: 'Radios y podcasts',
+              subtitle: 'Del servidor',
+              background: context.accent,
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const RadioPodcastsScreen()),
+              ),
+            ),
             // Artistas seguidos (entre Me gusta y playlists)
             for (final artistId in followedIds)
               _followedArtistTile(artistId, nav),
