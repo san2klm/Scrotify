@@ -144,6 +144,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                           ),
                           _buildJamBadge(context, jam),
                           IconButton(
+                            tooltip: 'Más opciones',
                             icon: Icon(Icons.more_horiz,
                                 color: context.textPrimary),
                             onPressed: () => _showContextMenu(player, track),
@@ -208,6 +209,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
                                     IconButton(
+                                      tooltip: 'Me gusta',
                                       icon: Icon(
                                         isStarred
                                             ? Icons.favorite
@@ -581,8 +583,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                           position: effectivePosition,
                           duration: duration,
                           // Con el mando cada pulsación salta más.
-                          seekStep:
-                              Duration(seconds: TvMode.isTv ? 10 : 5),
+                          seekStep: Duration(seconds: TvMode.isTv ? 10 : 5),
                           onSeek: (target) =>
                               _seek(jam, player, target, canControl),
                         ),
@@ -664,6 +665,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
       children: [
         IconButton(
+          tooltip: 'Aleatorio',
           icon: Icon(
             Icons.shuffle,
             size: 22,
@@ -672,10 +674,12 @@ class _PlayerScreenState extends State<PlayerScreen> {
           onPressed: jam.isGuest ? null : player.toggleShuffle,
         ),
         IconButton(
+          tooltip: 'Anterior',
           icon: Icon(Icons.skip_previous, color: context.textPrimary, size: 34),
           onPressed: _playbackHandler(jam, player, 'skip_previous', canControl),
         ),
         IconButton(
+          tooltip: 'Pausar / Reproducir',
           // En una tele el foco empieza en pausa/reproducir.
           autofocus: TvMode.isTv,
           iconSize: 60,
@@ -686,10 +690,12 @@ class _PlayerScreenState extends State<PlayerScreen> {
           onPressed: _playbackHandler(jam, player, 'toggle', canControl),
         ),
         IconButton(
+          tooltip: 'Siguiente',
           icon: Icon(Icons.skip_next, color: context.textPrimary, size: 34),
           onPressed: _playbackHandler(jam, player, 'skip_next', canControl),
         ),
         IconButton(
+          tooltip: 'Repetir',
           icon: Icon(
             repeatMode == LoopMode.one ? Icons.repeat_one : Icons.repeat,
             size: 22,
@@ -730,6 +736,7 @@ class _PlayerVolumeBarState extends State<_PlayerVolumeBar> {
           mainAxisSize: MainAxisSize.min,
           children: [
             IconButton(
+              tooltip: 'Volumen',
               visualDensity: VisualDensity.compact,
               padding: EdgeInsets.zero,
               constraints: const BoxConstraints(minWidth: 26, minHeight: 26),

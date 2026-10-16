@@ -123,6 +123,7 @@ class ExploreTracksView extends StatelessWidget {
                 ),
                 LocalDownloadButton(tracks: [track], compact: true),
                 IconButton(
+                  tooltip: 'Más opciones',
                   icon: Icon(Icons.more_horiz, color: context.textMuted),
                   onPressed: () => TrackContextMenu.show(context, track),
                 ),

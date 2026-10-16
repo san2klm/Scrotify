@@ -88,6 +88,9 @@ class _AccountAvatarState extends State<AccountAvatar> {
             ? fallback
             : Image.network(_imageUrl!,
                 fit: BoxFit.cover,
+                cacheWidth:
+                    (widget.size * MediaQuery.devicePixelRatioOf(context))
+                        .ceil(),
                 excludeFromSemantics: true,
                 frameBuilder: (_, child, frame, loaded) =>
                     loaded || frame != null ? child : fallback,

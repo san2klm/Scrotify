@@ -46,7 +46,8 @@ class _AlbumDetailScreenState extends State<AlbumDetailScreen> {
         children: [
           const GlobalTopBar(title: 'Álbum'),
           Expanded(
-            child: TvInitialFocus(child: FutureBuilder<List<Track>>(
+            child: TvInitialFocus(
+                child: FutureBuilder<List<Track>>(
               future: _future,
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
@@ -72,8 +73,10 @@ class _AlbumDetailScreenState extends State<AlbumDetailScreen> {
                           borderRadius: BorderRadius.circular(16),
                           image: widget.album.coverArtUrl != null
                               ? DecorationImage(
-                                  image:
-                                      NetworkImage(widget.album.coverArtUrl!),
+                                  image: ResizeImage(
+                                    NetworkImage(widget.album.coverArtUrl!),
+                                    width: 600,
+                                  ),
                                   fit: BoxFit.cover,
                                 )
                               : null,
@@ -133,6 +136,7 @@ class _AlbumDetailScreenState extends State<AlbumDetailScreen> {
                               LocalDownloadButton(
                                   tracks: [track], compact: true),
                               IconButton(
+                                tooltip: 'Me gusta',
                                 icon: Icon(
                                   starred
                                       ? Icons.favorite
@@ -144,6 +148,7 @@ class _AlbumDetailScreenState extends State<AlbumDetailScreen> {
                                 ),
                                 onPressed: () async {
                                   await nav.toggleStar(track);
+                                  if (!mounted) return;
                                   setState(() {});
                                 },
                               ),

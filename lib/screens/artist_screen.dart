@@ -147,6 +147,7 @@ class _ArtistScreenState extends State<ArtistScreen> {
                   ? Image.network(
                       _bannerImageUrl!,
                       key: ValueKey(_bannerImageUrl),
+                      cacheWidth: 1280,
                       fit: BoxFit.cover,
                       alignment: const Alignment(0, -0.6),
                       width: double.infinity,
@@ -572,6 +573,7 @@ class _ArtistScreenState extends State<ArtistScreen> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 IconButton(
+                  tooltip: 'Me gusta',
                   icon: Icon(
                     starred ? Icons.favorite : Icons.favorite_border,
                     color: starred ? context.accent : context.textMuted,
@@ -579,11 +581,13 @@ class _ArtistScreenState extends State<ArtistScreen> {
                   ),
                   onPressed: () async {
                     await nav.toggleStar(track);
+                    if (!mounted) return;
                     setState(() {});
                   },
                 ),
                 LocalDownloadButton(tracks: [track], compact: true),
                 IconButton(
+                  tooltip: 'Más opciones',
                   icon: Icon(Icons.more_vert, color: context.textMuted),
                   onPressed: () => TrackContextMenu.show(context, track),
                 ),
@@ -628,7 +632,10 @@ class _ArtistScreenState extends State<ArtistScreen> {
                     borderRadius: BorderRadius.circular(8),
                     image: album.coverArtUrl != null
                         ? DecorationImage(
-                            image: NetworkImage(album.coverArtUrl!),
+                            image: ResizeImage(
+                              NetworkImage(album.coverArtUrl!),
+                              width: 400,
+                            ),
                             fit: BoxFit.cover,
                           )
                         : null,

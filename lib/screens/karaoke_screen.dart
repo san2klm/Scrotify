@@ -185,6 +185,7 @@ class _KaraokeScreenState extends State<KaraokeScreen> {
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           IconButton(
+                            tooltip: 'Cerrar',
                             icon: Icon(Icons.close_rounded,
                                 color: context.textPrimary, size: 28),
                             onPressed: () {
@@ -451,12 +452,14 @@ class _KaraokeScreenState extends State<KaraokeScreen> {
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
                               IconButton(
+                                tooltip: 'Anterior',
                                 icon: Icon(Icons.skip_previous_rounded,
                                     color: context.textPrimary, size: 30),
                                 onPressed: player.skipPrevious,
                               ),
                               const SizedBox(width: 16),
                               IconButton(
+                                tooltip: 'Pausar / Reproducir',
                                 iconSize: 52,
                                 icon: Icon(
                                   player.playing
@@ -468,6 +471,7 @@ class _KaraokeScreenState extends State<KaraokeScreen> {
                               ),
                               const SizedBox(width: 16),
                               IconButton(
+                                tooltip: 'Siguiente',
                                 icon: Icon(Icons.skip_next_rounded,
                                     color: context.textPrimary, size: 30),
                                 onPressed: player.skipNext,

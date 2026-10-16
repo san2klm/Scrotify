@@ -443,6 +443,7 @@ class _MobileLoginScreenState extends State<MobileLoginScreen> {
             icon: Icons.lock_outline_rounded,
             obscureText: _obscurePass,
             suffixIcon: IconButton(
+              tooltip: 'Mostrar u ocultar',
               icon: Icon(
                 _obscurePass
                     ? Icons.visibility_outlined

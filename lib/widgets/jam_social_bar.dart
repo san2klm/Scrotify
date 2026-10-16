@@ -169,6 +169,7 @@ class _JamChatDialogState extends State<JamChatDialog> {
               decoration: InputDecoration(
                 hintText: 'Escribe un mensaje…',
                 suffixIcon: IconButton(
+                  tooltip: 'Enviar',
                   icon: const Icon(Icons.send_rounded),
                   onPressed: _send,
                 ),

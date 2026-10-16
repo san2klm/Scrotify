@@ -416,6 +416,7 @@ class _ProBandTile extends StatelessWidget {
               '${band.type.usesGain ? ' · ${band.gainDb.toStringAsFixed(1)} dB' : ''}'
               ' · Q ${band.q.toStringAsFixed(2)}'),
           trailing: IconButton(
+            tooltip: 'Eliminar',
             icon: const Icon(Icons.delete_outline),
             onPressed: () => eq.removeBand(index),
           ),

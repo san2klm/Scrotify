@@ -201,6 +201,7 @@ class _QrScannerSheetState extends State<QrScannerSheet>
                   ),
                 ),
                 IconButton(
+                  tooltip: 'Cerrar',
                   icon:
                       Icon(Icons.close, color: context.textSecondary, size: 20),
                   onPressed: () => Navigator.of(context).pop(),

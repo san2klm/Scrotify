@@ -201,11 +201,13 @@ class _ServerActivityPanelState extends State<ServerActivityPanel>
                 ),
               ),
               IconButton(
+                tooltip: 'Actualizar',
                 icon: Icon(Icons.refresh_rounded,
                     color: context.textSecondary, size: 20),
                 onPressed: () => _loadData(),
               ),
               IconButton(
+                tooltip: 'Cerrar',
                 icon: Icon(Icons.close_rounded,
                     color: context.textMuted, size: 20),
                 onPressed: () => Navigator.of(context).pop(),

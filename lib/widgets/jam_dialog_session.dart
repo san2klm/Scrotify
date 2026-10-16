@@ -289,6 +289,7 @@ mixin _JamDialogSession on _JamDialogBase {
               ),
             ),
             IconButton(
+              tooltip: 'Cerrar',
               icon: Icon(Icons.close_rounded, color: context.textMuted),
               onPressed: () => Navigator.of(context).pop(),
             ),
@@ -751,6 +752,7 @@ mixin _JamDialogSession on _JamDialogBase {
               ),
             ),
             IconButton(
+              tooltip: 'Cerrar',
               icon: Icon(Icons.close_rounded, color: context.textMuted),
               onPressed: () => Navigator.of(context).pop(),
             ),

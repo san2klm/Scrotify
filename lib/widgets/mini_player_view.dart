@@ -85,6 +85,7 @@ class MiniPlayerView extends StatelessWidget {
                         width: 40,
                         height: 40,
                         child: IconButton(
+                          tooltip: 'Anterior',
                           visualDensity: VisualDensity.compact,
                           icon: const Icon(Icons.skip_previous_rounded),
                           color: context.textPrimary,
@@ -111,6 +112,7 @@ class MiniPlayerView extends StatelessWidget {
                         width: 40,
                         height: 40,
                         child: IconButton(
+                          tooltip: 'Siguiente',
                           visualDensity: VisualDensity.compact,
                           icon: const Icon(Icons.skip_next_rounded),
                           color: context.textPrimary,
@@ -127,6 +129,7 @@ class MiniPlayerView extends StatelessWidget {
                           width: 40,
                           height: 40,
                           child: IconButton(
+                            tooltip: 'Me gusta',
                             visualDensity: VisualDensity.compact,
                             icon: Icon(liked
                                 ? Icons.favorite_rounded

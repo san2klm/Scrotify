@@ -336,6 +336,7 @@ class _ProfileDialogState extends State<_ProfileDialog> {
                 icon: Icons.lock_outline,
                 obscure: _obscurePass,
                 suffix: IconButton(
+                  tooltip: 'Mostrar u ocultar',
                   icon: Icon(
                     _obscurePass
                         ? Icons.visibility_outlined

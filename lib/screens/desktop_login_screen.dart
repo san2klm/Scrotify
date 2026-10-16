@@ -470,6 +470,7 @@ class _DesktopLoginScreenState extends State<DesktopLoginScreen> {
           textInputAction: TextInputAction.done,
           onSubmitted: (_) => _loginWithForm(),
           suffixIcon: IconButton(
+            tooltip: 'Mostrar u ocultar',
             icon: Icon(
               _obscurePass
                   ? Icons.visibility_outlined

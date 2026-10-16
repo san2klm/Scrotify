@@ -96,23 +96,24 @@ mixin _JamDialogTabs on _JamDialogBase {
                     .watch<JamController>()
                     .cloudCapabilities
                     .offersPublicListing)
-                SwitchListTile(
-                  contentPadding: EdgeInsets.zero,
-                  dense: true,
-                  title: Text('Sesión pública',
-                      style: TextStyle(
-                          color: context.textSecondary, fontSize: 12)),
-                  subtitle: Text(
-                    _isPublicSession
-                        ? 'Aparece en el radar de la red y del servidor'
-                        : 'Sólo se puede unir con PIN o QR',
-                    style: TextStyle(color: context.textMuted, fontSize: 10.5),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    dense: true,
+                    title: Text('Sesión pública',
+                        style: TextStyle(
+                            color: context.textSecondary, fontSize: 12)),
+                    subtitle: Text(
+                      _isPublicSession
+                          ? 'Aparece en el radar de la red y del servidor'
+                          : 'Sólo se puede unir con PIN o QR',
+                      style:
+                          TextStyle(color: context.textMuted, fontSize: 10.5),
+                    ),
+                    value: _isPublicSession,
+                    activeTrackColor: context.accent,
+                    onChanged: (value) =>
+                        setState(() => _isPublicSession = value),
                   ),
-                  value: _isPublicSession,
-                  activeTrackColor: context.accent,
-                  onChanged: (value) =>
-                      setState(() => _isPublicSession = value),
-                ),
                 SwitchListTile(
                   contentPadding: EdgeInsets.zero,
                   dense: true,
@@ -214,34 +215,34 @@ mixin _JamDialogTabs on _JamDialogBase {
                     .watch<JamController>()
                     .cloudCapabilities
                     .offersPersistentRooms)
-                ExpansionTile(
-                  tilePadding: EdgeInsets.zero,
-                  title: Text('Sala persistente (avanzado)',
-                      style: TextStyle(
-                          color: context.textSecondary, fontSize: 12)),
-                  children: [
-                    TextField(
-                      controller: _fixedPinController,
-                      textCapitalization: TextCapitalization.characters,
-                      decoration: const InputDecoration(
-                          labelText: 'PIN fijo (reservado por el admin)'),
-                    ),
-                    TextField(
-                      controller: _roomPasswordController,
-                      obscureText: true,
-                      decoration: const InputDecoration(
-                          labelText: 'Contraseña de la sala (opcional)',
-                          helperText:
-                              'Solo para salas persistentes; el servidor guarda su hash.'),
-                    ),
-                    TextField(
-                      controller: _ownerTokenController,
-                      obscureText: true,
-                      decoration: const InputDecoration(
-                          labelText: 'Token de propietario'),
-                    ),
-                  ],
-                ),
+                  ExpansionTile(
+                    tilePadding: EdgeInsets.zero,
+                    title: Text('Sala persistente (avanzado)',
+                        style: TextStyle(
+                            color: context.textSecondary, fontSize: 12)),
+                    children: [
+                      TextField(
+                        controller: _fixedPinController,
+                        textCapitalization: TextCapitalization.characters,
+                        decoration: const InputDecoration(
+                            labelText: 'PIN fijo (reservado por el admin)'),
+                      ),
+                      TextField(
+                        controller: _roomPasswordController,
+                        obscureText: true,
+                        decoration: const InputDecoration(
+                            labelText: 'Contraseña de la sala (opcional)',
+                            helperText:
+                                'Solo para salas persistentes; el servidor guarda su hash.'),
+                      ),
+                      TextField(
+                        controller: _ownerTokenController,
+                        obscureText: true,
+                        decoration: const InputDecoration(
+                            labelText: 'Token de propietario'),
+                      ),
+                    ],
+                  ),
                 DropdownButtonFormField<int>(
                   initialValue: _maxParticipants,
                   dropdownColor: context.bgElevated,
@@ -491,6 +492,7 @@ mixin _JamDialogTabs on _JamDialogBase {
               ),
             ),
             IconButton(
+              tooltip: 'Actualizar',
               visualDensity: VisualDensity.compact,
               icon: jam.isScanningRadar
                   ? SizedBox(
@@ -580,8 +582,8 @@ mixin _JamDialogTabs on _JamDialogBase {
                                 password = await _askRoomPassword(context);
                                 if (password == null) return;
                               }
-                              final ok =
-                                  await jam.joinDiscovered(d, password: password);
+                              final ok = await jam.joinDiscovered(d,
+                                  password: password);
                               if (!ok && mounted) {
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   SnackBar(
@@ -641,6 +643,7 @@ mixin _JamDialogTabs on _JamDialogBase {
                   color: context.textPrimary, fontWeight: FontWeight.bold),
             ),
             IconButton(
+              tooltip: 'Cerrar',
               icon: Icon(Icons.close, color: context.textSecondary),
               onPressed: () {
                 _closeScanner();

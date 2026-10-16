@@ -305,6 +305,7 @@ class _MobileHomeScreenState extends _MobileHomeBase
                   ),
                   const Spacer(),
                   IconButton(
+                    tooltip: 'Cerrar',
                     icon: Icon(Icons.close, color: context.textMuted, size: 20),
                     onPressed: () => Navigator.of(ctx).pop(),
                   ),
@@ -412,10 +413,13 @@ class _MobileHomeScreenState extends _MobileHomeBase
             Expanded(
               child: IndexedStack(
                 index: _tabIndex,
+                // Las pestañas ocultas no deben animar: sin TickerMode seguían
+                // consumiendo fotogramas (p. ej. el pulso de la waveform).
                 children: [
-                  _buildHomeTab(),
-                  _buildSearchTab(),
-                  _buildLibraryTab(),
+                  TickerMode(enabled: _tabIndex == 0, child: _buildHomeTab()),
+                  TickerMode(enabled: _tabIndex == 1, child: _buildSearchTab()),
+                  TickerMode(
+                      enabled: _tabIndex == 2, child: _buildLibraryTab()),
                 ],
               ),
             ),

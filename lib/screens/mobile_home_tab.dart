@@ -457,6 +457,7 @@ mixin _MobileHomeTab on _MobileHomeBase {
                                   ? Image.network(
                                       album.coverArtUrl!,
                                       fit: BoxFit.cover,
+                                      cacheWidth: 400,
                                     )
                                   : Icon(Icons.album,
                                       color: context.textSecondary),
@@ -557,8 +558,10 @@ mixin _MobileHomeTab on _MobileHomeBase {
                                 ),
                                 image: artist.coverArtUrl != null
                                     ? DecorationImage(
-                                        image:
-                                            NetworkImage(artist.coverArtUrl!),
+                                        image: ResizeImage(
+                                          NetworkImage(artist.coverArtUrl!),
+                                          width: 400,
+                                        ),
                                         fit: BoxFit.cover,
                                       )
                                     : null,
@@ -652,6 +655,7 @@ mixin _MobileHomeTab on _MobileHomeBase {
                   ),
                 ),
                 IconButton(
+                  tooltip: 'Reproducir',
                   icon: Icon(Icons.play_circle_fill_rounded,
                       color: context.accent, size: 26),
                   onPressed: () {

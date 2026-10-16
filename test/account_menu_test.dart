@@ -224,7 +224,11 @@ void main() {
     final profiles = _Profiles([profile])..activeProfileId = 'foto';
     await _mount(tester, profiles, _Nav());
     final image = tester.widget<Image>(find.byType(Image));
-    final uri = Uri.parse((image.image as NetworkImage).url);
+    // La imagen se decodifica a su tamaño real (ResizeImage envuelve la red).
+    final provider = image.image is ResizeImage
+        ? (image.image as ResizeImage).imageProvider
+        : image.image;
+    final uri = Uri.parse((provider as NetworkImage).url);
     expect(uri.host, 'servidor.invalid');
     expect(uri.path, '/musica/rest/getAvatar.view');
     expect(uri.queryParameters['username'], 'Ana');

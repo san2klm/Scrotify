@@ -737,7 +737,10 @@ class _PlaylistTile extends StatelessWidget {
               borderRadius: BorderRadius.circular(4),
               image: playlist.coverArtUrl != null
                   ? DecorationImage(
-                      image: NetworkImage(playlist.coverArtUrl!),
+                      image: ResizeImage(
+                        NetworkImage(playlist.coverArtUrl!),
+                        width: 120,
+                      ),
                       fit: BoxFit.cover,
                     )
                   : null,

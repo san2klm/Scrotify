@@ -87,7 +87,8 @@ class _LikedSongsScreenState extends State<LikedSongsScreen> {
         children: [
           const GlobalTopBar(title: 'Liked Songs'),
           Expanded(
-            child: TvInitialFocus(child: FutureBuilder<List<Track>>(
+            child: TvInitialFocus(
+                child: FutureBuilder<List<Track>>(
               future: _future,
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
@@ -170,6 +171,7 @@ class _LikedSongsScreenState extends State<LikedSongsScreen> {
                               .playShuffledQueue(tracks),
                         ),
                         IconButton(
+                          tooltip: 'Reproducir',
                           icon: Icon(Icons.play_circle_filled,
                               color: context.accent, size: 48),
                           onPressed: () => context
@@ -256,6 +258,7 @@ class _LikedSongsScreenState extends State<LikedSongsScreen> {
                                     ),
                                     // Botón de me gusta
                                     IconButton(
+                                      tooltip: 'Me gusta',
                                       visualDensity: VisualDensity.compact,
                                       icon: Icon(
                                         starred

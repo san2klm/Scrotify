@@ -104,6 +104,7 @@ mixin _HomeMainContent on _HomeStateBase, _HomeLibraryPanel {
                 children: [
                   LocalDownloadButton(tracks: [track], compact: true),
                   IconButton(
+                    tooltip: 'Más opciones',
                     icon: Icon(Icons.more_horiz, color: context.textMuted),
                     onPressed: () => TrackContextMenu.show(context, track),
                   ),
@@ -810,6 +811,7 @@ mixin _HomeMainContent on _HomeStateBase, _HomeLibraryPanel {
                   ),
                 ),
                 IconButton(
+                  tooltip: 'Reproducir',
                   icon: Icon(Icons.play_circle_fill_rounded,
                       color: context.accent, size: 28),
                   onPressed: () {

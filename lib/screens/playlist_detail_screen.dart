@@ -204,7 +204,8 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
         children: [
           const GlobalTopBar(title: 'Playlist', showBackButton: true),
           Expanded(
-            child: TvInitialFocus(child: FutureBuilder<List<Track>>(
+            child: TvInitialFocus(
+                child: FutureBuilder<List<Track>>(
               future: _future,
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
@@ -301,6 +302,7 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
                             onPressed: () => _playShuffled(tracks),
                           ),
                           IconButton(
+                            tooltip: 'Reproducir',
                             icon: Icon(Icons.play_circle_filled,
                                 color: context.accent, size: 48),
                             onPressed: () =>
@@ -400,6 +402,7 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
                                     ),
                                     // Botón de me gusta
                                     IconButton(
+                                      tooltip: 'Me gusta',
                                       visualDensity: VisualDensity.compact,
                                       icon: Icon(
                                         nav.isStarred(track.id)
@@ -412,6 +415,7 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
                                       ),
                                       onPressed: () async {
                                         await nav.toggleStar(track);
+                                        if (!mounted) return;
                                         setState(() {});
                                       },
                                     ),

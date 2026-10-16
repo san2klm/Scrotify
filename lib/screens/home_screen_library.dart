@@ -48,9 +48,17 @@ mixin _HomeLibraryPanel on _HomeStateBase {
         return ListView(
           padding: const EdgeInsets.symmetric(vertical: 10),
           children: [
+            if (snapshot.hasError)
+              Tooltip(
+                message: 'No se pudieron cargar las playlists',
+                child: Icon(Icons.cloud_off_rounded, color: context.textMuted),
+              )
+            else if (snapshot.connectionState == ConnectionState.waiting)
+              const LinearProgressIndicator(minHeight: 2),
             Tooltip(
               message: 'Tus me gusta',
               child: IconButton(
+                tooltip: 'Me gusta',
                 icon: Icon(Icons.favorite_rounded, color: context.accent2),
                 onPressed: () => Navigator.push(
                   context,
@@ -218,6 +226,14 @@ mixin _HomeLibraryPanel on _HomeStateBase {
         return ListView(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
           children: [
+            if (snapshot.hasError)
+              Padding(
+                padding: const EdgeInsets.all(8),
+                child: Text('No se pudieron cargar tus playlists.',
+                    style: TextStyle(color: context.textMuted, fontSize: 12)),
+              )
+            else if (snapshot.connectionState == ConnectionState.waiting)
+              const LinearProgressIndicator(minHeight: 2),
             _libraryTile(
               icon: Icons.favorite_rounded,
               title: 'Tus me gusta',

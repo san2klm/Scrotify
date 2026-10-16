@@ -164,6 +164,7 @@ class JamQueuePanel extends StatelessWidget {
                       style: TextStyle(color: context.textMuted, fontSize: 12)),
                 ),
               IconButton(
+                tooltip: 'Cerrar',
                 icon: Icon(Icons.close_rounded,
                     color: context.textMuted, size: 20),
                 onPressed: () => Navigator.of(context).pop(),
@@ -477,6 +478,7 @@ class JamQueuePanel extends StatelessWidget {
                                         color: context.accent, size: 16),
                                   if (canRemove)
                                     IconButton(
+                                      tooltip: 'Cerrar',
                                       icon: Icon(Icons.close_rounded,
                                           color: context.textMuted, size: 18),
                                       onPressed: () => jam.removeTrackFromJam(
@@ -599,6 +601,7 @@ class JamQueuePanel extends StatelessWidget {
                                   ),
                                 ),
                                 IconButton(
+                                  tooltip: 'Cerrar',
                                   icon: Icon(Icons.close_rounded,
                                       color: context.textMuted, size: 18),
                                   onPressed: () {

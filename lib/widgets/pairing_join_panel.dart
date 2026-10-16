@@ -89,6 +89,7 @@ class _PairingJoinPanelState extends State<PairingJoinPanel> {
     if (code == null || code.isEmpty) {
       code = await _promptForCodeDialog(pc.deviceName);
       if (code == null || code.isEmpty) return;
+      if (!mounted) return;
     }
 
     setState(() {

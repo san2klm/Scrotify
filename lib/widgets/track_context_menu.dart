@@ -114,6 +114,7 @@ class TrackContextMenu extends StatelessWidget {
                     ),
                   ),
                   IconButton(
+                    tooltip: 'Me gusta',
                     icon: Icon(
                       isStarred ? Icons.favorite : Icons.favorite_border,
                       color: isStarred ? context.accent : context.textSecondary,

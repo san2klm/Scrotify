@@ -103,6 +103,7 @@ class _GlobalTopBarState extends State<GlobalTopBar> {
             ),
             const Spacer(),
             IconButton(
+              tooltip: 'Cerrar',
               icon: Icon(Icons.close, color: context.textMuted, size: 20),
               onPressed: () => Navigator.of(ctx).pop(),
             ),

@@ -108,6 +108,7 @@ class PersistentPlayerBar extends StatelessWidget {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       IconButton(
+                        tooltip: 'Aleatorio',
                         visualDensity: VisualDensity.compact,
                         icon: Icon(
                           Icons.shuffle,
@@ -121,6 +122,7 @@ class PersistentPlayerBar extends StatelessWidget {
                             : player.toggleShuffle,
                       ),
                       IconButton(
+                        tooltip: 'Anterior',
                         visualDensity: VisualDensity.compact,
                         icon: Icon(Icons.skip_previous,
                             color: context.textPrimary, size: 26),
@@ -129,6 +131,7 @@ class PersistentPlayerBar extends StatelessWidget {
                       ),
                       _playButton(context, player, jam, playing),
                       IconButton(
+                        tooltip: 'Siguiente',
                         visualDensity: VisualDensity.compact,
                         icon: Icon(Icons.skip_next,
                             color: context.textPrimary, size: 26),
@@ -136,6 +139,7 @@ class PersistentPlayerBar extends StatelessWidget {
                             _playbackHandler(context, jam, player, 'skip_next'),
                       ),
                       IconButton(
+                        tooltip: 'Repetir',
                         visualDensity: VisualDensity.compact,
                         icon: Icon(
                           player.repeatMode == LoopMode.one
@@ -387,6 +391,7 @@ class PersistentPlayerBar extends StatelessWidget {
   Widget _threeDotsMenu(BuildContext context, Track? track) {
     if (track == null) return const SizedBox.shrink();
     return IconButton(
+      tooltip: 'Más opciones',
       visualDensity: compact ? VisualDensity.compact : null,
       icon:
           Icon(Icons.more_vert_rounded, color: context.textSecondary, size: 20),
@@ -406,6 +411,7 @@ class PersistentPlayerBar extends StatelessWidget {
     final nav = context.watch<NavidromeService>();
     final starred = nav.isStarred(track.id);
     return IconButton(
+      tooltip: 'Me gusta',
       visualDensity: compact ? VisualDensity.compact : null,
       padding: compact ? EdgeInsets.zero : null,
       constraints:
@@ -423,6 +429,11 @@ class PersistentPlayerBar extends StatelessWidget {
       BuildContext context, IconData icon, VoidCallback? onPressed,
       {Color? color, double size = 24}) {
     return IconButton(
+      tooltip: icon == Icons.skip_previous
+          ? 'Anterior'
+          : icon == Icons.skip_next
+              ? 'Siguiente'
+              : null,
       visualDensity: VisualDensity.compact,
       padding: EdgeInsets.zero,
       constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
@@ -435,6 +446,7 @@ class PersistentPlayerBar extends StatelessWidget {
       JamController jam, bool playing,
       {bool compact = false}) {
     return IconButton(
+      tooltip: 'Pausar / Reproducir',
       visualDensity: VisualDensity.compact,
       padding: compact ? EdgeInsets.zero : const EdgeInsets.all(2),
       constraints:
