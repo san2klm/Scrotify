@@ -13,7 +13,7 @@ AppName={#AppName}
 AppVersion={#AppVersion}
 AppPublisher=Scrotify
 AppPublisherURL=https://github.com/PC123PC123/Scrotify
-SetupIconFile=..\windowsunneresourcespp_icon.ico
+SetupIconFile=..\windows\runner\resources\app_icon.ico
 DefaultDirName={autopf}\{#AppName}
 DefaultGroupName={#AppName}
 UninstallDisplayIcon={app}\{#AppExe}
