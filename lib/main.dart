@@ -50,6 +50,7 @@ import 'services/theme_controller.dart';
 import 'utils/app_data_dir.dart';
 import 'screens/login_screen.dart';
 import 'widgets/cover_accent_sync.dart';
+import 'widgets/discord_presence_sync.dart';
 import 'widgets/desktop_window_frame.dart';
 
 /// Lee el tema guardado ANTES de runApp (equiv. startupThemeAppearance de
@@ -431,9 +432,11 @@ class MyApp extends StatelessWidget {
             builder: (context, child) {
               final app = DesktopWindowFrame(
                 child: CoverAccentSync(
-                  child: JamDeepLinkListener(
-                    navigatorKey: rootNavigatorKey,
-                    child: child ?? const SizedBox.shrink(),
+                  child: DiscordPresenceSync(
+                    child: JamDeepLinkListener(
+                      navigatorKey: rootNavigatorKey,
+                      child: child ?? const SizedBox.shrink(),
+                    ),
                   ),
                 ),
               );

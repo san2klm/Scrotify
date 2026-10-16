@@ -69,6 +69,8 @@ class SettingsController extends ChangeNotifier {
   bool _silenceRemovalEnabled = false;
   bool _thirdPartyArtistImages = false;
   bool _syncQueueToServer = false;
+  bool _discordPresence = false;
+  String _discordClientId = '';
   bool _isSmartMixEnabled = true;
   ReplayGainMode _replayGainMode = ReplayGainMode.off;
   double _replayGainPreamp = 0.0;
@@ -130,6 +132,25 @@ class SettingsController extends ChangeNotifier {
   /// Guarda la cola en el servidor (`savePlayQueue`) para continuar en otro
   /// dispositivo. Desactivado por defecto: sobrescribe la cola guardada.
   bool get syncQueueToServer => _syncQueueToServer;
+
+  /// Discord Rich Presence (escritorio). Necesita el Application ID propio.
+  bool get discordPresence => _discordPresence;
+  String get discordClientId => _discordClientId;
+
+  void setDiscordPresence(bool enabled) {
+    if (_discordPresence == enabled) return;
+    _discordPresence = enabled;
+    _save();
+    notifyListeners();
+  }
+
+  void setDiscordClientId(String id) {
+    final clean = id.trim();
+    if (_discordClientId == clean) return;
+    _discordClientId = clean;
+    _save();
+    notifyListeners();
+  }
 
   void setSyncQueueToServer(bool enabled) {
     if (_syncQueueToServer == enabled) return;
@@ -386,6 +407,8 @@ class SettingsController extends ChangeNotifier {
       _silenceRemovalEnabled = data['silenceRemovalEnabled'] as bool? ?? false;
       _thirdPartyArtistImages = data['thirdPartyArtistImages'] as bool? ?? false;
       _syncQueueToServer = data['syncQueueToServer'] as bool? ?? false;
+      _discordPresence = data['discordPresence'] as bool? ?? false;
+      _discordClientId = data['discordClientId'] as String? ?? '';
       _isSmartMixEnabled = data['smartMixEnabled'] as bool? ?? true;
       _replayGainMode =
           ReplayGainMode.fromString(data['replayGainMode'] as String?);
@@ -430,6 +453,8 @@ class SettingsController extends ChangeNotifier {
         'silenceRemovalEnabled': _silenceRemovalEnabled,
         'thirdPartyArtistImages': _thirdPartyArtistImages,
         'syncQueueToServer': _syncQueueToServer,
+        'discordPresence': _discordPresence,
+        'discordClientId': _discordClientId,
         'smartMixEnabled': _isSmartMixEnabled,
         'replayGainMode': _replayGainMode.name,
         'replayGainPreamp': _replayGainPreamp,

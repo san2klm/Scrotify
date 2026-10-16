@@ -374,6 +374,27 @@ class _SettingsScreenState extends State<SettingsScreen> {
             value: settings.silenceRemovalEnabled,
             onChanged: settings.setSilenceRemovalEnabled,
           ),
+          if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) ...[
+            _switchTile(
+              title: 'Discord Rich Presence',
+              subtitle:
+                  'Muestra lo que escuchas en tu perfil de Discord (necesita el ID de tu aplicación)',
+              value: settings.discordPresence,
+              onChanged: settings.setDiscordPresence,
+            ),
+            if (settings.discordPresence)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                child: TextFormField(
+                  initialValue: settings.discordClientId,
+                  decoration: const InputDecoration(
+                    labelText: 'Application ID de Discord',
+                    helperText: 'portal de desarrolladores de Discord → tu aplicación',
+                  ),
+                  onFieldSubmitted: settings.setDiscordClientId,
+                ),
+              ),
+          ],
           _switchTile(
             title: 'Color según la carátula',
             subtitle:
