@@ -11,11 +11,13 @@ lib="$appdir/usr/lib"
 mkdir -p "$lib"
 
 skip='^(ld-linux.*|libc|libm|libdl|libpthread|librt|libutil|libresolv|libnsl|libanl|libthread_db'
-skip+='|libGL|libGLX|libGLdispatch|libEGL|libGLESv2|libOpenGL|libvulkan|libdrm.*|libgbm|libva.*|libvdpau'
-skip+='|libX.*|libxcb.*|libxkbcommon.*|libwayland.*|libdecor.*'
+skip+='|libGL|libGLX|libGLdispatch|libEGL|libGLESv2|libOpenGL|libdrm.*|libgbm'
+skip+='|libX.*|libxcb.*|libxkbcommon.*|libwayland.*'
 skip+='|libgtk-3|libgdk-3|libgdk_pixbuf-2.0|libpango.*|libcairo.*|libatk.*|libatspi|libglib-2.0|libgobject-2.0'
 skip+='|libgio-2.0|libgmodule-2.0|libepoxy|libcloudproviders|libdbus-1|libsystemd|libmount|libblkid|libselinux'
-skip+='|libpipewire-0.3|libspa.*|libpulse.*|libasound|libjack|libsndio|libjvm|libglycin.*|librsvg.*)\.so'
+skip+='|libpipewire-0.3|libspa.*|libpulse.*|libasound|libjvm|libglycin.*)\.so'
+# libmpv enlaza directo libjack, libsndio, librsvg, libvulkan, libva, libdecor…:
+# si faltan en la PC destino, libmpv no carga. Por eso viajan dentro.
 
 declare -A seen
 queue=()
