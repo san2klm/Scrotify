@@ -26,6 +26,7 @@ part 'navidrome_playlists.dart';
 part 'navidrome_favorites.dart';
 part 'navidrome_library.dart';
 part 'navidrome_extras.dart';
+part 'navidrome_discovery.dart';
 
 /// Estado de [NavidromeService]. Vive en una clase base para que las áreas de la API
 /// (en archivos aparte) puedan ser mixins sobre el mismo estado.
@@ -170,7 +171,8 @@ class NavidromeService extends _NavidromeBase
         _NavidromePlaylists,
         _NavidromeFavorites,
         _NavidromeLibrary,
-        _NavidromeExtras {
+        _NavidromeExtras,
+        _NavidromeDiscovery {
   NavidromeService(
       {SettingsController? settings,
       http.Client? httpClient,
