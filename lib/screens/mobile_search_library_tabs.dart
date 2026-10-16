@@ -100,15 +100,28 @@ mixin _MobileSearchLibraryTabs on _MobileHomeBase {
       );
     }
 
-    final songs = results.songs;
+    final nav = context.read<NavidromeService>();
+    final songs =
+        _trackFilter.apply(results.songs, isStarred: nav.isStarred);
     final albums = results.albums;
     final artists = results.artists;
 
     return ListView(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       children: [
-        if (songs.isNotEmpty) ...[
+        if (results.songs.isNotEmpty) ...[
           const _ResultHeader('Canciones'),
+          TrackFilterBar(
+            filter: _trackFilter,
+            tracks: results.songs,
+            onChanged: (f) => setState(() => _trackFilter = f),
+          ),
+          if (songs.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Text('Ninguna canción cumple los filtros.',
+                  style: TextStyle(color: context.textMuted, fontSize: 12.5)),
+            ),
           for (final track in songs)
             ListTile(
               dense: true,

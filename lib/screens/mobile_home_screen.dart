@@ -1,3 +1,5 @@
+import '../services/track_filters.dart';
+import '../widgets/track_filter_bar.dart';
 import '../utils/player_select.dart';
 import 'dart:async';
 
@@ -66,6 +68,9 @@ abstract class _MobileHomeBase extends State<MobileHomeScreen> {
   final TextEditingController _searchController = TextEditingController();
 
   SearchResults? _searchResults;
+
+  /// Orden y filtros locales de las canciones encontradas.
+  TrackFilter _trackFilter = const TrackFilter();
 
   bool _searching = false;
 
