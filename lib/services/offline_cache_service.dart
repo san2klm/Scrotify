@@ -204,12 +204,12 @@ class SqfliteOfflineCacheMetadataStore implements OfflineCacheMetadataStore {
         _customDbPath = customDbPath;
 
   Future<Database> _getDatabase() async {
-    if (_injectedDb != null) return _injectedDb!;
+    if (_injectedDb != null) return _injectedDb;
     if (_db != null && _db!.isOpen) return _db!;
 
     String path;
     if (_customDbPath != null) {
-      path = _customDbPath!;
+      path = _customDbPath;
     } else {
       final docDir = await getAppDataDirectory();
       path = p.join(docDir.path, dbName);
@@ -489,7 +489,7 @@ class OfflineCacheService {
   Future<Directory> getCacheRootDir() async {
     if (_resolvedRootDir != null) return _resolvedRootDir!;
     if (_cacheRootDir != null) {
-      _resolvedRootDir = _cacheRootDir!;
+      _resolvedRootDir = _cacheRootDir;
     } else {
       final base = await getApplicationSupportDirectory();
       _resolvedRootDir = Directory(p.join(base.path, 'offline_cache'));

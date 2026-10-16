@@ -34,6 +34,13 @@ commit=$(git rev-parse --short HEAD)
 # Por arquitectura Flutter le suma 1000 (armv7) o 2000 (arm64).
 build_number=$((10000 + $(git rev-list --count HEAD)))
 
+# Sin android/key.properties Gradle rechaza el release; aquí es una instalación
+# local por adb, así que se permite la clave debug de forma explícita.
+if [[ ! -f android/key.properties ]]; then
+  echo "AVISO: sin android/key.properties; el APK se firma con la clave debug (solo para adb)." >&2
+  export ORG_GRADLE_PROJECT_allowDebugSigning=true
+fi
+
 build() { # sabor  plataformas  [defines extra...]
   local flavor=$1 platforms=$2
   shift 2

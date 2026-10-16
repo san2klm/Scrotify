@@ -512,7 +512,7 @@ class OfflineDownloadManager extends ChangeNotifier {
 
     final effectiveScope = serverScope ??
         (_transport is NavidromeDownloadTransport
-            ? (_transport as NavidromeDownloadTransport).serverScope
+            ? _transport.serverScope
             : null);
 
     if (effectiveScope == null || effectiveScope.trim().isEmpty) {
@@ -987,9 +987,9 @@ class OfflineDownloadManager extends ChangeNotifier {
   int _attemptSeq = 0;
 
   Future<File> _getPersistenceFile() async {
-    if (_persistenceFile != null) return _persistenceFile!;
+    if (_persistenceFile != null) return _persistenceFile;
     if (_persistenceDir != null) {
-      return File(p.join(_persistenceDir!.path, 'download_tasks.json'));
+      return File(p.join(_persistenceDir.path, 'download_tasks.json'));
     }
     final root = await _cacheService.getCacheRootDir();
     return File(p.join(root.path, 'downloads', 'tasks.json'));

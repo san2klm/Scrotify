@@ -12,6 +12,26 @@ val keystoreProps = Properties().apply {
     val f = rootProject.file("key.properties")
     if (f.exists()) f.inputStream().use { load(it) }
 }
+// Un release sin clave propia solo se permite si se pide explícitamente
+// (`ORG_GRADLE_PROJECT_allowDebugSigning=true` o `-PallowDebugSigning`); así
+// nadie distribuye por error un APK firmado con la clave debug.
+gradle.taskGraph.whenReady {
+    val releaseRequested = allTasks.any {
+        it.project == project &&
+            it.name.contains("Release") &&
+            (it.name.startsWith("assemble") || it.name.startsWith("bundle") ||
+                it.name.startsWith("package"))
+    }
+    if (releaseRequested && !keystoreProps.containsKey("storeFile") &&
+        !project.hasProperty("allowDebugSigning")
+    ) {
+        throw GradleException(
+            "Falta android/key.properties: un release no se firma con la clave debug " +
+                "por defecto. Crea key.properties o define " +
+                "ORG_GRADLE_PROJECT_allowDebugSigning=true para una instalación local."
+        )
+    }
+}
 if (!keystoreProps.containsKey("storeFile")) {
     logger.warn(
         "AVISO Scrotify: no hay android/key.properties; los builds release se firman " +

@@ -16,8 +16,6 @@ analyzer:
     - web/**
     - windows/**
     - macos/**
-    # Paquete de entrega original del ecualizador (ya integrado en lib/).
-    - Eculiza/**
 include: package:flutter_lints/flutter.yaml
 
 linter:
