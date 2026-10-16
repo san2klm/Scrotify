@@ -1,6 +1,6 @@
 # Scrotify
 
-Cliente Flutter para Navidrome/Subsonic con Jam (escucha en grupo) para Linux, Android, Windows e iOS.
+Cliente Flutter para Navidrome/Subsonic con Jam (escucha en grupo) para Linux, Android y Windows.
 
 ## Documentación
 
@@ -21,4 +21,40 @@ flutter test
 flutter run -d linux
 ```
 
-En escritorio los datos de la app se guardan en `Documentos/Scrotify/`.
+En escritorio los datos de la app se guardan en la carpeta de soporte de la
+aplicación (`%APPDATA%` en Windows, `~/.local/share` en Linux).
+
+## Compilar
+
+El repositorio incluye `android/`, `linux/` y `windows/`: basta con
+`flutter pub get`.
+
+### Android
+
+Hay dos sabores: `phone` y `tv`.
+
+```
+flutter build apk --flavor phone --debug      # desarrollo
+scripts/build_apks.sh [phone|tv] [--universal] # releases por arquitectura
+```
+
+Un release exige `android/key.properties` (`storeFile`, `storePassword`,
+`keyAlias`, `keyPassword`). Sin él, Gradle se niega a firmar con la clave debug
+salvo que se defina `ORG_GRADLE_PROJECT_allowDebugSigning=true`
+(`scripts/build_apks.sh` lo hace solo para instalaciones locales por adb).
+
+### Windows
+
+```
+flutter build windows --release
+scripts/build_windows_installer.sh   # necesita Inno Setup 6
+```
+
+### Linux
+
+```
+flutter build linux --release
+scripts/build_appimage.sh            # necesita appimagetool
+```
+
+iOS no está soportado todavía (no hay carpeta `ios/`).

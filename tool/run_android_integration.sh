@@ -8,7 +8,19 @@
 # y no deben ejecutarse por error en un teléfono con tu música real.
 set -euo pipefail
 
-ADB=${ADB:-/opt/android-sdk/platform-tools/adb}
+# SDK de Android: ADB explícito, ANDROID_SDK_ROOT/ANDROID_HOME o el valor típico
+# de cada sistema.
+if [[ -z "${ADB:-}" ]]; then
+  sdk=${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}
+  if [[ -z "$sdk" ]]; then
+    case "$(uname -s)" in
+      Darwin) sdk="$HOME/Library/Android/sdk" ;;
+      MINGW*|MSYS*|CYGWIN*) sdk="${LOCALAPPDATA:-$HOME/AppData/Local}/Android/Sdk" ;;
+      *) sdk=/opt/android-sdk ;;
+    esac
+  fi
+  ADB="$sdk/platform-tools/adb"
+fi
 PACKAGE=com.example.navidrome_client
 DEVICE=${1:-}
 

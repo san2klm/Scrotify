@@ -1,6 +1,8 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+
+import 'support/wait_for.dart';
 import 'package:navidrome_client/models/eq_models.dart';
 import 'package:navidrome_client/services/eq/eq_backends.dart';
 import 'package:navidrome_client/services/eq/eq_math.dart';
@@ -117,10 +119,11 @@ void main() {
     await eq
         .selectProfile(EqPresets.graphic.firstWhere((p) => p.name == 'Vocal'));
     await eq.saveCurrentAs('Mi vocal');
-    // La escritura tiene un debounce de 600 ms.
-    await Future<void>.delayed(const Duration(milliseconds: 800));
-
+    // La escritura tiene un debounce de 600 ms: esperar a que aparezca.
     final file = File('${dir.path}/equalizer_v2.json');
+    await waitFor(
+        () => file.existsSync() && !File('${file.path}.tmp').existsSync(),
+        reason: 'el ecualizador no persistió a tiempo');
     expect(file.existsSync(), isTrue);
     expect(File('${file.path}.tmp').existsSync(), isFalse);
 

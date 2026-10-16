@@ -603,7 +603,7 @@ El test va en el archivo de pruebas del servicio, si ya existe.
   - Revisar si sobra `libayatana-appindicator3-dev`.
 - **Pendiente:** confirmar el resultado real del job `linux-smoke`.
 
-### [!] 46. Firma y `applicationId` (sigue de la tanda 3, ítems 7 y 8)
+### [~] 46. Firma y `applicationId` (sigue de la tanda 3, ítems 7 y 8)
 - **Firma:** `android/app/build.gradle.kts:74-76` firma el release con la clave
   debug y solo avisa. Que `assembleRelease` falle si falta `key.properties`,
   salvo con `-PallowDebugSigning`.
@@ -613,13 +613,13 @@ El test va en el archivo de pruebas del servicio, si ya existe.
 - **Release:** `isMinifyEnabled` + `isShrinkResources`, con reglas ProGuard
   para media_kit y audio_service. Probar en un dispositivo.
 
-### [!] 47. Permisos de Android
+### [~] 47. Permisos de Android
 - `MANAGE_EXTERNAL_STORAGE` (Manifest l.16): Play lo restringe. Decidir si se
   publica en Play.
 - `requestLegacyExternalStorage` (l.26): no hace nada con targetSdk ≥ 30.
   Quitarlo.
 
-### [ ] 48. Dependencias
+### [~] 48. Dependencias
 - Pendientes de la tanda 3 (necesitan dispositivo):
   - `just_audio` 0.9.46 → 0.10.6 + `audio_session` 0.2 (reaplicar
     `third_party/just_audio_media_kit/SCROTIFY_PATCH.md`).
@@ -637,7 +637,7 @@ El test va en el archivo de pruebas del servicio, si ya existe.
   - **Decidir.**
 - Quitar del `analysis_options.yaml` la exclusión `Eculiza/**` si ya no existe.
 
-### [ ] 49. Tests frágiles y cobertura
+### [~] 49. Tests frágiles y cobertura
 - 52 `Future.delayed` en `test/`: pasarlos a `fake_async` o
   `tester.pump(d)`, o esperar la condición concreta. Prioridad:
   - `diagnostics_panel_test.dart:64`
@@ -648,7 +648,7 @@ El test va en el archivo de pruebas del servicio, si ya existe.
 - Que el CI no esconda los fallos: `set -o pipefail` en cualquier paso con
   pipes.
 
-### [ ] 50. Empaquetado de Windows y documentación
+### [x] 50. Empaquetado de Windows y documentación
 - `installer/scrotify.iss`:
   - Versión leída de `pubspec.yaml` (`/DAppVersion=` desde un script).
   - `SetupIconFile`.
@@ -758,3 +758,10 @@ robustez y las funciones nuevas.
   - 42: `ArtistImageService` (caché + dedupe); primero `getArtistInfo2`; TheAudioDB/Deezer solo con el ajuste «Fotos de artista de internet» (desactivado). 3 tests.
   - 43: **no hecho** (`HomeDataController` toca las dos pantallas de inicio enteras; conviene hacerlo con sus propias pruebas de pantalla).
   - 44 (parcial): los 54 `IconButton` sin `tooltip` ya lo tienen; una prueba de código impide nuevos. **Falta** áreas de toque ≥ 48 dp y `Semantics` en el reproductor, con `meetsGuideline` en tests de widget.
+
+- 2026-10-15 (6) — Fase 6 (build, CI y dependencias).
+  - 46 (parcial): un release sin `key.properties` falla salvo `-PallowDebugSigning`/`ORG_GRADLE_PROJECT_allowDebugSigning=true` (`build_apks.sh` lo activa solo para instalar por adb). **Pendiente de decisión del usuario:** cambiar `applicationId` (`com.example.navidrome_client`, también en `linux/CMakeLists.txt` y `tool/run_android_integration.sh`) y activar `isMinifyEnabled`/ProGuard (necesita probar en un dispositivo).
+  - 47 (parcial): quitado `requestLegacyExternalStorage`. **Decisión:** `MANAGE_EXTERNAL_STORAGE` solo es un problema si se publica en Play.
+  - 48 (parcial): SDK `>=3.5.0` (arregló 6 avisos de `!`/cast), exclusión `Eculiza/**` fuera. **Pendiente:** `just_audio` 0.10 + `audio_session` y `mobile_scanner` 7 (necesitan dispositivo); `flutter_lints` 6 y lints nuevos; `cupertino_icons` 2; **decidir** qué hacer con `json_annotation`/`build_runner`/`json_serializable` (sin uso; quitar y corregir AGENTS.md, o usarlos en los modelos de Jam).
+  - 49 (parcial): `test/support/wait_for.dart`; el ecualizador y la cola ya no duermen un tiempo fijo; tests nuevos de `CoverFallbackService`. Siguen 40 `Future.delayed` (muchos son esperas de «no ocurre nada», legítimas) y falta `mini_player_controller`.
+  - 50: `scripts/build_windows_installer.sh`; `.iss` con `/DAppVersion`, icono y URL; `ANDROID_SDK_ROOT` por sistema; README con Android (sabores y firma), Windows y Linux, sin iOS. `.gitattributes` ya estaba.

@@ -1,6 +1,10 @@
 ; Instalador de Scrotify (Inno Setup 6)
 #define AppName "Scrotify"
-#define AppVersion "1.0.0"
+; La versión la pasa scripts/build_windows_installer.sh (/DAppVersion=...);
+; este valor solo se usa al compilar el .iss a mano.
+#ifndef AppVersion
+  #define AppVersion "1.0.0"
+#endif
 #define AppExe "navidrome_client.exe"
 
 [Setup]
@@ -8,6 +12,8 @@ AppId={{B7E1C5A2-4D3F-4F6A-9C1E-5C0A7F2D9E11}
 AppName={#AppName}
 AppVersion={#AppVersion}
 AppPublisher=Scrotify
+AppPublisherURL=https://github.com/PC123PC123/Scrotify
+SetupIconFile=..\windowsunneresourcespp_icon.ico
 DefaultDirName={autopf}\{#AppName}
 DefaultGroupName={#AppName}
 UninstallDisplayIcon={app}\{#AppExe}

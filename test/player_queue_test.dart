@@ -5,6 +5,7 @@ import 'package:navidrome_client/services/settings_controller.dart';
 
 import 'support/app_fakes.dart';
 import 'support/fake_audio_player.dart';
+import 'support/wait_for.dart';
 
 Track t(String id) => Track(
     id: id,
@@ -94,11 +95,12 @@ void main() {
   test('insertar «a continuación» tras precargar suena la pista insertada',
       () async {
     await player.playQueue([t('1'), t('2'), t('3')]);
-    await Future<void>.delayed(const Duration(milliseconds: 20));
+    // Esperar a que la siguiente esté precargada en el otro reproductor.
+    await waitFor(() => a.loaded.isNotEmpty && b.loaded.isNotEmpty,
+        reason: 'no se precargó la siguiente');
     await player.addNextInQueue(t('x'));
-    await Future<void>.delayed(const Duration(milliseconds: 20));
     await player.skipNext();
-    await Future<void>.delayed(const Duration(milliseconds: 20));
+    await waitFor(() => player.currentTrack?.id == 'x');
     expect(player.currentTrack?.id, 'x');
     final loaded = [...a.loaded, ...b.loaded];
     expect(loaded.last, endsWith('/x'));
