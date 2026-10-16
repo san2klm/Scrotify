@@ -41,6 +41,9 @@ class _ArtistScreenState extends State<ArtistScreen> {
 
   String? _bannerImageUrl;
 
+  late final Future<ArtistBio?> _futureBio;
+  bool _bioExpanded = false;
+
   @override
   void initState() {
     // Iniciar con la portada de Navidrome para que no haya pantalla negra mientas busca
@@ -50,6 +53,7 @@ class _ArtistScreenState extends State<ArtistScreen> {
     nav.cacheArtist(widget.artist);
     _futureTopTracks = nav.getArtistTracks(widget.artist.id);
     _futureAlbums = nav.getArtistAlbums(widget.artist.id);
+    _futureBio = nav.getArtistBio(widget.artist.id);
 
     _fetchBetterArtistImage();
   }
@@ -395,6 +399,68 @@ class _ArtistScreenState extends State<ArtistScreen> {
     }
   }
 
+  /// Biografía y artistas similares (`getArtistInfo2`); no muestra nada si el
+  /// servidor no tiene datos.
+  Widget _buildBioSection() {
+    return FutureBuilder<ArtistBio?>(
+      future: _futureBio,
+      builder: (context, snapshot) {
+        final bio = snapshot.data;
+        if (bio == null || bio.isEmpty) return const SizedBox.shrink();
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (bio.biography.isNotEmpty) ...[
+                Text('Acerca de',
+                    style: TextStyle(
+                        color: context.textPrimary,
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold)),
+                const SizedBox(height: 6),
+                Text(
+                  bio.biography,
+                  maxLines: _bioExpanded ? null : 4,
+                  overflow: _bioExpanded ? null : TextOverflow.ellipsis,
+                  style: TextStyle(color: context.textSecondary, height: 1.4),
+                ),
+                TextButton(
+                  onPressed: () => setState(() => _bioExpanded = !_bioExpanded),
+                  child: Text(_bioExpanded ? 'Mostrar menos' : 'Mostrar más'),
+                ),
+              ],
+              if (bio.similarArtists.isNotEmpty) ...[
+                const SizedBox(height: 4),
+                Text('Artistas similares',
+                    style: TextStyle(
+                        color: context.textPrimary,
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold)),
+                const SizedBox(height: 6),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 4,
+                  children: [
+                    for (final a in bio.similarArtists)
+                      ActionChip(
+                        label: Text(a.name),
+                        onPressed: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                              builder: (_) => ArtistScreen(artist: a)),
+                        ),
+                      ),
+                  ],
+                ),
+              ],
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   Widget _buildContent() {
     return FutureBuilder<List<Track>>(
       future: _futureTopTracks,
@@ -412,6 +478,7 @@ class _ArtistScreenState extends State<ArtistScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  _buildBioSection(),
                   // ── Canciones populares ──────────────────────────────
                   _sectionHeader('Canciones populares', tracks.isNotEmpty),
                   const SizedBox(height: 8),
