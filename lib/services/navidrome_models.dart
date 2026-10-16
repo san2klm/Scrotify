@@ -27,6 +27,9 @@ class Track {
   final int? samplingRate;
   final int? bitDepth;
 
+  /// Año de la pista según el servidor (`year`), si lo informa.
+  final int? year;
+
   int get rating => userRating;
 
   Track({
@@ -49,6 +52,7 @@ class Track {
     this.trackNumber,
     this.samplingRate,
     this.bitDepth,
+    this.year,
   });
 
   Track copyWith({
@@ -71,6 +75,7 @@ class Track {
     int? trackNumber,
     int? samplingRate,
     int? bitDepth,
+    int? year,
   }) {
     return Track(
       id: id ?? this.id,
@@ -92,6 +97,7 @@ class Track {
       trackNumber: trackNumber ?? this.trackNumber,
       samplingRate: samplingRate ?? this.samplingRate,
       bitDepth: bitDepth ?? this.bitDepth,
+      year: year ?? this.year,
     );
   }
 
@@ -154,6 +160,7 @@ class Track {
           : null,
       samplingRate: (json['samplingRate'] as num?)?.toInt(),
       bitDepth: (json['bitDepth'] as num?)?.toInt(),
+      year: (json['year'] as num?)?.toInt(),
     );
   }
 

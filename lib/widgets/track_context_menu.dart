@@ -274,6 +274,45 @@ class TrackContextMenu extends StatelessWidget {
                   },
                 ),
                 ListTile(
+                  leading: Icon(Icons.radio, color: context.textSecondary),
+                  title: Text(
+                    'Iniciar radio de esta canción',
+                    style: TextStyle(color: context.textPrimary, fontSize: 14),
+                  ),
+                  onTap: () async {
+                    final messenger = ScaffoldMessenger.of(context);
+                    Navigator.of(context).pop();
+                    final similar = await nav.getSimilarSongs(track.id);
+                    if (similar.isEmpty) {
+                      messenger.showSnackBar(const SnackBar(
+                          content: Text(
+                              'El servidor no encontró canciones parecidas.')));
+                      return;
+                    }
+                    unawaited(player.playQueue([track, ...similar]));
+                  },
+                ),
+                if (player.currentTrack?.id == track.id)
+                  ListTile(
+                    leading: Icon(Icons.bookmark_add_outlined,
+                        color: context.textSecondary),
+                    title: Text(
+                      'Guardar marcador aquí',
+                      style:
+                          TextStyle(color: context.textPrimary, fontSize: 14),
+                    ),
+                    onTap: () async {
+                      final messenger = ScaffoldMessenger.of(context);
+                      final position = player.position.inMilliseconds;
+                      Navigator.of(context).pop();
+                      final ok = await nav.createBookmark(track.id, position);
+                      messenger.showSnackBar(SnackBar(
+                          content: Text(ok
+                              ? 'Marcador guardado.'
+                              : 'No se pudo guardar el marcador.')));
+                    },
+                  ),
+                ListTile(
                   leading: Icon(Icons.queue_music_rounded,
                       color: context.textSecondary),
                   title: Text(
