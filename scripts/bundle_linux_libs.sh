@@ -6,6 +6,7 @@
 # X11/Wayland, pila GTK/GLib, audio del sistema): toda PC de escritorio las trae.
 set -euo pipefail
 appdir=${1:?uso: $0 <appdir>}
+export PATH="$PATH:/sbin:/usr/sbin"   # ldconfig no siempre está en el PATH
 lib="$appdir/usr/lib"
 mkdir -p "$lib"
 
