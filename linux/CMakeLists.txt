@@ -74,6 +74,13 @@ set_target_properties(${BINARY_NAME}
 # them to the application.
 include(flutter/generated_plugins.cmake)
 
+# hotkey_manager_linux (de terceros) deja variables sin inicializar y clang, con
+# el -Werror que aplica el plugin, aborta la compilación. Se degrada solo ese aviso.
+if(TARGET hotkey_manager_linux_plugin)
+  target_compile_options(hotkey_manager_linux_plugin PRIVATE
+    -Wno-error=sometimes-uninitialized)
+endif()
+
 
 # === Installation ===
 # By default, "installing" just makes a relocatable bundle in the build
