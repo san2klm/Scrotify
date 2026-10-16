@@ -40,6 +40,8 @@ class _DesktopWindowFrameState extends State<DesktopWindowFrame>
 
   bool _maximized = false;
   bool _fullScreen = false;
+  PlayerController? _playerSub;
+  SettingsController? _settingsSub;
 
   @override
   void initState() {
@@ -50,12 +52,22 @@ class _DesktopWindowFrameState extends State<DesktopWindowFrame>
       if (Platform.isWindows) {
         _mouseChannel.setMethodCallHandler((call) async {
           if (!mounted) return;
-          if (call.method == 'togglePlayPause') {
-            _togglePlayPause(context);
-          } else if (call.method == 'skipNext') {
-            _skipNext(context);
-          } else if (call.method == 'skipPrevious') {
-            _skipPrevious(context);
+          switch (call.method) {
+            case 'togglePlayPause':
+              _togglePlayPause(context);
+              break;
+            case 'skipNext':
+              _skipNext(context);
+              break;
+            case 'skipPrevious':
+              _skipPrevious(context);
+              break;
+            case 'volumeUp':
+              _changeVolume(context, 0.04);
+              break;
+            case 'volumeDown':
+              _changeVolume(context, -0.04);
+              break;
           }
         });
       }
@@ -63,7 +75,47 @@ class _DesktopWindowFrameState extends State<DesktopWindowFrame>
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (WindowControls.isDesktop && Platform.isWindows) {
+      final player = context.read<PlayerController>();
+      if (_playerSub != player) {
+        _playerSub?.removeListener(_syncNativePlaybackState);
+        _playerSub = player;
+        _playerSub?.addListener(_syncNativePlaybackState);
+        _syncNativePlaybackState();
+      }
+      final settings = context.read<SettingsController>();
+      if (_settingsSub != settings) {
+        _settingsSub?.removeListener(_syncNativeMouseSettings);
+        _settingsSub = settings;
+        _settingsSub?.addListener(_syncNativeMouseSettings);
+        _syncNativeMouseSettings();
+      }
+    }
+  }
+
+  void _syncNativePlaybackState() {
+    final p = _playerSub;
+    if (p == null || !Platform.isWindows) return;
+    _mouseChannel.invokeMethod('setPlaying', p.playing).catchError((_) {});
+  }
+
+  void _syncNativeMouseSettings() {
+    final s = _settingsSub;
+    if (s == null || !Platform.isWindows) return;
+    _mouseChannel.invokeMethod('setMouseConfig', {
+      'enabled': s.mouseControlsEnabled,
+      'global': s.mouseGlobalEnabled,
+      'middleClick': s.mouseMiddleClickEnabled,
+      'closeToTray': s.closeToTray,
+    }).catchError((_) {});
+  }
+
+  @override
   void dispose() {
+    _playerSub?.removeListener(_syncNativePlaybackState);
+    _settingsSub?.removeListener(_syncNativeMouseSettings);
     if (WindowControls.isDesktop) {
       windowManager.removeListener(this);
       _mouseChannel.setMethodCallHandler(null);
@@ -99,18 +151,7 @@ class _DesktopWindowFrameState extends State<DesktopWindowFrame>
     if (!WindowControls.isDesktop) return widget.child;
     final colors = Theme.of(context).colorScheme;
     final mini = context.watch<MiniPlayerController>();
-    final player = context.watch<PlayerController>();
     final settings = context.watch<SettingsController>();
-    if (Platform.isWindows) {
-      _mouseChannel
-          .invokeMethod('setPlaying', player.playing)
-          .catchError((_) {});
-      _mouseChannel.invokeMethod('setMouseConfig', {
-        'enabled': settings.mouseControlsEnabled,
-        'global': settings.mouseGlobalEnabled,
-        'middleClick': settings.mouseMiddleClickEnabled,
-      }).catchError((_) {});
-    }
 
     final content = Column(
       children: [
@@ -175,10 +216,20 @@ class _DesktopWindowFrameState extends State<DesktopWindowFrame>
                       ),
                     ],
                     _WindowButton(
-                      tooltip: 'Cerrar',
+                      tooltip: settings.closeToTray
+                          ? 'Minimizar a segundo plano (Bandeja)'
+                          : 'Cerrar',
                       icon: Icons.close_rounded,
                       danger: true,
-                      onPressed: windowManager.close,
+                      onPressed: () async {
+                        if (Platform.isWindows && settings.closeToTray) {
+                          try {
+                            await _mouseChannel.invokeMethod('hideToTray');
+                            return;
+                          } catch (_) {}
+                        }
+                        await windowManager.close();
+                      },
                     ),
                   ],
                 ),

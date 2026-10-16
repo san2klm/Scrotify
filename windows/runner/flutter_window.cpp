@@ -4,85 +4,219 @@
 #include <string>
 
 #include "flutter/generated_plugin_registrant.h"
+#include "resource.h"
 
-static HHOOK g_mouse_hook = nullptr;
-static FlutterWindow* g_current_window = nullptr;
+namespace {
 
-static bool g_mouse_enabled = true;
-static bool g_mouse_global = true;
-static bool g_mouse_middle_enabled = true;
+constexpr UINT kWmScrotifyHotkey = WM_USER + 200;
+constexpr UINT kWmTrayIcon = WM_USER + 201;
+constexpr UINT kWmRestoreFromTray = WM_USER + 202;
 
-static ULONGLONG g_last_xbutton1_time = 0;
-static ULONGLONG g_last_xbutton2_time = 0;
-static ULONGLONG g_last_mbutton_time = 0;
+enum HotkeyAction : WPARAM {
+  kActionTogglePlayPause = 1,
+  kActionSkipNext = 2,
+  kActionSkipPrevious = 3,
+  kActionVolumeUp = 4,
+  kActionVolumeDown = 5,
+};
 
-static LRESULT CALLBACK LowLevelMouseProc(int nCode, WPARAM wParam, LPARAM lParam) {
-  if (nCode >= 0 && g_current_window != nullptr && g_mouse_enabled) {
-    MSLLHOOKSTRUCT* pMouse = reinterpret_cast<MSLLHOOKSTRUCT*>(lParam);
-    if (pMouse != nullptr) {
-      HWND hwnd = g_current_window->GetHandle();
-      HWND target = WindowFromPoint(pMouse->pt);
-      bool is_over_scrotify = (target != nullptr) && (target == hwnd || IsChild(hwnd, target));
-
-      // Si no están habilitados los atajos globales y el puntero no está sobre la ventana de Scrotify,
-      // dejamos que el sistema procese el evento normalmente.
-      if (!g_mouse_global && !is_over_scrotify) {
-        return CallNextHookEx(g_mouse_hook, nCode, wParam, lParam);
-      }
-
-      WORD xbutton = HIWORD(pMouse->mouseData);
-      ULONGLONG now = GetTickCount64();
-
-      if (wParam == WM_XBUTTONDOWN || wParam == WM_NCXBUTTONDOWN) {
-        if (xbutton == XBUTTON1) {
-          // Botón lateral Atrás:
-          // Un clic: alternar Play / Pausa
-          // Doble clic rápido (< 380ms): Canción anterior
-          if (now - g_last_xbutton1_time < 380) {
-            g_last_xbutton1_time = 0;
-            g_current_window->SendMouseHotkey("skipPrevious");
-          } else {
-            g_last_xbutton1_time = now;
-            g_current_window->SendMouseHotkey("togglePlayPause");
-          }
-          return 1;
-        } else if (xbutton == XBUTTON2) {
-          // Botón lateral Adelante: Siguiente canción (debounce de 250ms)
-          if (now - g_last_xbutton2_time >= 250) {
-            g_last_xbutton2_time = now;
-            g_current_window->SendMouseHotkey("skipNext");
-          }
-          return 1;
-        }
-      } else if (wParam == WM_XBUTTONUP || wParam == WM_NCXBUTTONUP) {
-        if (xbutton == XBUTTON1 || xbutton == XBUTTON2) {
-          return 1;
-        }
-      } else if (wParam == WM_MBUTTONDOWN) {
-        // Clic de rueda: Play / Pausa SOLO cuando el puntero está sobre la ventana de Scrotify
-        // para no romper pestañas de navegadores web u otros programas.
-        if (g_mouse_middle_enabled && is_over_scrotify) {
-          if (now - g_last_mbutton_time >= 250) {
-            g_last_mbutton_time = now;
-            g_current_window->SendMouseHotkey("togglePlayPause");
-          }
-          return 1;
-        }
-      } else if (wParam == WM_MBUTTONUP) {
-        if (g_mouse_middle_enabled && is_over_scrotify) {
-          return 1;
-        }
-      }
-    }
-  }
-  return CallNextHookEx(g_mouse_hook, nCode, wParam, lParam);
-}
+enum TrayMenuId : UINT {
+  kTrayOpen = 2001,
+  kTrayPlayPause = 2002,
+  kTrayNext = 2003,
+  kTrayPrev = 2004,
+  kTrayQuit = 2005,
+};
 
 enum TaskbarButtonId {
   kThbPrev = 1001,
   kThbPlayPause = 1002,
   kThbNext = 1003,
 };
+
+static HHOOK g_mouse_hook = nullptr;
+static HHOOK g_keyboard_hook = nullptr;
+static HWND g_main_hwnd = nullptr;
+
+static std::atomic<bool> g_mouse_enabled{true};
+static std::atomic<bool> g_mouse_global{true};
+static std::atomic<bool> g_mouse_middle_enabled{true};
+static std::atomic<bool> g_close_to_tray{true};
+
+static std::atomic<ULONGLONG> g_last_xbutton1_time{0};
+static std::atomic<ULONGLONG> g_last_xbutton2_time{0};
+static std::atomic<ULONGLONG> g_last_mbutton_time{0};
+static std::atomic<ULONGLONG> g_last_hook_event_time{0};
+
+// Verifica si el punto está sobre la ventana de Scrotify.
+// NOTA: Sólo se llama al hacer CLIC (nunca en WM_MOUSEMOVE).
+static bool IsPointOverScrotify(POINT pt) {
+  HWND hwnd = g_main_hwnd;
+  if (!hwnd || !IsWindowVisible(hwnd) || IsIconic(hwnd)) {
+    return false;
+  }
+  HWND target = WindowFromPoint(pt);
+  if (!target) return false;
+  HWND root = GetAncestor(target, GA_ROOT);
+  return (target == hwnd || root == hwnd || IsChild(hwnd, target));
+}
+
+// Detecta si la ventana bajo el cursor es un navegador web (Chrome, Edge, Brave, Firefox)
+// donde un clic simple con la rueda se usa para cerrar o abrir pestañas.
+static bool IsPointOverWebBrowser(POINT pt) {
+  HWND target = WindowFromPoint(pt);
+  if (!target) return false;
+  HWND root = GetAncestor(target, GA_ROOT);
+  if (!root) root = target;
+  wchar_t class_name[128] = {};
+  if (GetClassNameW(root, class_name, 127) > 0) {
+    if (wcscmp(class_name, L"Chrome_WidgetWin_1") == 0 ||
+        wcscmp(class_name, L"MozillaWindowClass") == 0) {
+      // Verificar que no sea nuestra propia ventana
+      if (root != g_main_hwnd) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+static void DispatchHotkeyToMain(HotkeyAction action) {
+  HWND hwnd = g_main_hwnd;
+  if (hwnd) {
+    PostMessageW(hwnd, kWmScrotifyHotkey, static_cast<WPARAM>(action), 0);
+  }
+}
+
+static LRESULT CALLBACK LowLevelMouseProc(int nCode, WPARAM wParam, LPARAM lParam) {
+  // Filtro instantáneo para movimientos del mouse (evita cualquier latencia o
+  // desinstalación del hook por LowLevelHooksTimeout en mouses de 1000Hz).
+  if (nCode < 0 || wParam == WM_MOUSEMOVE) {
+    return CallNextHookEx(g_mouse_hook, nCode, wParam, lParam);
+  }
+
+  if (!g_mouse_enabled.load(std::memory_order_relaxed) || g_main_hwnd == nullptr) {
+    return CallNextHookEx(g_mouse_hook, nCode, wParam, lParam);
+  }
+
+  MSLLHOOKSTRUCT* pMouse = reinterpret_cast<MSLLHOOKSTRUCT*>(lParam);
+  if (!pMouse) {
+    return CallNextHookEx(g_mouse_hook, nCode, wParam, lParam);
+  }
+
+  // Solo inspeccionamos los eventos de botones laterales, botón central o rueda con Alt
+  if (wParam != WM_XBUTTONDOWN && wParam != WM_NCXBUTTONDOWN &&
+      wParam != WM_XBUTTONUP && wParam != WM_NCXBUTTONUP &&
+      wParam != WM_MBUTTONDOWN && wParam != WM_MBUTTONUP &&
+      wParam != WM_MOUSEWHEEL) {
+    return CallNextHookEx(g_mouse_hook, nCode, wParam, lParam);
+  }
+
+  bool global_allowed = g_mouse_global.load(std::memory_order_relaxed);
+  bool is_over_scrotify = IsPointOverScrotify(pMouse->pt);
+
+  // Si la ventana de Scrotify está activa y el puntero está encima de ella,
+  // el Listener de Flutter ya maneja el clic directo dentro de la ventana;
+  // pero igual registramos el timestamp para que el poller de respaldo no duplique.
+  ULONGLONG now = GetTickCount64();
+  g_last_hook_event_time.store(now, std::memory_order_relaxed);
+
+  if (!global_allowed && !is_over_scrotify) {
+    return CallNextHookEx(g_mouse_hook, nCode, wParam, lParam);
+  }
+
+  // Si el clic ocurrió afuera de la ventana de Scrotify (escritorio, barra de tareas,
+  // otro programa o con Scrotify minimizado/oculto en bandeja):
+  if (!is_over_scrotify) {
+    WORD xbutton = HIWORD(pMouse->mouseData);
+
+    if (wParam == WM_XBUTTONDOWN || wParam == WM_NCXBUTTONDOWN) {
+      if (xbutton == XBUTTON1) {
+        ULONGLONG last = g_last_xbutton1_time.load(std::memory_order_relaxed);
+        if (now - last < 380) {
+          g_last_xbutton1_time.store(0, std::memory_order_relaxed);
+          DispatchHotkeyToMain(kActionSkipPrevious);
+        } else {
+          g_last_xbutton1_time.store(now, std::memory_order_relaxed);
+          DispatchHotkeyToMain(kActionTogglePlayPause);
+        }
+        return 1;
+      } else if (xbutton == XBUTTON2) {
+        ULONGLONG last = g_last_xbutton2_time.load(std::memory_order_relaxed);
+        if (now - last >= 220) {
+          g_last_xbutton2_time.store(now, std::memory_order_relaxed);
+          DispatchHotkeyToMain(kActionSkipNext);
+        }
+        return 1;
+      }
+    } else if (wParam == WM_XBUTTONUP || wParam == WM_NCXBUTTONUP) {
+      if (xbutton == XBUTTON1 || xbutton == XBUTTON2) {
+        return 1;
+      }
+    } else if (wParam == WM_MBUTTONDOWN) {
+      if (g_mouse_middle_enabled.load(std::memory_order_relaxed)) {
+        bool in_browser = IsPointOverWebBrowser(pMouse->pt);
+        bool alt_held = (GetAsyncKeyState(VK_MENU) & 0x8000) != 0;
+        ULONGLONG last = g_last_mbutton_time.load(std::memory_order_relaxed);
+
+        if (!in_browser || alt_held) {
+          // En el escritorio, explorador de archivos u otras apps: un clic de rueda pausa/reproduce
+          if (now - last >= 220) {
+            g_last_mbutton_time.store(now, std::memory_order_relaxed);
+            DispatchHotkeyToMain(kActionTogglePlayPause);
+          }
+          if (alt_held) return 1;
+        } else {
+          // En navegadores web: doble clic rápido de rueda pausa/reproduce sin romper el clic simple en pestañas
+          if (now - last < 360) {
+            g_last_mbutton_time.store(0, std::memory_order_relaxed);
+            DispatchHotkeyToMain(kActionTogglePlayPause);
+            return 1;
+          } else {
+            g_last_mbutton_time.store(now, std::memory_order_relaxed);
+          }
+        }
+      }
+    } else if (wParam == WM_MOUSEWHEEL) {
+      // Alt + Rueda arriba/abajo global: sube o baja el volumen de Scrotify desde el escritorio
+      bool alt_held = (GetAsyncKeyState(VK_MENU) & 0x8000) != 0;
+      if (alt_held) {
+        short delta = static_cast<short>(HIWORD(pMouse->mouseData));
+        if (delta > 0) {
+          DispatchHotkeyToMain(kActionVolumeUp);
+          return 1;
+        } else if (delta < 0) {
+          DispatchHotkeyToMain(kActionVolumeDown);
+          return 1;
+        }
+      }
+    }
+  }
+
+  return CallNextHookEx(g_mouse_hook, nCode, wParam, lParam);
+}
+
+static LRESULT CALLBACK LowLevelKeyboardProc(int nCode, WPARAM wParam, LPARAM lParam) {
+  if (nCode >= 0 && (wParam == WM_KEYDOWN || wParam == WM_SYSKEYDOWN)) {
+    KBDLLHOOKSTRUCT* pKey = reinterpret_cast<KBDLLHOOKSTRUCT*>(lParam);
+    if (pKey && g_main_hwnd != nullptr) {
+      // Si Scrotify no tiene el foco (está minimizado, en bandeja o en el escritorio),
+      // capturar teclas multimedia globales.
+      if (GetForegroundWindow() != g_main_hwnd) {
+        if (pKey->vkCode == VK_MEDIA_PLAY_PAUSE) {
+          DispatchHotkeyToMain(kActionTogglePlayPause);
+        } else if (pKey->vkCode == VK_MEDIA_NEXT_TRACK) {
+          DispatchHotkeyToMain(kActionSkipNext);
+        } else if (pKey->vkCode == VK_MEDIA_PREV_TRACK) {
+          DispatchHotkeyToMain(kActionSkipPrevious);
+        }
+      }
+    }
+  }
+  return CallNextHookEx(g_keyboard_hook, nCode, wParam, lParam);
+}
+
+}  // namespace
 
 static HICON CreateMediaIcon(int type) {
   const int size = 16;
@@ -161,12 +295,215 @@ static HICON CreateMediaIcon(int type) {
 FlutterWindow::FlutterWindow(const flutter::DartProject& project)
     : project_(project) {}
 
-FlutterWindow::~FlutterWindow() {}
+FlutterWindow::~FlutterWindow() {
+  StopHookThread();
+  RemoveTrayIcon();
+}
 
 void FlutterWindow::SendMouseHotkey(const std::string& action) {
   if (mouse_channel_) {
     mouse_channel_->InvokeMethod(action, nullptr);
+    // Despertar el loop de mensajes de Flutter aunque la ventana esté minimizada u oculta
+    if (flutter_controller_) {
+      flutter_controller_->ForceRedraw();
+    }
   }
+}
+
+void FlutterWindow::StartHookThread() {
+  if (hook_thread_running_.load()) return;
+  hook_thread_running_.store(true);
+
+  hook_thread_ = std::thread([this]() {
+    hook_thread_id_ = GetCurrentThreadId();
+
+    // Forzar creación de la cola de mensajes del hilo antes de instalar los hooks
+    MSG msg;
+    PeekMessageW(&msg, nullptr, WM_USER, WM_USER, PM_NOREMOVE);
+
+    HINSTANCE hMod = GetModuleHandleW(nullptr);
+    g_mouse_hook = SetWindowsHookExW(WH_MOUSE_LL, LowLevelMouseProc, hMod, 0);
+    g_keyboard_hook = SetWindowsHookExW(WH_KEYBOARD_LL, LowLevelKeyboardProc, hMod, 0);
+
+    // Timer cada 25ms para:
+    // 1) Respaldo con GetAsyncKeyState cuando la ventana activa corre como Administrador (UIPI)
+    //    y Windows bloquea los hooks de nivel bajo para procesos normales.
+    // 2) Verificar que los hooks sigan vivos.
+    UINT_PTR timer_id = SetTimer(nullptr, 1, 25, nullptr);
+
+    bool prev_xb1 = false;
+    bool prev_xb2 = false;
+    bool prev_mb = false;
+
+    while (hook_thread_running_.load(std::memory_order_relaxed)) {
+      BOOL ret = GetMessageW(&msg, nullptr, 0, 0);
+      if (ret <= 0) break;
+
+      if (msg.message == WM_QUIT) {
+        break;
+      }
+
+      if (msg.message == WM_TIMER) {
+        bool xb1_down = (GetAsyncKeyState(VK_XBUTTON1) & 0x8000) != 0;
+        bool xb2_down = (GetAsyncKeyState(VK_XBUTTON2) & 0x8000) != 0;
+        bool mb_down = (GetAsyncKeyState(VK_MBUTTON) & 0x8000) != 0;
+
+        if (g_mouse_enabled.load(std::memory_order_relaxed) &&
+            g_mouse_global.load(std::memory_order_relaxed)) {
+          ULONGLONG now = GetTickCount64();
+          ULONGLONG last_hook = g_last_hook_event_time.load(std::memory_order_relaxed);
+
+          // Si el hook NO recibió el evento en los últimos 90ms (por ejemplo, porque el usuario
+          // está dentro de un juego o programa ejecutado como Administrador), disparamos vía GetAsyncKeyState.
+          if (now - last_hook > 90) {
+            POINT pt = {};
+            GetCursorPos(&pt);
+            if (!IsPointOverScrotify(pt)) {
+              if (xb1_down && !prev_xb1) {
+                ULONGLONG last = g_last_xbutton1_time.load(std::memory_order_relaxed);
+                if (now - last < 380) {
+                  g_last_xbutton1_time.store(0, std::memory_order_relaxed);
+                  DispatchHotkeyToMain(kActionSkipPrevious);
+                } else {
+                  g_last_xbutton1_time.store(now, std::memory_order_relaxed);
+                  DispatchHotkeyToMain(kActionTogglePlayPause);
+                }
+              }
+              if (xb2_down && !prev_xb2) {
+                ULONGLONG last = g_last_xbutton2_time.load(std::memory_order_relaxed);
+                if (now - last >= 220) {
+                  g_last_xbutton2_time.store(now, std::memory_order_relaxed);
+                  DispatchHotkeyToMain(kActionSkipNext);
+                }
+              }
+              if (mb_down && !prev_mb && g_mouse_middle_enabled.load(std::memory_order_relaxed)) {
+                if (!IsPointOverWebBrowser(pt)) {
+                  ULONGLONG last = g_last_mbutton_time.load(std::memory_order_relaxed);
+                  if (now - last >= 220) {
+                    g_last_mbutton_time.store(now, std::memory_order_relaxed);
+                    DispatchHotkeyToMain(kActionTogglePlayPause);
+                  }
+                }
+              }
+            }
+          }
+        }
+
+        prev_xb1 = xb1_down;
+        prev_xb2 = xb2_down;
+        prev_mb = mb_down;
+        continue;
+      }
+
+      TranslateMessage(&msg);
+      DispatchMessageW(&msg);
+    }
+
+    if (timer_id) {
+      KillTimer(nullptr, timer_id);
+    }
+    if (g_mouse_hook) {
+      UnhookWindowsHookEx(g_mouse_hook);
+      g_mouse_hook = nullptr;
+    }
+    if (g_keyboard_hook) {
+      UnhookWindowsHookEx(g_keyboard_hook);
+      g_keyboard_hook = nullptr;
+    }
+  });
+}
+
+void FlutterWindow::StopHookThread() {
+  if (!hook_thread_running_.exchange(false)) return;
+  if (hook_thread_id_ != 0) {
+    PostThreadMessageW(hook_thread_id_, WM_QUIT, 0, 0);
+  }
+  if (hook_thread_.joinable()) {
+    hook_thread_.join();
+  }
+  hook_thread_id_ = 0;
+}
+
+void FlutterWindow::InitTrayIcon() {
+  HWND hwnd = GetHandle();
+  if (!hwnd || tray_icon_added_) return;
+
+  ZeroMemory(&nid_, sizeof(nid_));
+  nid_.cbSize = sizeof(NOTIFYICONDATAW);
+  nid_.hWnd = hwnd;
+  nid_.uID = 1;
+  nid_.uFlags = NIF_ICON | NIF_MESSAGE | NIF_TIP;
+  nid_.uCallbackMessage = kWmTrayIcon;
+  nid_.hIcon = LoadIconW(GetModuleHandleW(nullptr), MAKEINTRESOURCEW(IDI_APP_ICON));
+  wcscpy_s(nid_.szTip, L"Scrotify (Reproductor en segundo plano)");
+
+  if (Shell_NotifyIconW(NIM_ADD, &nid_)) {
+    tray_icon_added_ = true;
+  }
+}
+
+void FlutterWindow::RemoveTrayIcon() {
+  if (tray_icon_added_) {
+    Shell_NotifyIconW(NIM_DELETE, &nid_);
+    tray_icon_added_ = false;
+  }
+}
+
+void FlutterWindow::HideToTray() {
+  HWND hwnd = GetHandle();
+  if (!hwnd) return;
+  InitTrayIcon();
+  ShowWindow(hwnd, SW_HIDE);
+
+  if (tray_icon_added_ && !tray_balloon_shown_) {
+    tray_balloon_shown_ = true;
+    nid_.uFlags = NIF_INFO;
+    wcscpy_s(nid_.szInfoTitle, L"Scrotify sigue en segundo plano");
+    wcscpy_s(nid_.szInfo,
+             L"Podés seguir cambiando canciones y pausando con el mouse. Tocá el icono en la bandeja para abrirlo.");
+    nid_.dwInfoFlags = NIIF_INFO;
+    Shell_NotifyIconW(NIM_MODIFY, &nid_);
+  }
+}
+
+void FlutterWindow::RestoreFromTray() {
+  HWND hwnd = GetHandle();
+  if (!hwnd) return;
+  ShowWindow(hwnd, SW_SHOW);
+  if (IsIconic(hwnd)) {
+    ShowWindow(hwnd, SW_RESTORE);
+  }
+  SetForegroundWindow(hwnd);
+  SetFocus(hwnd);
+  if (flutter_controller_) {
+    flutter_controller_->ForceRedraw();
+  }
+}
+
+void FlutterWindow::ShowTrayContextMenu() {
+  HWND hwnd = GetHandle();
+  if (!hwnd) return;
+
+  HMENU menu = CreatePopupMenu();
+  if (!menu) return;
+
+  AppendMenuW(menu, MF_STRING, kTrayOpen, L"Abrir Scrotify");
+  AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
+  AppendMenuW(menu, MF_STRING, kTrayPlayPause,
+              is_playing_ ? L"Pausar reproducción" : L"Reproducir");
+  AppendMenuW(menu, MF_STRING, kTrayNext, L"Siguiente canción");
+  AppendMenuW(menu, MF_STRING, kTrayPrev, L"Canción anterior");
+  AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
+  AppendMenuW(menu, MF_STRING, kTrayQuit, L"Cerrar Scrotify por completo");
+
+  SetMenuDefaultItem(menu, kTrayOpen, FALSE);
+
+  POINT pt = {};
+  GetCursorPos(&pt);
+  SetForegroundWindow(hwnd);
+  TrackPopupMenu(menu, TPM_RIGHTBUTTON | TPM_BOTTOMALIGN, pt.x, pt.y, 0, hwnd, nullptr);
+  PostMessageW(hwnd, WM_NULL, 0, 0);
+  DestroyMenu(menu);
 }
 
 void FlutterWindow::InitTaskbarToolbar() {
@@ -265,28 +602,35 @@ bool FlutterWindow::OnCreate() {
           if (const auto* args = std::get_if<flutter::EncodableMap>(call.arguments())) {
             auto it_en = args->find(flutter::EncodableValue("enabled"));
             if (it_en != args->end() && std::holds_alternative<bool>(it_en->second)) {
-              g_mouse_enabled = std::get<bool>(it_en->second);
+              g_mouse_enabled.store(std::get<bool>(it_en->second), std::memory_order_relaxed);
             }
             auto it_gl = args->find(flutter::EncodableValue("global"));
             if (it_gl != args->end() && std::holds_alternative<bool>(it_gl->second)) {
-              g_mouse_global = std::get<bool>(it_gl->second);
+              g_mouse_global.store(std::get<bool>(it_gl->second), std::memory_order_relaxed);
             }
             auto it_mid = args->find(flutter::EncodableValue("middleClick"));
             if (it_mid != args->end() && std::holds_alternative<bool>(it_mid->second)) {
-              g_mouse_middle_enabled = std::get<bool>(it_mid->second);
+              g_mouse_middle_enabled.store(std::get<bool>(it_mid->second), std::memory_order_relaxed);
+            }
+            auto it_tray = args->find(flutter::EncodableValue("closeToTray"));
+            if (it_tray != args->end() && std::holds_alternative<bool>(it_tray->second)) {
+              g_close_to_tray.store(std::get<bool>(it_tray->second), std::memory_order_relaxed);
             }
           }
+          result->Success();
+        } else if (call.method_name() == "hideToTray") {
+          HideToTray();
           result->Success();
         } else {
           result->NotImplemented();
         }
       });
 
-  g_current_window = this;
-  g_mouse_hook = SetWindowsHookEx(
-      WH_MOUSE_LL, LowLevelMouseProc, GetModuleHandle(nullptr), 0);
+  g_main_hwnd = GetHandle();
+  InitTrayIcon();
+  StartHookThread();
 
-  taskbar_button_created_msg_ = ::RegisterWindowMessage(L"TaskbarButtonCreated");
+  taskbar_button_created_msg_ = ::RegisterWindowMessageW(L"TaskbarButtonCreated");
   InitTaskbarToolbar();
 
   flutter_controller_->engine()->SetNextFrameCallback([&]() {
@@ -299,6 +643,9 @@ bool FlutterWindow::OnCreate() {
 }
 
 void FlutterWindow::OnDestroy() {
+  StopHookThread();
+  RemoveTrayIcon();
+
   if (taskbar_list_) {
     taskbar_list_->Release();
     taskbar_list_ = nullptr;
@@ -308,12 +655,8 @@ void FlutterWindow::OnDestroy() {
   if (icon_pause_) { DestroyIcon(icon_pause_); icon_pause_ = nullptr; }
   if (icon_next_) { DestroyIcon(icon_next_); icon_next_ = nullptr; }
 
-  if (g_mouse_hook != nullptr) {
-    UnhookWindowsHookEx(g_mouse_hook);
-    g_mouse_hook = nullptr;
-  }
-  if (g_current_window == this) {
-    g_current_window = nullptr;
+  if (g_main_hwnd == GetHandle()) {
+    g_main_hwnd = nullptr;
   }
   mouse_channel_ = nullptr;
 
@@ -328,21 +671,74 @@ LRESULT
 FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
                               WPARAM const wparam,
                               LPARAM const lparam) noexcept {
-  if (message == taskbar_button_created_msg_) {
+  if (message == taskbar_button_created_msg_ && taskbar_button_created_msg_ != 0) {
     InitTaskbarToolbar();
+    InitTrayIcon();
+    return 0;
+  }
+
+  if (message == kWmRestoreFromTray) {
+    RestoreFromTray();
+    return 0;
+  }
+
+  if (message == kWmScrotifyHotkey) {
+    switch (static_cast<HotkeyAction>(wparam)) {
+      case kActionTogglePlayPause:
+        SendMouseHotkey("togglePlayPause");
+        break;
+      case kActionSkipNext:
+        SendMouseHotkey("skipNext");
+        break;
+      case kActionSkipPrevious:
+        SendMouseHotkey("skipPrevious");
+        break;
+      case kActionVolumeUp:
+        SendMouseHotkey("volumeUp");
+        break;
+      case kActionVolumeDown:
+        SendMouseHotkey("volumeDown");
+        break;
+    }
+    return 0;
+  }
+
+  if (message == kWmTrayIcon) {
+    UINT event = LOWORD(lparam);
+    if (event == WM_LBUTTONUP || event == WM_LBUTTONDBLCLK || event == NIN_BALLOONUSERCLICK) {
+      RestoreFromTray();
+    } else if (event == WM_RBUTTONUP || event == WM_CONTEXTMENU) {
+      ShowTrayContextMenu();
+    }
+    return 0;
+  }
+
+  // Si el usuario cierra la ventana (Alt+F4, botón X o Cerrar desde barra de tareas)
+  // y "Seguir en segundo plano" está activado, ocultamos a la bandeja en vez de cerrar.
+  if (message == WM_CLOSE && !force_quit_ &&
+      g_close_to_tray.load(std::memory_order_relaxed)) {
+    HideToTray();
     return 0;
   }
 
   if (message == WM_COMMAND) {
     UINT id = LOWORD(wparam);
-    if (id == kThbPrev) {
+    if (id == kThbPrev || id == kTrayPrev) {
       SendMouseHotkey("skipPrevious");
       return 0;
-    } else if (id == kThbPlayPause) {
+    } else if (id == kThbPlayPause || id == kTrayPlayPause) {
       SendMouseHotkey("togglePlayPause");
       return 0;
-    } else if (id == kThbNext) {
+    } else if (id == kThbNext || id == kTrayNext) {
       SendMouseHotkey("skipNext");
+      return 0;
+    } else if (id == kTrayOpen) {
+      RestoreFromTray();
+      return 0;
+    } else if (id == kTrayQuit) {
+      force_quit_ = true;
+      RemoveTrayIcon();
+      DestroyWindow(hwnd);
       return 0;
     }
   }
@@ -360,6 +756,13 @@ FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
       SendMouseHotkey("skipPrevious");
       return TRUE;
     }
+  }
+
+  // Evitar que Flutter 3.47 suspenda el motor de Dart cuando la ventana se minimiza
+  // o se oculta en la bandeja del sistema (para que mpv y los canales de mouse respondan al instante).
+  if ((message == WM_SIZE && wparam == SIZE_MINIMIZED) ||
+      (message == WM_SHOWWINDOW && wparam == FALSE)) {
+    return Win32Window::MessageHandler(hwnd, message, wparam, lparam);
   }
 
   // Give Flutter, including plugins, an opportunity to handle window messages.

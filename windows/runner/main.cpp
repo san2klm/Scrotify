@@ -13,6 +13,17 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
     CreateAndAttachConsole();
   }
 
+  // Si Scrotify ya está corriendo en segundo plano (en la bandeja o minimizado),
+  // restaurar la ventana existente al frente en vez de abrir otra instancia.
+  HWND existing_window = ::FindWindowW(L"FLUTTER_RUNNER_WIN32_WINDOW", L"navidrome_client");
+  if (!existing_window) {
+    existing_window = ::FindWindowW(L"FLUTTER_RUNNER_WIN32_WINDOW", L"Scrotify");
+  }
+  if (existing_window) {
+    ::PostMessageW(existing_window, WM_USER + 202, 0, 0);
+    return EXIT_SUCCESS;
+  }
+
   // Initialize COM, so that it is available for use in the library and/or
   // plugins.
   ::CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);

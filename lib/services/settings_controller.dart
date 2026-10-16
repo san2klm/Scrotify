@@ -76,6 +76,7 @@ class SettingsController extends ChangeNotifier {
   bool _mouseControlsEnabled = true;
   bool _mouseGlobalEnabled = true;
   bool _mouseMiddleClickEnabled = true;
+  bool _closeToTray = true;
 
   // Red actual detectada. Si no se puede saber (sin NetworkManager, etc.) se
   // asume "casa" para no degradar la calidad sin motivo.
@@ -265,6 +266,7 @@ class SettingsController extends ChangeNotifier {
   bool get mouseControlsEnabled => _mouseControlsEnabled;
   bool get mouseGlobalEnabled => _mouseGlobalEnabled;
   bool get mouseMiddleClickEnabled => _mouseMiddleClickEnabled;
+  bool get closeToTray => _closeToTray;
 
   void setMouseControlsEnabled(bool value) {
     if (value == _mouseControlsEnabled) return;
@@ -283,6 +285,13 @@ class SettingsController extends ChangeNotifier {
   void setMouseMiddleClickEnabled(bool value) {
     if (value == _mouseMiddleClickEnabled) return;
     _mouseMiddleClickEnabled = value;
+    _save();
+    notifyListeners();
+  }
+
+  void setCloseToTray(bool value) {
+    if (value == _closeToTray) return;
+    _closeToTray = value;
     _save();
     notifyListeners();
   }
@@ -367,6 +376,7 @@ class SettingsController extends ChangeNotifier {
       _mouseGlobalEnabled = data['mouseGlobalEnabled'] as bool? ?? true;
       _mouseMiddleClickEnabled =
           data['mouseMiddleClickEnabled'] as bool? ?? true;
+      _closeToTray = data['closeToTray'] as bool? ?? true;
       final jamUrl =
           JamServerEndpoint.parse(data['jamServerUrl'] as String? ?? '');
       _jamServerUrl = jamUrl.url ?? kDefaultRemoteJamEndpoint;
@@ -399,6 +409,7 @@ class SettingsController extends ChangeNotifier {
         'mouseControlsEnabled': _mouseControlsEnabled,
         'mouseGlobalEnabled': _mouseGlobalEnabled,
         'mouseMiddleClickEnabled': _mouseMiddleClickEnabled,
+        'closeToTray': _closeToTray,
       }));
     } catch (err) {
       debugPrint('settings_controller:304 ignorado: $err');

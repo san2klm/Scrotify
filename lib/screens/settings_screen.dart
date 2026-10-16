@@ -360,8 +360,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
         ]),
         if (WindowControls.isDesktop) ...[
-          _sectionTitle('Controles con el Mouse (Escritorio)'),
+          _sectionTitle('Controles con el Mouse y Segundo Plano (Escritorio)'),
           _card(children: [
+            _switchTile(
+              title: 'Seguir en segundo plano al cerrar la ventana',
+              subtitle:
+                  'Al tocar la X, Scrotify queda en la bandeja del sistema reproduciendo música y respondiendo al mouse',
+              value: settings.closeToTray,
+              onChanged: settings.setCloseToTray,
+            ),
             _switchTile(
               title: 'Atajos con botones del mouse',
               subtitle:
@@ -371,26 +378,26 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
             if (settings.mouseControlsEnabled) ...[
               _switchTile(
-                title: 'Atajos globales (fuera de la app)',
+                title: 'Atajos globales (en el escritorio y fuera de la app)',
                 subtitle:
-                    'Controla la reproducción aunque Scrotify esté minimizado o en segundo plano',
+                    'Controla la reproducción aunque cierres la ventana, minimices o estés en el escritorio/juegos',
                 value: settings.mouseGlobalEnabled,
                 onChanged: settings.setMouseGlobalEnabled,
               ),
               _switchTile(
                 title: 'Pausar con clic de la rueda (botón central)',
                 subtitle:
-                    'Al hacer clic con la rueda del mouse sobre la ventana de Scrotify',
+                    'Funciona en Scrotify, en el escritorio y en otros programas (en navegadores usa doble clic de rueda o Alt + Rueda para no cerrar pestañas)',
                 value: settings.mouseMiddleClickEnabled,
                 onChanged: settings.setMouseMiddleClickEnabled,
               ),
               const SizedBox(height: 6),
               const _InfoText(
-                'Guía de atajos del mouse:\n'
+                'Guía de atajos del mouse (funcionan dentro y fuera de la app):\n'
                 '• Botón lateral adelante (XButton 2): Siguiente canción\n'
                 '• Botón lateral atrás (XButton 1): Pausar / Reanudar (un clic) o Canción anterior (doble clic)\n'
-                '• Botón central (rueda): Pausar / Reanudar sobre la ventana de Scrotify\n'
-                '• Alt + Rueda arriba/abajo: Subir o bajar volumen en cualquier parte de la ventana',
+                '• Botón central (clic de rueda): Pausar / Reanudar en Scrotify y en el escritorio\n'
+                '• Alt + Rueda arriba/abajo: Subir o bajar volumen desde cualquier lugar',
               ),
             ],
           ]),
