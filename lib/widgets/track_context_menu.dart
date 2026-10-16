@@ -5,6 +5,8 @@ import 'package:provider/provider.dart';
 import '../screens/karaoke_screen.dart';
 import '../screens/artist_screen.dart';
 import '../screens/album_detail_screen.dart';
+import '../services/cast/cast_client.dart';
+import '../services/cast/cast_session.dart';
 import '../services/jam_controller.dart';
 import '../services/navidrome_service.dart';
 import '../services/offline_cache_service.dart';
@@ -26,6 +28,58 @@ class TrackContextMenu extends StatelessWidget {
   final String? playlistId;
 
   const TrackContextMenu({super.key, required this.track, this.playlistId});
+
+  /// Busca Chromecasts y transmite [track] al elegido. La URL de streaming
+  /// lleva el token Subsonic del usuario: el dispositivo la necesita para
+  /// pedir el audio al servidor.
+  static Future<void> _castTrack(
+      BuildContext context, Track track, NavidromeService nav) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final session = CastSession.instance;
+    if (session.isCasting) {
+      await session.stop();
+      messenger
+          .showSnackBar(const SnackBar(content: Text('Transmisión detenida.')));
+      return;
+    }
+    messenger.showSnackBar(const SnackBar(
+        content: Text('Buscando dispositivos Chromecast…'),
+        duration: Duration(seconds: 3)));
+    final devices = await discoverCastDevices();
+    if (!context.mounted) return;
+    if (devices.isEmpty) {
+      messenger.showSnackBar(const SnackBar(
+          content: Text('No se encontró ningún Chromecast en la red.')));
+      return;
+    }
+    final device = await showDialog<CastDevice>(
+      context: context,
+      builder: (ctx) => SimpleDialog(
+        title: const Text('Enviar a…'),
+        children: [
+          for (final d in devices)
+            SimpleDialogOption(
+              onPressed: () => Navigator.of(ctx).pop(d),
+              child: Text(d.name),
+            ),
+        ],
+      ),
+    );
+    if (device == null) return;
+    try {
+      await session.cast(
+        device,
+        track,
+        streamUrl: nav.getStreamUrl(track.id),
+        imageUrl: track.albumArtUrl,
+      );
+      messenger.showSnackBar(
+          SnackBar(content: Text('Transmitiendo a ${device.name}.')));
+    } catch (e) {
+      messenger.showSnackBar(
+          SnackBar(content: Text('No se pudo conectar con ${device.name}.')));
+    }
+  }
 
   static void show(BuildContext context, Track track, {String? playlistId}) {
     final theme = context.read<ThemeController>().active;
@@ -271,6 +325,19 @@ class TrackContextMenu extends StatelessWidget {
                   onTap: () {
                     Navigator.of(context).pop();
                     player.playQueue([track], startIndex: 0);
+                  },
+                ),
+                ListTile(
+                  leading: Icon(Icons.cast, color: context.textSecondary),
+                  title: Text(
+                    CastSession.instance.isCasting
+                        ? 'Cambiar o detener la transmisión'
+                        : 'Enviar a Chromecast',
+                    style: TextStyle(color: context.textPrimary, fontSize: 14),
+                  ),
+                  onTap: () {
+                    Navigator.of(context).pop();
+                    unawaited(_castTrack(context, track, nav));
                   },
                 ),
                 ListTile(

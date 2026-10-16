@@ -765,3 +765,17 @@ robustez y las funciones nuevas.
   - 48 (parcial): SDK `>=3.5.0` (arregló 6 avisos de `!`/cast), exclusión `Eculiza/**` fuera. **Pendiente:** `just_audio` 0.10 + `audio_session` y `mobile_scanner` 7 (necesitan dispositivo); `flutter_lints` 6 y lints nuevos; `cupertino_icons` 2; **decidir** qué hacer con `json_annotation`/`build_runner`/`json_serializable` (sin uso; quitar y corregir AGENTS.md, o usarlos en los modelos de Jam).
   - 49 (parcial): `test/support/wait_for.dart`; el ecualizador y la cola ya no duermen un tiempo fijo; tests nuevos de `CoverFallbackService`. Siguen 40 `Future.delayed` (muchos son esperas de «no ocurre nada», legítimas) y falta `mini_player_controller`.
   - 50: `scripts/build_windows_installer.sh`; `.iss` con `/DAppVersion`, icono y URL; `ANDROID_SDK_ROOT` por sistema; README con Android (sabores y firma), Windows y Linux, sin iOS. `.gitattributes` ya estaba.
+
+- 2026-10-15 (7) — Fase 7 (funciones nuevas). Windows: 947 tests verdes; `flutter build windows --debug` compila con los plugins nuevos.
+  - 51 Radio: `getSimilarSongs`/`getTopSongs`/`getArtistRadio`; botón «Radio» en el artista y «Iniciar radio de esta canción» en el menú de pista.
+  - 52 Cola en el servidor: `savePlayQueue`/`getSavedPlayQueue`; ajuste «Guardar la cola en el servidor» (desactivado: sobrescribe la cola del servidor) y «Recuperar la cola guardada» en Ajustes. Guarda 5 s después de cada cambio de pista. **No** guarda la posición al pausar.
+  - 53 Biografía y similares: `getArtistBio` y sección «Acerca de» en el artista. Con 42 sustituye a TheAudioDB/Deezer, que quedan tras el ajuste.
+  - 54 Color según la carátula: `AppTheme.withAccent`, `CoverPalette` (cacheada) y `CoverAccentSync`; ajuste «Color según la carátula» (desactivado).
+  - 55 Marcadores: `getBookmarks`/`createBookmark`/`deleteBookmark` y «Guardar marcador aquí» en el menú de la pista actual. **Falta** una vista para listar y reanudar marcadores.
+  - 56 Discord Rich Presence: IPC local (socket Unix / tubería en Windows), opt-in con Application ID propio. **Sin probar contra un Discord real.**
+  - 57 Controles del sistema: MPRIS en Linux (`dbus`, pure Dart) y teclas multimedia globales (`hotkey_manager`). **Sin probar en Linux real.** SMTC de Windows **no** hecho (necesita `smtc_windows`, que exige Rust).
+  - 58 Android Auto: árbol de navegación (Recientes, Más escuchadas, Playlists) + `automotive_app_desc`. **Sin probar en un coche/emulador DHU.**
+  - 59 Playlists inteligentes: `SmartPlaylist` (reglas locales, JSON, determinista con `Random` inyectado) con tests. **Falta** la pantalla para crearlas y listarlas.
+  - 60 Búsqueda con filtros: `TrackFilter` + `TrackFilterBar` en los resultados de escritorio y móvil; `Track.year`.
+  - 61 Radios y podcasts: API + pantalla «Radios y podcasts» en la biblioteca; `playInternetRadio` con streams directos.
+  - 62 Chromecast: protocolo CASTV2 propio (protobuf mínimo, heartbeat, LAUNCH/LOAD), descubrimiento mDNS y «Enviar a Chromecast» en el menú. **Sin probar con un dispositivo real**; la URL de streaming (con token Subsonic) llega al Chromecast y es el dispositivo quien pide el audio.
