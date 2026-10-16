@@ -32,6 +32,7 @@ import 'settings_screen.dart';
 import '../utils/app_visibility.dart';
 import '../utils/app_colors.dart';
 import '../widgets/quick_actions_row.dart';
+import '../widgets/discovery_section.dart';
 
 part 'mobile_home_tab.dart';
 part 'mobile_search_library_tabs.dart';

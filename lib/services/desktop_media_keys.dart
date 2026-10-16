@@ -7,6 +7,23 @@ import 'package:hotkey_manager/hotkey_manager.dart';
 
 import 'player_controller.dart';
 
+// Keep the Windows startup fix from the previous local build. The plugin
+// requires non-null modifiers and native VK codes for next/previous.
+class _WindowsMediaHotKey extends HotKey {
+  _WindowsMediaHotKey(PhysicalKeyboardKey key)
+      : super(key: key, modifiers: const [], scope: HotKeyScope.system);
+
+  @override
+  Map<String, dynamic> toJson() => {
+        ...super.toJson(),
+        'keyCode': {
+          PhysicalKeyboardKey.mediaPlayPause: 0xB3,
+          PhysicalKeyboardKey.mediaTrackNext: 0xB0,
+          PhysicalKeyboardKey.mediaTrackPrevious: 0xB1,
+        }[key]!,
+      };
+}
+
 /// Teclas multimedia globales (reproducir/pausa, siguiente, anterior) en
 /// escritorio, incluso con la ventana en segundo plano.
 ///
@@ -31,7 +48,10 @@ class DesktopMediaKeys {
       PhysicalKeyboardKey.mediaTrackPrevious: _player.skipPrevious,
     };
     for (final entry in bindings.entries) {
-      final hotKey = HotKey(key: entry.key, scope: HotKeyScope.system);
+      final hotKey = Platform.isWindows
+          ? _WindowsMediaHotKey(entry.key)
+          : HotKey(
+              key: entry.key, modifiers: const [], scope: HotKeyScope.system);
       try {
         await hotKeyManager.register(hotKey,
             keyDownHandler: (_) => unawaited(entry.value()));

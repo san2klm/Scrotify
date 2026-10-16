@@ -202,7 +202,6 @@ mixin _HomeMainContent on _HomeStateBase, _HomeLibraryPanel {
 
   Widget _mainContent(List<Track> tracks) {
     // Los géneros solo se muestran al buscar o explorar, no en Inicio.
-    final filteredTracks = tracks;
     return SingleChildScrollView(
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
       child: Column(
@@ -221,10 +220,7 @@ mixin _HomeMainContent on _HomeStateBase, _HomeLibraryPanel {
           const SizedBox(height: 12),
           _recentlyAddedSection(),
           const SizedBox(height: 32),
-          _sectionHeader('Recomendados para ti'),
-          const SizedBox(height: 12),
-          PlayerSelector.mostPlayed(
-            builder: (_, player) => _recommendedGrid(filteredTracks, player)),
+          const DiscoverySection(),
           const SizedBox(height: 32),
           _sectionHeader('Álbumes destacados'),
           const SizedBox(height: 12),
