@@ -200,6 +200,9 @@ abstract class _PlayerBase extends ChangeNotifier {
   /// Invalida un fundido de apagado en curso al cancelar el temporizador.
   int _sleepFadeGen = 0;
 
+  /// Guardado diferido de la cola en el servidor.
+  Timer? _queueSaveTimer;
+
   Duration? _usefulStart;
 
   Duration? _usefulEnd;
@@ -279,6 +282,11 @@ abstract class _PlayerBase extends ChangeNotifier {
   ListeningStatsService? get _statsService;
   void cancelSleepTimer({bool silent = false});
   void clearQueue();
+  Future<void> playQueue(
+    List<Track> tracks, {
+    int startIndex = 0,
+    Playlist? sourcePlaylist,
+  });
   Track? get currentTrack;
   bool get playing;
   Duration get position;
@@ -1113,6 +1121,7 @@ class PlayerController extends _PlayerBase
     _audioHandler?.detachPlayerController();
     _audioHandler = null;
     _sleepFadeGen++;
+    _queueSaveTimer?.cancel();
     _watchdog?.cancel();
     _sleepTimer?.cancel();
     _sleepTicker?.cancel();

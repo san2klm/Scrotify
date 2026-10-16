@@ -68,6 +68,7 @@ class SettingsController extends ChangeNotifier {
   Duration _crossfade = Duration.zero;
   bool _silenceRemovalEnabled = false;
   bool _thirdPartyArtistImages = false;
+  bool _syncQueueToServer = false;
   bool _isSmartMixEnabled = true;
   ReplayGainMode _replayGainMode = ReplayGainMode.off;
   double _replayGainPreamp = 0.0;
@@ -125,6 +126,17 @@ class SettingsController extends ChangeNotifier {
   /// Permite buscar fotos de artista en TheAudioDB y Deezer (reciben el nombre
   /// del artista). Desactivado por defecto.
   bool get thirdPartyArtistImages => _thirdPartyArtistImages;
+
+  /// Guarda la cola en el servidor (`savePlayQueue`) para continuar en otro
+  /// dispositivo. Desactivado por defecto: sobrescribe la cola guardada.
+  bool get syncQueueToServer => _syncQueueToServer;
+
+  void setSyncQueueToServer(bool enabled) {
+    if (_syncQueueToServer == enabled) return;
+    _syncQueueToServer = enabled;
+    _save();
+    notifyListeners();
+  }
 
   void setThirdPartyArtistImages(bool enabled) {
     if (_thirdPartyArtistImages == enabled) return;
@@ -373,6 +385,7 @@ class SettingsController extends ChangeNotifier {
       _crossfade = Duration(milliseconds: rawCf.clamp(0, 10000));
       _silenceRemovalEnabled = data['silenceRemovalEnabled'] as bool? ?? false;
       _thirdPartyArtistImages = data['thirdPartyArtistImages'] as bool? ?? false;
+      _syncQueueToServer = data['syncQueueToServer'] as bool? ?? false;
       _isSmartMixEnabled = data['smartMixEnabled'] as bool? ?? true;
       _replayGainMode =
           ReplayGainMode.fromString(data['replayGainMode'] as String?);
@@ -416,6 +429,7 @@ class SettingsController extends ChangeNotifier {
         'crossfade': _crossfade.inMilliseconds,
         'silenceRemovalEnabled': _silenceRemovalEnabled,
         'thirdPartyArtistImages': _thirdPartyArtistImages,
+        'syncQueueToServer': _syncQueueToServer,
         'smartMixEnabled': _isSmartMixEnabled,
         'replayGainMode': _replayGainMode.name,
         'replayGainPreamp': _replayGainPreamp,

@@ -10,6 +10,7 @@ import '../services/pairing_server.dart';
 import '../services/hifi/audio_output_devices.dart';
 import '../services/hifi/hifi_coordinator.dart';
 import '../services/hifi/hifi_profiles.dart';
+import '../services/player_controller.dart';
 import '../services/settings_controller.dart';
 import '../widgets/diagnostics_panel.dart';
 import '../widgets/pairing_panel.dart';
@@ -371,6 +372,29 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 'Recorta silencios al inicio y final de las canciones usando análisis de waveform',
             value: settings.silenceRemovalEnabled,
             onChanged: settings.setSilenceRemovalEnabled,
+          ),
+          _switchTile(
+            title: 'Guardar la cola en el servidor',
+            subtitle:
+                'Permite continuar en otro dispositivo; sobrescribe la cola guardada',
+            value: settings.syncQueueToServer,
+            onChanged: settings.setSyncQueueToServer,
+          ),
+          ListTile(
+            leading: Icon(Icons.restore, color: context.textMuted),
+            title: Text('Recuperar la cola guardada',
+                style: TextStyle(color: context.textPrimary)),
+            subtitle: Text('Continúa lo que dejaste en otro dispositivo',
+                style: TextStyle(color: context.textMuted, fontSize: 12)),
+            onTap: () async {
+              final messenger = ScaffoldMessenger.of(context);
+              final restored =
+                  await context.read<PlayerController>().restoreSavedQueue();
+              messenger.showSnackBar(SnackBar(
+                  content: Text(restored == null
+                      ? 'No hay ninguna cola guardada en el servidor.'
+                      : 'Cola recuperada (${restored.tracks.length} canciones).')));
+            },
           ),
           _switchTile(
             title: 'Fotos de artista de internet',

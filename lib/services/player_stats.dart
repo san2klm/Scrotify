@@ -75,6 +75,46 @@ mixin _PlayerStats on _PlayerBase {
       _recentlyPlayed.removeRange(50, _recentlyPlayed.length);
     }
     _saveHistory();
+    scheduleQueueSave();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Cola guardada en el servidor
+  // ---------------------------------------------------------------------------
+
+  /// Programa guardar la cola en el servidor (si el ajuste está activo).
+  /// Se agrupa en una sola petición por ráfaga de cambios.
+  void scheduleQueueSave() {
+    if (!_settings.syncQueueToServer || _mirror) return;
+    _queueSaveTimer?.cancel();
+    _queueSaveTimer =
+        Timer(const Duration(seconds: 5), () => unawaited(saveQueueNow()));
+  }
+
+  /// Guarda ya la cola actual y la posición. `false` si no había nada o falló.
+  Future<bool> saveQueueNow() {
+    final ids = [
+      for (final i in _order)
+        if (i >= 0 && i < _queue.length) _queue[i].id,
+    ];
+    if (ids.isEmpty) return Future.value(false);
+    return _service.savePlayQueue(
+      ids,
+      currentId: currentTrack?.id,
+      positionMs: _lead.position.inMilliseconds,
+    );
+  }
+
+  /// Carga la cola guardada en el servidor y empieza por la pista y posición
+  /// guardadas. Devuelve la cola recuperada o `null` si no había.
+  Future<SavedPlayQueue?> restoreSavedQueue() async {
+    final saved = await _service.getSavedPlayQueue();
+    if (saved == null) return null;
+    await playQueue(saved.tracks, startIndex: saved.currentIndex);
+    if (saved.positionMs > 0) {
+      await _lead.seek(Duration(milliseconds: saved.positionMs));
+    }
+    return saved;
   }
 
   String _historyFileName(String session) {

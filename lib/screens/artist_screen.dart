@@ -299,6 +299,52 @@ class _ArtistScreenState extends State<ArtistScreen> {
   }
 
   Widget _buildPlayButton({bool compact = false}) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _buildPlayOnly(compact: compact),
+        SizedBox(width: compact ? 8 : 12),
+        _buildRadioButton(compact: compact),
+      ],
+    );
+  }
+
+  /// Radio del artista: sus temas más escuchados y los de artistas parecidos.
+  Widget _buildRadioButton({bool compact = false}) {
+    return Tooltip(
+      message: 'Radio del artista',
+      child: OutlinedButton.icon(
+        onPressed: _playArtistRadio,
+        icon: const Icon(Icons.radio),
+        label: Text('Radio', style: TextStyle(fontSize: compact ? 14 : 16)),
+        style: OutlinedButton.styleFrom(
+          foregroundColor: context.accent,
+          side: BorderSide(color: context.accent),
+          shape: const StadiumBorder(),
+          padding: EdgeInsets.symmetric(
+              horizontal: compact ? 14 : 24, vertical: compact ? 8 : 11),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _playArtistRadio() async {
+    final nav = context.read<NavidromeService>();
+    final player = context.read<PlayerController>();
+    final messenger = ScaffoldMessenger.of(context);
+    final tracks =
+        await nav.getArtistRadio(widget.artist.id, widget.artist.name);
+    if (!mounted) return;
+    if (tracks.isEmpty) {
+      messenger.showSnackBar(const SnackBar(
+          content:
+              Text('El servidor no pudo armar una radio para este artista.')));
+      return;
+    }
+    unawaited(player.playQueue(tracks, startIndex: 0));
+  }
+
+  Widget _buildPlayOnly({bool compact = false}) {
     return Consumer<PlayerController>(
       builder: (context, player, _) {
         return InkWell(

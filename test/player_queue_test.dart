@@ -35,6 +35,23 @@ class SessionNavidrome extends FakeNavidrome {
           ? throw StateError('sin red')
           : 'https://a.example.invalid/stream/$trackId';
 
+  List<String>? savedIds;
+  String? savedCurrent;
+  int? savedPosition;
+  SavedPlayQueue? toRestore;
+
+  @override
+  Future<bool> savePlayQueue(List<String> ids,
+      {String? currentId, int positionMs = 0}) async {
+    savedIds = ids;
+    savedCurrent = currentId;
+    savedPosition = positionMs;
+    return true;
+  }
+
+  @override
+  Future<SavedPlayQueue?> getSavedPlayQueue() async => toRestore;
+
   void changed() => notifyListeners();
 }
 
@@ -148,5 +165,22 @@ void main() {
     await Future<void>.delayed(const Duration(milliseconds: 600));
     expect(lead.playing, isTrue); // no se pausó
     expect(lead.volume, closeTo(base, 0.001)); // volumen restaurado
+  });
+
+  test('guardar y restaurar la cola en el servidor', () async {
+    await player.playQueue([t('1'), t('2'), t('3')], startIndex: 1);
+    expect(await player.saveQueueNow(), isTrue);
+    expect(service.savedIds, ['1', '2', '3']);
+    expect(service.savedCurrent, '2');
+
+    service.toRestore = SavedPlayQueue(
+        tracks: [t('x'), t('y')], currentId: 'y', positionMs: 5000);
+    final restored = await player.restoreSavedQueue();
+    expect(restored, isNotNull);
+    expect(player.queue.map((e) => e.id), ['x', 'y']);
+    expect(player.currentTrack?.id, 'y');
+
+    service.toRestore = null;
+    expect(await player.restoreSavedQueue(), isNull);
   });
 }

@@ -2,6 +2,7 @@ part of 'player_controller.dart';
 
 /// Cola: reproducir, añadir, quitar, reordenar, aleatorio y repetición.
 mixin _PlayerQueue on _PlayerBase {
+  @override
   Future<void> playQueue(
     List<Track> tracks, {
     int startIndex = 0,
