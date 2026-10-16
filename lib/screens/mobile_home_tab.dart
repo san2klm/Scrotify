@@ -143,8 +143,10 @@ mixin _MobileHomeTab on _MobileHomeBase {
     );
   }
 
-  Widget _quickAccessGrid() {
-    final mostPlayed = context.watch<PlayerController>().mostPlayed;
+  Widget _quickAccessGrid() => PlayerSelector.mostPlayed(
+      builder: (_, player) => _quickAccessGridFor(player.mostPlayed));
+
+  Widget _quickAccessGridFor(List<MostPlayedItem> mostPlayed) {
     MostPlayedItem? topPlaylist;
     final topTracks = <MostPlayedItem>[];
     for (final item in mostPlayed) {
@@ -600,8 +602,10 @@ mixin _MobileHomeTab on _MobileHomeBase {
     );
   }
 
-  Widget _recentsList() {
-    final player = context.watch<PlayerController>();
+  Widget _recentsList() => PlayerSelector.recents(
+      builder: (_, player) => _recentsListFor(player));
+
+  Widget _recentsListFor(PlayerController player) {
     final items = player.recentlyPlayed.take(5).toList();
     if (items.isEmpty) {
       return Padding(

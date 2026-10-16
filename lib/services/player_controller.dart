@@ -429,6 +429,27 @@ class PlayerController extends _PlayerBase
 
   List<Track> get recentlyPlayed => List.unmodifiable(_recentlyPlayed);
 
+  /// Firma barata de [mostPlayed] para `context.select`: la pantalla de inicio
+  /// solo se reconstruye cuando cambian los contadores, no con cada cambio de
+  /// estado del reproductor (play/pausa, posición, buffering…).
+  String get mostPlayedSignature {
+    final b = StringBuffer();
+    for (final item in _mostPlayedByKey.values) {
+      b
+        ..write(item.type.name)
+        ..write(':')
+        ..write(item.id)
+        ..write(':')
+        ..write(item.playCount)
+        ..write(';');
+    }
+    return b.toString();
+  }
+
+  /// Firma de [recentlyPlayed] (ver [mostPlayedSignature]).
+  String get recentlyPlayedSignature =>
+      _recentlyPlayed.take(12).map((t) => t.id).join(',');
+
   List<MostPlayedItem> get mostPlayed {
     final items = _mostPlayedByKey.values.toList();
     items.sort((a, b) {

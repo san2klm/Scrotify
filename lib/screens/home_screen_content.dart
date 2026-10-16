@@ -210,7 +210,8 @@ mixin _HomeMainContent on _HomeStateBase, _HomeLibraryPanel {
           const SizedBox(height: 32),
           _sectionHeader('Recomendados para ti'),
           const SizedBox(height: 12),
-          _recommendedGrid(filteredTracks, context.watch<PlayerController>()),
+          PlayerSelector.mostPlayed(
+            builder: (_, player) => _recommendedGrid(filteredTracks, player)),
           const SizedBox(height: 32),
           _sectionHeader('Álbumes destacados'),
           const SizedBox(height: 12),
@@ -253,9 +254,11 @@ mixin _HomeMainContent on _HomeStateBase, _HomeLibraryPanel {
   }
 
   // Tarjetas de Acceso Rápido AMOLED
-  Widget _quickAccessGrid() {
+  Widget _quickAccessGrid() => PlayerSelector.mostPlayed(
+      builder: (_, player) => _quickAccessGridFor(player.mostPlayed));
+
+  Widget _quickAccessGridFor(List<MostPlayedItem> mostPlayed) {
     // Orden fijo: favoritos, la playlist más reproducida y cuatro canciones.
-    final mostPlayed = context.watch<PlayerController>().mostPlayed;
     MostPlayedItem? topPlaylist;
     final topTracks = <MostPlayedItem>[];
     for (final item in mostPlayed) {
@@ -445,7 +448,8 @@ mixin _HomeMainContent on _HomeStateBase, _HomeLibraryPanel {
             ),
           );
         }
-        return _recommendedGrid(tracks, context.watch<PlayerController>());
+        return PlayerSelector.mostPlayed(
+            builder: (_, player) => _recommendedGrid(tracks, player));
       },
     );
   }
@@ -756,8 +760,10 @@ mixin _HomeMainContent on _HomeStateBase, _HomeLibraryPanel {
     );
   }
 
-  Widget _recentsList() {
-    final player = context.watch<PlayerController>();
+  Widget _recentsList() => PlayerSelector.recents(
+      builder: (_, player) => _recentsListFor(player));
+
+  Widget _recentsListFor(PlayerController player) {
     final items = player.recentlyPlayed.take(6).toList();
     if (items.isEmpty) {
       return Padding(

@@ -517,7 +517,7 @@ El test va en el archivo de pruebas del servicio, si ya existe.
 
 ## Fase 5 — UI y rendimiento
 
-### [ ] 39. Reconstrucciones amplias (R)
+### [~] 39. Reconstrucciones amplias (R)
 - **`PlayerController`:** `_onPlayerState` (`player_controller.dart:702`)
   notifica en cada cambio de estado, y lo escuchan:
   - `home_screen_content.dart:212,257,447,759`
@@ -530,7 +530,7 @@ El test va en el archivo de pruebas del servicio, si ya existe.
 - **Aceptación:** medir con DevTools (rebuild counts) antes y después;
   anotar los números en la bitácora.
 
-### [ ] 40. Listas e imágenes (R)
+### [~] 40. Listas e imágenes (R)
 - `ListView(children:)` con listas grandes:
   - `home_screen_library.dart:48,218`
   - `mobile_search_library_tabs.dart:107,211`
@@ -550,7 +550,7 @@ El test va en el archivo de pruebas del servicio, si ya existe.
 - `waveform_progress_bar.dart:182`: `_pulse.repeat` sigue en pestañas ocultas
   de un `IndexedStack`. Envolver en `TickerMode`.
 
-### [ ] 41. Async en la UI (R)
+### [~] 41. Async en la UI (R)
 - `setState` tras `await` sin `mounted`:
   - `album_detail_screen.dart:147`
   - `artist_screen.dart:582`
@@ -560,7 +560,7 @@ El test va en el archivo de pruebas del servicio, si ya existe.
 - `FutureBuilder` con `snapshot.data ?? []` sin estado de error ni de carga
   (`home_screen_library.dart:42`, entre otros). Usar `AppErrorBox` + esqueleto.
 
-### [ ] 42. Imagen de artista desde terceros (R)
+### [x] 42. Imagen de artista desde terceros (R)
 - **Dónde:** `artist_screen.dart:57-95` manda el nombre del artista a
   TheAudioDB y Deezer, sin timeout y desde el widget.
 - **Arreglo:**
@@ -568,7 +568,7 @@ El test va en el archivo de pruebas del servicio, si ya existe.
   - Primero `getArtistInfo2` de Navidrome (idea 46).
   - Terceros solo con un ajuste de opt-in.
 
-### [ ] 43. Duplicación entre móvil y escritorio (R)
+### [!] 43. Duplicación entre móvil y escritorio (R)
 - **Dónde:** `home_screen.dart:100-225` y `mobile_home_screen.dart:110-360`
   repiten carga, búsqueda y reinicio por sesión.
 - **Arreglo:**
@@ -577,7 +577,7 @@ El test va en el archivo de pruebas del servicio, si ya existe.
   - Las pantallas solo maquetan.
 - **Más adelante:** lo mismo para los dos logins.
 
-### [ ] 44. Accesibilidad (R)
+### [~] 44. Accesibilidad (R)
 - Unos 54 de 113 `IconButton` no tienen `tooltip`
   (`persistent_player_bar.dart`: 3 de 11).
 - Solo hay 8 `Semantics`.
@@ -750,3 +750,11 @@ robustez y las funciones nuevas.
   - 36: frames de Connect LAN en serie; relé con backoff + jitter y tope de 60 s.
   - 37: `closeRoom` avisa al anfitrión y limpia `socketRooms`; poda del guard por intervalo; Dockerfile/healthcheck (ya hechos).
   - 38 (parcial): sin resucitar temas tras purgar el aviso (test); `JamSessionState.fromJson` descarta solo el elemento malo; RTT del reloj con `Stopwatch`. **Falta** el conflicto de sync por versión/contador: hoy compara el mtime local con `updatedAt` del servidor (relojes distintos) y requiere un cambio de protocolo en `jam-server/src/sync.js`.
+
+- 2026-10-15 (5) — Fase 5 (UI y rendimiento).
+  - 39 (parcial): `PlayerSelector` (+ `mostPlayedSignature`/`recentlyPlayedSignature`) en Inicio móvil y escritorio: accesos rápidos, recomendados y recientes ya no se reconstruyen con play/pausa (test con contador de builds). **Falta** `track_context_menu` y `NavidromeService` en `home_screen`/`mobile_home_screen`, y medir con DevTools antes/después.
+  - 40 (parcial): imágenes de red a tamaño real (`ResizeImage`/`cacheWidth`) en álbum, artista, inicio, ajustes y avatar; `TickerMode` por pestaña en `IndexedStack` del inicio móvil. **Falta** pasar `ListView(children:)` a `SliverList.builder` y los `GridView` con `shrinkWrap` a slivers (son reestructuraciones de varias pantallas).
+  - 41 (parcial): `if (!mounted)` tras `await` en álbum, artista, playlist y emparejamiento; la biblioteca muestra carga y fallo de las playlists. **Falta** estado de error/carga en los demás `FutureBuilder` de inicio.
+  - 42: `ArtistImageService` (caché + dedupe); primero `getArtistInfo2`; TheAudioDB/Deezer solo con el ajuste «Fotos de artista de internet» (desactivado). 3 tests.
+  - 43: **no hecho** (`HomeDataController` toca las dos pantallas de inicio enteras; conviene hacerlo con sus propias pruebas de pantalla).
+  - 44 (parcial): los 54 `IconButton` sin `tooltip` ya lo tienen; una prueba de código impide nuevos. **Falta** áreas de toque ≥ 48 dp y `Semantics` en el reproductor, con `meetsGuideline` en tests de widget.

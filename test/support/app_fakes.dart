@@ -67,6 +67,10 @@ class IdlePlayer extends ChangeNotifier implements PlayerController {
   List<MostPlayedItem> get mostPlayed => [];
   @override
   List<Track> get recentlyPlayed => [];
+  @override
+  String get mostPlayedSignature => '';
+  @override
+  String get recentlyPlayedSignature => '';
 
   @override
   bool get hasSleepTimer => false;
