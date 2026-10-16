@@ -123,9 +123,73 @@ class AppTheme {
     this.thumbnailPath,
   });
 
+  /// Copia del tema con [accent] como color de énfasis (p. ej. el de la
+  /// carátula). Conserva fondos y textos; recalcula los derivados del acento.
+  AppTheme withAccent(Color accent) {
+    final hsl = HSLColor.fromColor(accent);
+    final accent2 =
+        hsl.withLightness((hsl.lightness + 0.12).clamp(0.0, 1.0)).toColor();
+    final accentDim = accent.withValues(alpha: 0.6);
+    final accentGlow = accent.withValues(alpha: 0.25);
+    final onAccent =
+        ThemeData.estimateBrightnessForColor(accent) == Brightness.dark
+            ? const Color(0xFFFFFFFF)
+            : const Color(0xFF111111);
+    return AppTheme(
+      id: '$id+cover',
+      name: name,
+      author: author,
+      version: version,
+      description: description,
+      mode: mode,
+      tags: tags,
+      accent: accent,
+      accent2: accent2,
+      accentDim: accentDim,
+      accentGlow: accentGlow,
+      highlight: accent,
+      bgApp: bgApp,
+      bgCard: bgCard,
+      bgElevated: bgElevated,
+      bgSidebar: bgSidebar,
+      bgHover: bgHover,
+      bgPlayer: bgPlayer,
+      bgDeep: bgDeep,
+      menuBg: menuBg,
+      modalBg: modalBg,
+      inputBg: inputBg,
+      inputBorder: inputBorder,
+      inputFocusBorder: accent,
+      border: border,
+      borderSubtle: borderSubtle,
+      cardHoverBorder: cardHoverBorder,
+      textPrimary: textPrimary,
+      textSecondary: textSecondary,
+      textMuted: textMuted,
+      textOnAccent: onAccent,
+      danger: danger,
+      positive: positive,
+      warning: warning,
+      rowPlayingBg: rowPlayingBg,
+      rowPlayingText: accent,
+      rowDivider: rowDivider,
+      sidebarActiveBg: sidebarActiveBg,
+      sidebarActiveText: accent,
+      sliderTrack: sliderTrack,
+      sliderThumb: accent,
+      scrollbarThumb: scrollbarThumb,
+      volumeAccent: accent,
+      waveformPlayed: accent,
+      waveformUnplayed: waveformUnplayed,
+      playerTitle: playerTitle,
+      playerArtist: playerArtist,
+      logoStart: logoStart,
+      logoEnd: logoEnd,
+    );
+  }
+
   bool get isDark => mode.toLowerCase() != 'light';
-  bool get isCvdSafe =>
-      tags.any((t) => t.toLowerCase().contains('cvd'));
+  bool get isCvdSafe => tags.any((t) => t.toLowerCase().contains('cvd'));
 
   /// Color inferior de la tarjeta de vista previa (franja de color).
   Color get previewStripe => accent;
@@ -179,12 +243,10 @@ class AppTheme {
 
       // Núcleo (los demás colores derivan de estos si faltan en el CSS).
       final accent = parse('--accent') ?? const Color(0xFFA855F7);
-      final textPrimary =
-          parse('--text-primary') ?? Colors.white;
+      final textPrimary = parse('--text-primary') ?? Colors.white;
       final textSecondary =
           parse('--text-secondary') ?? const Color(0xFFBDBDBD);
-      final textMuted =
-          parse('--text-muted') ?? const Color(0xFF7A7A7A);
+      final textMuted = parse('--text-muted') ?? const Color(0xFF7A7A7A);
       final border = parse('--border') ?? const Color(0xFF242424);
       final bgApp = parse('--bg-app') ?? const Color(0xFF000000);
       final bgCard = parse('--bg-card') ?? const Color(0xFF121212);
@@ -195,8 +257,7 @@ class AppTheme {
       final warningRaw = parse('--warning');
       final highlight =
           parse('--highlight') ?? warningRaw ?? const Color(0xFFFBBF24);
-      final accent2 =
-          parse('--accent-2') ?? parse('--accent-dim') ?? accent;
+      final accent2 = parse('--accent-2') ?? parse('--accent-dim') ?? accent;
 
       return AppTheme(
         id: (manifest['id'] ?? manifest['name'] ?? 'tema').toString(),
@@ -208,10 +269,8 @@ class AppTheme {
         tags: tags,
         accent: accent,
         accent2: accent2,
-        accentDim:
-            parse('--accent-dim') ?? accent.withValues(alpha: 0.12),
-        accentGlow:
-            parse('--accent-glow') ?? accent.withValues(alpha: 0.35),
+        accentDim: parse('--accent-dim') ?? accent.withValues(alpha: 0.12),
+        accentGlow: parse('--accent-glow') ?? accent.withValues(alpha: 0.35),
         highlight: highlight,
         bgApp: bgApp,
         bgCard: bgCard,
@@ -223,9 +282,8 @@ class AppTheme {
         menuBg: parse('--menu-bg') ?? bgElevated,
         modalBg: parse('--modal-bg') ?? bgElevated,
         inputBg: parse('--input-bg') ?? bgApp,
-        inputBorder: parse('--input-border') ??
-            parse('--border-dropdown') ??
-            border,
+        inputBorder:
+            parse('--input-border') ?? parse('--border-dropdown') ?? border,
         inputFocusBorder: parse('--input-focus-border') ??
             parse('--card-hover-border') ??
             accent,
@@ -239,21 +297,20 @@ class AppTheme {
         danger: parse('--danger') ?? const Color(0xFFF87171),
         positive: parse('--positive') ?? const Color(0xFF4ADE80),
         warning: warningRaw ?? highlight,
-        rowPlayingBg: parse('--row-playing-bg') ??
-            accent.withValues(alpha: 0.12),
+        rowPlayingBg:
+            parse('--row-playing-bg') ?? accent.withValues(alpha: 0.12),
         rowPlayingText: parse('--row-playing-text') ?? accent,
         rowDivider: parse('--row-divider') ?? border,
-        sidebarActiveBg: parse('--sidebar-item-active-bg') ??
-            accent.withValues(alpha: 0.18),
-        sidebarActiveText:
-            parse('--sidebar-item-active-text') ?? accent,
+        sidebarActiveBg:
+            parse('--sidebar-item-active-bg') ?? accent.withValues(alpha: 0.18),
+        sidebarActiveText: parse('--sidebar-item-active-text') ?? accent,
         sliderTrack: parse('--slider-track') ?? textMuted,
         sliderThumb: parse('--slider-thumb') ?? accent,
         scrollbarThumb: parse('--scrollbar-thumb') ?? textMuted,
         volumeAccent: parse('--volume-accent') ?? accent,
         waveformPlayed: parse('--waveform-played') ?? accent,
-        waveformUnplayed: parse('--waveform-unplayed') ??
-            textMuted.withValues(alpha: 0.25),
+        waveformUnplayed:
+            parse('--waveform-unplayed') ?? textMuted.withValues(alpha: 0.25),
         playerTitle: parse('--player-title') ?? textPrimary,
         playerArtist: parse('--player-artist') ?? textSecondary,
         logoStart: parse('--logo-color-start') ?? accent,
@@ -344,8 +401,7 @@ class AppTheme {
     Color? logoEnd,
   }) {
     final dark = mode.toLowerCase() != 'light';
-    final tp = textPrimary ??
-        (dark ? Colors.white : const Color(0xFF1A1B20));
+    final tp = textPrimary ?? (dark ? Colors.white : const Color(0xFF1A1B20));
     final ts = textSecondary ??
         (dark ? const Color(0xFFBDBDBD) : const Color(0xFF4C4F69));
     final tm =
@@ -481,17 +537,16 @@ class AppTheme {
 
   ThemeData toThemeData() {
     final brightness = isDark ? Brightness.dark : Brightness.light;
-    final scheme =
-        ColorScheme.fromSeed(
-          seedColor: accent,
-          brightness: brightness,
-        ).copyWith(
-          surface: bgApp,
-          primary: accent,
-          onPrimary: _onColor(accent),
-          secondary: accent2,
-          error: danger,
-        );
+    final scheme = ColorScheme.fromSeed(
+      seedColor: accent,
+      brightness: brightness,
+    ).copyWith(
+      surface: bgApp,
+      primary: accent,
+      onPrimary: _onColor(accent),
+      secondary: accent2,
+      error: danger,
+    );
     return materialPresentation(
       this,
       ThemeData(
@@ -541,7 +596,8 @@ class AppTheme {
 
   /// Color de texto legible sobre [bg] (negro o blanco según luminancia).
   static Color onColor(Color bg) {
-    final l = (0.299 * bg.r * 255 + 0.587 * bg.g * 255 + 0.114 * bg.b * 255) / 255;
+    final l =
+        (0.299 * bg.r * 255 + 0.587 * bg.g * 255 + 0.114 * bg.b * 255) / 255;
     return l > 0.6 ? Colors.black : Colors.white;
   }
 
@@ -568,10 +624,10 @@ class AppTheme {
   }
 
   /// Extrae `--var: valor;` del bloque `[data-theme=...] { ... }`.
-  static Map<String, String> _parseCssVars(String css) {    final out = <String, String>{};
+  static Map<String, String> _parseCssVars(String css) {
+    final out = <String, String>{};
     // Quita comentarios /* ... */
-    final clean =
-        css.replaceAll(RegExp(r'/\*.*?\*/', dotAll: true), '');
+    final clean = css.replaceAll(RegExp(r'/\*.*?\*/', dotAll: true), '');
     final reg = RegExp(r'(--[\w-]+)\s*:\s*([^;]+);');
     for (final m in reg.allMatches(clean)) {
       out[m.group(1)!.trim().toLowerCase()] = m.group(2)!.trim();

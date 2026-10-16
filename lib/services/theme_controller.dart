@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:archive/archive.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/painting.dart' show Color;
 import 'package:path_provider/path_provider.dart';
 
 import 'app_theme.dart';
@@ -26,6 +27,9 @@ class ThemeController extends ChangeNotifier {
 
   String _themesDir = '';
   String? _selectedId;
+
+  bool _coverAccentEnabled = false;
+  Color? _coverAccent;
   List<AppTheme> _installed = const [];
   bool _loading = false;
   String? _error;
@@ -55,7 +59,31 @@ class ThemeController extends ChangeNotifier {
   int get skippedInvalid => _skippedInvalid;
   String? get migrationNotice => _migrationNotice;
 
+  /// El color de énfasis sigue a la carátula de la pista que suena.
+  bool get coverAccentEnabled => _coverAccentEnabled;
+
+  Future<void> setCoverAccentEnabled(bool value) async {
+    if (_coverAccentEnabled == value) return;
+    _coverAccentEnabled = value;
+    if (!value) _coverAccent = null;
+    notifyListeners();
+    await _saveConfig();
+  }
+
+  /// Color extraído de la carátula actual (`null` = el del tema).
+  void setCoverAccent(Color? color) {
+    if (!_coverAccentEnabled || _coverAccent == color) return;
+    _coverAccent = color;
+    notifyListeners();
+  }
+
   AppTheme get active {
+    final base = _baseTheme;
+    final accent = _coverAccentEnabled ? _coverAccent : null;
+    return accent == null ? base : base.withAccent(accent);
+  }
+
+  AppTheme get _baseTheme {
     final id = _selectedId ?? 'mocha';
     for (final t in themes) {
       if (t.id == id) return t;
@@ -98,6 +126,7 @@ class ThemeController extends ChangeNotifier {
     final dir = data['themesDir'] as String?;
     _themesDir = dir == null || dir == _legacyThemesDir ? '' : dir;
     _selectedId = data['selectedId'] as String?;
+    _coverAccentEnabled = data['coverAccent'] as bool? ?? false;
   }
 
   Future<Directory> _thumbDir() async {
@@ -187,6 +216,7 @@ class ThemeController extends ChangeNotifier {
         'version': _configVersion,
         'themesDir': _themesDir,
         'selectedId': _selectedId,
+        'coverAccent': _coverAccentEnabled,
       }));
     } catch (err) {
       debugPrint('theme_controller:170 ignorado: $err');

@@ -11,6 +11,7 @@ import '../services/hifi/audio_output_devices.dart';
 import '../services/hifi/hifi_coordinator.dart';
 import '../services/hifi/hifi_profiles.dart';
 import '../services/player_controller.dart';
+import '../services/theme_controller.dart';
 import '../services/settings_controller.dart';
 import '../widgets/diagnostics_panel.dart';
 import '../widgets/pairing_panel.dart';
@@ -372,6 +373,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 'Recorta silencios al inicio y final de las canciones usando análisis de waveform',
             value: settings.silenceRemovalEnabled,
             onChanged: settings.setSilenceRemovalEnabled,
+          ),
+          _switchTile(
+            title: 'Color según la carátula',
+            subtitle:
+                'El color de énfasis de la app sigue a la portada de la canción que suena',
+            value: context.watch<ThemeController>().coverAccentEnabled,
+            onChanged: (v) =>
+                context.read<ThemeController>().setCoverAccentEnabled(v),
           ),
           _switchTile(
             title: 'Guardar la cola en el servidor',
