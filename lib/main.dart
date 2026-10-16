@@ -13,6 +13,8 @@ import 'package:just_audio_media_kit/just_audio_media_kit.dart';
 import 'package:provider/provider.dart';
 import 'package:window_manager/window_manager.dart';
 
+import 'services/desktop_media_keys.dart';
+import 'services/mpris_service.dart';
 import 'services/diagnostics_log.dart';
 import 'services/hifi/hifi_coordinator.dart';
 import 'services/home_widget_service.dart';
@@ -287,6 +289,18 @@ class MyApp extends StatelessWidget {
               final scope = ctx.read<NavidromeService>().serverScope;
               return scope == null ? null : music.localPath(scope, id);
             };
+            // Escritorio: teclas multimedia globales y MPRIS (Linux). Un fallo
+            // aquí nunca debe impedir que la app arranque.
+            if (DesktopMediaKeys.isSupported) {
+              unawaited(
+                  DesktopMediaKeys(player).start().catchError((Object _) {}));
+              if (Platform.isLinux) {
+                unawaited(MprisService(player)
+                    .start()
+                    .then((_) {})
+                    .catchError((Object _) {}));
+              }
+            }
             // Navegación para Android Auto: playlists del servidor.
             final browseLibrary = ctx.read<NavidromeService>();
             audioHandler?.playlistsLoader = browseLibrary.getPlaylists;

@@ -46,6 +46,8 @@ dependencies:
   audio_session: ^0.1.25
   home_widget: ^0.10.0
   app_links: ^7.2.1
+  dbus: ^0.8.0
+  hotkey_manager: ^0.2.3
 dev_dependencies:
   flutter_test:
     sdk: flutter
