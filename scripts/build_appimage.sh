@@ -13,8 +13,12 @@ if [[ -z "$tool" || ! -x "$tool" ]]; then
 fi
 
 ver=$(grep -E '^version:' pubspec.yaml | sed 's/version: *//; s/+.*//')
-commit=$(git rev-parse --short HEAD)
-[[ -n "$(git status --porcelain --untracked-files=no)" ]] && commit="$commit-mod"
+if [[ -z "${SCROTIFY_COMMIT:-}" ]]; then
+  commit=$(git rev-parse --short HEAD)
+  [[ -n "$(git status --porcelain --untracked-files=no)" ]] && commit="$commit-mod"
+else
+  commit=$SCROTIFY_COMMIT   # lo fija build_appimage_portable.sh (sin repo git)
+fi
 
 flutter build linux --release \
   --dart-define=SCROTIFY_VERSION="$ver" \
@@ -36,9 +40,13 @@ Exec=navidrome_client
 Icon=scrotify
 Categories=AudioVideo;Audio;Player;
 DESKTOP
+scripts/bundle_linux_libs.sh "$appdir"
 cat > "$appdir/AppRun" <<'APPRUN'
 #!/bin/sh
 HERE="$(dirname "$(readlink -f "$0")")"
+# Librerías y ffmpeg/ffprobe viajan dentro del AppImage.
+export LD_LIBRARY_PATH="$HERE/usr/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+export PATH="$HERE/usr/bin:$PATH"
 exec "$HERE/usr/bin/navidrome_client" "$@"
 APPRUN
 chmod +x "$appdir/AppRun"
