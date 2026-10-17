@@ -1081,8 +1081,7 @@ class PlayerController extends _PlayerBase
       if (_karaokeMode && _karaokePlayer != null) {
         final t = currentTrack;
         if (t != null) {
-          final url = _service.getPlaybackStreamUrl(t.id,
-              quality: _settings.effectiveQuality);
+          final url = _mediaLocationFor(t);
           await _applyKaraokeVolume();
           await _karaokePlayer!.open(mk.Media(url), play: true);
           _recordRecent(t);

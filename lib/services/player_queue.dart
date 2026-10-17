@@ -182,6 +182,7 @@ mixin _PlayerQueue on _PlayerBase {
   void clearQueue() {
     if (_mirror) return _remote!.clearQueue();
     _cancelFade();
+    _loadGen++; // una carga en curso ya no debe reproducir nada
     _queue.clear();
     _order.clear();
     _pos = -1;
