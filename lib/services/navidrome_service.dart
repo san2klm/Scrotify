@@ -530,9 +530,11 @@ class NavidromeService extends _NavidromeBase
   /// Un fallo de red puntual no debe dejar la app en modo sin conexión para
   /// siempre: mientras esté offline se sondea el servidor y, en cuanto
   /// responde, se vuelve a conectar sin intervención del usuario.
+  static const _reconnectEvery = 5;
+
   void _startAutoReconnect() {
-    _reconnectTimer ??= Timer.periodic(
-        const Duration(seconds: 15), (_) => unawaited(_tryAutoReconnect()));
+    _reconnectTimer ??= Timer.periodic(const Duration(seconds: _reconnectEvery),
+        (_) => unawaited(_tryAutoReconnect()));
   }
 
   void _stopAutoReconnect() {
@@ -632,6 +634,8 @@ class NavidromeService extends _NavidromeBase
           !await _pingServer() &&
           currentSessionKey == session &&
           _connected) {
+        debugPrint('Sin conexión: ${error.runtimeType} y el servidor no '
+            'respondió al ping; se reintenta cada $_reconnectEvery s.');
         _connected = false;
         _offlineMode = true;
         _startAutoReconnect();

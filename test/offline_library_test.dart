@@ -199,6 +199,22 @@ void main() {
     expect((await nav.getRecentlyAddedTracks()).length, 2);
   });
 
+  test('Al pasar a sin conexión deja en el registro el motivo', () async {
+    await seed(songs[0]);
+    await saveOnline();
+    network = false;
+    final logged = <String>[];
+    final previous = debugPrint;
+    debugPrint = (String? message, {int? wrapWidth}) {
+      if (message != null) logged.add(message);
+    };
+    addTearDown(() => debugPrint = previous);
+    await nav.getPlaylists();
+    expect(nav.offlineMode, isTrue);
+    expect(
+        logged.where((line) => line.startsWith('Sin conexión:')), hasLength(1));
+  });
+
   test('Una petición cortada con el servidor vivo no deja la app sin conexión',
       () async {
     await seed(songs[0]);

@@ -147,10 +147,18 @@ class RemoteCrotoLinkService {
       fitted.add(item);
     }
     if (fitted.length == queue.length) return state;
-    debugPrint(
-        'RemoteCrotoLinkService: cola recortada a ${fitted.length}/${queue.length} para el servidor central');
+    // Se reenvía el estado cada pocos segundos: avisar solo cuando cambia el
+    // recorte, para no llenar el registro de diagnóstico con la misma línea.
+    final notice =
+        'RemoteCrotoLinkService: cola recortada a ${fitted.length}/${queue.length} para el servidor central';
+    if (notice != _lastTrimNotice) {
+      _lastTrimNotice = notice;
+      debugPrint(notice);
+    }
     return {...state, 'queue': fitted};
   }
+
+  static String? _lastTrimNotice;
 
   void setEndpoint(String endpoint) {
     _endpoint = endpoint.trim();
