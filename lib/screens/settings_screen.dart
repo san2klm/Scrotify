@@ -1,6 +1,8 @@
 import 'dart:io' show Platform;
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../models/crotolink_models.dart';
@@ -13,6 +15,7 @@ import '../services/hifi/hifi_profiles.dart';
 import '../services/player_controller.dart';
 import '../services/theme_controller.dart';
 import '../services/settings_controller.dart';
+import '../services/window_controls.dart';
 import '../widgets/diagnostics_panel.dart';
 import '../widgets/pairing_panel.dart';
 import '../widgets/sync_settings.dart';
@@ -453,6 +456,94 @@ class _SettingsScreenState extends State<SettingsScreen> {
             onChanged: settings.setSmartMixEnabled,
           ),
         ]),
+        if (WindowControls.isDesktop) ...[
+          _sectionTitle('Atajos'),
+          _card(children: [
+            _switchTile(
+              title: 'Seguir en segundo plano al cerrar la ventana',
+              subtitle:
+                  'Al tocar la X, CrotoWave queda en la bandeja del sistema reproduciendo música y respondiendo a los atajos',
+              value: settings.closeToTray,
+              onChanged: settings.setCloseToTray,
+            ),
+            _switchTile(
+              title: 'Activar atajos de reproducción',
+              subtitle:
+                  'Permite controlar la reproducción con botones del mouse o teclas del teclado',
+              value: settings.mouseControlsEnabled,
+              onChanged: settings.setMouseControlsEnabled,
+            ),
+            if (settings.mouseControlsEnabled) ...[
+              _switchTile(
+                title: 'Atajos globales (en el escritorio y fuera de la app)',
+                subtitle:
+                    'Controla la reproducción aunque cierres la ventana, minimices o estés en el escritorio/juegos',
+                value: settings.mouseGlobalEnabled,
+                onChanged: settings.setMouseGlobalEnabled,
+              ),
+              _switchTile(
+                title: 'Pausar con clic de la rueda (botón central)',
+                subtitle:
+                    'Funciona en CrotoWave, en el escritorio y en otros programas (en navegadores usa doble clic de rueda o Alt + Rueda para no cerrar pestañas)',
+                value: settings.mouseMiddleClickEnabled,
+                onChanged: settings.setMouseMiddleClickEnabled,
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'Personalizar botones del mouse o teclas',
+                style: TextStyle(
+                  color: context.textSecondary,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 8),
+              _ShortcutBindingTile(
+                title: 'Reproducir / Pausar tema',
+                subtitle:
+                    'Elegí qué botón del mouse o tecla usar para pausar y reanudar (doble clic rápido en botón lateral = tema anterior)',
+                icon: Icons.play_arrow_rounded,
+                binding: settings.playPauseBinding,
+                onChange: (newRaw) => settings.setPlayPauseShortcut(newRaw),
+              ),
+              const SizedBox(height: 8),
+              _ShortcutBindingTile(
+                title: 'Siguiente tema',
+                subtitle:
+                    'Elegí qué botón del mouse o tecla usar para pasar a la siguiente canción',
+                icon: Icons.skip_next_rounded,
+                binding: settings.nextTrackBinding,
+                onChange: (newRaw) => settings.setNextTrackShortcut(newRaw),
+              ),
+              if (settings.playPauseShortcut !=
+                      ShortcutBinding.mouseXButton1.raw ||
+                  settings.nextTrackShortcut !=
+                      ShortcutBinding.mouseXButton2.raw) ...[
+                const SizedBox(height: 8),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton.icon(
+                    onPressed: settings.resetShortcutsToDefault,
+                    icon: Icon(Icons.restore_rounded,
+                        size: 18, color: context.textSecondary),
+                    label: Text(
+                      'Restaurar atajos por defecto',
+                      style:
+                          TextStyle(color: context.textSecondary, fontSize: 13),
+                    ),
+                  ),
+                ),
+              ],
+              const SizedBox(height: 8),
+              _InfoText(
+                'Atajos activos actualmente:\n'
+                '• Reproducir / Pausar tema: ${settings.playPauseBinding.label}\n'
+                '• Siguiente tema: ${settings.nextTrackBinding.label}\n'
+                '• Alt + Rueda arriba/abajo: Subir o bajar volumen desde cualquier lugar',
+              ),
+            ],
+          ]),
+        ],
       ];
 
   List<Widget> _appearancePage(SettingsController settings) => [
@@ -1130,6 +1221,367 @@ class _AlsaOutputPickerState extends State<_AlsaOutputPicker> {
           ]),
         );
       },
+    );
+  }
+}
+
+/// Fila interactiva que muestra el atajo asignado a una acción (ej. Reproducir
+/// o Siguiente tema) y permite modificarlo por cualquier botón del mouse o tecla.
+class _ShortcutBindingTile extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  final IconData icon;
+  final ShortcutBinding binding;
+  final ValueChanged<String> onChange;
+
+  const _ShortcutBindingTile({
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+    required this.binding,
+    required this.onChange,
+  });
+
+  IconData get _bindingIcon {
+    if (binding.isMouse) return Icons.mouse_rounded;
+    if (binding.isKey) return Icons.keyboard_rounded;
+    return Icons.block_rounded;
+  }
+
+  Future<void> _openCaptureDialog(BuildContext context) async {
+    final settings = context.read<SettingsController>();
+    settings.setCapturingShortcut(true);
+    try {
+      final result = await showDialog<String>(
+        context: context,
+        builder: (ctx) => _ShortcutCaptureDialog(
+          actionTitle: title,
+          initialBinding: binding,
+        ),
+      );
+      if (result != null && result.isNotEmpty) {
+        onChange(result);
+      }
+    } finally {
+      settings.setCapturingShortcut(false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialSurface(
+      color: context.bgElevated,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      child: Row(
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: context.accent.withValues(alpha: 0.14),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(icon, color: context.accent, size: 20),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: TextStyle(
+                    color: context.textPrimary,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  subtitle,
+                  style: TextStyle(
+                    color: context.textSecondary,
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          OutlinedButton.icon(
+            onPressed: () => _openCaptureDialog(context),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: context.textPrimary,
+              side: BorderSide(color: context.accent.withValues(alpha: 0.6)),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            ),
+            icon: Icon(_bindingIcon, size: 17, color: context.accent),
+            label: Text(
+              binding.shortLabel,
+              style: TextStyle(
+                color: context.textPrimary,
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Diálogo modal para capturar un botón del mouse o una tecla del teclado,
+/// o elegir entre las opciones de botones del mouse.
+class _ShortcutCaptureDialog extends StatefulWidget {
+  final String actionTitle;
+  final ShortcutBinding initialBinding;
+
+  const _ShortcutCaptureDialog({
+    required this.actionTitle,
+    required this.initialBinding,
+  });
+
+  @override
+  State<_ShortcutCaptureDialog> createState() => _ShortcutCaptureDialogState();
+}
+
+class _ShortcutCaptureDialogState extends State<_ShortcutCaptureDialog> {
+  late String _selectedRaw = widget.initialBinding.raw;
+  final FocusNode _focusNode = FocusNode();
+  bool _justCaptured = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _focusNode.requestFocus();
+    });
+  }
+
+  @override
+  void dispose() {
+    _focusNode.dispose();
+    super.dispose();
+  }
+
+  void _selectBinding(String raw) {
+    setState(() {
+      _selectedRaw = raw;
+      _justCaptured = true;
+    });
+    _focusNode.requestFocus();
+  }
+
+  KeyEventResult _handleKeyEvent(FocusNode node, KeyEvent event) {
+    if (event is! KeyDownEvent) return KeyEventResult.ignored;
+    if (event.logicalKey == LogicalKeyboardKey.escape) {
+      Navigator.of(context).pop();
+      return KeyEventResult.handled;
+    }
+    final bound = ShortcutBinding.fromLogicalKey(event.logicalKey);
+    if (bound != null) {
+      _selectBinding(bound.raw);
+      return KeyEventResult.handled;
+    }
+    return KeyEventResult.ignored;
+  }
+
+  void _handlePointerDown(PointerDownEvent event) {
+    if ((event.buttons & kBackMouseButton) != 0) {
+      _selectBinding(ShortcutBinding.mouseXButton1.raw);
+    } else if ((event.buttons & kForwardMouseButton) != 0) {
+      _selectBinding(ShortcutBinding.mouseXButton2.raw);
+    } else if ((event.buttons & kMiddleMouseButton) != 0) {
+      _selectBinding(ShortcutBinding.mouseMiddle.raw);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final current = ShortcutBinding(_selectedRaw);
+    final presetOptions = [
+      (
+        binding: ShortcutBinding.mouseXButton1,
+        subtitle: 'Botón lateral trasero del mouse (XButton 1)',
+        icon: Icons.mouse_rounded,
+      ),
+      (
+        binding: ShortcutBinding.mouseXButton2,
+        subtitle: 'Botón lateral delantero del mouse (XButton 2)',
+        icon: Icons.mouse_rounded,
+      ),
+      (
+        binding: ShortcutBinding.mouseMiddle,
+        subtitle: 'Pulsar la rueda del mouse (Botón central)',
+        icon: Icons.mouse_rounded,
+      ),
+      (
+        binding: ShortcutBinding.none,
+        subtitle: 'No asignar ningún atajo a esta acción',
+        icon: Icons.block_rounded,
+      ),
+    ];
+
+    return Focus(
+      focusNode: _focusNode,
+      autofocus: true,
+      onKeyEvent: _handleKeyEvent,
+      child: Listener(
+        behavior: HitTestBehavior.translucent,
+        onPointerDown: _handlePointerDown,
+        child: AlertDialog(
+          backgroundColor: context.bgCard,
+          title: Text(
+            'Configurar atajo: ${widget.actionTitle}',
+            style: TextStyle(
+              color: context.textPrimary,
+              fontSize: 17,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          content: SizedBox(
+            width: 460,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
+                  decoration: BoxDecoration(
+                    color: context.bgElevated,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: _justCaptured
+                          ? context.accent
+                          : context.themeBorder,
+                      width: _justCaptured ? 1.8 : 1.0,
+                    ),
+                  ),
+                  child: Column(
+                    children: [
+                      Icon(
+                        current.isKey
+                            ? Icons.keyboard_alt_rounded
+                            : (current.isMouse
+                                ? Icons.mouse_rounded
+                                : Icons.block_rounded),
+                        color: context.accent,
+                        size: 30,
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        current.label,
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: context.textPrimary,
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        'Presioná ahora cualquier TECLA del teclado o BOTÓN del mouse (lateral/rueda) para asignarlo, o elegí una opción abajo:',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: context.textSecondary,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 14),
+                Text(
+                  'Opciones de botones del mouse:',
+                  style: TextStyle(
+                    color: context.textSecondary,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                MaterialSurface(
+                  color: context.bgElevated,
+                  child: Column(
+                    children: [
+                      for (final opt in presetOptions)
+                        InkWell(
+                          onTap: () => _selectBinding(opt.binding.raw),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 9),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  _selectedRaw == opt.binding.raw
+                                      ? Icons.radio_button_checked
+                                      : Icons.radio_button_off,
+                                  color: _selectedRaw == opt.binding.raw
+                                      ? context.accent
+                                      : context.themeBorder,
+                                  size: 19,
+                                ),
+                                const SizedBox(width: 10),
+                                Icon(opt.icon,
+                                    size: 18, color: context.textSecondary),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        opt.binding.label,
+                                        style: TextStyle(
+                                          color: context.textPrimary,
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                      ),
+                                      Text(
+                                        opt.subtitle,
+                                        style: TextStyle(
+                                          color: context.textSecondary,
+                                          fontSize: 11.5,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: Text(
+                'Cancelar',
+                style: TextStyle(color: context.textSecondary),
+              ),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(_selectedRaw),
+              style: FilledButton.styleFrom(
+                backgroundColor: context.accent,
+                foregroundColor: Colors.black,
+              ),
+              child: const Text(
+                'Guardar atajo',
+                style: TextStyle(fontWeight: FontWeight.w600),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
