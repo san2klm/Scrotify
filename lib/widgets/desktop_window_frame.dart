@@ -68,6 +68,14 @@ class _DesktopWindowFrameState extends State<DesktopWindowFrame>
             case 'volumeDown':
               _changeVolume(context, -0.04);
               break;
+            case 'onShortcutCaptured':
+              final raw = call.arguments as String?;
+              if (raw == 'cancel') {
+                _settingsSub?.stopShortcutCapture();
+              } else if (raw != null && raw.isNotEmpty) {
+                _settingsSub?.handleCapturedShortcut(raw);
+              }
+              break;
           }
         });
       }
@@ -106,6 +114,7 @@ class _DesktopWindowFrameState extends State<DesktopWindowFrame>
     if (s == null || !Platform.isWindows) return;
     _mouseChannel.invokeMethod('setMouseConfig', {
       'enabled': s.mouseControlsEnabled && !s.isCapturingShortcut,
+      'capturing': s.isCapturingShortcut,
       'global': s.mouseGlobalEnabled,
       'middleClick': s.mouseMiddleClickEnabled,
       'closeToTray': s.closeToTray,
@@ -327,18 +336,21 @@ class _DesktopWindowFrameState extends State<DesktopWindowFrame>
             return KeyEventResult.ignored;
           }
 
+          final pressed = ShortcutBinding.fromLogicalKey(event.logicalKey);
+          final pressedVk = pressed?.vkCode ?? 0;
+
           final playBind = settings.playPauseBinding;
           if (playBind.isKey &&
-              playBind.logicalKeyId != 0 &&
-              keyId == playBind.logicalKeyId) {
+              ((playBind.logicalKeyId != 0 && keyId == playBind.logicalKeyId) ||
+                  (playBind.vkCode != 0 && playBind.vkCode == pressedVk))) {
             _togglePlayPause(context);
             return KeyEventResult.handled;
           }
 
           final nextBind = settings.nextTrackBinding;
           if (nextBind.isKey &&
-              nextBind.logicalKeyId != 0 &&
-              keyId == nextBind.logicalKeyId) {
+              ((nextBind.logicalKeyId != 0 && keyId == nextBind.logicalKeyId) ||
+                  (nextBind.vkCode != 0 && nextBind.vkCode == pressedVk))) {
             _skipNext(context);
             return KeyEventResult.handled;
           }
@@ -371,6 +383,8 @@ class _DesktopWindowFrameState extends State<DesktopWindowFrame>
               pressedMouseType = 'mouse_xb2';
             } else if ((event.buttons & kMiddleMouseButton) != 0) {
               pressedMouseType = 'mouse_middle';
+            } else if ((event.buttons & kSecondaryMouseButton) != 0) {
+              pressedMouseType = 'mouse_right';
             }
             if (pressedMouseType == null) return;
 

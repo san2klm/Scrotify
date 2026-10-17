@@ -1226,7 +1226,7 @@ class _AlsaOutputPickerState extends State<_AlsaOutputPicker> {
 }
 
 /// Fila interactiva que muestra el atajo asignado a una acción (ej. Reproducir
-/// o Siguiente tema) y permite modificarlo por cualquier botón del mouse o tecla.
+/// o Siguiente tema) y permite modificarlo o detectar cualquier botón/tecla.
 class _ShortcutBindingTile extends StatelessWidget {
   final String title;
   final String subtitle;
@@ -1250,20 +1250,17 @@ class _ShortcutBindingTile extends StatelessWidget {
 
   Future<void> _openCaptureDialog(BuildContext context) async {
     final settings = context.read<SettingsController>();
-    settings.setCapturingShortcut(true);
     try {
-      final result = await showDialog<String>(
+      await showDialog<void>(
         context: context,
         builder: (ctx) => _ShortcutCaptureDialog(
           actionTitle: title,
           initialBinding: binding,
+          onSaveBinding: onChange,
         ),
       );
-      if (result != null && result.isNotEmpty) {
-        onChange(result);
-      }
     } finally {
-      settings.setCapturingShortcut(false);
+      settings.stopShortcutCapture();
     }
   }
 
@@ -1331,15 +1328,18 @@ class _ShortcutBindingTile extends StatelessWidget {
   }
 }
 
-/// Diálogo modal para capturar un botón del mouse o una tecla del teclado,
-/// o elegir entre las opciones de botones del mouse.
+/// Diálogo modal con la lista de hasta 3 opciones guardadas y el botón
+/// "Seleccionar botón a usar" que detecta cualquier botón del mouse o tecla,
+/// lo asigna a la función y lo guarda en la lista de 3 opciones.
 class _ShortcutCaptureDialog extends StatefulWidget {
   final String actionTitle;
   final ShortcutBinding initialBinding;
+  final ValueChanged<String> onSaveBinding;
 
   const _ShortcutCaptureDialog({
     required this.actionTitle,
     required this.initialBinding,
+    required this.onSaveBinding,
   });
 
   @override
@@ -1349,79 +1349,98 @@ class _ShortcutCaptureDialog extends StatefulWidget {
 class _ShortcutCaptureDialogState extends State<_ShortcutCaptureDialog> {
   late String _selectedRaw = widget.initialBinding.raw;
   final FocusNode _focusNode = FocusNode();
+  bool _listening = false;
   bool _justCaptured = false;
+  SettingsController? _settings;
 
   @override
-  void initState() {
-    super.initState();
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _settings ??= context.read<SettingsController>();
+  }
+
+  @override
+  void dispose() {
+    _settings?.stopShortcutCapture();
+    _focusNode.dispose();
+    super.dispose();
+  }
+
+  void _startListening() {
+    setState(() {
+      _listening = true;
+      _justCaptured = false;
+    });
+    _settings?.startShortcutCapture((capturedRaw) {
+      if (!mounted) return;
+      _applyBinding(capturedRaw, fromCapture: true);
+    });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _focusNode.requestFocus();
     });
   }
 
-  @override
-  void dispose() {
-    _focusNode.dispose();
-    super.dispose();
+  void _stopListening() {
+    _settings?.stopShortcutCapture();
+    if (mounted && _listening) {
+      setState(() {
+        _listening = false;
+      });
+    }
   }
 
-  void _selectBinding(String raw) {
+  void _applyBinding(String raw, {required bool fromCapture}) {
+    if (raw.isEmpty || raw == 'cancel') {
+      _stopListening();
+      return;
+    }
+    _settings?.stopShortcutCapture();
+    widget.onSaveBinding(raw);
+    if (!mounted) return;
     setState(() {
       _selectedRaw = raw;
-      _justCaptured = true;
+      _listening = false;
+      _justCaptured = fromCapture;
     });
-    _focusNode.requestFocus();
   }
 
   KeyEventResult _handleKeyEvent(FocusNode node, KeyEvent event) {
     if (event is! KeyDownEvent) return KeyEventResult.ignored;
     if (event.logicalKey == LogicalKeyboardKey.escape) {
-      Navigator.of(context).pop();
+      if (_listening) {
+        _stopListening();
+      } else {
+        Navigator.of(context).pop();
+      }
       return KeyEventResult.handled;
     }
+    if (!_listening) return KeyEventResult.ignored;
     final bound = ShortcutBinding.fromLogicalKey(event.logicalKey);
     if (bound != null) {
-      _selectBinding(bound.raw);
+      _applyBinding(bound.raw, fromCapture: true);
       return KeyEventResult.handled;
     }
     return KeyEventResult.ignored;
   }
 
   void _handlePointerDown(PointerDownEvent event) {
+    if (!_listening) return;
     if ((event.buttons & kBackMouseButton) != 0) {
-      _selectBinding(ShortcutBinding.mouseXButton1.raw);
+      _applyBinding(ShortcutBinding.mouseXButton1.raw, fromCapture: true);
     } else if ((event.buttons & kForwardMouseButton) != 0) {
-      _selectBinding(ShortcutBinding.mouseXButton2.raw);
+      _applyBinding(ShortcutBinding.mouseXButton2.raw, fromCapture: true);
     } else if ((event.buttons & kMiddleMouseButton) != 0) {
-      _selectBinding(ShortcutBinding.mouseMiddle.raw);
+      _applyBinding(ShortcutBinding.mouseMiddle.raw, fromCapture: true);
+    } else if ((event.buttons & kSecondaryMouseButton) != 0) {
+      _applyBinding(ShortcutBinding.mouseRight.raw, fromCapture: true);
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final settings = context.watch<SettingsController>();
+    final savedOptions = settings.shortcutSavedOptions.take(3).toList();
     final current = ShortcutBinding(_selectedRaw);
-    final presetOptions = [
-      (
-        binding: ShortcutBinding.mouseXButton1,
-        subtitle: 'Botón lateral trasero del mouse (XButton 1)',
-        icon: Icons.mouse_rounded,
-      ),
-      (
-        binding: ShortcutBinding.mouseXButton2,
-        subtitle: 'Botón lateral delantero del mouse (XButton 2)',
-        icon: Icons.mouse_rounded,
-      ),
-      (
-        binding: ShortcutBinding.mouseMiddle,
-        subtitle: 'Pulsar la rueda del mouse (Botón central)',
-        icon: Icons.mouse_rounded,
-      ),
-      (
-        binding: ShortcutBinding.none,
-        subtitle: 'No asignar ningún atajo a esta acción',
-        icon: Icons.block_rounded,
-      ),
-    ];
 
     return Focus(
       focusNode: _focusNode,
@@ -1433,7 +1452,7 @@ class _ShortcutCaptureDialogState extends State<_ShortcutCaptureDialog> {
         child: AlertDialog(
           backgroundColor: context.bgCard,
           title: Text(
-            'Configurar atajo: ${widget.actionTitle}',
+            'Atajo: ${widget.actionTitle}',
             style: TextStyle(
               color: context.textPrimary,
               fontSize: 17,
@@ -1446,55 +1465,112 @@ class _ShortcutCaptureDialogState extends State<_ShortcutCaptureDialog> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
-                  decoration: BoxDecoration(
-                    color: context.bgElevated,
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(
-                      color: _justCaptured
-                          ? context.accent
-                          : context.themeBorder,
-                      width: _justCaptured ? 1.8 : 1.0,
+                // Botón "Seleccionar botón a usar"
+                InkWell(
+                  borderRadius: BorderRadius.circular(10),
+                  onTap: _listening ? _stopListening : _startListening,
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 160),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 14),
+                    decoration: BoxDecoration(
+                      color: _listening
+                          ? context.accent.withValues(alpha: 0.16)
+                          : context.bgElevated,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                        color: _listening
+                            ? context.accent
+                            : (_justCaptured
+                                ? context.accent.withValues(alpha: 0.8)
+                                : context.accent.withValues(alpha: 0.45)),
+                        width: _listening ? 2.0 : 1.3,
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 40,
+                          height: 40,
+                          decoration: BoxDecoration(
+                            color: _listening
+                                ? context.accent
+                                : context.accent.withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Icon(
+                            _listening
+                                ? Icons.sensors_rounded
+                                : Icons.ads_click_rounded,
+                            color: _listening ? Colors.black : context.accent,
+                            size: 22,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                _listening
+                                    ? 'Esperando... Presioná cualquier botón o tecla'
+                                    : 'Seleccionar botón a usar',
+                                style: TextStyle(
+                                  color: _listening
+                                      ? context.accent
+                                      : context.textPrimary,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              const SizedBox(height: 3),
+                              Text(
+                                _listening
+                                    ? 'Apretá ahora el botón del mouse o tecla que quieras usar y se guardará automáticamente.'
+                                    : 'Tocá acá y apretá cualquier botón del mouse o tecla para detectarlo y guardarlo en la lista.',
+                                style: TextStyle(
+                                  color: context.textSecondary,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                  child: Column(
-                    children: [
-                      Icon(
-                        current.isKey
-                            ? Icons.keyboard_alt_rounded
-                            : (current.isMouse
-                                ? Icons.mouse_rounded
-                                : Icons.block_rounded),
-                        color: context.accent,
-                        size: 30,
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        current.label,
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          color: context.textPrimary,
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        'Presioná ahora cualquier TECLA del teclado o BOTÓN del mouse (lateral/rueda) para asignarlo, o elegí una opción abajo:',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          color: context.textSecondary,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ],
-                  ),
                 ),
+                if (_justCaptured && !_listening) ...[
+                  const SizedBox(height: 10),
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: context.accent.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.check_circle_rounded,
+                            color: context.accent, size: 18),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'Guardado para esta función: ${current.label}',
+                            style: TextStyle(
+                              color: context.textPrimary,
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
                 const SizedBox(height: 14),
                 Text(
-                  'Opciones de botones del mouse:',
+                  'Opciones guardadas (máx. 3):',
                   style: TextStyle(
                     color: context.textSecondary,
                     fontSize: 12,
@@ -1506,26 +1582,33 @@ class _ShortcutCaptureDialogState extends State<_ShortcutCaptureDialog> {
                   color: context.bgElevated,
                   child: Column(
                     children: [
-                      for (final opt in presetOptions)
+                      for (final opt in savedOptions)
                         InkWell(
-                          onTap: () => _selectBinding(opt.binding.raw),
+                          onTap: () => _applyBinding(opt.raw, fromCapture: false),
                           child: Padding(
                             padding: const EdgeInsets.symmetric(
-                                horizontal: 12, vertical: 9),
+                                horizontal: 12, vertical: 10),
                             child: Row(
                               children: [
                                 Icon(
-                                  _selectedRaw == opt.binding.raw
+                                  _selectedRaw == opt.raw
                                       ? Icons.radio_button_checked
                                       : Icons.radio_button_off,
-                                  color: _selectedRaw == opt.binding.raw
+                                  color: _selectedRaw == opt.raw
                                       ? context.accent
                                       : context.themeBorder,
                                   size: 19,
                                 ),
                                 const SizedBox(width: 10),
-                                Icon(opt.icon,
-                                    size: 18, color: context.textSecondary),
+                                Icon(
+                                  opt.isKey
+                                      ? Icons.keyboard_rounded
+                                      : Icons.mouse_rounded,
+                                  size: 18,
+                                  color: _selectedRaw == opt.raw
+                                      ? context.accent
+                                      : context.textSecondary,
+                                ),
                                 const SizedBox(width: 10),
                                 Expanded(
                                   child: Column(
@@ -1533,11 +1616,13 @@ class _ShortcutCaptureDialogState extends State<_ShortcutCaptureDialog> {
                                         CrossAxisAlignment.start,
                                     children: [
                                       Text(
-                                        opt.binding.label,
+                                        opt.label,
                                         style: TextStyle(
                                           color: context.textPrimary,
                                           fontSize: 13,
-                                          fontWeight: FontWeight.w500,
+                                          fontWeight: _selectedRaw == opt.raw
+                                              ? FontWeight.w700
+                                              : FontWeight.w500,
                                         ),
                                       ),
                                       Text(
@@ -1561,21 +1646,14 @@ class _ShortcutCaptureDialogState extends State<_ShortcutCaptureDialog> {
             ),
           ),
           actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: Text(
-                'Cancelar',
-                style: TextStyle(color: context.textSecondary),
-              ),
-            ),
             FilledButton(
-              onPressed: () => Navigator.of(context).pop(_selectedRaw),
+              onPressed: () => Navigator.of(context).pop(),
               style: FilledButton.styleFrom(
                 backgroundColor: context.accent,
                 foregroundColor: Colors.black,
               ),
               child: const Text(
-                'Guardar atajo',
+                'Listo',
                 style: TextStyle(fontWeight: FontWeight.w600),
               ),
             ),

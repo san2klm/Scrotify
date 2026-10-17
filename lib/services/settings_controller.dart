@@ -27,17 +27,19 @@ class ShortcutBinding {
   static const mouseXButton1 = ShortcutBinding('mouse:xbutton1');
   static const mouseXButton2 = ShortcutBinding('mouse:xbutton2');
   static const mouseMiddle = ShortcutBinding('mouse:middle');
+  static const mouseRight = ShortcutBinding('mouse:right');
   static const none = ShortcutBinding('none');
 
   bool get isNone => raw == 'none' || raw.isEmpty;
   bool get isMouse => raw.startsWith('mouse:');
   bool get isKey => raw.startsWith('key:');
 
-  /// Identificador para el canal nativo (`mouse_xb1`, `mouse_xb2`, `mouse_middle`, `key`, `none`).
+  /// Identificador para el canal nativo (`mouse_xb1`, `mouse_xb2`, `mouse_middle`, `mouse_right`, `key`, `none`).
   String get nativeType {
     if (raw == 'mouse:xbutton1') return 'mouse_xb1';
     if (raw == 'mouse:xbutton2') return 'mouse_xb2';
     if (raw == 'mouse:middle') return 'mouse_middle';
+    if (raw == 'mouse:right') return 'mouse_right';
     if (isKey) return 'key';
     return 'none';
   }
@@ -67,6 +69,8 @@ class ShortcutBinding {
         return 'Botón lateral adelante (Mouse 5)';
       case 'mouse:middle':
         return 'Clic de rueda (Botón central)';
+      case 'mouse:right':
+        return 'Clic derecho (Botón secundario)';
       case 'none':
       case '':
         return 'Desactivado';
@@ -82,6 +86,25 @@ class ShortcutBinding {
     }
   }
 
+  /// Subtítulo descriptivo para la lista de opciones.
+  String get subtitle {
+    switch (raw) {
+      case 'mouse:xbutton1':
+        return 'Botón lateral trasero del mouse (XButton 1)';
+      case 'mouse:xbutton2':
+        return 'Botón lateral delantero del mouse (XButton 2)';
+      case 'mouse:middle':
+        return 'Pulsar la rueda del mouse (Botón central)';
+      case 'mouse:right':
+        return 'Botón secundario del mouse';
+      default:
+        if (isKey) {
+          return 'Atajo de teclado detectado y guardado';
+        }
+        return 'Botón personalizado guardado';
+    }
+  }
+
   /// Etiqueta corta para badges/botones.
   String get shortLabel {
     switch (raw) {
@@ -91,6 +114,8 @@ class ShortcutBinding {
         return 'Mouse 5 (Adelante)';
       case 'mouse:middle':
         return 'Clic de rueda';
+      case 'mouse:right':
+        return 'Clic derecho';
       case 'none':
       case '':
         return 'Desactivado';
@@ -107,13 +132,7 @@ class ShortcutBinding {
 
   /// Crea un `ShortcutBinding` a partir de un `LogicalKeyboardKey` de Flutter.
   static ShortcutBinding? fromLogicalKey(LogicalKeyboardKey key) {
-    if (key == LogicalKeyboardKey.shiftLeft ||
-        key == LogicalKeyboardKey.shiftRight ||
-        key == LogicalKeyboardKey.controlLeft ||
-        key == LogicalKeyboardKey.controlRight ||
-        key == LogicalKeyboardKey.altLeft ||
-        key == LogicalKeyboardKey.altRight ||
-        key == LogicalKeyboardKey.metaLeft ||
+    if (key == LogicalKeyboardKey.metaLeft ||
         key == LogicalKeyboardKey.metaRight) {
       return null;
     }
@@ -150,6 +169,16 @@ class ShortcutBinding {
       LogicalKeyboardKey.numpadEnter: (0x0D, 'Intro Num'),
       LogicalKeyboardKey.tab: (0x09, 'Tab'),
       LogicalKeyboardKey.backspace: (0x08, 'Borrar'),
+      LogicalKeyboardKey.capsLock: (0x14, 'Bloq Mayús'),
+      LogicalKeyboardKey.shiftLeft: (0x10, 'Shift'),
+      LogicalKeyboardKey.shiftRight: (0x10, 'Shift'),
+      LogicalKeyboardKey.shift: (0x10, 'Shift'),
+      LogicalKeyboardKey.controlLeft: (0x11, 'Ctrl'),
+      LogicalKeyboardKey.controlRight: (0x11, 'Ctrl'),
+      LogicalKeyboardKey.control: (0x11, 'Ctrl'),
+      LogicalKeyboardKey.altLeft: (0x12, 'Alt'),
+      LogicalKeyboardKey.altRight: (0x12, 'Alt'),
+      LogicalKeyboardKey.alt: (0x12, 'Alt'),
       LogicalKeyboardKey.insert: (0x2D, 'Insert'),
       LogicalKeyboardKey.delete: (0x2E, 'Supr'),
       LogicalKeyboardKey.home: (0x24, 'Inicio'),
@@ -278,9 +307,17 @@ class SettingsController extends ChangeNotifier {
   bool _mouseGlobalEnabled = true;
   bool _mouseMiddleClickEnabled = true;
   bool _closeToTray = true;
+  static const List<String> defaultShortcutOptions = [
+    'mouse:xbutton1',
+    'mouse:xbutton2',
+    'mouse:middle',
+  ];
+
   String _playPauseShortcut = ShortcutBinding.mouseXButton1.raw;
   String _nextTrackShortcut = ShortcutBinding.mouseXButton2.raw;
+  List<String> _shortcutSavedOptions = List<String>.of(defaultShortcutOptions);
   bool _isCapturingShortcut = false;
+  void Function(String rawBinding)? _onShortcutCapturedCallback;
 
   // Red actual detectada. Si no se puede saber (sin NetworkManager, etc.) se
   // asume "casa" para no degradar la calidad sin motivo.
@@ -563,6 +600,30 @@ class SettingsController extends ChangeNotifier {
   ShortcutBinding get nextTrackBinding => ShortcutBinding(_nextTrackShortcut);
   bool get isCapturingShortcut => _isCapturingShortcut;
 
+  /// Lista de opciones guardadas (máximo 3 opciones).
+  List<ShortcutBinding> get shortcutSavedOptions => _shortcutSavedOptions
+      .take(3)
+      .map(ShortcutBinding.new)
+      .toList(growable: false);
+
+  void _registerShortcutInOptionsList(String rawBinding) {
+    if (rawBinding.isEmpty || rawBinding == 'none') return;
+    if (_shortcutSavedOptions.take(3).contains(rawBinding)) return;
+    final nextList = <String>[rawBinding];
+    for (final existing in _shortcutSavedOptions) {
+      if (existing != rawBinding && existing.isNotEmpty && existing != 'none') {
+        nextList.add(existing);
+      }
+    }
+    for (final def in defaultShortcutOptions) {
+      if (nextList.length >= 3) break;
+      if (!nextList.contains(def)) {
+        nextList.add(def);
+      }
+    }
+    _shortcutSavedOptions = nextList.take(3).toList();
+  }
+
   void setMouseControlsEnabled(bool value) {
     if (value == _mouseControlsEnabled) return;
     _mouseControlsEnabled = value;
@@ -592,23 +653,25 @@ class SettingsController extends ChangeNotifier {
   }
 
   void setPlayPauseShortcut(String rawBinding) {
-    if (rawBinding == _playPauseShortcut) return;
+    if (rawBinding.isEmpty) return;
     final prev = _playPauseShortcut;
     _playPauseShortcut = rawBinding;
-    if (rawBinding != 'none' && _nextTrackShortcut == rawBinding) {
+    if (rawBinding != 'none' && _nextTrackShortcut == rawBinding && prev != rawBinding) {
       _nextTrackShortcut = prev;
     }
+    _registerShortcutInOptionsList(rawBinding);
     _save();
     notifyListeners();
   }
 
   void setNextTrackShortcut(String rawBinding) {
-    if (rawBinding == _nextTrackShortcut) return;
+    if (rawBinding.isEmpty) return;
     final prev = _nextTrackShortcut;
     _nextTrackShortcut = rawBinding;
-    if (rawBinding != 'none' && _playPauseShortcut == rawBinding) {
+    if (rawBinding != 'none' && _playPauseShortcut == rawBinding && prev != rawBinding) {
       _playPauseShortcut = prev;
     }
+    _registerShortcutInOptionsList(rawBinding);
     _save();
     notifyListeners();
   }
@@ -616,6 +679,7 @@ class SettingsController extends ChangeNotifier {
   void resetShortcutsToDefault() {
     _playPauseShortcut = ShortcutBinding.mouseXButton1.raw;
     _nextTrackShortcut = ShortcutBinding.mouseXButton2.raw;
+    _shortcutSavedOptions = List<String>.of(defaultShortcutOptions);
     _save();
     notifyListeners();
   }
@@ -623,7 +687,34 @@ class SettingsController extends ChangeNotifier {
   void setCapturingShortcut(bool capturing) {
     if (_isCapturingShortcut == capturing) return;
     _isCapturingShortcut = capturing;
+    if (!capturing) {
+      _onShortcutCapturedCallback = null;
+    }
     notifyListeners();
+  }
+
+  void startShortcutCapture(void Function(String rawBinding) onCaptured) {
+    _onShortcutCapturedCallback = onCaptured;
+    if (!_isCapturingShortcut) {
+      _isCapturingShortcut = true;
+    }
+    notifyListeners();
+  }
+
+  void stopShortcutCapture() {
+    _onShortcutCapturedCallback = null;
+    if (_isCapturingShortcut) {
+      _isCapturingShortcut = false;
+      notifyListeners();
+    }
+  }
+
+  void handleCapturedShortcut(String rawBinding) {
+    final cb = _onShortcutCapturedCallback;
+    stopShortcutCapture();
+    if (cb != null && rawBinding.isNotEmpty && rawBinding != 'cancel') {
+      cb(rawBinding);
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -720,6 +811,22 @@ class SettingsController extends ChangeNotifier {
       if (rawNextTrack != null && rawNextTrack.isNotEmpty) {
         _nextTrackShortcut = rawNextTrack;
       }
+      final rawOptions = data['shortcutSavedOptions'];
+      if (rawOptions is List) {
+        final loaded = rawOptions
+            .whereType<String>()
+            .where((s) => s.isNotEmpty && s != 'none')
+            .toSet()
+            .toList();
+        for (final def in defaultShortcutOptions) {
+          if (loaded.length >= 3) break;
+          if (!loaded.contains(def)) loaded.add(def);
+        }
+        _shortcutSavedOptions = loaded.take(3).toList();
+      } else {
+        _registerShortcutInOptionsList(_nextTrackShortcut);
+        _registerShortcutInOptionsList(_playPauseShortcut);
+      }
       final crotoLinkUrl = CrotoLinkServerEndpoint.parse(
           data['crotoLinkServerUrl'] as String? ?? '');
       _crotoLinkServerUrl = crotoLinkUrl.url ?? kDefaultRemoteCrotoLinkEndpoint;
@@ -769,6 +876,7 @@ class SettingsController extends ChangeNotifier {
         'closeToTray': _closeToTray,
         'playPauseShortcut': _playPauseShortcut,
         'nextTrackShortcut': _nextTrackShortcut,
+        'shortcutSavedOptions': _shortcutSavedOptions.take(3).toList(),
       }));
     } catch (err) {
       debugPrint('settings_controller:304 ignorado: $err');

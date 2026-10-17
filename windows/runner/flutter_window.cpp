@@ -1,5 +1,6 @@
 #include "flutter_window.h"
 
+#include <mutex>
 #include <optional>
 #include <string>
 
@@ -11,6 +12,7 @@ namespace {
 constexpr UINT kWmCrotoWaveHotkey = WM_USER + 200;
 constexpr UINT kWmTrayIcon = WM_USER + 201;
 constexpr UINT kWmRestoreFromTray = WM_USER + 202;
+constexpr UINT kWmCrotoWaveCaptured = WM_USER + 203;
 
 enum HotkeyAction : WPARAM {
   kActionTogglePlayPause = 1,
@@ -39,11 +41,15 @@ static HHOOK g_keyboard_hook = nullptr;
 static HWND g_main_hwnd = nullptr;
 
 static std::atomic<bool> g_mouse_enabled{true};
+static std::atomic<bool> g_capturing_shortcut{false};
 static std::atomic<bool> g_mouse_global{true};
 static std::atomic<bool> g_mouse_middle_enabled{true};
 static std::atomic<bool> g_close_to_tray{true};
 
-// 1 = mouse_xb1, 2 = mouse_xb2, 3 = mouse_middle, 0 = none/key
+static std::mutex g_captured_mutex;
+static std::string g_captured_binding;
+
+// 1 = mouse_xb1, 2 = mouse_xb2, 3 = mouse_middle, 4 = mouse_right, 0 = none/key
 static std::atomic<int> g_play_pause_mouse_btn{1};
 static std::atomic<int> g_next_track_mouse_btn{2};
 static std::atomic<DWORD> g_play_pause_vk{0};
@@ -52,9 +58,89 @@ static std::atomic<DWORD> g_next_track_vk{0};
 static std::atomic<ULONGLONG> g_last_xbutton1_time{0};
 static std::atomic<ULONGLONG> g_last_xbutton2_time{0};
 static std::atomic<ULONGLONG> g_last_mbutton_time{0};
+static std::atomic<ULONGLONG> g_last_rbutton_time{0};
 static std::atomic<ULONGLONG> g_last_key_play_time{0};
 static std::atomic<ULONGLONG> g_last_key_next_time{0};
 static std::atomic<ULONGLONG> g_last_hook_event_time{0};
+
+static DWORD NormalizeVkCode(DWORD vk) {
+  if (vk == VK_LSHIFT || vk == VK_RSHIFT) return VK_SHIFT;
+  if (vk == VK_LCONTROL || vk == VK_RCONTROL) return VK_CONTROL;
+  if (vk == VK_LMENU || vk == VK_RMENU) return VK_MENU;
+  return vk;
+}
+
+static std::string VkCodeToLabel(DWORD vk, DWORD scanCode, DWORD flags) {
+  vk = NormalizeVkCode(vk);
+  if (vk >= 0x41 && vk <= 0x5A) {
+    return std::string(1, static_cast<char>(vk));
+  }
+  if (vk >= 0x30 && vk <= 0x39) {
+    return std::string(1, static_cast<char>(vk));
+  }
+  if (vk >= VK_F1 && vk <= VK_F24) {
+    return "F" + std::to_string(vk - VK_F1 + 1);
+  }
+  if (vk >= VK_NUMPAD0 && vk <= VK_NUMPAD9) {
+    return "Num " + std::to_string(vk - VK_NUMPAD0);
+  }
+  switch (vk) {
+    case VK_SPACE: return "Espacio";
+    case VK_RETURN: return "Enter";
+    case VK_TAB: return "Tab";
+    case VK_BACK: return "Borrar";
+    case VK_CAPITAL: return "Bloq Mayús";
+    case VK_SHIFT: return "Shift";
+    case VK_CONTROL: return "Ctrl";
+    case VK_MENU: return "Alt";
+    case VK_INSERT: return "Insert";
+    case VK_DELETE: return "Supr";
+    case VK_HOME: return "Inicio";
+    case VK_END: return "Fin";
+    case VK_PRIOR: return "Re Pág";
+    case VK_NEXT: return "Av Pág";
+    case VK_UP: return "Flecha Arriba";
+    case VK_DOWN: return "Flecha Abajo";
+    case VK_LEFT: return "Flecha Izquierda";
+    case VK_RIGHT: return "Flecha Derecha";
+    case VK_ADD: return "Num +";
+    case VK_SUBTRACT: return "Num -";
+    case VK_MULTIPLY: return "Num *";
+    case VK_DIVIDE: return "Num /";
+    case VK_DECIMAL: return "Num .";
+    case VK_MEDIA_PLAY_PAUSE: return "Media Play/Pausa";
+    case VK_MEDIA_NEXT_TRACK: return "Media Siguiente";
+    case VK_MEDIA_PREV_TRACK: return "Media Anterior";
+    case VK_MEDIA_STOP: return "Media Stop";
+    case VK_PAUSE: return "Pausa";
+    case VK_SCROLL: return "Bloq Despl";
+  }
+  LONG lparam_name = (scanCode << 16);
+  if (flags & LLKHF_EXTENDED) {
+    lparam_name |= (1 << 24);
+  }
+  wchar_t wname[64] = {};
+  if (GetKeyNameTextW(lparam_name, wname, 63) > 0) {
+    int needed = WideCharToMultiByte(CP_UTF8, 0, wname, -1, nullptr, 0, nullptr, nullptr);
+    if (needed > 1) {
+      std::string out(needed - 1, '\0');
+      WideCharToMultiByte(CP_UTF8, 0, wname, -1, out.data(), needed, nullptr, nullptr);
+      return out;
+    }
+  }
+  return "VK " + std::to_string(vk);
+}
+
+static void DispatchCapturedShortcut(const std::string& raw) {
+  {
+    std::lock_guard<std::mutex> lock(g_captured_mutex);
+    g_captured_binding = raw;
+  }
+  HWND hwnd = g_main_hwnd;
+  if (hwnd) {
+    PostMessageW(hwnd, kWmCrotoWaveCaptured, 0, 0);
+  }
+}
 
 static bool IsPointOverCrotoWave(POINT pt) {
   HWND hwnd = g_main_hwnd;
@@ -122,18 +208,44 @@ static LRESULT CALLBACK LowLevelMouseProc(int nCode, WPARAM wParam, LPARAM lPara
     return CallNextHookEx(g_mouse_hook, nCode, wParam, lParam);
   }
 
-  if (!g_mouse_enabled.load(std::memory_order_relaxed) || g_main_hwnd == nullptr) {
+  MSLLHOOKSTRUCT* pMouse = reinterpret_cast<MSLLHOOKSTRUCT*>(lParam);
+  if (!pMouse || g_main_hwnd == nullptr) {
     return CallNextHookEx(g_mouse_hook, nCode, wParam, lParam);
   }
 
-  MSLLHOOKSTRUCT* pMouse = reinterpret_cast<MSLLHOOKSTRUCT*>(lParam);
-  if (!pMouse) {
+  // Modo captura ("Seleccionar botón a usar"): detecta cualquier botón del mouse (excepto clic izquierdo)
+  if (g_capturing_shortcut.load(std::memory_order_relaxed)) {
+    WORD xbutton = HIWORD(pMouse->mouseData);
+    if (wParam == WM_XBUTTONDOWN || wParam == WM_NCXBUTTONDOWN) {
+      if (xbutton == XBUTTON1) {
+        g_capturing_shortcut.store(false, std::memory_order_relaxed);
+        DispatchCapturedShortcut("mouse:xbutton1");
+        return 1;
+      } else if (xbutton == XBUTTON2) {
+        g_capturing_shortcut.store(false, std::memory_order_relaxed);
+        DispatchCapturedShortcut("mouse:xbutton2");
+        return 1;
+      }
+    } else if (wParam == WM_MBUTTONDOWN) {
+      g_capturing_shortcut.store(false, std::memory_order_relaxed);
+      DispatchCapturedShortcut("mouse:middle");
+      return 1;
+    } else if (wParam == WM_RBUTTONDOWN) {
+      g_capturing_shortcut.store(false, std::memory_order_relaxed);
+      DispatchCapturedShortcut("mouse:right");
+      return 1;
+    }
+    return CallNextHookEx(g_mouse_hook, nCode, wParam, lParam);
+  }
+
+  if (!g_mouse_enabled.load(std::memory_order_relaxed)) {
     return CallNextHookEx(g_mouse_hook, nCode, wParam, lParam);
   }
 
   if (wParam != WM_XBUTTONDOWN && wParam != WM_NCXBUTTONDOWN &&
       wParam != WM_XBUTTONUP && wParam != WM_NCXBUTTONUP &&
       wParam != WM_MBUTTONDOWN && wParam != WM_MBUTTONUP &&
+      wParam != WM_RBUTTONDOWN && wParam != WM_RBUTTONUP &&
       wParam != WM_MOUSEWHEEL) {
     return CallNextHookEx(g_mouse_hook, nCode, wParam, lParam);
   }
@@ -170,6 +282,8 @@ static LRESULT CALLBACK LowLevelMouseProc(int nCode, WPARAM wParam, LPARAM lPara
       if (xbutton == XBUTTON2 && (pp_btn == 2 || nt_btn == 2)) {
         return 1;
       }
+    } else if (wParam == WM_RBUTTONDOWN) {
+      HandleConfiguredSideButton(4, now, g_last_rbutton_time);
     } else if (wParam == WM_MBUTTONDOWN) {
       int pp_btn = g_play_pause_mouse_btn.load(std::memory_order_relaxed);
       int nt_btn = g_next_track_mouse_btn.load(std::memory_order_relaxed);
@@ -218,30 +332,49 @@ static LRESULT CALLBACK LowLevelMouseProc(int nCode, WPARAM wParam, LPARAM lPara
 static LRESULT CALLBACK LowLevelKeyboardProc(int nCode, WPARAM wParam, LPARAM lParam) {
   if (nCode >= 0 && (wParam == WM_KEYDOWN || wParam == WM_SYSKEYDOWN)) {
     KBDLLHOOKSTRUCT* pKey = reinterpret_cast<KBDLLHOOKSTRUCT*>(lParam);
-    if (pKey && g_main_hwnd != nullptr &&
-        g_mouse_enabled.load(std::memory_order_relaxed)) {
-      if (GetForegroundWindow() != g_main_hwnd) {
-        if (pKey->vkCode == VK_MEDIA_PLAY_PAUSE) {
-          DispatchHotkeyToMain(kActionTogglePlayPause);
-        } else if (pKey->vkCode == VK_MEDIA_NEXT_TRACK) {
-          DispatchHotkeyToMain(kActionSkipNext);
-        } else if (pKey->vkCode == VK_MEDIA_PREV_TRACK) {
-          DispatchHotkeyToMain(kActionSkipPrevious);
-        } else if (g_mouse_global.load(std::memory_order_relaxed)) {
-          ULONGLONG now = GetTickCount64();
-          DWORD pp_vk = g_play_pause_vk.load(std::memory_order_relaxed);
-          DWORD nt_vk = g_next_track_vk.load(std::memory_order_relaxed);
-          if (pp_vk != 0 && pKey->vkCode == pp_vk) {
-            ULONGLONG last = g_last_key_play_time.load(std::memory_order_relaxed);
-            if (now - last >= 220) {
-              g_last_key_play_time.store(now, std::memory_order_relaxed);
-              DispatchHotkeyToMain(kActionTogglePlayPause);
-            }
-          } else if (nt_vk != 0 && pKey->vkCode == nt_vk) {
-            ULONGLONG last = g_last_key_next_time.load(std::memory_order_relaxed);
-            if (now - last >= 220) {
-              g_last_key_next_time.store(now, std::memory_order_relaxed);
-              DispatchHotkeyToMain(kActionSkipNext);
+    if (pKey && g_main_hwnd != nullptr) {
+      // Modo captura ("Seleccionar botón a usar"): detecta cualquier tecla presionada
+      if (g_capturing_shortcut.load(std::memory_order_relaxed)) {
+        if (pKey->vkCode == VK_ESCAPE) {
+          g_capturing_shortcut.store(false, std::memory_order_relaxed);
+          DispatchCapturedShortcut("cancel");
+          return 1;
+        }
+        if (pKey->vkCode != VK_LWIN && pKey->vkCode != VK_RWIN) {
+          DWORD norm_vk = NormalizeVkCode(pKey->vkCode);
+          std::string label = VkCodeToLabel(norm_vk, pKey->scanCode, pKey->flags);
+          std::string raw = "key:" + std::to_string(norm_vk) + ":0:" + label;
+          g_capturing_shortcut.store(false, std::memory_order_relaxed);
+          DispatchCapturedShortcut(raw);
+          return 1;
+        }
+      }
+
+      if (g_mouse_enabled.load(std::memory_order_relaxed)) {
+        DWORD norm_vk = NormalizeVkCode(pKey->vkCode);
+        if (GetForegroundWindow() != g_main_hwnd) {
+          if (norm_vk == VK_MEDIA_PLAY_PAUSE) {
+            DispatchHotkeyToMain(kActionTogglePlayPause);
+          } else if (norm_vk == VK_MEDIA_NEXT_TRACK) {
+            DispatchHotkeyToMain(kActionSkipNext);
+          } else if (norm_vk == VK_MEDIA_PREV_TRACK) {
+            DispatchHotkeyToMain(kActionSkipPrevious);
+          } else if (g_mouse_global.load(std::memory_order_relaxed)) {
+            ULONGLONG now = GetTickCount64();
+            DWORD pp_vk = g_play_pause_vk.load(std::memory_order_relaxed);
+            DWORD nt_vk = g_next_track_vk.load(std::memory_order_relaxed);
+            if (pp_vk != 0 && norm_vk == pp_vk) {
+              ULONGLONG last = g_last_key_play_time.load(std::memory_order_relaxed);
+              if (now - last >= 220) {
+                g_last_key_play_time.store(now, std::memory_order_relaxed);
+                DispatchHotkeyToMain(kActionTogglePlayPause);
+              }
+            } else if (nt_vk != 0 && norm_vk == nt_vk) {
+              ULONGLONG last = g_last_key_next_time.load(std::memory_order_relaxed);
+              if (now - last >= 220) {
+                g_last_key_next_time.store(now, std::memory_order_relaxed);
+                DispatchHotkeyToMain(kActionSkipNext);
+              }
             }
           }
         }
@@ -363,6 +496,7 @@ void FlutterWindow::StartHookThread() {
     bool prev_xb1 = false;
     bool prev_xb2 = false;
     bool prev_mb = false;
+    bool prev_rb = false;
     bool prev_pp_key = false;
     bool prev_nt_key = false;
 
@@ -378,13 +512,28 @@ void FlutterWindow::StartHookThread() {
         bool xb1_down = (GetAsyncKeyState(VK_XBUTTON1) & 0x8000) != 0;
         bool xb2_down = (GetAsyncKeyState(VK_XBUTTON2) & 0x8000) != 0;
         bool mb_down = (GetAsyncKeyState(VK_MBUTTON) & 0x8000) != 0;
+        bool rb_down = (GetAsyncKeyState(VK_RBUTTON) & 0x8000) != 0;
         DWORD pp_vk = g_play_pause_vk.load(std::memory_order_relaxed);
         DWORD nt_vk = g_next_track_vk.load(std::memory_order_relaxed);
         bool pp_key_down = (pp_vk != 0) && ((GetAsyncKeyState(static_cast<int>(pp_vk)) & 0x8000) != 0);
         bool nt_key_down = (nt_vk != 0) && ((GetAsyncKeyState(static_cast<int>(nt_vk)) & 0x8000) != 0);
 
-        if (g_mouse_enabled.load(std::memory_order_relaxed) &&
-            g_mouse_global.load(std::memory_order_relaxed)) {
+        if (g_capturing_shortcut.load(std::memory_order_relaxed)) {
+          if (xb1_down && !prev_xb1) {
+            g_capturing_shortcut.store(false, std::memory_order_relaxed);
+            DispatchCapturedShortcut("mouse:xbutton1");
+          } else if (xb2_down && !prev_xb2) {
+            g_capturing_shortcut.store(false, std::memory_order_relaxed);
+            DispatchCapturedShortcut("mouse:xbutton2");
+          } else if (mb_down && !prev_mb) {
+            g_capturing_shortcut.store(false, std::memory_order_relaxed);
+            DispatchCapturedShortcut("mouse:middle");
+          } else if (rb_down && !prev_rb) {
+            g_capturing_shortcut.store(false, std::memory_order_relaxed);
+            DispatchCapturedShortcut("mouse:right");
+          }
+        } else if (g_mouse_enabled.load(std::memory_order_relaxed) &&
+                   g_mouse_global.load(std::memory_order_relaxed)) {
           ULONGLONG now = GetTickCount64();
           ULONGLONG last_hook = g_last_hook_event_time.load(std::memory_order_relaxed);
 
@@ -397,6 +546,9 @@ void FlutterWindow::StartHookThread() {
               }
               if (xb2_down && !prev_xb2) {
                 HandleConfiguredSideButton(2, now, g_last_xbutton2_time);
+              }
+              if (rb_down && !prev_rb) {
+                HandleConfiguredSideButton(4, now, g_last_rbutton_time);
               }
               int pp_btn = g_play_pause_mouse_btn.load(std::memory_order_relaxed);
               int nt_btn = g_next_track_mouse_btn.load(std::memory_order_relaxed);
@@ -433,6 +585,7 @@ void FlutterWindow::StartHookThread() {
         prev_xb1 = xb1_down;
         prev_xb2 = xb2_down;
         prev_mb = mb_down;
+        prev_rb = rb_down;
         prev_pp_key = pp_key_down;
         prev_nt_key = nt_key_down;
         continue;
@@ -644,6 +797,10 @@ bool FlutterWindow::OnCreate() {
             if (it_en != args->end() && std::holds_alternative<bool>(it_en->second)) {
               g_mouse_enabled.store(std::get<bool>(it_en->second), std::memory_order_relaxed);
             }
+            auto it_cap = args->find(flutter::EncodableValue("capturing"));
+            if (it_cap != args->end() && std::holds_alternative<bool>(it_cap->second)) {
+              g_capturing_shortcut.store(std::get<bool>(it_cap->second), std::memory_order_relaxed);
+            }
             auto it_gl = args->find(flutter::EncodableValue("global"));
             if (it_gl != args->end() && std::holds_alternative<bool>(it_gl->second)) {
               g_mouse_global.store(std::get<bool>(it_gl->second), std::memory_order_relaxed);
@@ -660,6 +817,7 @@ bool FlutterWindow::OnCreate() {
               if (t == "mouse_xb1") return 1;
               if (t == "mouse_xb2") return 2;
               if (t == "mouse_middle") return 3;
+              if (t == "mouse_right") return 4;
               return 0;
             };
             auto it_ppt = args->find(flutter::EncodableValue("playPauseType"));
@@ -751,6 +909,23 @@ FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
 
   if (message == kWmRestoreFromTray) {
     RestoreFromTray();
+    return 0;
+  }
+
+  if (message == kWmCrotoWaveCaptured) {
+    std::string captured;
+    {
+      std::lock_guard<std::mutex> lock(g_captured_mutex);
+      captured = g_captured_binding;
+    }
+    if (mouse_channel_ && !captured.empty()) {
+      mouse_channel_->InvokeMethod(
+          "onShortcutCaptured",
+          std::make_unique<flutter::EncodableValue>(captured));
+      if (flutter_controller_) {
+        flutter_controller_->ForceRedraw();
+      }
+    }
     return 0;
   }
 
