@@ -8,7 +8,7 @@ import 'package:http_parser/http_parser.dart';
 import 'package:flutter/foundation.dart';
 import 'package:crypto/crypto.dart';
 
-import '../models/jam_models.dart';
+import '../models/crotolink_models.dart';
 import '../models/server_profile.dart';
 import 'offline_cache_service.dart';
 import 'local_music_service.dart';
@@ -120,13 +120,13 @@ abstract class _NavidromeBase with ChangeNotifier {
 
   String? _lastSelectedGenreSuggestion;
 
-  /// Base HTTP del relay Jam usada para el chat comunitario. Navidrome no
+  /// Base HTTP del relay CrotoLink usada para el chat comunitario. Navidrome no
   /// implementa el chat de Subsonic (responde 410), así que se hospeda allí.
   Uri? lobbyBaseUrl;
 
-  /// Publica o anuncia una sesión Jam activa en el servidor Navidrome para que
+  /// Publica o anuncia una sesión CrotoLink activa en el servidor Navidrome para que
   /// cualquier usuario conectado a la misma instancia pueda descubrirla y unirse.
-  DateTime? _lastJamAnnounce;
+  DateTime? _lastCrotoLinkAnnounce;
 
   (String, String) _auth();
   String? _coverArtUrl(

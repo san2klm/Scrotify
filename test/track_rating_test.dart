@@ -5,12 +5,12 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:provider/provider.dart';
 
-import 'package:navidrome_client/services/jam_controller.dart';
-import 'package:navidrome_client/services/navidrome_service.dart';
-import 'package:navidrome_client/services/player_controller.dart';
-import 'package:navidrome_client/services/theme_controller.dart';
-import 'package:navidrome_client/widgets/rating_stars.dart';
-import 'package:navidrome_client/widgets/track_context_menu.dart';
+import 'package:crotowave/services/crotolink_controller.dart';
+import 'package:crotowave/services/navidrome_service.dart';
+import 'package:crotowave/services/player_controller.dart';
+import 'package:crotowave/services/theme_controller.dart';
+import 'package:crotowave/widgets/rating_stars.dart';
+import 'package:crotowave/widgets/track_context_menu.dart';
 
 import 'support/app_fakes.dart';
 
@@ -47,7 +47,9 @@ void main() {
       expect(copy.title, 'Time');
     });
 
-    test('NavidromeService getTrackRating and setRating update memory and call Subsonic setRating.view', () async {
+    test(
+        'NavidromeService getTrackRating and setRating update memory and call Subsonic setRating.view',
+        () async {
       String? requestedUrl;
       final mockClient = MockClient((request) async {
         if (request.url.path.contains('setRating.view')) {
@@ -88,7 +90,8 @@ void main() {
       expect(requestedUrl, contains('rating=0'));
     });
 
-    test('NavidromeService sortByRating sorts tracks with highest rating first', () {
+    test('NavidromeService sortByRating sorts tracks with highest rating first',
+        () {
       final nav = NavidromeService();
       final t1 = Track(
         id: 't1',
@@ -134,11 +137,12 @@ void main() {
       expect(nav.getTrackRating('t1'), 0);
     });
 
-    testWidgets('TrackContextMenu renders RatingStars and updates rating on tap',
+    testWidgets(
+        'TrackContextMenu renders RatingStars and updates rating on tap',
         (tester) async {
       final nav = FakeNavidrome();
       final player = IdlePlayer();
-      final jam = IdleJam();
+      final crotoLink = IdleCrotoLink();
       final theme = ThemeController();
 
       final track = Track(
@@ -155,7 +159,7 @@ void main() {
           providers: [
             ChangeNotifierProvider<NavidromeService>.value(value: nav),
             ChangeNotifierProvider<PlayerController>.value(value: player),
-            ChangeNotifierProvider<JamController>.value(value: jam),
+            ChangeNotifierProvider<CrotoLinkController>.value(value: crotoLink),
             ChangeNotifierProvider<ThemeController>.value(value: theme),
           ],
           child: MaterialApp(

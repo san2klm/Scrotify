@@ -58,9 +58,9 @@ cosign.key
 # Copias de datos de la migración de firma (pueden contener contraseñas).
 migration-backup/
 
-# Jam server
-jam-server/data/
-jam-server/.env
+# CrotoLink server
+crotolink-server/data/
+crotolink-server/.env
 
 # Local/IDE artifacts
 *.iml
@@ -71,7 +71,7 @@ installer/stage/
 
 # Binarios de entrega (scripts/build_apks.sh): se publican como release, no en git.
 /CrotoWave-*.apk
-/Scrotify-*.apk
+/CrotoWave-*.apk
 # Carpeta de entrega (binarios firmados y SHA256SUMS).
 /dist/
 temp/

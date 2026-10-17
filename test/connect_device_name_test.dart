@@ -2,11 +2,11 @@ import 'dart:async';
 import 'dart:math';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:navidrome_client/services/connect/connect_protocol.dart';
-import 'package:navidrome_client/services/connect/connect_service.dart';
-import 'package:navidrome_client/services/connect/connect_transport.dart';
-import 'package:navidrome_client/services/settings_controller.dart';
-import 'package:navidrome_client/services/sync/sync_crypto.dart';
+import 'package:crotowave/services/connect/connect_protocol.dart';
+import 'package:crotowave/services/connect/connect_service.dart';
+import 'package:crotowave/services/connect/connect_transport.dart';
+import 'package:crotowave/services/settings_controller.dart';
+import 'package:crotowave/services/sync/sync_crypto.dart';
 
 import 'support/app_fakes.dart';
 

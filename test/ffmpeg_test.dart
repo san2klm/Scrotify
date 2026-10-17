@@ -1,9 +1,9 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:navidrome_client/services/audio_waveform_service.dart';
-import 'package:navidrome_client/services/ffmpeg_waveform_decoder.dart';
-import 'package:navidrome_client/services/pcm_waveform_analyzer.dart';
+import 'package:crotowave/services/audio_waveform_service.dart';
+import 'package:crotowave/services/ffmpeg_waveform_decoder.dart';
+import 'package:crotowave/services/pcm_waveform_analyzer.dart';
 
 import 'support/wav_synth.dart';
 
@@ -22,8 +22,7 @@ void main() {
     }
 
     const duration = Duration(seconds: 10);
-    final tmp =
-        await Directory.systemTemp.createTemp('waveform_ffmpeg_');
+    final tmp = await Directory.systemTemp.createTemp('waveform_ffmpeg_');
     try {
       final wavBytes = WavSynth.silenceToneSilenceWav(duration: duration);
       final wavPath = '${tmp.path}/input.wav';
@@ -49,8 +48,7 @@ void main() {
 
       // Ruta ffmpeg: MP3 → PCM mono float.
       final mp3Bytes = await File(mp3Path).readAsBytes();
-      final mono =
-          await FfmpegWaveformDecoder.decodeBytesToMonoFloat32(
+      final mono = await FfmpegWaveformDecoder.decodeBytesToMonoFloat32(
         mp3Bytes,
         extensionHint: '.mp3',
       );

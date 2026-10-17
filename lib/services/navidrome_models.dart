@@ -17,7 +17,7 @@ class Track {
   final int userRating;
 
   /// Identificadores/metadatos para emparejar la pista entre servidores
-  /// distintos (Jam). Opcionales: OpenSubsonic los expone si están etiquetados.
+  /// distintos (CrotoLink). Opcionales: OpenSubsonic los expone si están etiquetados.
   final String? mbid;
   final String? isrc;
   final int? trackNumber;

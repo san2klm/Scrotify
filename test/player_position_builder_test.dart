@@ -2,8 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:navidrome_client/services/player_controller.dart';
-import 'package:navidrome_client/widgets/player_position_builder.dart';
+import 'package:crotowave/services/player_controller.dart';
+import 'package:crotowave/widgets/player_position_builder.dart';
 
 /// Fake mínimo: solo lo que usa PlayerPositionBuilder.
 class _FakePlayer extends ChangeNotifier implements PlayerController {

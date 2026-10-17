@@ -3,11 +3,11 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'support/wait_for.dart';
-import 'package:navidrome_client/models/eq_models.dart';
-import 'package:navidrome_client/services/eq/eq_backends.dart';
-import 'package:navidrome_client/services/eq/eq_math.dart';
-import 'package:navidrome_client/services/eq/eq_presets.dart';
-import 'package:navidrome_client/services/equalizer_service.dart';
+import 'package:crotowave/models/eq_models.dart';
+import 'package:crotowave/services/eq/eq_backends.dart';
+import 'package:crotowave/services/eq/eq_math.dart';
+import 'package:crotowave/services/eq/eq_presets.dart';
+import 'package:crotowave/services/equalizer_service.dart';
 
 class _FakeBackend extends EqBackend {
   final applied = <(List<EqBand>, double)>[];
@@ -33,7 +33,7 @@ void main() {
   late EqualizerService eq;
 
   setUp(() async {
-    dir = await Directory.systemTemp.createTemp('scrotify-eq-');
+    dir = await Directory.systemTemp.createTemp('crotowave-eq-');
     backend = _FakeBackend();
     eq = EqualizerService(backend: backend, storageDir: dir);
     await eq.initialize();

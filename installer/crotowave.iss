@@ -5,7 +5,7 @@
 #ifndef AppVersion
   #define AppVersion "1.0.0"
 #endif
-#define AppExe "navidrome_client.exe"
+#define AppExe "CrotoWave.exe"
 
 [Setup]
 AppId={{B7E1C5A2-4D3F-4F6A-9C1E-5C0A7F2D9E11}

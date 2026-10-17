@@ -2,9 +2,9 @@ import 'dart:io';
 import 'dart:math';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:navidrome_client/services/connect/connect_protocol.dart';
-import 'package:navidrome_client/services/connect/lan_transport.dart';
-import 'package:navidrome_client/services/sync/sync_crypto.dart';
+import 'package:crotowave/services/connect/connect_protocol.dart';
+import 'package:crotowave/services/connect/lan_transport.dart';
+import 'package:crotowave/services/sync/sync_crypto.dart';
 
 LanTransport make(SyncCrypto crypto, String id, String name, ConnectKind kind,
     {required int listen, required List<int> talkTo}) {

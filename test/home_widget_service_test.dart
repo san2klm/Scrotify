@@ -1,7 +1,7 @@
 import 'package:fake_async/fake_async.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:navidrome_client/services/home_widget_service.dart';
-import 'package:navidrome_client/services/navidrome_service.dart';
+import 'package:crotowave/services/home_widget_service.dart';
+import 'package:crotowave/services/navidrome_service.dart';
 
 import 'support/app_fakes.dart';
 

@@ -16,7 +16,7 @@ in <https://github.com/Dante0Q/CrotoWave>:
 
 | Platform | Signature |
 |---|---|
-| Windows (`CrotoWave-Setup-<version>.exe`, `navidrome_client.exe`) | Authenticode via SignPath Foundation |
+| Windows (`CrotoWave-Setup-<version>.exe`, `CrotoWave.exe`) | Authenticode via SignPath Foundation |
 | Android (APK) | the project's own key, SHA-256 `06:37:E6:E7:6D:F2:E7:8D:3B:C8:3F:70:F3:CD:48:BA:CC:B2:2A:52:D9:5C:EE:93:91:67:5C:9B:BD:3B:4F:7D` |
 | All release files | `SHA256SUMS` signed with minisign; public key `crotowave-release.pub` |
 

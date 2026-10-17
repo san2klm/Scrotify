@@ -1,5 +1,5 @@
 import 'widgets/app_error_box.dart';
-import 'widgets/jam_deep_link_listener.dart';
+import 'widgets/crotolink_deep_link_listener.dart';
 import 'dart:async' show unawaited;
 import 'dart:io' show Platform;
 
@@ -21,12 +21,12 @@ import 'services/home_widget_service.dart';
 import 'services/notification_cover_cache.dart';
 import 'services/cover_fallback_service.dart';
 import 'services/mini_player_controller.dart';
-import 'services/scrotify_audio_handler.dart';
+import 'services/crotowave_audio_handler.dart';
 
 import 'services/eq/eq_backends.dart';
 import 'services/eq/eq_mpv_setup.dart';
 import 'services/equalizer_service.dart';
-import 'services/jam_controller.dart';
+import 'services/crotolink_controller.dart';
 import 'services/listening_stats_service.dart';
 import 'services/navidrome_service.dart';
 import 'services/offline_cache_service.dart';
@@ -47,7 +47,7 @@ import 'services/connect/lan_transport.dart';
 import 'services/connect/player_connect_port.dart';
 import 'services/connect/relay_transport.dart';
 import 'services/sync/sync_service.dart';
-import 'models/jam_models.dart';
+import 'models/crotolink_models.dart';
 import 'services/theme_controller.dart';
 import 'utils/app_data_dir.dart';
 import 'utils/app_licenses.dart';
@@ -103,17 +103,16 @@ Future<void> main() async {
   // En una tele el teclado del sistema pide conectar el teléfono: se usa el propio.
   if (TvMode.isTv) TextInput.setInputControl(NoSystemKeyboard());
 
-  ScrotifyAudioHandler? audioHandler;
+  CrotoWaveAudioHandler? audioHandler;
   // Android e iOS: controles en la notificación / pantalla de bloqueo y sesión
   // de audio de música para seguir sonando en segundo plano.
   if (!kIsWeb && (Platform.isAndroid || Platform.isIOS)) {
     try {
       audioHandler = await AudioService.init(
         builder: () =>
-            ScrotifyAudioHandler(coverFetcher: NotificationCoverCache().fetch),
+            CrotoWaveAudioHandler(coverFetcher: NotificationCoverCache().fetch),
         config: const AudioServiceConfig(
-          androidNotificationChannelId:
-              'com.example.navidrome_client.channel.audio',
+          androidNotificationChannelId: 'cloud.templo.crotowave.channel.audio',
           androidNotificationChannelName: 'CrotoWave Playback',
           androidNotificationIcon: 'mipmap/ic_launcher',
           androidNotificationOngoing: false,
@@ -157,7 +156,7 @@ final GlobalKey<NavigatorState> rootNavigatorKey = GlobalKey<NavigatorState>();
 
 class MyApp extends StatelessWidget {
   final Map<String, dynamic> initialTheme;
-  final ScrotifyAudioHandler? audioHandler;
+  final CrotoWaveAudioHandler? audioHandler;
   final ConnectIdentity? connectIdentity;
 
   const MyApp({
@@ -188,7 +187,8 @@ class MyApp extends StatelessWidget {
               dataDir: getAppDataDirectory,
               themeImportsDir: themes.importsDirectory,
               serverBase: () {
-                final endpoint = JamServerEndpoint.parse(settings.jamServerUrl);
+                final endpoint =
+                    CrotoLinkServerEndpoint.parse(settings.crotoLinkServerUrl);
                 return endpoint.isValid ? endpoint.httpBase : null;
               },
             );
@@ -351,20 +351,21 @@ class MyApp extends StatelessWidget {
             return hifi;
           },
         ),
-        ChangeNotifierProvider<JamController>(
+        ChangeNotifierProvider<CrotoLinkController>(
           create: (ctx) {
-            final jam = JamController(
+            final crotoLink = CrotoLinkController(
               ctx.read<PlayerController>(),
               ctx.read<NavidromeService>(),
               settings: ctx.read<SettingsController>(),
             );
-            // La notificación de medios muestra la Jam y trae el botón de salir.
+            // La notificación de medios muestra la CrotoLink y trae el botón de salir.
             final handler = audioHandler;
             if (handler != null) {
-              handler.onLeaveJam = jam.leaveOrEndSession;
-              jam.addListener(() => handler.setJam(jam.notificationInfo));
+              handler.onLeaveCrotoLink = crotoLink.leaveOrEndSession;
+              crotoLink.addListener(
+                  () => handler.setCrotoLink(crotoLink.notificationInfo));
             }
-            return jam;
+            return crotoLink;
           },
         ),
         // CrotoWave Connect: ver y controlar tus otros dispositivos.
@@ -374,8 +375,8 @@ class MyApp extends StatelessWidget {
             final settings = ctx.read<SettingsController>();
             final nav = ctx.read<NavidromeService>();
             final identity = connectIdentity ??
-                const ConnectIdentity(
-                    'scrotify-device', 'Esta computadora', ConnectKind.desktop);
+                const ConnectIdentity('crotowave-device', 'Esta computadora',
+                    ConnectKind.desktop);
             ConnectAccount? account;
             final connect = ConnectService(
               port: PlayerConnectPort(ctx.read<PlayerController>(), nav),
@@ -384,7 +385,8 @@ class MyApp extends StatelessWidget {
               defaultName: identity.name,
               persistName: (name) async => settings.setConnectDeviceName(name),
               transportsFor: (crypto) {
-                final endpoint = JamServerEndpoint.parse(settings.jamServerUrl);
+                final endpoint =
+                    CrotoLinkServerEndpoint.parse(settings.crotoLinkServerUrl);
                 return [
                   // Por LAN primero (más rápido y sin internet).
                   LanTransport(
@@ -415,7 +417,7 @@ class MyApp extends StatelessWidget {
               final creds = nav.currentCredentials;
               final key = creds == null
                   ? null
-                  : '${creds.username}\n${creds.password}\n${settings.jamServerUrl}';
+                  : '${creds.username}\n${creds.password}\n${settings.crotoLinkServerUrl}';
               if (key == applied) return;
               applied = key;
               final mine = ++generation;
@@ -459,7 +461,7 @@ class MyApp extends StatelessWidget {
               final app = DesktopWindowFrame(
                 child: CoverAccentSync(
                   child: DiscordPresenceSync(
-                    child: JamDeepLinkListener(
+                    child: CrotoLinkDeepLinkListener(
                       navigatorKey: rootNavigatorKey,
                       child: child ?? const SizedBox.shrink(),
                     ),

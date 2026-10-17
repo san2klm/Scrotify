@@ -1,10 +1,10 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:just_audio/just_audio.dart';
-import 'package:navidrome_client/services/navidrome_service.dart';
-import 'package:navidrome_client/services/player_controller.dart';
-import 'package:navidrome_client/services/remote_playback.dart';
-import 'package:navidrome_client/services/settings_controller.dart';
+import 'package:crotowave/services/navidrome_service.dart';
+import 'package:crotowave/services/player_controller.dart';
+import 'package:crotowave/services/remote_playback.dart';
+import 'package:crotowave/services/settings_controller.dart';
 
 import 'support/app_fakes.dart';
 

@@ -1,8 +1,8 @@
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:navidrome_client/services/discord_presence.dart';
-import 'package:navidrome_client/services/navidrome_service.dart';
+import 'package:crotowave/services/discord_presence.dart';
+import 'package:crotowave/services/navidrome_service.dart';
 
 class _FakeTransport implements DiscordIpcTransport {
   _FakeTransport({this.available = true});

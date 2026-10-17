@@ -21,7 +21,6 @@ Todas **fuera del repositorio**, en `~/.config/crotowave-signing/` (permisos 700
 | `crotowave-release.p12` | keystore Android (PKCS12, alias `crotowave`, `CN=CrotoWave`, válido hasta 2076) |
 | `key.properties` | rutas y contraseña del keystore; `android/key.properties` es un enlace a este archivo |
 | `minisign.key` | clave privada minisign, cifrada con tu contraseña |
-| `legacy/` | clave de la etapa «Scrotify» (`cloud.templo.scrotify`): solo para migrar instalaciones viejas; se puede borrar cuando no quede ninguna |
 
 **Haz una copia de esa carpeta fuera de la PC** (USB cifrado, gestor de
 contraseñas) y guarda aparte la contraseña de minisign. Si se pierde el
@@ -40,8 +39,7 @@ Protecciones contra subirlas por error:
 ## Android
 
 - `applicationId`: **`cloud.templo.crotowave`** (definitivo: cambiarlo crea otra
-  app). Antes: `com.example.navidrome_client` (plantilla, clave debug) y
-  `cloud.templo.scrotify` (2026-10-16, antes del cambio de nombre).
+  app). Antes: `com.example.navidrome_client` (plantilla, clave debug).
 - Huella SHA-256 del certificado:
   `06:37:E6:E7:6D:F2:E7:8D:3B:C8:3F:70:F3:CD:48:BA:CC:B2:2A:52:D9:5C:EE:93:91:67:5C:9B:BD:3B:4F:7D`
 
@@ -61,7 +59,7 @@ Gradle rechaza los release salvo que se pida la clave debug a propósito
 Verificar un APK:
 
 ```sh
-apksigner verify --print-certs CrotoWave-*.apk | grep SHA-256
+apksigner verify --print-certs dist/CrotoWave-*.apk | grep SHA-256
 ```
 
 ### Migrar una instalación existente
@@ -76,19 +74,13 @@ sincronización, ajustes, temas, estadísticas, caché offline y permisos):
 tool/migrate_android_signing.sh <id-adb> phone|tv backup
 tool/migrate_android_signing.sh <id-adb> phone|tv restore
 
-# Desde la de la etapa Scrotify (cloud.templo.scrotify):
-export FROM_APP=cloud.templo.scrotify
-export FROM_KEY=~/.config/crotowave-signing/legacy/key.properties
-tool/migrate_android_signing.sh <id-adb> phone backup
-tool/migrate_android_signing.sh <id-adb> phone restore
-
 adb -s <id-adb> uninstall <id-viejo>      # cuando todo esté bien
 ```
 
 Cómo funciona: `run-as` solo entra en apps depurables, así que el script
 instala encima de la vieja un build debug con el mismo id y la misma clave
 (conserva los datos). Ese build, compilado con
-`--dart-define=SCROTIFY_SIGNING_MIGRATION=true`, exporta el almacén seguro: está
+`--dart-define=CROTOWAVE_SIGNING_MIGRATION=true`, exporta el almacén seguro: está
 cifrado con claves del Keystore de Android atadas a la instalación y copiar
 sus archivos no serviría. Después instala la app nueva en modo migración, le
 copia los datos, ella importa el almacén, y por último la actualiza al release

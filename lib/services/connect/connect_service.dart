@@ -34,7 +34,7 @@ abstract class ConnectPlayerPort implements Listenable {
 }
 
 /// CrotoWave Connect: ver los demás dispositivos del usuario (por LAN y por el
-/// servidor Jam), usarlos como altavoz y controlarlos a distancia, como
+/// servidor CrotoLink), usarlos como altavoz y controlarlos a distancia, como
 /// Spotify Connect. Todos los mensajes van cifrados con la clave de
 /// sincronización, así que solo los dispositivos del mismo grupo se entienden.
 class ConnectService extends ChangeNotifier {

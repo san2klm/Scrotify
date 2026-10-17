@@ -602,8 +602,8 @@ mixin _MobileHomeTab on _MobileHomeBase {
     );
   }
 
-  Widget _recentsList() => PlayerSelector.recents(
-      builder: (_, player) => _recentsListFor(player));
+  Widget _recentsList() =>
+      PlayerSelector.recents(builder: (_, player) => _recentsListFor(player));
 
   Widget _recentsListFor(PlayerController player) {
     final items = player.recentlyPlayed.take(5).toList();

@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:navidrome_client/main.dart';
-import 'package:navidrome_client/screens/login_screen.dart';
+import 'package:crotowave/main.dart';
+import 'package:crotowave/screens/login_screen.dart';
 
 void main() {
   testWidgets('App initializes with LoginScreen and MultiProvider',

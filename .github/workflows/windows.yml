@@ -61,9 +61,6 @@ jobs:
           Write-Host "Directorio Release encontrado: $releaseDir"
           Get-ChildItem -Path $releaseDir
 
-          if (Test-Path "$releaseDir\navidrome_client.exe") {
-            Copy-Item "$releaseDir\navidrome_client.exe" "$releaseDir\CrotoWave.exe" -Force
-          }
           Compress-Archive -Path "$releaseDir\*" -DestinationPath "CrotoWave-Windows-x64.zip" -Force
           Get-Item "CrotoWave-Windows-x64.zip" | Select-Object Name, Length
 

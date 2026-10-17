@@ -2,12 +2,13 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:navidrome_client/widgets/waveform_progress_bar.dart';
-import 'package:navidrome_client/services/waveform_service.dart';
+import 'package:crotowave/widgets/waveform_progress_bar.dart';
+import 'package:crotowave/services/waveform_service.dart';
 
 void main() {
   _newTests();
-  testWidgets('WaveformProgressBar renders correctly without waveform', (WidgetTester tester) async {
+  testWidgets('WaveformProgressBar renders correctly without waveform',
+      (WidgetTester tester) async {
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
@@ -26,10 +27,15 @@ void main() {
     );
 
     // Should render our custom paint widget inside GestureDetector
-    expect(find.descendant(of: find.byType(WaveformProgressBar), matching: find.byType(CustomPaint)), findsOneWidget);
+    expect(
+        find.descendant(
+            of: find.byType(WaveformProgressBar),
+            matching: find.byType(CustomPaint)),
+        findsOneWidget);
   });
 
-  testWidgets('WaveformProgressBar renders correctly with waveform', (WidgetTester tester) async {
+  testWidgets('WaveformProgressBar renders correctly with waveform',
+      (WidgetTester tester) async {
     const waveform = WaveformData(
       trackId: '123',
       duration: Duration(seconds: 120),
@@ -53,12 +59,17 @@ void main() {
       ),
     );
 
-    expect(find.descendant(of: find.byType(WaveformProgressBar), matching: find.byType(CustomPaint)), findsOneWidget);
+    expect(
+        find.descendant(
+            of: find.byType(WaveformProgressBar),
+            matching: find.byType(CustomPaint)),
+        findsOneWidget);
   });
 
-  testWidgets('WaveformProgressBar calls onSeek when tapped', (WidgetTester tester) async {
+  testWidgets('WaveformProgressBar calls onSeek when tapped',
+      (WidgetTester tester) async {
     Duration? seekResult;
-    
+
     const waveform = WaveformData(
       trackId: '123',
       duration: Duration(seconds: 120),
@@ -69,7 +80,8 @@ void main() {
       MaterialApp(
         home: Scaffold(
           body: SizedBox(
-            width: 400, // Important to give it a fixed width for testing tap location
+            width:
+                400, // Important to give it a fixed width for testing tap location
             height: 60,
             child: WaveformProgressBar(
               waveform: waveform,
@@ -142,7 +154,8 @@ Widget _host(Widget child, {double width = 400, bool noAnim = false}) =>
     MaterialApp(
       home: MediaQuery(
         data: MediaQueryData(disableAnimations: noAnim),
-        child: Scaffold(body: Center(child: SizedBox(width: width, child: child))),
+        child:
+            Scaffold(body: Center(child: SizedBox(width: width, child: child))),
       ),
     );
 
@@ -164,7 +177,9 @@ void _newTests() {
     )));
     await tester.pumpAndSettle();
 
-    final gesture = await tester.startGesture(tester.getCenter(find.byType(WaveformProgressBar)) - const Offset(200, 0));
+    final gesture = await tester.startGesture(
+        tester.getCenter(find.byType(WaveformProgressBar)) -
+            const Offset(200, 0));
     await gesture.moveBy(const Offset(150, 0));
     await tester.pump();
     expect(seeks, isEmpty); // aún arrastrando
@@ -244,7 +259,8 @@ void _newTests() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('con "reducir animaciones" no hay ticker ni pulso', (tester) async {
+  testWidgets('con "reducir animaciones" no hay ticker ni pulso',
+      (tester) async {
     await tester.pumpWidget(_host(
       WaveformProgressBar(
         waveform: _wf,

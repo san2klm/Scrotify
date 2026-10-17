@@ -4,16 +4,16 @@ import 'package:archive/archive.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
-import 'package:navidrome_client/screens/home_screen.dart';
-import 'package:navidrome_client/screens/mobile_home_screen.dart';
-import 'package:navidrome_client/services/app_theme.dart';
-import 'package:navidrome_client/services/connect/connect_service.dart';
-import 'package:navidrome_client/services/jam_controller.dart';
-import 'package:navidrome_client/services/navidrome_service.dart';
-import 'package:navidrome_client/services/player_controller.dart';
-import 'package:navidrome_client/services/theme_controller.dart';
-import 'package:navidrome_client/utils/tv_mode.dart';
-import 'package:navidrome_client/widgets/global_top_bar.dart';
+import 'package:crotowave/screens/home_screen.dart';
+import 'package:crotowave/screens/mobile_home_screen.dart';
+import 'package:crotowave/services/app_theme.dart';
+import 'package:crotowave/services/connect/connect_service.dart';
+import 'package:crotowave/services/crotolink_controller.dart';
+import 'package:crotowave/services/navidrome_service.dart';
+import 'package:crotowave/services/player_controller.dart';
+import 'package:crotowave/services/theme_controller.dart';
+import 'package:crotowave/utils/tv_mode.dart';
+import 'package:crotowave/widgets/global_top_bar.dart';
 
 import 'support/app_fakes.dart';
 
@@ -115,8 +115,10 @@ void main() {
                   create: (_) => _Reproductor()),
               ChangeNotifierProvider<ThemeController>(
                   create: (_) => _Tema(tema)),
-              ChangeNotifierProvider<ConnectService>(create: (_) => idleConnectService()),
-              ChangeNotifierProvider<JamController>(create: (_) => IdleJam()),
+              ChangeNotifierProvider<ConnectService>(
+                  create: (_) => idleConnectService()),
+              ChangeNotifierProvider<CrotoLinkController>(
+                  create: (_) => IdleCrotoLink()),
             ],
             child: MaterialApp(
                 theme: tema.toThemeData(),
@@ -150,12 +152,12 @@ void main() {
     await tester.pumpWidget(MultiProvider(
       providers: [
         ChangeNotifierProvider<NavidromeService>(create: (_) => _Biblioteca()),
-        ChangeNotifierProvider<PlayerController>(
-            create: (_) => _Reproductor()),
+        ChangeNotifierProvider<PlayerController>(create: (_) => _Reproductor()),
         ChangeNotifierProvider<ThemeController>(create: (_) => _Tema(tema)),
         ChangeNotifierProvider<ConnectService>(
             create: (_) => idleConnectService()),
-        ChangeNotifierProvider<JamController>(create: (_) => IdleJam()),
+        ChangeNotifierProvider<CrotoLinkController>(
+            create: (_) => IdleCrotoLink()),
       ],
       child: MaterialApp(theme: tema.toThemeData(), home: const HomeScreen()),
     ));
@@ -166,8 +168,8 @@ void main() {
     expect(focused, isNotNull);
     expect(focused, isNot(isA<FocusScopeNode>()),
         reason: 'debe haber un elemento concreto enfocado, no solo el ámbito');
-    expect(focused!.context!.findAncestorWidgetOfExactType<GlobalTopBar>(),
-        isNull,
+    expect(
+        focused!.context!.findAncestorWidgetOfExactType<GlobalTopBar>(), isNull,
         reason: 'el foco no debe quedarse en la barra superior');
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pumpAndSettle();

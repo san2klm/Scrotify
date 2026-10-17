@@ -1,6 +1,6 @@
-# AGENTS.md — Directivas y Activación Automática de Skills para Scrotify
+# AGENTS.md — Directivas y Activación Automática de Skills para CrotoWave
 
-> Este archivo rige el comportamiento de cualquier agente de IA en este proyecto (`Scrotify`).
+> Este archivo rige el comportamiento de cualquier agente de IA en este proyecto (`CrotoWave`).
 > Las directivas y skills detalladas aquí se deben **activar y aplicar de forma autónoma** según la tarea en curso, sin requerir que el usuario las invoque manualmente.
 
 ---
@@ -25,7 +25,7 @@ El agente debe operar bajo el flujo de ingeniería de software estructurado, act
 
 ### 📋 Fase B — Planificación y Restricciones (Plan)
 * **`planning-and-task-breakdown`**: Desglosar tareas complejas en subtareas atómicas y ordenadas (como se gestiona en `tasks/todo.md`), estimando impacto y dependencias.
-* **`constraint-driven-development`**: Respetar estrictamente las restricciones del proyecto (soporte multiplataforma Linux/Android/Windows/iOS, audio en background, headless Jam Server, dependencias fijas).
+* **`constraint-driven-development`**: Respetar estrictamente las restricciones del proyecto (soporte multiplataforma Linux/Android/Windows/iOS, audio en background, headless CrotoLink Server, dependencias fijas).
 
 ### 🛠️ Fase C — Construcción Limpia e Incremental (Build)
 * **`incremental-implementation`**: Implementar los cambios en rebanadas delgadas y verificables (*thin vertical slices*), asegurando que cada paso compile y pase tests antes de avanzar al siguiente.
@@ -48,9 +48,9 @@ El agente debe operar bajo el flujo de ingeniería de software estructurado, act
 ### 🛡️ Fase F — Seguridad y Auditoría (Harden & Audit)
 * **`security-and-hardening`**: Proteger credenciales en `SecureStorage`, validación de tokens MD5+salt para Subsonic, sanitización de inputs y prevención de fugas de secretos en logs.
 * **`security-audit`** *(Cloudflare)*: 
-  * Auditar comunicación en red (HTTP Subsonic y WebSockets en Jam).
+  * Auditar comunicación en red (HTTP Subsonic y WebSockets en CrotoLink).
   * Verificar aislamiento de datos entre perfiles locales (`server_profiles`).
-  * Aplicar validación estricta de esquemas JSON en mensajes de Jam Server y cliente para evitar inyecciones o estados corruptos.
+  * Aplicar validación estricta de esquemas JSON en mensajes de CrotoLink Server y cliente para evitar inyecciones o estados corruptos.
 
 ### 🚀 Fase G — Lanzamiento y Observabilidad (Ship & Observe)
 * **`shipping-and-launch`**: Lista de comprobación previa a dar por cerrada una fase o release.
@@ -58,7 +58,7 @@ El agente debe operar bajo el flujo de ingeniería de software estructurado, act
 
 ---
 
-## 2. Especialización de Dominio en Scrotify
+## 2. Especialización de Dominio en CrotoWave
 
 Además del ciclo general, el agente debe activar las skills técnicas específicas según el subsistema intervenido:
 
@@ -67,7 +67,7 @@ Además del ciclo general, el agente debe activar las skills técnicas específi
 * **Directivas:** Diagnosticar RenderFlex overflows, desacoplar widgets con `LayoutBuilder` y `MediaQuery` para Desktop vs Móvil, soporte para hover de ratón y atajos.
 
 ### ✨ Animaciones, Espectros y Micro-interacciones
-* **Skills:** `flutter-animations`, `improve-animations`, `scrotify-dev`, `songsee`, `audio-video-sync`.
+* **Skills:** `flutter-animations`, `improve-animations`, `crotowave-dev`, `songsee`, `audio-video-sync`.
 * **Directivas:** `AnimationController` con tickers a 60fps, física de muelles (*springs*), decodificación ffmpeg local cacheada en desktop y curva procedural determinística en móvil (`Random` + hash `track.id`).
 
 ### 📱 Testing en Emulador y Automatización Android (`mobile-mcp`)
@@ -79,9 +79,9 @@ Además del ciclo general, el agente debe activar las skills técnicas específi
   * **Diagnóstico de Estabilidad:** Monitorear cuelgues con `mobile_list_crashes`, `mobile_get_crash` y `mobile_get_device_logs`.
   * **ADB Unificado:** Asegurar que las llamadas de adb usen `/opt/android-sdk/platform-tools/adb` para prevenir desincronizaciones de servidor.
 
-### 📻 Scrotify Jam & Sincronización en Tiempo Real
+### 📻 CrotoWave CrotoLink & Sincronización en Tiempo Real
 * **Skills:** `websocket-engineer`, `docker-management`.
-* **Directivas:** Esquemas tipados de mensajes, compensación de latencia, reconexión con retroceso exponencial, heartbeats/ping-pong, tests en `jam-server` con `node --test` y Docker Compose.
+* **Directivas:** Esquemas tipados de mensajes, compensación de latencia, reconexión con retroceso exponencial, heartbeats/ping-pong, tests en `crotolink-server` con `node --test` y Docker Compose.
 
 ### 🧪 Pruebas Automatizadas y Análisis Estático
 * **Skills:** `flutter-add-widget-test`, `flutter-add-integration-test`, `dart-add-unit-test`, `dart-generate-test-mocks`, `dart-run-static-analysis`, `dart-log-failure-parser`.
@@ -93,10 +93,10 @@ Además del ciclo general, el agente debe activar las skills técnicas específi
 
 ---
 
-## 3. Invariantes Estrictos del Proyecto Scrotify
+## 3. Invariantes Estrictos del Proyecto CrotoWave
 
 1. **Modelos canónicos:** Los tipos canónicos `Track`, `Album` y `Artist` son los definidos en `lib/services/navidrome_service.dart`. No crear modelos duplicados ni importar copias paralelas.
-2. **Imports limpios:** Usar siempre `package:navidrome_client/...`, nunca rutas relativas `../lib/...` desde `test/` (rompe el análisis estático).
+2. **Imports limpios:** Usar siempre `package:crotowave/...`, nunca rutas relativas `../lib/...` desde `test/` (rompe el análisis estático).
 3. **SecureStorage:** Usar exclusivamente los métodos públicos estáticos: `SecureStorage.secureRead`, `SecureStorage.secureWrite`, `SecureStorage.secureDelete`.
 4. **Provider:** Todo nuevo servicio principal debe extender `ChangeNotifier` y registrarse en el `MultiProvider` de `lib/main.dart` respetando el orden de dependencias.
 5. **Verificación de archivos:** Los subagentes pueden reportar escrituras falsas; siempre comprobar mutaciones reales con `git status --porcelain`.

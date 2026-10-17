@@ -5,11 +5,11 @@ import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
-import 'package:navidrome_client/services/sync/sync_crypto.dart';
-import 'package:navidrome_client/services/sync/sync_service.dart';
+import 'package:crotowave/services/sync/sync_crypto.dart';
+import 'package:crotowave/services/sync/sync_service.dart';
 import 'package:path/path.dart' as p;
 
-/// Servidor Jam mínimo en memoria con el mismo contrato que `/api/sync/v1`.
+/// Servidor CrotoLink mínimo en memoria con el mismo contrato que `/api/sync/v1`.
 class FakeVault {
   final docs = <String, Map<String, dynamic>>{};
 
@@ -17,6 +17,9 @@ class FakeVault {
   final deleted = <String>[];
   String? token;
   bool enabled = true;
+
+  /// Cuerpo con el que responde 507 (bóveda llena) a los PUT, si no es `null`.
+  String? fullBody;
 
   http.Client get client => MockClient((request) async {
         if (!enabled) return http.Response('{}', 403);
@@ -49,6 +52,9 @@ class FakeVault {
           return http.Response('{"ok":true}', 200);
         }
         if (request.method == 'PUT') {
+          if (fullBody != null) {
+            return http.Response.bytes(utf8.encode(fullBody!), 507);
+          }
           token ??= auth!.substring(7);
           final body = jsonDecode(request.body) as Map<String, dynamic>;
           final current = docs[key!];
@@ -73,7 +79,7 @@ class Device {
     service = SyncService(
       dataDir: () async => data,
       themeImportsDir: () async => themes,
-      serverBase: () => Uri.parse('https://jam.test/'),
+      serverBase: () => Uri.parse('https://crotolink.test/'),
       client: vault.client,
       interval: const Duration(days: 1),
       now: now,
@@ -234,20 +240,21 @@ void main() {
         a.file('followed_artists_srv_x.json').readAsStringSync(), '["de-b"]');
   });
 
-  test('la URL del servidor CrotoLink no se sincroniza entre dispositivos', () async {
+  test('la URL del servidor CrotoLink no se sincroniza entre dispositivos',
+      () async {
     final a = device('a');
-    a.write(
-        'settings.json', '{"gapless":true,"jamServerUrl":"wss://a.example/"}');
+    a.write('settings.json',
+        '{"gapless":true,"crotoLinkServerUrl":"wss://a.example/"}');
     await link(a);
     final b = device('b');
-    b.write(
-        'settings.json', '{"gapless":false,"jamServerUrl":"wss://b.example/"}');
+    b.write('settings.json',
+        '{"gapless":false,"crotoLinkServerUrl":"wss://b.example/"}');
     await link(b);
 
     final merged = jsonDecode(b.file('settings.json').readAsStringSync())
         as Map<String, dynamic>;
     expect(merged['gapless'], true);
-    expect(merged['jamServerUrl'], 'wss://b.example/');
+    expect(merged['crotoLinkServerUrl'], 'wss://b.example/');
   });
 
   test('ignora nombres de archivo peligrosos del servidor', () async {
@@ -274,6 +281,14 @@ void main() {
     final a = device('a');
     await link(a);
     expect(a.service.error, contains('no tiene la sincronización activada'));
+  });
+
+  test('muestra el motivo que da el servidor cuando no hay espacio', () async {
+    vault.fullBody = '{"error":"La bóveda alcanzó el máximo de documentos."}';
+    final a = device('a');
+    a.write('followed_artists_srv_x.json', '[]');
+    await link(a);
+    expect(a.service.error, contains('máximo de documentos'));
   });
 
   test('desactivar borra la clave y el estado local', () async {

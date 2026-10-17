@@ -76,7 +76,7 @@ class SyncCrypto {
     final root = SecretKey(secret);
     Future<List<int>> derive(String label) async => (await hkdf.deriveKey(
           secretKey: root,
-          nonce: utf8.encode('scrotify-sync-v1'),
+          nonce: utf8.encode('crotowave-sync-v1'),
           info: utf8.encode(label),
         ))
             .extractBytes();

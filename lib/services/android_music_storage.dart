@@ -4,7 +4,7 @@ import 'package:flutter/services.dart';
 
 /// Permiso necesario para la biblioteca compartida de Android.
 class AndroidMusicStorage {
-  static const _channel = MethodChannel('scrotify/music_storage');
+  static const _channel = MethodChannel('crotowave/music_storage');
 
   static Future<bool> ensureAccess({bool request = false}) async {
     if (!Platform.isAndroid) return true;

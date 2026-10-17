@@ -2,8 +2,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:navidrome_client/utils/tv_mode.dart';
-import 'package:navidrome_client/widgets/tv_initial_focus.dart';
+import 'package:crotowave/utils/tv_mode.dart';
+import 'package:crotowave/widgets/tv_initial_focus.dart';
 
 void main() {
   tearDown(() => TvMode.debugSet(false));

@@ -10,7 +10,7 @@ class TvMode {
   TvMode._();
 
   static const _forced = bool.fromEnvironment('FORCE_TV');
-  static const _channel = MethodChannel('scrotify/device');
+  static const _channel = MethodChannel('crotowave/device');
 
   static bool _isTv = _forced;
   static bool get isTv => _isTv;

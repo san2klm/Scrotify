@@ -12,8 +12,8 @@ import 'dart:ui' show PlatformDispatcher;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
-import 'package:navidrome_client/main.dart' as app;
-import 'package:navidrome_client/services/secure_storage.dart';
+import 'package:crotowave/main.dart' as app;
+import 'package:crotowave/services/secure_storage.dart';
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();

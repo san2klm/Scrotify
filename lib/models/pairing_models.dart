@@ -7,7 +7,7 @@ import '../utils/app_links.dart';
 const int kPairingDiscoveryPort = 47622;
 
 /// Identificador de protocolo para las tramas UDP de emparejamiento.
-const String kPairingDiscoveryAppTag = 'scrotify-pair';
+const String kPairingDiscoveryAppTag = 'crotowave-pair';
 
 /// Datos que van en el QR. Los QR nuevos usan un topic temporal de ntfy; se
 /// conserva el formato LAN para que los QR existentes no dejen de funcionar.
@@ -29,7 +29,7 @@ class QrData {
 
   bool get usesRelay => relayTopic != null;
 
-  /// URI nueva: `crotowave://pair?topic=scrotify-...&code=X7K9MP`.
+  /// URI nueva: `crotowave://pair?topic=crotowave-...&code=X7K9MP`.
   String toUri() {
     if (relayTopic != null) {
       return Uri(
@@ -50,7 +50,8 @@ class QrData {
       final code = u.queryParameters['code'];
       if (code == null) return null;
       final topic = u.queryParameters['topic'];
-      if (topic != null && RegExp(r'^scrotify-[a-z0-9]{32}$').hasMatch(topic)) {
+      if (topic != null &&
+          RegExp(r'^crotowave-[a-z0-9]{32}$').hasMatch(topic)) {
         return QrData(code: code, relayTopic: topic);
       }
       final host = u.queryParameters['host'];

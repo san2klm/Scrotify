@@ -3,8 +3,8 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
-import 'package:navidrome_client/services/navidrome_service.dart';
-import 'package:navidrome_client/services/scrobble_queue.dart';
+import 'package:crotowave/services/navidrome_service.dart';
+import 'package:crotowave/services/scrobble_queue.dart';
 import 'package:path/path.dart' as p;
 
 void main() {

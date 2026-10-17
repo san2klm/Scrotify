@@ -11,7 +11,7 @@ import '../sync/sync_crypto.dart';
 /// Cuenta de Navidrome con la que se identifica Connect: los dispositivos con
 /// el mismo usuario se ven entre sí y solo entre sí.
 ///
-/// - Ante el servidor Jam se prueba con el token de Subsonic
+/// - Ante el servidor CrotoLink se prueba con el token de Subsonic
 ///   (`md5(clave + salt)`); el servidor lo verifica con Navidrome y nunca
 ///   recibe la clave.
 /// - Los mensajes se cifran de extremo a extremo con una clave derivada de la
@@ -54,7 +54,7 @@ class ConnectAccount {
           bits: 256,
         ).deriveKeyFromPassword(
           password: password,
-          nonce: utf8.encode('scrotify-connect-v1|$user'),
+          nonce: utf8.encode('crotowave-connect-v1|$user'),
         );
         return Uint8List.fromList(await key.extractBytes());
       });

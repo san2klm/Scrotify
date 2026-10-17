@@ -1,6 +1,6 @@
 // Recuperación de descargas antiguas en un dispositivo Android real: usa el
 // lector de etiquetas de verdad (MediaMetadataRetriever vía el canal
-// `scrotify/music_storage`) y el almacenamiento compartido, que las pruebas
+// `crotowave/music_storage`) y el almacenamiento compartido, que las pruebas
 // unitarias de escritorio no pueden ejercitar.
 //
 // Requisitos (el script `tool/run_android_integration.sh` los prepara):
@@ -15,11 +15,11 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
-import 'package:navidrome_client/services/android_music_storage.dart';
-import 'package:navidrome_client/services/local_audio_metadata.dart';
-import 'package:navidrome_client/services/local_music_service.dart';
-import 'package:navidrome_client/services/navidrome_service.dart';
-import 'package:navidrome_client/services/offline_cache_service.dart';
+import 'package:crotowave/services/android_music_storage.dart';
+import 'package:crotowave/services/local_audio_metadata.dart';
+import 'package:crotowave/services/local_music_service.dart';
+import 'package:crotowave/services/navidrome_service.dart';
+import 'package:crotowave/services/offline_cache_service.dart';
 
 import 'fixtures/tagged_flac.dart';
 
@@ -45,10 +45,10 @@ void main() {
 
   setUp(() async {
     final stamp = DateTime.now().microsecondsSinceEpoch;
-    sandbox = Directory('/storage/emulated/0/Music/ScrotifyIT_$stamp');
+    sandbox = Directory('/storage/emulated/0/Music/CrotoWaveIT_$stamp');
     music = Directory('${sandbox.path}/Music');
     await music.create(recursive: true);
-    final state = Directory.systemTemp.createTempSync('scrotify_it_state');
+    final state = Directory.systemTemp.createTempSync('crotowave_it_state');
     addTearDown(() => state.deleteSync(recursive: true));
     service = LocalMusicService(
       OfflineCacheService(
@@ -94,8 +94,7 @@ void main() {
       (tester) async {
     Directory('${music.path}/Playlists/Vieja').createSync(recursive: true);
     Directory('${music.path}/likes').createSync(recursive: true);
-    File('${music.path}/Playlists/Vieja/a.flac')
-        .writeAsBytesSync(taggedFlac());
+    File('${music.path}/Playlists/Vieja/a.flac').writeAsBytesSync(taggedFlac());
     File('${music.path}/likes/copia.flac').writeAsBytesSync(taggedFlac());
 
     await scan([matching]);

@@ -1,9 +1,9 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:navidrome_client/services/audio_waveform_service.dart';
-import 'package:navidrome_client/services/pcm_waveform_analyzer.dart';
-import 'package:navidrome_client/services/waveform_service.dart';
+import 'package:crotowave/services/audio_waveform_service.dart';
+import 'package:crotowave/services/pcm_waveform_analyzer.dart';
+import 'package:crotowave/services/waveform_service.dart';
 
 import 'support/wav_synth.dart';
 
@@ -18,8 +18,7 @@ void main() {
 
   group('PRUEBA C — silencio + tono (estructura real)', () {
     test('el centro es fuerte y los bordes son silencio', () async {
-      final dir =
-          await Directory.systemTemp.createTemp('waveform_test_c_');
+      final dir = await Directory.systemTemp.createTemp('waveform_test_c_');
       final service = AudioWaveformService(cacheDirOverride: dir);
       try {
         final wavB = WavSynth.silenceToneSilenceWav(duration: duration);
@@ -53,11 +52,11 @@ void main() {
         expect(center, greaterThan(0.5),
             reason: 'el tono central debe ser fuerte (centro=$center)');
         expect(start, lessThan(0.2),
-            reason: 'el silencio inicial debe dar barras bajas (inicio=$start)');
+            reason:
+                'el silencio inicial debe dar barras bajas (inicio=$start)');
         expect(end, lessThan(0.2),
             reason: 'el silencio final debe dar barras bajas (final=$end)');
-        expect(center, greaterThan(start * 3),
-            reason: 'centro >> inicio');
+        expect(center, greaterThan(start * 3), reason: 'centro >> inicio');
         expect(center, greaterThan(end * 3), reason: 'centro >> final');
       } finally {
         await dir.delete(recursive: true);
@@ -65,8 +64,7 @@ void main() {
     });
 
     test('tono constante produce barras altas y parejas', () async {
-      final dir =
-          await Directory.systemTemp.createTemp('waveform_test_const_');
+      final dir = await Directory.systemTemp.createTemp('waveform_test_const_');
       final service = AudioWaveformService(cacheDirOverride: dir);
       try {
         final wavA = WavSynth.constantToneWav(duration: duration);
@@ -91,11 +89,9 @@ void main() {
     });
   });
 
-  group('PRUEBA A — mismo trackId, audio diferente → waveforms DIFERENTES',
-      () {
+  group('PRUEBA A — mismo trackId, audio diferente → waveforms DIFERENTES', () {
     test('la forma depende del AUDIO, no del trackId', () async {
-      final dir =
-          await Directory.systemTemp.createTemp('waveform_test_a_');
+      final dir = await Directory.systemTemp.createTemp('waveform_test_a_');
       final service = AudioWaveformService(cacheDirOverride: dir);
       try {
         const trackId = 'test-track';
@@ -130,7 +126,8 @@ void main() {
         }
         meanDiff /= waveA.amplitudes.length;
         // ignore: avoid_print
-        print('PRUEBA A: maxDiff=$maxDiff meanDiff=$meanDiff → PASS=${maxDiff > 0.3}');
+        print(
+            'PRUEBA A: maxDiff=$maxDiff meanDiff=$meanDiff → PASS=${maxDiff > 0.3}');
         expect(maxDiff, greaterThan(0.3),
             reason:
                 'mismo ID con audio distinto debe dar formas distintas (maxDiff=$maxDiff)');
@@ -145,8 +142,7 @@ void main() {
   group('PRUEBA B — mismo audio, trackId diferente → waveforms EQUIVALENTES',
       () {
     test('distinto ID con mismo audio produce la misma forma', () async {
-      final dir =
-          await Directory.systemTemp.createTemp('waveform_test_b_');
+      final dir = await Directory.systemTemp.createTemp('waveform_test_b_');
       final service = AudioWaveformService(cacheDirOverride: dir);
       try {
         final wav = WavSynth.silenceToneSilenceWav(duration: duration);

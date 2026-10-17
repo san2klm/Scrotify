@@ -17,7 +17,7 @@ import 'settings_controller.dart';
 import 'listening_stats_service.dart';
 import 'waveform_service.dart';
 import 'audio_waveform_service.dart';
-import 'scrotify_audio_handler.dart';
+import 'crotowave_audio_handler.dart';
 
 part 'player_sleep_timer.dart';
 part 'player_gain.dart';
@@ -633,7 +633,7 @@ class PlayerController extends _PlayerBase
 
   double get playbackSpeed => _playbackSpeed;
 
-  /// Velocidad de reproducción (la usa Jam para corregir deriva suavemente).
+  /// Velocidad de reproducción (la usa CrotoLink para corregir deriva suavemente).
   /// Se aplica a ambos reproductores A/B; si el motor no la soporta, se ignora.
   Future<void> setPlaybackSpeed(double speed) async {
     final v = speed.clamp(0.5, 2.0).toDouble();
@@ -656,11 +656,11 @@ class PlayerController extends _PlayerBase
           : ProcessingState.ready)
       : _lead.processingState;
 
-  ScrotifyAudioHandler? _audioHandler;
+  CrotoWaveAudioHandler? _audioHandler;
 
-  ScrotifyAudioHandler? get audioHandler => _audioHandler;
+  CrotoWaveAudioHandler? get audioHandler => _audioHandler;
 
-  void setAudioHandler(ScrotifyAudioHandler? handler) {
+  void setAudioHandler(CrotoWaveAudioHandler? handler) {
     if (identical(_audioHandler, handler)) return;
     _audioHandler?.detachPlayerController();
     _audioHandler = handler;
@@ -671,7 +671,7 @@ class PlayerController extends _PlayerBase
     NavidromeService service,
     SettingsController settings, {
     ListeningStatsService? statsService,
-    ScrotifyAudioHandler? audioHandler,
+    CrotoWaveAudioHandler? audioHandler,
     AudioPlayer? playerA,
     AudioPlayer? playerB,
     AndroidLoudnessEnhancer? loudnessEnhancerA,

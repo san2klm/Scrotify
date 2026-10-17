@@ -309,7 +309,8 @@ class _WaveformProgressBarState extends State<WaveformProgressBar>
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final width = constraints.maxWidth.isFinite ? constraints.maxWidth : 300.0;
+        final width =
+            constraints.maxWidth.isFinite ? constraints.maxWidth : 300.0;
         final height = widget.height;
 
         _cache = _BarsCache.obtain(
@@ -326,10 +327,9 @@ class _WaveformProgressBarState extends State<WaveformProgressBar>
           value: '$posLabel de $durLabel',
           slider: true,
           increasedValue: formatPlaybackTime(widget.position + widget.seekStep),
-          decreasedValue: formatPlaybackTime(
-              widget.position > widget.seekStep
-                  ? widget.position - widget.seekStep
-                  : Duration.zero),
+          decreasedValue: formatPlaybackTime(widget.position > widget.seekStep
+              ? widget.position - widget.seekStep
+              : Duration.zero),
           onIncrease: () => _seekBy(widget.seekStep),
           onDecrease: () => _seekBy(-widget.seekStep),
           child: Focus(
@@ -338,7 +338,8 @@ class _WaveformProgressBarState extends State<WaveformProgressBar>
               cursor: _durationMs > 0
                   ? SystemMouseCursors.click
                   : SystemMouseCursors.basic,
-              onHover: (e) => _hover.value = _fractionAt(e.localPosition.dx, width),
+              onHover: (e) =>
+                  _hover.value = _fractionAt(e.localPosition.dx, width),
               onExit: (_) => _hover.value = null,
               child: GestureDetector(
                 behavior: HitTestBehavior.opaque,
@@ -444,8 +445,7 @@ class _BarsCache {
     required Color inactiveColor,
   }) {
     if (previous != null &&
-        previous.matches(
-            waveform, width, height, activeColor, inactiveColor)) {
+        previous.matches(waveform, width, height, activeColor, inactiveColor)) {
       return previous;
     }
     previous?.dispose();
@@ -579,8 +579,7 @@ class _WaveformPainter extends CustomPainter {
     required this.labelFor,
     required this.labelColor,
     required this.labelBackground,
-  }) : super(
-            repaint: Listenable.merge([progress, drag, hover, reveal, pulse]));
+  }) : super(repaint: Listenable.merge([progress, drag, hover, reveal, pulse]));
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -650,9 +649,8 @@ class _WaveformPainter extends CustomPainter {
       const padH = 6.0, padV = 2.0;
       final w = tp.width + padH * 2;
       final h = tp.height + padV * 2;
-      final left = (x - w / 2)
-          .clamp(0.0, math.max(0.0, size.width - w))
-          .toDouble();
+      final left =
+          (x - w / 2).clamp(0.0, math.max(0.0, size.width - w)).toDouble();
       final rect = RRect.fromRectAndRadius(
           Rect.fromLTWH(left, 0, w, h), const Radius.circular(4));
       canvas.drawRRect(rect, Paint()..color = labelBackground);

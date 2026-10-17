@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:just_audio/just_audio.dart';
-import 'package:navidrome_client/models/jam_models.dart';
-import 'package:navidrome_client/services/connect/connect_protocol.dart';
-import 'package:navidrome_client/services/connect/connect_service.dart';
-import 'package:navidrome_client/services/jam_controller.dart';
-import 'package:navidrome_client/services/navidrome_service.dart';
-import 'package:navidrome_client/services/player_controller.dart';
-import 'package:navidrome_client/services/waveform_service.dart';
+import 'package:crotowave/models/crotolink_models.dart';
+import 'package:crotowave/services/connect/connect_protocol.dart';
+import 'package:crotowave/services/connect/connect_service.dart';
+import 'package:crotowave/services/crotolink_controller.dart';
+import 'package:crotowave/services/navidrome_service.dart';
+import 'package:crotowave/services/player_controller.dart';
+import 'package:crotowave/services/waveform_service.dart';
 
 class FakeNavidrome extends NavidromeService {
   final queries = <String>[];
@@ -87,12 +87,12 @@ class IdlePlayer extends ChangeNotifier implements PlayerController {
   dynamic noSuchMethod(Invocation invocation) => Future<void>.value();
 }
 
-class IdleJam extends ChangeNotifier implements JamController {
+class IdleCrotoLink extends ChangeNotifier implements CrotoLinkController {
   @override
-  JamRole get role => JamRole.none;
+  CrotoLinkRole get role => CrotoLinkRole.none;
 
   @override
-  bool get inJam => false;
+  bool get inCrotoLink => false;
 
   @override
   bool get isHost => false;
@@ -101,16 +101,16 @@ class IdleJam extends ChangeNotifier implements JamController {
   bool get isGuest => false;
 
   @override
-  JamParticipant? get localParticipant => null;
+  CrotoLinkParticipant? get localParticipant => null;
 
   @override
-  List<JamQueueItem> get jamQueue => const [];
+  List<CrotoLinkQueueItem> get crotoLinkQueue => const [];
 
   @override
-  List<JamQueueItem> get queue => const [];
+  List<CrotoLinkQueueItem> get queue => const [];
 
   @override
-  bool isTrackInJamQueue(String trackId) => false;
+  bool isTrackInCrotoLinkQueue(String trackId) => false;
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);

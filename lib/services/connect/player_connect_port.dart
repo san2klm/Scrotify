@@ -17,7 +17,7 @@ class ConnectIdentity {
   final String name;
   final ConnectKind kind;
 
-  static const _storageKey = 'scrotify.connect_device_id';
+  static const _storageKey = 'crotowave.connect_device_id';
 
   static Future<ConnectIdentity> load() async {
     var id = await SecureStorage.secureRead(_storageKey);

@@ -78,4 +78,4 @@ jobs:
           gh release create linux-latest CrotoWave-Linux-x64.tar.gz \
             --target "$GITHUB_SHA" \
             --title "CrotoWave para Linux x64 (última compilación)" \
-            --notes "Binario nativo para Linux x64 compilado desde ${GITHUB_SHA::7}. Descomprimir y ejecutar navidrome_client."
+            --notes "Binario nativo para Linux x64 compilado desde ${GITHUB_SHA::7}. Descomprimir y ejecutar crotowave."

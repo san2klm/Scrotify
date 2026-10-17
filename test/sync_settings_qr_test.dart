@@ -3,12 +3,12 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/testing.dart';
-import 'package:navidrome_client/services/app_theme.dart';
-import 'package:navidrome_client/services/sync/sync_key_link.dart';
-import 'package:navidrome_client/services/sync/sync_service.dart';
-import 'package:navidrome_client/services/theme_controller.dart';
-import 'package:navidrome_client/widgets/pairing_qr_code.dart';
-import 'package:navidrome_client/widgets/sync_settings.dart';
+import 'package:crotowave/services/app_theme.dart';
+import 'package:crotowave/services/sync/sync_key_link.dart';
+import 'package:crotowave/services/sync/sync_service.dart';
+import 'package:crotowave/services/theme_controller.dart';
+import 'package:crotowave/widgets/pairing_qr_code.dart';
+import 'package:crotowave/widgets/sync_settings.dart';
 import 'package:provider/provider.dart';
 
 class _Themes extends ThemeController {
@@ -135,7 +135,7 @@ void main() {
     await finish(tester);
   });
 
-  testWidgets('la clave se puede pegar como enlace scrotify-sync://',
+  testWidgets('la clave se puede pegar como enlace crotowave-sync://',
       (tester) async {
     final other = SyncKeyLink.build(
         'ABCD-EFGH-IJKL-MNOP-QRST-UVWX-YZ23-4567-ABCD-EFGH-IJKL-MNOP-QRST');

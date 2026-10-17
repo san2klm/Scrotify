@@ -3,10 +3,10 @@ import 'dart:math';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:navidrome_client/services/connect/connect_protocol.dart';
-import 'package:navidrome_client/services/connect/connect_service.dart';
-import 'package:navidrome_client/services/connect/connect_transport.dart';
-import 'package:navidrome_client/services/sync/sync_crypto.dart';
+import 'package:crotowave/services/connect/connect_protocol.dart';
+import 'package:crotowave/services/connect/connect_service.dart';
+import 'package:crotowave/services/connect/connect_transport.dart';
+import 'package:crotowave/services/sync/sync_crypto.dart';
 
 /// Red en memoria: entrega mensajes entre transportes del mismo "medio".
 class FakeNetwork {

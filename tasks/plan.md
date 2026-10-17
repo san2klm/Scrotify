@@ -1,4 +1,4 @@
-# Plan de implementación — Mejoras UI/UX Scrotify
+# Plan de implementación — Mejoras UI/UX CrotoWave
 
 Fecha: 2026-09-19  
 Rama: Lau
@@ -208,7 +208,7 @@ Rama: Lau
 **Archivos:** `lib/widgets/track_context_menu.dart`, `lib/widgets/server_activity_panel.dart`
 
 **Qué hacer:**
-- Definir formato de link interno: `scrotify://track/{trackId}` o simplemente un prefijo reconocible como `[TRACK:{trackId}:{trackTitle}:{artist}]`.
+- Definir formato de link interno: `crotowave://track/{trackId}` o simplemente un prefijo reconocible como `[TRACK:{trackId}:{trackTitle}:{artist}]`.
 - En `TrackContextMenu`, opción "Compartir con la comunidad" actualmente solo abre el panel. Cambiar para que **envíe un mensaje al chat** automáticamente:
   ```dart
   final msg = '🎵 [TRACK:${track.id}] "${track.title}" — ${track.artist}';
@@ -273,6 +273,6 @@ Rama: Lau
 
 ## Puntos abiertos / decisiones
 
-1. **Formato del link de canción en el chat**: ¿prefijo `[TRACK:id]` o URL custom scheme `scrotify://`? → Recomiendo `[TRACK:id:title:artist]` (sin URL externa, funciona offline).
+1. **Formato del link de canción en el chat**: ¿prefijo `[TRACK:id]` o URL custom scheme `crotowave://`? → Recomiendo `[TRACK:id:title:artist]` (sin URL externa, funciona offline).
 2. **Artistas seguidos en biblioteca**: ¿mostrar todos los seguidos o solo los que tienen canciones en la biblioteca? → Todos los seguidos (el `id` viene de Navidrome).
 3. **Excluir artista en reproducción aleatoria**: `PlayerController` debe filtrar artistas excluidos en `skipNext` / shuffle. Esto no está listado explícitamente pero es la única forma de "no reproducir este artista".

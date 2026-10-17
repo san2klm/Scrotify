@@ -6,21 +6,21 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:navidrome_client/screens/settings_screen.dart';
-import 'package:navidrome_client/services/app_theme.dart';
-import 'package:navidrome_client/services/connect/connect_service.dart';
-import 'package:navidrome_client/services/equalizer_service.dart';
-import 'package:navidrome_client/services/hifi/audio_output_devices.dart';
-import 'package:navidrome_client/services/hifi/hifi_coordinator.dart';
-import 'package:navidrome_client/services/hifi/hifi_profiles.dart';
-import 'package:navidrome_client/services/jam_controller.dart';
-import 'package:navidrome_client/services/listening_stats_service.dart';
-import 'package:navidrome_client/services/local_music_service.dart';
-import 'package:navidrome_client/services/navidrome_service.dart';
-import 'package:navidrome_client/services/player_controller.dart';
-import 'package:navidrome_client/services/settings_controller.dart';
-import 'package:navidrome_client/services/sync/sync_service.dart';
-import 'package:navidrome_client/services/theme_controller.dart';
+import 'package:crotowave/screens/settings_screen.dart';
+import 'package:crotowave/services/app_theme.dart';
+import 'package:crotowave/services/connect/connect_service.dart';
+import 'package:crotowave/services/equalizer_service.dart';
+import 'package:crotowave/services/hifi/audio_output_devices.dart';
+import 'package:crotowave/services/hifi/hifi_coordinator.dart';
+import 'package:crotowave/services/hifi/hifi_profiles.dart';
+import 'package:crotowave/services/crotolink_controller.dart';
+import 'package:crotowave/services/listening_stats_service.dart';
+import 'package:crotowave/services/local_music_service.dart';
+import 'package:crotowave/services/navidrome_service.dart';
+import 'package:crotowave/services/player_controller.dart';
+import 'package:crotowave/services/settings_controller.dart';
+import 'package:crotowave/services/sync/sync_service.dart';
+import 'package:crotowave/services/theme_controller.dart';
 import 'package:provider/provider.dart';
 
 import 'support/app_fakes.dart';
@@ -155,7 +155,8 @@ void main() {
         ChangeNotifierProvider<PlayerController>(create: (_) => IdlePlayer()),
         ChangeNotifierProvider<ConnectService>(
             create: (_) => idleConnectService()),
-        ChangeNotifierProvider<JamController>(create: (_) => IdleJam()),
+        ChangeNotifierProvider<CrotoLinkController>(
+            create: (_) => IdleCrotoLink()),
         ChangeNotifierProvider<SettingsController>.value(value: settings),
         ChangeNotifierProvider<LocalMusicService>.value(value: music),
         ChangeNotifierProvider<HifiCoordinator>.value(value: hifi),

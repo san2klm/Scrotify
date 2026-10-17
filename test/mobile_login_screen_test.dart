@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:local_auth/local_auth.dart';
-import 'package:navidrome_client/screens/mobile_login_screen.dart';
-import 'package:navidrome_client/services/biometric_auth_service.dart';
-import 'package:navidrome_client/services/secure_storage.dart';
-import 'package:navidrome_client/services/server_profiles_controller.dart';
-import 'package:navidrome_client/services/theme_controller.dart';
+import 'package:crotowave/screens/mobile_login_screen.dart';
+import 'package:crotowave/services/biometric_auth_service.dart';
+import 'package:crotowave/services/secure_storage.dart';
+import 'package:crotowave/services/server_profiles_controller.dart';
+import 'package:crotowave/services/theme_controller.dart';
 import 'package:provider/provider.dart';
 
 class FakeLocalAuthentication implements LocalAuthentication {
@@ -78,7 +78,8 @@ void main() {
       expect(find.text('Ingresar con huella digital'), findsNothing);
     });
 
-    testWidgets('shows biometric button when credentials stored and biometrics available',
+    testWidgets(
+        'shows biometric button when credentials stored and biometrics available',
         (tester) async {
       await SecureStorage.saveCredentials(
         serverUrl: 'https://demo.navidrome.org',

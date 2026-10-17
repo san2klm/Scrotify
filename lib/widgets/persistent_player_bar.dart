@@ -5,14 +5,14 @@ import 'package:provider/provider.dart';
 
 import '../services/connect/connect_protocol.dart';
 import '../services/connect/connect_service.dart';
-import '../services/jam_controller.dart';
+import '../services/crotolink_controller.dart';
 import '../services/navidrome_service.dart';
 import '../services/player_controller.dart';
 import '../screens/player_screen.dart';
 import 'cover_art.dart';
 import 'player_position_builder.dart';
 import 'waveform_progress_bar.dart';
-import 'jam_dialog.dart';
+import 'crotolink_dialog.dart';
 import 'connect_panel.dart';
 import 'track_context_menu.dart';
 import 'interactive_artist_text.dart';
@@ -41,11 +41,11 @@ class PersistentPlayerBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Consumer3<PlayerController, JamController, ConnectService>(
-      builder: (context, player, jam, connect, _) {
+    return Consumer3<PlayerController, CrotoLinkController, ConnectService>(
+      builder: (context, player, crotoLink, connect, _) {
         // En modo Party Speaker el invitado no reproduce audio local, pero la
         // barra debe reflejar fielmente lo que está sonando en el anfitrión.
-        final remoteState = jam.isGuest ? jam.session : null;
+        final remoteState = crotoLink.isGuest ? crotoLink.session : null;
         // Con Connect, la barra muestra y controla el dispositivo remoto.
         final remote =
             connect.controlled != null ? connect.controlledState : null;
@@ -57,9 +57,9 @@ class PersistentPlayerBar extends StatelessWidget {
             : remoteState?.isPlaying ?? player.playing;
 
         if (compact) {
-          return _buildMobileBar(context, player, jam, track, playing);
+          return _buildMobileBar(context, player, crotoLink, track, playing);
         }
-        return _buildDesktopBar(context, player, jam, track, playing);
+        return _buildDesktopBar(context, player, crotoLink, track, playing);
       },
     );
   }
@@ -75,13 +75,13 @@ class PersistentPlayerBar extends StatelessWidget {
   // ---------------------------------------------------------------------------
 
   Widget _buildDesktopBar(BuildContext context, PlayerController player,
-      JamController jam, Track? track, bool playing) {
+      CrotoLinkController crotoLink, Track? track, bool playing) {
     // Tramos adaptativos: a medida que la ventana se estrecha se ocultan
-    // primero el volumen, luego Jam y pantalla completa, y se acorta el
+    // primero el volumen, luego CrotoLink y pantalla completa, y se acorta el
     // bloque de título. Así la barra nunca desborda.
     final w = MediaQuery.sizeOf(context).width;
     final showVolume = w >= 1050;
-    final showJam = w >= 880;
+    final showCrotoLink = w >= 880;
     final showFull = w >= 800;
     final infoWidth = w < 900 ? 130.0 : (w < 1100 ? 180.0 : 240.0);
     final connect = context.watch<ConnectService>();
@@ -117,8 +117,8 @@ class PersistentPlayerBar extends StatelessWidget {
         if ((event.buttons & kMiddleMouseButton) != 0) {
           if (remoteControlled) {
             connect.command(ConnectCommand.toggle);
-          } else if (jam.inJam) {
-            jam.playbackAction('toggle');
+          } else if (crotoLink.inCrotoLink) {
+            crotoLink.playbackAction('toggle');
           } else {
             player.togglePlay();
           }
@@ -130,123 +130,126 @@ class PersistentPlayerBar extends StatelessWidget {
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
           child: Row(
-          children: [
-            // ── Left: artwork + track info (title, artist, favorite) ──
-            _artwork(context, track),
-            const SizedBox(width: 12),
-            SizedBox(width: infoWidth, child: _trackInfo(context, track)),
-            const SizedBox(width: 8),
+            children: [
+              // ── Left: artwork + track info (title, artist, favorite) ──
+              _artwork(context, track),
+              const SizedBox(width: 12),
+              SizedBox(width: infoWidth, child: _trackInfo(context, track)),
+              const SizedBox(width: 8),
 
-            // ── Center: playback controls on top, progress bar below ──
-            Expanded(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  // Playback controls
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      IconButton(
-                        tooltip: 'Aleatorio',
-                        visualDensity: VisualDensity.compact,
-                        icon: Icon(
-                          Icons.shuffle,
-                          size: 20,
-                          color: player.shuffleEnabled
-                              ? context.accent
-                              : context.textSecondary,
+              // ── Center: playback controls on top, progress bar below ──
+              Expanded(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    // Playback controls
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          tooltip: 'Aleatorio',
+                          visualDensity: VisualDensity.compact,
+                          icon: Icon(
+                            Icons.shuffle,
+                            size: 20,
+                            color: player.shuffleEnabled
+                                ? context.accent
+                                : context.textSecondary,
+                          ),
+                          onPressed: crotoLink.isGuest || remoteControlled
+                              ? null
+                              : player.toggleShuffle,
                         ),
-                        onPressed: jam.isGuest || remoteControlled
-                            ? null
-                            : player.toggleShuffle,
-                      ),
-                      IconButton(
-                        tooltip: 'Anterior',
-                        visualDensity: VisualDensity.compact,
-                        icon: Icon(Icons.skip_previous,
-                            color: context.textPrimary, size: 26),
-                        onPressed: _playbackHandler(
-                            context, jam, player, 'skip_previous'),
-                      ),
-                      _playButton(context, player, jam, playing),
-                      IconButton(
-                        tooltip: 'Siguiente',
-                        visualDensity: VisualDensity.compact,
-                        icon: Icon(Icons.skip_next,
-                            color: context.textPrimary, size: 26),
-                        onPressed:
-                            _playbackHandler(context, jam, player, 'skip_next'),
-                      ),
-                      IconButton(
-                        tooltip: 'Repetir',
-                        visualDensity: VisualDensity.compact,
-                        icon: Icon(
-                          player.repeatMode == LoopMode.one
-                              ? Icons.repeat_one
-                              : Icons.repeat,
-                          size: 20,
-                          color: player.repeatMode != LoopMode.off
-                              ? context.accent
-                              : context.textSecondary,
+                        IconButton(
+                          tooltip: 'Anterior',
+                          visualDensity: VisualDensity.compact,
+                          icon: Icon(Icons.skip_previous,
+                              color: context.textPrimary, size: 26),
+                          onPressed: _playbackHandler(
+                              context, crotoLink, player, 'skip_previous'),
                         ),
-                        onPressed: jam.isGuest || remoteControlled
-                            ? null
-                            : player.toggleRepeat,
-                      ),
-                    ],
-                  ),
-                  // Progress bar with time labels
-                  ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 560),
-                    child: _DesktopProgressBar(
-                      player,
-                      remote: remoteControlled ? remoteState : null,
-                      remoteActive: remoteControlled,
-                      onSeek: (target) => _seek(context, jam, player, target),
+                        _playButton(context, player, crotoLink, playing),
+                        IconButton(
+                          tooltip: 'Siguiente',
+                          visualDensity: VisualDensity.compact,
+                          icon: Icon(Icons.skip_next,
+                              color: context.textPrimary, size: 26),
+                          onPressed: _playbackHandler(
+                              context, crotoLink, player, 'skip_next'),
+                        ),
+                        IconButton(
+                          tooltip: 'Repetir',
+                          visualDensity: VisualDensity.compact,
+                          icon: Icon(
+                            player.repeatMode == LoopMode.one
+                                ? Icons.repeat_one
+                                : Icons.repeat,
+                            size: 20,
+                            color: player.repeatMode != LoopMode.off
+                                ? context.accent
+                                : context.textSecondary,
+                          ),
+                          onPressed: crotoLink.isGuest || remoteControlled
+                              ? null
+                              : player.toggleRepeat,
+                        ),
+                      ],
                     ),
-                  ),
-                ],
+                    // Progress bar with time labels
+                    ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 560),
+                      child: _DesktopProgressBar(
+                        player,
+                        remote: remoteControlled ? remoteState : null,
+                        remoteActive: remoteControlled,
+                        onSeek: (target) =>
+                            _seek(context, crotoLink, player, target),
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
 
-            // ── Right: Jam + Queue + volume + fullscreen + three dots ──
-            if (showJam) ...[
-              _jamButton(context),
-              const SizedBox(width: 6),
-            ],
-            _connectButton(context),
-            if (showVolume) ...[
-              const SizedBox(width: 8),
-              _VolumeBar(player, connect: remoteControlled ? connect : null),
-            ],
-            if (showFull) ...[
-              const SizedBox(width: 8),
-              _openFullButton(context),
-            ],
-            if (WindowControls.isDesktop) ...[
+              // ── Right: CrotoLink + Queue + volume + fullscreen + three dots ──
+              if (showCrotoLink) ...[
+                _crotoLinkButton(context),
+                const SizedBox(width: 6),
+              ],
+              _connectButton(context),
+              if (showVolume) ...[
+                const SizedBox(width: 8),
+                _VolumeBar(player, connect: remoteControlled ? connect : null),
+              ],
+              if (showFull) ...[
+                const SizedBox(width: 8),
+                _openFullButton(context),
+              ],
+              if (WindowControls.isDesktop) ...[
+                const SizedBox(width: 4),
+                IconButton(
+                  icon: const Icon(Icons.picture_in_picture_alt_rounded,
+                      size: 18),
+                  color: context.textSecondary,
+                  tooltip: 'Widget / Mini reproductor',
+                  onPressed: () =>
+                      context.read<MiniPlayerController>().toggle(),
+                ),
+              ],
               const SizedBox(width: 4),
-              IconButton(
-                icon: const Icon(Icons.picture_in_picture_alt_rounded, size: 18),
-                color: context.textSecondary,
-                tooltip: 'Widget / Mini reproductor',
-                onPressed: () => context.read<MiniPlayerController>().toggle(),
-              ),
+              _threeDotsMenu(context, track),
             ],
-            const SizedBox(width: 4),
-            _threeDotsMenu(context, track),
-          ],
+          ),
         ),
       ),
-    ),
-  );
-}
+    );
+  }
 
   // ---------------------------------------------------------------------------
   // Mobile layout — Spotify mobile style
   // ---------------------------------------------------------------------------
 
   Widget _buildMobileBar(BuildContext context, PlayerController player,
-      JamController jam, Track? track, bool playing) {
+      CrotoLinkController crotoLink, Track? track, bool playing) {
     return Container(
       height: 84,
       color: context.bgPlayer,
@@ -259,7 +262,7 @@ class PersistentPlayerBar extends StatelessWidget {
                 ? context.watch<ConnectService>().controlledState
                 : null,
             remoteActive: context.watch<ConnectService>().controlled != null,
-            onSeek: (target) => _seek(context, jam, player, target),
+            onSeek: (target) => _seek(context, crotoLink, player, target),
           ),
           // Content row
           Expanded(
@@ -283,7 +286,8 @@ class PersistentPlayerBar extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(width: 4),
-                  ..._mobileControls(context, player, jam, playing, track),
+                  ..._mobileControls(
+                      context, player, crotoLink, playing, track),
                 ],
               ),
             ),
@@ -294,19 +298,19 @@ class PersistentPlayerBar extends StatelessWidget {
   }
 
   List<Widget> _mobileControls(BuildContext context, PlayerController player,
-      JamController jam, bool playing, Track? track) {
+      CrotoLinkController crotoLink, bool playing, Track? track) {
     return [
       _compactControlIcon(
         context,
         Icons.skip_previous,
-        _playbackHandler(context, jam, player, 'skip_previous'),
+        _playbackHandler(context, crotoLink, player, 'skip_previous'),
         size: 24,
       ),
-      _playButton(context, player, jam, playing, compact: true),
+      _playButton(context, player, crotoLink, playing, compact: true),
       _compactControlIcon(
         context,
         Icons.skip_next,
-        _playbackHandler(context, jam, player, 'skip_next'),
+        _playbackHandler(context, crotoLink, player, 'skip_next'),
         size: 24,
       ),
       _connectButton(context, compact: true),
@@ -314,11 +318,11 @@ class PersistentPlayerBar extends StatelessWidget {
     ];
   }
 
-  Widget _jamButton(BuildContext context) {
-    final jam = context.watch<JamController>();
-    if (jam.inJam) {
+  Widget _crotoLinkButton(BuildContext context) {
+    final crotoLink = context.watch<CrotoLinkController>();
+    if (crotoLink.inCrotoLink) {
       return InkWell(
-        onTap: () => JamDialog.show(context),
+        onTap: () => CrotoLinkDialog.show(context),
         borderRadius: BorderRadius.circular(20),
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
@@ -345,7 +349,7 @@ class PersistentPlayerBar extends StatelessWidget {
                   color: context.accent, size: 15),
               const SizedBox(width: 5),
               Text(
-                'CrotoLink · ${jam.participants.length}',
+                'CrotoLink · ${crotoLink.participants.length}',
                 style: TextStyle(
                   color: context.accent,
                   fontSize: 11.5,
@@ -363,7 +367,7 @@ class PersistentPlayerBar extends StatelessWidget {
       visualDensity: VisualDensity.compact,
       icon: Icon(Icons.speaker_group_outlined,
           color: context.textSecondary, size: 20),
-      onPressed: () => JamDialog.show(context),
+      onPressed: () => CrotoLinkDialog.show(context),
     );
   }
 
@@ -492,7 +496,7 @@ class PersistentPlayerBar extends StatelessWidget {
   }
 
   Widget _playButton(BuildContext context, PlayerController player,
-      JamController jam, bool playing,
+      CrotoLinkController crotoLink, bool playing,
       {bool compact = false}) {
     return IconButton(
       tooltip: 'Pausar / Reproducir',
@@ -505,13 +509,13 @@ class PersistentPlayerBar extends StatelessWidget {
         playing ? Icons.pause_circle_filled : Icons.play_circle_filled,
         color: context.textPrimary,
       ),
-      onPressed: _playbackHandler(context, jam, player, 'toggle'),
+      onPressed: _playbackHandler(context, crotoLink, player, 'toggle'),
     );
   }
 
   VoidCallback? _playbackHandler(
     BuildContext context,
-    JamController jam,
+    CrotoLinkController crotoLink,
     PlayerController player,
     String action,
   ) {
@@ -525,12 +529,13 @@ class PersistentPlayerBar extends StatelessWidget {
       };
       return command == null ? null : () => connect.command(command);
     }
-    if (jam.isGuest && !(jam.localParticipant?.canControlPlayback ?? false)) {
+    if (crotoLink.isGuest &&
+        !(crotoLink.localParticipant?.canControlPlayback ?? false)) {
       return null;
     }
-    if (jam.inJam) {
+    if (crotoLink.inCrotoLink) {
       return () {
-        jam.playbackAction(action);
+        crotoLink.playbackAction(action);
       };
     }
     return switch (action) {
@@ -541,18 +546,19 @@ class PersistentPlayerBar extends StatelessWidget {
     };
   }
 
-  void _seek(BuildContext context, JamController jam, PlayerController player,
-      Duration target) {
+  void _seek(BuildContext context, CrotoLinkController crotoLink,
+      PlayerController player, Duration target) {
     final connect = context.read<ConnectService>();
     if (connect.controlled != null) {
       connect.command(ConnectCommand.seek, target.inMilliseconds);
       return;
     }
-    if (jam.isGuest && !(jam.localParticipant?.canControlPlayback ?? false)) {
+    if (crotoLink.isGuest &&
+        !(crotoLink.localParticipant?.canControlPlayback ?? false)) {
       return;
     }
-    if (jam.inJam) {
-      jam.playbackAction('seek', position: target);
+    if (crotoLink.inCrotoLink) {
+      crotoLink.playbackAction('seek', position: target);
     } else {
       player.seek(target);
     }
@@ -575,9 +581,10 @@ class PersistentPlayerBar extends StatelessWidget {
 
   void _openPlayerScreen(BuildContext context) {
     final player = context.read<PlayerController>();
-    final jam = context.read<JamController>();
+    final crotoLink = context.read<CrotoLinkController>();
     final track =
-        (jam.isGuest ? jam.session?.currentTrack : null) ?? player.currentTrack;
+        (crotoLink.isGuest ? crotoLink.session?.currentTrack : null) ??
+            player.currentTrack;
     if (track == null) return;
     Navigator.push(
       context,

@@ -4,10 +4,10 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
-import 'package:navidrome_client/services/navidrome_service.dart';
-import 'package:navidrome_client/services/offline_cache_service.dart';
-import 'package:navidrome_client/services/offline_download_manager.dart';
-import 'package:navidrome_client/services/settings_controller.dart';
+import 'package:crotowave/services/navidrome_service.dart';
+import 'package:crotowave/services/offline_cache_service.dart';
+import 'package:crotowave/services/offline_download_manager.dart';
+import 'package:crotowave/services/settings_controller.dart';
 import 'package:path/path.dart' as p;
 
 /// Mock HTTP client implementing [http.BaseClient] for isolated Navidrome tests.

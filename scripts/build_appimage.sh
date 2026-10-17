@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Genera el AppImage de Linux: CrotoWave-<versión>-x86_64.AppImage en la raíz.
+# Genera el AppImage de Linux: dist/CrotoWave-<versión>-LINUX-x86_64.AppImage
+# (siempre en dist/; firmar con scripts/sign_release.sh).
 #
 # Necesita `appimagetool` (https://github.com/AppImage/appimagetool/releases):
 # en el PATH, o indicando su ruta en APPIMAGETOOL.
@@ -13,17 +14,17 @@ if [[ -z "$tool" || ! -x "$tool" ]]; then
 fi
 
 ver=$(grep -E '^version:' pubspec.yaml | sed 's/version: *//; s/+.*//')
-if [[ -z "${SCROTIFY_COMMIT:-}" ]]; then
+if [[ -z "${CROTOWAVE_COMMIT:-}" ]]; then
   commit=$(git rev-parse --short HEAD)
   [[ -n "$(git status --porcelain --untracked-files=no)" ]] && commit="$commit-mod"
 else
-  commit=$SCROTIFY_COMMIT   # lo fija build_appimage_portable.sh (sin repo git)
+  commit=$CROTOWAVE_COMMIT   # lo fija build_appimage_portable.sh (sin repo git)
 fi
 
 flutter build linux --release \
-  --dart-define=SCROTIFY_VERSION="$ver" \
-  --dart-define=SCROTIFY_COMMIT="$commit" \
-  --dart-define=SCROTIFY_BUILD_DATE="$(date +%F)"
+  --dart-define=CROTOWAVE_VERSION="$ver" \
+  --dart-define=CROTOWAVE_COMMIT="$commit" \
+  --dart-define=CROTOWAVE_BUILD_DATE="$(date +%F)"
 
 appdir=$(mktemp -d)
 trap 'rm -rf "$appdir"' EXIT
@@ -36,7 +37,7 @@ cat > "$appdir/crotowave.desktop" <<'DESKTOP'
 Type=Application
 Name=CrotoWave
 Comment=Cliente Navidrome/Subsonic
-Exec=navidrome_client
+Exec=crotowave
 Icon=crotowave
 Categories=AudioVideo;Audio;Player;
 DESKTOP
@@ -48,11 +49,12 @@ HERE="$(dirname "$(readlink -f "$0")")"
 # Librerías y ffmpeg/ffprobe viajan dentro del AppImage.
 export LD_LIBRARY_PATH="$HERE/usr/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 export PATH="$HERE/usr/bin:$PATH"
-exec "$HERE/usr/bin/navidrome_client" "$@"
+exec "$HERE/usr/bin/crotowave" "$@"
 APPRUN
 chmod +x "$appdir/AppRun"
 
-out="CrotoWave-$ver-x86_64.AppImage"
+mkdir -p dist
+out="dist/CrotoWave-$ver-LINUX-x86_64.AppImage"
 # --appimage-extract-and-run: funciona también sin FUSE.
 ARCH=x86_64 "$tool" --appimage-extract-and-run "$appdir" "$out" >/dev/null
 chmod +x "$out"

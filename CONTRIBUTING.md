@@ -5,11 +5,11 @@
 Al enviar un cambio (pull request, parche o commit) aceptás que se publique
 bajo la licencia de la carpeta que modifica:
 
-- Cliente (todo salvo `jam-server/` y `third_party/`): **GPL-3.0-or-later con
+- Cliente (todo salvo `crotolink-server/` y `third_party/`): **GPL-3.0-or-later con
   la excepción para tiendas de aplicaciones** que está al final de `LICENSE`.
   La excepción tiene que cubrir también tu código; si no, ya no se podría
   publicar CrotoWave en Google Play ni en la App Store.
-- `jam-server/`: **AGPL-3.0-or-later**.
+- `crotolink-server/`: **AGPL-3.0-or-later**.
 - `third_party/just_audio_media_kit/`: **The Unlicense**.
 
 Conservás el copyright de lo que escribiste. Ver `LICENSING.md`.
@@ -37,4 +37,4 @@ actívalo una vez con `git config core.hooksPath .githooks`.
 ## Antes de enviar
 
 - `flutter analyze` sin errores ni avisos.
-- `flutter test` y, si tocás el servidor, `cd jam-server && node --test`.
+- `flutter test` y, si tocás el servidor, `cd crotolink-server && node --test`.

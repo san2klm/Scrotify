@@ -3,13 +3,13 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:navidrome_client/services/jam_controller.dart';
-import 'package:navidrome_client/services/navidrome_service.dart';
-import 'package:navidrome_client/services/offline_cache_service.dart';
-import 'package:navidrome_client/services/offline_download_manager.dart';
-import 'package:navidrome_client/services/player_controller.dart';
-import 'package:navidrome_client/services/theme_controller.dart';
-import 'package:navidrome_client/widgets/track_context_menu.dart';
+import 'package:crotowave/services/crotolink_controller.dart';
+import 'package:crotowave/services/navidrome_service.dart';
+import 'package:crotowave/services/offline_cache_service.dart';
+import 'package:crotowave/services/offline_download_manager.dart';
+import 'package:crotowave/services/player_controller.dart';
+import 'package:crotowave/services/theme_controller.dart';
+import 'package:crotowave/widgets/track_context_menu.dart';
 import 'package:path/path.dart' as p;
 import 'package:provider/provider.dart';
 
@@ -23,12 +23,13 @@ class _TestNavidromeService extends FakeNavidrome {
   String? get serverScope => _scope;
 }
 
-class _TestJamController extends IdleJam {
-  final bool _jamActive;
-  _TestJamController({bool jamActive = false}) : _jamActive = jamActive;
+class _TestCrotoLinkController extends IdleCrotoLink {
+  final bool _crotoLinkActive;
+  _TestCrotoLinkController({bool crotoLinkActive = false})
+      : _crotoLinkActive = crotoLinkActive;
 
   @override
-  bool get inJam => _jamActive;
+  bool get inCrotoLink => _crotoLinkActive;
 }
 
 void main() {
@@ -266,7 +267,7 @@ void main() {
     Widget createTestHarness({
       required Widget child,
       NavidromeService? navidromeService,
-      JamController? jamController,
+      CrotoLinkController? crotoLinkController,
       PlayerController? playerController,
     }) {
       return MultiProvider(
@@ -280,9 +281,10 @@ void main() {
           ChangeNotifierProvider<PlayerController>(
             create: (_) => playerController ?? IdlePlayer(),
           ),
-          ChangeNotifierProvider<JamController>(
+          ChangeNotifierProvider<CrotoLinkController>(
             create: (_) =>
-                jamController ?? _TestJamController(jamActive: false),
+                crotoLinkController ??
+                _TestCrotoLinkController(crotoLinkActive: false),
           ),
           Provider<OfflineCacheService>.value(value: cacheService),
           ChangeNotifierProvider<OfflineDownloadManager>.value(
@@ -704,7 +706,7 @@ void main() {
     });
 
     Widget createContextMenuHarness({
-      required bool inJam,
+      required bool inCrotoLink,
     }) {
       return MultiProvider(
         providers: [
@@ -717,8 +719,9 @@ void main() {
           ChangeNotifierProvider<PlayerController>(
             create: (_) => IdlePlayer(),
           ),
-          ChangeNotifierProvider<JamController>(
-            create: (_) => _TestJamController(jamActive: inJam),
+          ChangeNotifierProvider<CrotoLinkController>(
+            create: (_) =>
+                _TestCrotoLinkController(crotoLinkActive: inCrotoLink),
           ),
           Provider<OfflineCacheService>.value(value: cacheService),
           ChangeNotifierProvider<OfflineDownloadManager>.value(
@@ -734,9 +737,9 @@ void main() {
     }
 
     testWidgets(
-        'renders offline action when not in CrotoLink mode (!jam.inJam) and preserves existing menu actions',
+        'renders offline action when not in CrotoLink mode (!crotoLink.inCrotoLink) and preserves existing menu actions',
         (tester) async {
-      await tester.pumpWidget(createContextMenuHarness(inJam: false));
+      await tester.pumpWidget(createContextMenuHarness(inCrotoLink: false));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 100));
 
@@ -752,13 +755,14 @@ void main() {
       expect(find.text('Modo Karaoke'), findsOneWidget);
     });
 
-    testWidgets('does NOT render offline action when in CrotoLink mode (jam.inJam)',
+    testWidgets(
+        'does NOT render offline action when in CrotoLink mode (crotoLink.inCrotoLink)',
         (tester) async {
-      await tester.pumpWidget(createContextMenuHarness(inJam: true));
+      await tester.pumpWidget(createContextMenuHarness(inCrotoLink: true));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 100));
 
-      // Offline download action is NOT shown in Jam mode
+      // Offline download action is NOT shown in CrotoLink mode
       expect(find.text('Descargar sin conexión'), findsNothing);
       expect(find.text('Disponible sin conexión'), findsNothing);
     });

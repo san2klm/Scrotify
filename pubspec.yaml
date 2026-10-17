@@ -1,4 +1,4 @@
-name: navidrome_client
+name: crotowave
 description: Cliente de música moderno para Navidrome (API Subsonic)
 publish_to: 'none'
 version: 1.0.0+2007

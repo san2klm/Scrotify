@@ -12,13 +12,13 @@ import '../services/secure_storage.dart';
 /// Los archivos de la app se copian con `run-as`, pero el almacén seguro
 /// (perfiles de servidor, clave de sincronización…) está cifrado con claves
 /// del Keystore de Android atadas a la instalación: copiarlo no sirve. Por eso,
-/// solo en un build con `--dart-define=SCROTIFY_SIGNING_MIGRATION=true`, al
+/// solo en un build con `--dart-define=CROTOWAVE_SIGNING_MIGRATION=true`, al
 /// arrancar la app:
 ///  - si existe [exportRequest], vuelca el almacén a [exportFile];
 ///  - si existe [importFile], lo escribe en el almacén y lo borra.
 /// En los builds normales la constante es `false` y este código no se incluye.
 class SigningMigration {
-  static const enabled = bool.fromEnvironment('SCROTIFY_SIGNING_MIGRATION');
+  static const enabled = bool.fromEnvironment('CROTOWAVE_SIGNING_MIGRATION');
 
   static const exportRequest = 'signing_migration.export';
   static const exportFile = 'signing_migration_export.json';
@@ -30,7 +30,9 @@ class SigningMigration {
       final dir = await getApplicationSupportDirectory();
       // `run-as` no entra si la carpeta de datos es legible por otros (una
       // restauración vieja la dejó en 755): solo la propia app puede cerrarla.
-      if (Platform.isAndroid) await Process.run('chmod', ['700', dir.parent.path]);
+      if (Platform.isAndroid) {
+        await Process.run('chmod', ['700', dir.parent.path]);
+      }
       await run(dir);
     } catch (e) {
       debugPrint('SigningMigration: $e');

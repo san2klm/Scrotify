@@ -5,14 +5,14 @@ import 'package:flutter/gestures.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:provider/provider.dart';
 
-import '../models/jam_models.dart';
-import '../services/jam_controller.dart';
+import '../models/crotolink_models.dart';
+import '../services/crotolink_controller.dart';
 import '../services/player_controller.dart';
 import '../services/navidrome_service.dart';
 import '../services/cover_fallback_service.dart';
 import '../services/local_music_service.dart';
-import '../widgets/jam_dialog.dart';
-import '../widgets/jam_queue_panel.dart';
+import '../widgets/crotolink_dialog.dart';
+import '../widgets/crotolink_queue_panel.dart';
 import '../widgets/lyrics_follow_panel.dart';
 import '../widgets/lyrics_overlay.dart';
 import '../widgets/track_context_menu.dart';
@@ -46,24 +46,24 @@ class _PlayerScreenState extends State<PlayerScreen> {
   }
 
   VoidCallback? _playbackHandler(
-    JamController jam,
+    CrotoLinkController crotoLink,
     PlayerController player,
     String action,
     bool canControl,
   ) {
-    if (jam.isGuest && !canControl) {
+    if (crotoLink.isGuest && !canControl) {
       return null;
     }
-    if (jam.inJam) {
+    if (crotoLink.inCrotoLink) {
       return () {
         debugPrint(
-            '[JAM] PlayerScreen playback action: route=jam action=$action');
-        jam.playbackAction(action);
+            '[CROTOLINK] PlayerScreen playback action: route=crotolink action=$action');
+        crotoLink.playbackAction(action);
       };
     }
     return () {
       debugPrint(
-          '[JAM] PlayerScreen playback action: route=local action=$action');
+          '[CROTOLINK] PlayerScreen playback action: route=local action=$action');
       switch (action) {
         case 'toggle':
           player.togglePlay();
@@ -79,32 +79,33 @@ class _PlayerScreenState extends State<PlayerScreen> {
   }
 
   void _seek(
-    JamController jam,
+    CrotoLinkController crotoLink,
     PlayerController player,
     Duration target,
     bool canControl,
   ) {
-    if (jam.isGuest && !canControl) {
+    if (crotoLink.isGuest && !canControl) {
       return;
     }
-    if (jam.inJam) {
-      debugPrint('[JAM] PlayerScreen seek: route=jam target=$target');
-      jam.playbackAction('seek', position: target);
+    if (crotoLink.inCrotoLink) {
+      debugPrint(
+          '[CROTOLINK] PlayerScreen seek: route=crotolink target=$target');
+      crotoLink.playbackAction('seek', position: target);
     } else {
-      debugPrint('[JAM] PlayerScreen seek: route=local target=$target');
+      debugPrint('[CROTOLINK] PlayerScreen seek: route=local target=$target');
       player.seek(target);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Consumer2<PlayerController, JamController>(
-      builder: (context, player, jam, _) {
-        final remoteState = jam.isGuest ? jam.session : null;
+    return Consumer2<PlayerController, CrotoLinkController>(
+      builder: (context, player, crotoLink, _) {
+        final remoteState = crotoLink.isGuest ? crotoLink.session : null;
         final track = remoteState?.currentTrack ?? player.currentTrack;
         final playing = remoteState?.isPlaying ?? player.playing;
-        final canControl =
-            !jam.isGuest || (jam.localParticipant?.canControlPlayback ?? false);
+        final canControl = !crotoLink.isGuest ||
+            (crotoLink.localParticipant?.canControlPlayback ?? false);
 
         if (track == null) {
           return Scaffold(
@@ -143,7 +144,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                               ),
                             ],
                           ),
-                          _buildJamBadge(context, jam),
+                          _buildCrotoLinkBadge(context, crotoLink),
                           IconButton(
                             tooltip: 'Más opciones',
                             icon: Icon(Icons.more_horiz,
@@ -178,15 +179,16 @@ class _PlayerScreenState extends State<PlayerScreen> {
                           fontSize: 16,
                         ),
                       ),
-                      if (jam.inJam && jam.currentTrackAddedBy != null)
-                        _buildAddedByTag(jam.currentTrackAddedBy!),
+                      if (crotoLink.inCrotoLink &&
+                          crotoLink.currentTrackAddedBy != null)
+                        _buildAddedByTag(crotoLink.currentTrackAddedBy!),
                       const SizedBox(height: 16),
                       _buildProgressBar(
-                          context, player, jam, track, canControl),
+                          context, player, crotoLink, track, canControl),
                       const SizedBox(height: 8),
                       _buildControls(
                         player,
-                        jam,
+                        crotoLink,
                         playing: playing,
                         repeatMode: repeatMode,
                         shuffleEnabled: shuffleEnabled,
@@ -246,9 +248,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
                                 // En celular se oculta para no saturar.
                                 if (_isWide(context)) ...[
                                   IgnorePointer(
-                                    ignoring: jam.isGuest,
+                                    ignoring: crotoLink.isGuest,
                                     child: Opacity(
-                                      opacity: jam.isGuest ? 0.4 : 1.0,
+                                      opacity: crotoLink.isGuest ? 0.4 : 1.0,
                                       child: _PlayerVolumeBar(player: player),
                                     ),
                                   ),
@@ -272,7 +274,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
                                   icon: Icon(Icons.queue_music_rounded,
                                       color: context.textSecondary, size: 24),
                                   tooltip: 'Cola de reproducción',
-                                  onPressed: () => JamQueuePanel.show(context),
+                                  onPressed: () =>
+                                      CrotoLinkQueuePanel.show(context),
                                 ),
                               ],
                             ),
@@ -291,10 +294,11 @@ class _PlayerScreenState extends State<PlayerScreen> {
     );
   }
 
-  Widget _buildJamBadge(BuildContext context, JamController jam) {
-    if (jam.inJam) {
+  Widget _buildCrotoLinkBadge(
+      BuildContext context, CrotoLinkController crotoLink) {
+    if (crotoLink.inCrotoLink) {
       return InkWell(
-        onTap: () => JamDialog.showAsBottomSheet(context),
+        onTap: () => CrotoLinkDialog.showAsBottomSheet(context),
         borderRadius: BorderRadius.circular(20),
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
@@ -318,7 +322,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
               ),
               const SizedBox(width: 6),
               Text(
-                'CrotoLink · ${jam.participants.length}',
+                'CrotoLink · ${crotoLink.participants.length}',
                 style: TextStyle(
                   color: context.accent,
                   fontSize: 11.5,
@@ -334,11 +338,11 @@ class _PlayerScreenState extends State<PlayerScreen> {
       icon: Icon(Icons.speaker_group_outlined,
           color: context.textSecondary, size: 22),
       tooltip: 'CrotoLink',
-      onPressed: () => JamDialog.showAsBottomSheet(context),
+      onPressed: () => CrotoLinkDialog.showAsBottomSheet(context),
     );
   }
 
-  Widget _buildAddedByTag(JamParticipant p) {
+  Widget _buildAddedByTag(CrotoLinkParticipant p) {
     return Padding(
       padding: const EdgeInsets.only(top: 6),
       child: Container(
@@ -545,7 +549,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
   Widget _buildProgressBar(
     BuildContext context,
     PlayerController player,
-    JamController jam,
+    CrotoLinkController crotoLink,
     Track track,
     bool canControl,
   ) {
@@ -564,10 +568,10 @@ class _PlayerScreenState extends State<PlayerScreen> {
               player: playerModel,
               duration: duration,
               builder: (context, position) {
-                final effectivePosition = (jam.isGuest &&
+                final effectivePosition = (crotoLink.isGuest &&
                         position == Duration.zero &&
-                        (jam.session?.positionMs ?? 0) > 0)
-                    ? Duration(milliseconds: jam.session!.positionMs)
+                        (crotoLink.session?.positionMs ?? 0) > 0)
+                    ? Duration(milliseconds: crotoLink.session!.positionMs)
                     : position;
                 return Column(
                   children: [
@@ -586,7 +590,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                           // Con el mando cada pulsación salta más.
                           seekStep: Duration(seconds: TvMode.isTv ? 10 : 5),
                           onSeek: (target) =>
-                              _seek(jam, player, target, canControl),
+                              _seek(crotoLink, player, target, canControl),
                         ),
                       ),
                     ),
@@ -656,7 +660,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
   Widget _buildControls(
     PlayerController player,
-    JamController jam, {
+    CrotoLinkController crotoLink, {
     required bool playing,
     required LoopMode repeatMode,
     required bool shuffleEnabled,
@@ -672,12 +676,13 @@ class _PlayerScreenState extends State<PlayerScreen> {
             size: 22,
             color: shuffleEnabled ? context.accent : context.textPrimary,
           ),
-          onPressed: jam.isGuest ? null : player.toggleShuffle,
+          onPressed: crotoLink.isGuest ? null : player.toggleShuffle,
         ),
         IconButton(
           tooltip: 'Anterior',
           icon: Icon(Icons.skip_previous, color: context.textPrimary, size: 34),
-          onPressed: _playbackHandler(jam, player, 'skip_previous', canControl),
+          onPressed:
+              _playbackHandler(crotoLink, player, 'skip_previous', canControl),
         ),
         IconButton(
           tooltip: 'Pausar / Reproducir',
@@ -688,12 +693,13 @@ class _PlayerScreenState extends State<PlayerScreen> {
             playing ? Icons.pause_circle_filled : Icons.play_circle_filled,
             color: context.textPrimary,
           ),
-          onPressed: _playbackHandler(jam, player, 'toggle', canControl),
+          onPressed: _playbackHandler(crotoLink, player, 'toggle', canControl),
         ),
         IconButton(
           tooltip: 'Siguiente',
           icon: Icon(Icons.skip_next, color: context.textPrimary, size: 34),
-          onPressed: _playbackHandler(jam, player, 'skip_next', canControl),
+          onPressed:
+              _playbackHandler(crotoLink, player, 'skip_next', canControl),
         ),
         IconButton(
           tooltip: 'Repetir',
@@ -704,7 +710,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                 ? context.accent
                 : context.textPrimary,
           ),
-          onPressed: jam.isGuest ? null : player.toggleRepeat,
+          onPressed: crotoLink.isGuest ? null : player.toggleRepeat,
         ),
       ],
     );
@@ -782,7 +788,8 @@ class _PlayerVolumeBarState extends State<_PlayerVolumeBar> {
                     thumbShape:
                         const RoundSliderThumbShape(enabledThumbRadius: 4),
                     overlayColor: context.accentDim,
-                    overlayShape: const RoundSliderOverlayShape(overlayRadius: 8),
+                    overlayShape:
+                        const RoundSliderOverlayShape(overlayRadius: 8),
                   ),
                   child: Slider(
                     min: 0,
@@ -814,4 +821,3 @@ class _PlayerVolumeBarState extends State<_PlayerVolumeBar> {
     );
   }
 }
-

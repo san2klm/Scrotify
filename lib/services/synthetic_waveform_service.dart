@@ -32,8 +32,7 @@ class SyntheticWaveformService implements WaveformService {
         amplitudes[i] = amplitudes[i - 1] * 0.3 + amplitudes[i] * 0.7;
       }
     }
-    final maxVal =
-        amplitudes.isEmpty ? 1.0 : amplitudes.reduce(max);
+    final maxVal = amplitudes.isEmpty ? 1.0 : amplitudes.reduce(max);
     if (maxVal > 0) {
       for (var i = 0; i < amplitudes.length; i++) {
         amplitudes[i] = amplitudes[i] / maxVal;

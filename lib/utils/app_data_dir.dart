@@ -32,9 +32,9 @@ final RegExp _legacyName = RegExp(
 );
 
 /// Mueve los archivos que versiones anteriores dejaban a la vista:
-/// la carpeta `<Documentos>/Scrotify` y los sueltos en Documentos.
+/// la carpeta `<Documentos>/CrotoWave` y los sueltos en Documentos.
 Future<void> _migrateLegacyFiles(Directory docs, Directory to) async {
-  final visible = Directory(p.join(docs.path, 'Scrotify'));
+  final visible = Directory(p.join(docs.path, 'CrotoWave'));
   await _moveEntries(visible, to, (_) => true);
   try {
     if (await visible.exists() && await visible.list().isEmpty) {

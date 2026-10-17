@@ -100,9 +100,8 @@ class PlaylistImporter {
   // ---------------------------------------------------------------------------
 
   static ParsedPlaylist parseFile(String fileName, String content) {
-    final ext = fileName.contains('.')
-        ? fileName.toLowerCase().split('.').last
-        : '';
+    final ext =
+        fileName.contains('.') ? fileName.toLowerCase().split('.').last : '';
     return switch (ext) {
       'csv' => parseCsv(content),
       'm3u' || 'm3u8' => parseM3u(content),
@@ -119,12 +118,25 @@ class PlaylistImporter {
     if (rows.isEmpty) return const ParsedPlaylist(tracks: []);
 
     const titleWords = {
-      'title', 'track', 'track name', 'name', 'song',
-      'titulo', 'título', 'cancion', 'canción',
+      'title',
+      'track',
+      'track name',
+      'name',
+      'song',
+      'titulo',
+      'título',
+      'cancion',
+      'canción',
     };
     const artistWords = {
-      'artist', 'artist name', 'artist name(s)', 'artist(s)', 'artists',
-      'artista', 'artistas', 'interpret',
+      'artist',
+      'artist name',
+      'artist name(s)',
+      'artist(s)',
+      'artists',
+      'artista',
+      'artistas',
+      'interpret',
     };
 
     var titleIdx = 0;
@@ -324,13 +336,51 @@ class PlaylistImporter {
   /// Normaliza texto para comparar: minúsculas, sin acentos, sin puntuación.
   static String _fold(String s) {
     const accents = {
-      'á': 'a', 'à': 'a', 'â': 'a', 'ä': 'a', 'ã': 'a', 'å': 'a', 'ā': 'a',
-      'é': 'e', 'è': 'e', 'ê': 'e', 'ë': 'e', 'ē': 'e', 'ė': 'e', 'ę': 'e',
-      'í': 'i', 'ì': 'i', 'î': 'i', 'ï': 'i', 'ī': 'i', 'į': 'i',
-      'ó': 'o', 'ò': 'o', 'ô': 'o', 'ö': 'o', 'õ': 'o', 'ø': 'o', 'ō': 'o',
-      'ú': 'u', 'ù': 'u', 'û': 'u', 'ü': 'u', 'ū': 'u',
-      'ñ': 'n', 'ç': 'c', 'ć': 'c', 'č': 'c', 'š': 's', 'ș': 's', 'ş': 's',
-      'ž': 'z', 'ý': 'y', 'ÿ': 'y', 'æ': 'ae', 'œ': 'oe', 'ß': 'ss',
+      'á': 'a',
+      'à': 'a',
+      'â': 'a',
+      'ä': 'a',
+      'ã': 'a',
+      'å': 'a',
+      'ā': 'a',
+      'é': 'e',
+      'è': 'e',
+      'ê': 'e',
+      'ë': 'e',
+      'ē': 'e',
+      'ė': 'e',
+      'ę': 'e',
+      'í': 'i',
+      'ì': 'i',
+      'î': 'i',
+      'ï': 'i',
+      'ī': 'i',
+      'į': 'i',
+      'ó': 'o',
+      'ò': 'o',
+      'ô': 'o',
+      'ö': 'o',
+      'õ': 'o',
+      'ø': 'o',
+      'ō': 'o',
+      'ú': 'u',
+      'ù': 'u',
+      'û': 'u',
+      'ü': 'u',
+      'ū': 'u',
+      'ñ': 'n',
+      'ç': 'c',
+      'ć': 'c',
+      'č': 'c',
+      'š': 's',
+      'ș': 's',
+      'ş': 's',
+      'ž': 'z',
+      'ý': 'y',
+      'ÿ': 'y',
+      'æ': 'ae',
+      'œ': 'oe',
+      'ß': 'ss',
     };
     final out = StringBuffer();
     for (final ch in s.toLowerCase().split('')) {
@@ -362,8 +412,8 @@ class PlaylistImporter {
   /// "A; B", "A, B", "A & B", "A feat. B" → ["a", "b"] (plegado).
   static List<String> _artistTokens(String artist) {
     return artist
-        .split(RegExp(r'\s*(?:;|,|&|\bfeat\.?|\bft\.?)\s*',
-            caseSensitive: false))
+        .split(
+            RegExp(r'\s*(?:;|,|&|\bfeat\.?|\bft\.?)\s*', caseSensitive: false))
         .map(_fold)
         .where((a) => a.isNotEmpty)
         .toList();

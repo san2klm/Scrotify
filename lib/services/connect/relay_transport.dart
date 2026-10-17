@@ -9,7 +9,7 @@ import 'connect_account.dart';
 import 'connect_protocol.dart';
 import 'connect_transport.dart';
 
-/// Conecta con el servidor Jam (`connect_join` / `connect_send`) para ver y
+/// Conecta con el servidor CrotoLink (`connect_join` / `connect_send`) para ver y
 /// controlar los dispositivos del mismo usuario de Navidrome, también fuera de
 /// la red local. El servidor verifica al usuario con Navidrome y solo reenvía
 /// blobs cifrados.

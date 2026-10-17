@@ -124,8 +124,7 @@ mixin _PlayerKaraoke on _PlayerBase {
   }
 
   Future<void> _applyVocalFilter(bool enabled) async {
-    if (_karaokePlayer == null ||
-        !PlayerController.isVocalReductionSupported) {
+    if (_karaokePlayer == null || !PlayerController.isVocalReductionSupported) {
       return;
     }
     try {

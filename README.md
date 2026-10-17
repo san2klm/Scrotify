@@ -5,11 +5,11 @@ Cliente Flutter para Navidrome/Subsonic con CrotoLink (escucha en grupo) para Li
 ## Documentación
 
 - [Visión general y arquitectura](docs/crotowave.md)
-- [CrotoLink: diseño](docs/jam.md)
-- [CrotoLink: roadmap](docs/jam-roadmap.md)
-- [CrotoLink: pruebas y despliegue remoto](docs/jam-pruebas.md)
+- [CrotoLink: diseño](docs/crotolink.md)
+- [CrotoLink: roadmap](docs/crotolink-roadmap.md)
+- [CrotoLink: pruebas y despliegue remoto](docs/crotolink-pruebas.md)
 - [Música local](docs/musica-local.md)
-- [Servidor CrotoLink](jam-server/README.md)
+- [Servidor CrotoLink](crotolink-server/README.md)
 - [Plan y tareas](tasks/todo.md)
 
 ## Desarrollo

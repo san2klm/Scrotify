@@ -3,9 +3,9 @@ import 'dart:io' show Platform;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../models/jam_models.dart';
+import '../models/crotolink_models.dart';
 import '../services/navidrome_service.dart';
-import '../services/remote_jam_service.dart';
+import '../services/remote_crotolink_service.dart';
 import '../services/pairing_server.dart';
 import '../services/hifi/audio_output_devices.dart';
 import '../services/hifi/hifi_coordinator.dart';
@@ -91,13 +91,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
               _menuRow(
                 icon: Icons.podcasts_rounded,
-                title: nav.connected ? 'CrotoLink y dispositivos' : 'Servidor CrotoLink',
+                title: nav.connected
+                    ? 'CrotoLink y dispositivos'
+                    : 'Servidor CrotoLink',
                 subtitle: nav.connected
                     ? 'Servidor CrotoLink y vincular teléfono'
                     : 'Servidor de sesiones grupales',
                 onTap: () => _openPage(
-                    nav.connected ? 'CrotoLink y dispositivos' : 'Servidor CrotoLink',
-                    _jamPage),
+                    nav.connected
+                        ? 'CrotoLink y dispositivos'
+                        : 'Servidor CrotoLink',
+                    _crotoLinkPage),
               ),
               _menuRow(
                 icon: Icons.insights_rounded,
@@ -396,7 +400,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   initialValue: settings.discordClientId,
                   decoration: const InputDecoration(
                     labelText: 'Application ID de Discord',
-                    helperText: 'portal de desarrolladores de Discord → tu aplicación',
+                    helperText:
+                        'portal de desarrolladores de Discord → tu aplicación',
                   ),
                   onFieldSubmitted: settings.setDiscordClientId,
                 ),
@@ -482,11 +487,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
         const _PlaylistsManager(),
       ];
 
-  List<Widget> _jamPage(SettingsController settings) {
+  List<Widget> _crotoLinkPage(SettingsController settings) {
     final nav = context.read<NavidromeService>();
     return [
       _sectionTitle('Servidor CrotoLink'),
-      _card(children: [_JamServerField(settings: settings)]),
+      _card(children: [_CrotoLinkServerField(settings: settings)]),
       _sectionTitle('Sincronización'),
       _card(children: const [SyncSettings()]),
       if (nav.connected) ...[
@@ -910,20 +915,20 @@ class _InfoText extends StatelessWidget {
   }
 }
 
-/// Campo de URL del servidor Jam con validación, prueba de conexión
+/// Campo de URL del servidor CrotoLink con validación, prueba de conexión
 /// (`GET /health`) y restauración del valor por defecto.
-class _JamServerField extends StatefulWidget {
+class _CrotoLinkServerField extends StatefulWidget {
   final SettingsController settings;
 
-  const _JamServerField({required this.settings});
+  const _CrotoLinkServerField({required this.settings});
 
   @override
-  State<_JamServerField> createState() => _JamServerFieldState();
+  State<_CrotoLinkServerField> createState() => _CrotoLinkServerFieldState();
 }
 
-class _JamServerFieldState extends State<_JamServerField> {
+class _CrotoLinkServerFieldState extends State<_CrotoLinkServerField> {
   late final TextEditingController _controller =
-      TextEditingController(text: widget.settings.jamServerUrl);
+      TextEditingController(text: widget.settings.crotoLinkServerUrl);
   String? _error;
   String? _info;
   bool _testing = false;
@@ -935,7 +940,7 @@ class _JamServerFieldState extends State<_JamServerField> {
   }
 
   void _save() {
-    final result = widget.settings.setJamServerUrl(_controller.text);
+    final result = widget.settings.setCrotoLinkServerUrl(_controller.text);
     setState(() {
       _error = result.error;
       _info = result.warning;
@@ -949,7 +954,8 @@ class _JamServerFieldState extends State<_JamServerField> {
       _error = null;
       _info = null;
     });
-    final failure = await RemoteJamService.testConnection(_controller.text);
+    final failure =
+        await RemoteCrotoLinkService.testConnection(_controller.text);
     if (!mounted) return;
     setState(() {
       _testing = false;
@@ -962,9 +968,9 @@ class _JamServerFieldState extends State<_JamServerField> {
   }
 
   void _reset() {
-    widget.settings.resetJamServerUrl();
+    widget.settings.resetCrotoLinkServerUrl();
     setState(() {
-      _controller.text = kDefaultRemoteJamEndpoint;
+      _controller.text = kDefaultRemoteCrotoLinkEndpoint;
       _error = null;
       _info = null;
     });
@@ -982,7 +988,7 @@ class _JamServerFieldState extends State<_JamServerField> {
           style: TextStyle(color: context.textPrimary, fontSize: 14),
           decoration: InputDecoration(
             labelText: 'URL del servidor',
-            hintText: kExampleRemoteJamEndpoint,
+            hintText: kExampleRemoteCrotoLinkEndpoint,
             errorText: _error,
             helperText: _info,
           ),
@@ -997,15 +1003,14 @@ class _JamServerFieldState extends State<_JamServerField> {
               onPressed: _testing ? null : _test,
               child: Text(_testing ? 'Probando…' : 'Probar conexión'),
             ),
-            TextButton(
-                onPressed: _reset, child: const Text('Quitar servidor')),
+            TextButton(onPressed: _reset, child: const Text('Quitar servidor')),
           ],
         ),
         const SizedBox(height: 8),
         const _InfoText(
             'Servidor para salas CrotoLink remotas, CrotoWave Connect por '
             'internet y sincronización. No hay ninguno por defecto: alojá el '
-            'tuyo con el Docker de jam-server/ o usá el de alguien de confianza. '
+            'tuyo con el Docker de crotolink-server/ o usá el de alguien de confianza. '
             'Usa wss://; ws:// solo en red local.'),
       ],
     );

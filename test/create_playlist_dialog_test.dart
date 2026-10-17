@@ -3,9 +3,9 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
-import 'package:navidrome_client/services/navidrome_service.dart';
-import 'package:navidrome_client/services/theme_controller.dart';
-import 'package:navidrome_client/widgets/create_playlist_dialog.dart';
+import 'package:crotowave/services/navidrome_service.dart';
+import 'package:crotowave/services/theme_controller.dart';
+import 'package:crotowave/widgets/create_playlist_dialog.dart';
 
 class _Playlists extends NavidromeService {
   final pending = Completer<Playlist?>();

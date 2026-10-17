@@ -8,24 +8,24 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
-import 'package:navidrome_client/screens/album_detail_screen.dart';
-import 'package:navidrome_client/screens/equalizer_screen.dart';
-import 'package:navidrome_client/screens/liked_songs_screen.dart';
-import 'package:navidrome_client/screens/playlist_detail_screen.dart';
-import 'package:navidrome_client/screens/settings_screen.dart';
-import 'package:navidrome_client/screens/stats_screen.dart';
-import 'package:navidrome_client/services/app_theme.dart';
-import 'package:navidrome_client/services/equalizer_service.dart';
-import 'package:navidrome_client/services/connect/connect_service.dart';
-import 'package:navidrome_client/services/jam_controller.dart';
-import 'package:navidrome_client/services/listening_stats_service.dart';
-import 'package:navidrome_client/services/navidrome_service.dart';
-import 'package:navidrome_client/services/player_controller.dart';
-import 'package:navidrome_client/services/settings_controller.dart';
-import 'package:navidrome_client/services/sync/sync_service.dart';
-import 'package:navidrome_client/services/theme_controller.dart';
-import 'package:navidrome_client/utils/tv_mode.dart';
-import 'package:navidrome_client/widgets/theme_grid.dart';
+import 'package:crotowave/screens/album_detail_screen.dart';
+import 'package:crotowave/screens/equalizer_screen.dart';
+import 'package:crotowave/screens/liked_songs_screen.dart';
+import 'package:crotowave/screens/playlist_detail_screen.dart';
+import 'package:crotowave/screens/settings_screen.dart';
+import 'package:crotowave/screens/stats_screen.dart';
+import 'package:crotowave/services/app_theme.dart';
+import 'package:crotowave/services/equalizer_service.dart';
+import 'package:crotowave/services/connect/connect_service.dart';
+import 'package:crotowave/services/crotolink_controller.dart';
+import 'package:crotowave/services/listening_stats_service.dart';
+import 'package:crotowave/services/navidrome_service.dart';
+import 'package:crotowave/services/player_controller.dart';
+import 'package:crotowave/services/settings_controller.dart';
+import 'package:crotowave/services/sync/sync_service.dart';
+import 'package:crotowave/services/theme_controller.dart';
+import 'package:crotowave/utils/tv_mode.dart';
+import 'package:crotowave/widgets/theme_grid.dart';
 
 import 'support/app_fakes.dart';
 
@@ -80,7 +80,7 @@ class _Themes extends ThemeController {
   List<AppTheme> get themes => [...AppTheme.fixedThemes, imported];
   @override
   String get themesDir =>
-      '/carpeta/con/un/nombre/muy/largo/para/los/temas/de/scrotify';
+      '/carpeta/con/un/nombre/muy/largo/para/los/temas/de/crotowave';
   @override
   bool get loading => false;
   @override
@@ -172,7 +172,8 @@ Future<void> _pump(WidgetTester tester, Widget screen, _Themes themes,
         ChangeNotifierProvider<PlayerController>(create: (_) => IdlePlayer()),
         ChangeNotifierProvider<ConnectService>(
             create: (_) => idleConnectService()),
-        ChangeNotifierProvider<JamController>(create: (_) => IdleJam()),
+        ChangeNotifierProvider<CrotoLinkController>(
+            create: (_) => IdleCrotoLink()),
         ChangeNotifierProvider<SettingsController>(
             create: (_) => SettingsController()),
         ChangeNotifierProvider<SyncService>(
@@ -204,8 +205,8 @@ Future<void> _pump(WidgetTester tester, Widget screen, _Themes themes,
 void main() {
   setUpAll(() async {
     // Capturas opcionales con las fuentes del SDK; las pruebas normales usan Ahem.
-    if (Platform.environment['SCROTIFY_UI_CAPTURE'] != '1') return;
-    final fontDir = Platform.environment['SCROTIFY_UI_FONT_DIR'];
+    if (Platform.environment['CROTOWAVE_UI_CAPTURE'] != '1') return;
+    final fontDir = Platform.environment['CROTOWAVE_UI_FONT_DIR'];
     if (fontDir == null) return;
     for (final entry in {
       'Ahem': 'Roboto-Regular.ttf',
@@ -400,7 +401,7 @@ void main() {
               expect(find.text('Cuenta y Perfiles'), findsNothing);
               expect(find.text('Gestionar perfiles de servidor'), findsNothing);
             }
-            if (Platform.environment['SCROTIFY_UI_CAPTURE'] == '1' &&
+            if (Platform.environment['CROTOWAVE_UI_CAPTURE'] == '1' &&
                 scale == 1 &&
                 size.width == 375 &&
                 ['temas', 'estadisticas', 'playlist'].contains(screen.key)) {
@@ -410,7 +411,7 @@ void main() {
                 final image = await boundary.toImage();
                 final bytes =
                     await image.toByteData(format: ui.ImageByteFormat.png);
-                await File('/tmp/scrotify-${screen.key}-${theme.id}.png')
+                await File('/tmp/crotowave-${screen.key}-${theme.id}.png')
                     .writeAsBytes(bytes!.buffer.asUint8List());
                 image.dispose();
               });

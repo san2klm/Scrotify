@@ -3,8 +3,8 @@ import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
-import 'package:navidrome_client/services/navidrome_service.dart';
-import 'package:navidrome_client/services/playlist_importer.dart';
+import 'package:crotowave/services/navidrome_service.dart';
+import 'package:crotowave/services/playlist_importer.dart';
 
 /// Biblioteca simulada: título → (id, artista).
 const _library = {
@@ -52,7 +52,10 @@ void main() {
               },
         ];
         return http.Response(
-            jsonEncode(_ok({'searchResult3': {'song': songs}})), 200);
+            jsonEncode(_ok({
+              'searchResult3': {'song': songs}
+            })),
+            200);
       }
       if (path.endsWith('createPlaylist.view')) {
         return http.Response(
@@ -84,7 +87,10 @@ void main() {
     });
     nav = NavidromeService();
     nav.setConnectedForTesting(
-        url: 'https://nd.example', username: 'u', password: 'p', client: client);
+        url: 'https://nd.example',
+        username: 'u',
+        password: 'p',
+        client: client);
   });
 
   List<String> addedIds() => calls

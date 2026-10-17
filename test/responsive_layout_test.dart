@@ -4,17 +4,17 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:provider/provider.dart';
 
-import 'package:navidrome_client/screens/home_screen.dart';
-import 'package:navidrome_client/screens/home_shell.dart';
-import 'package:navidrome_client/screens/mobile_home_screen.dart';
-import 'package:navidrome_client/services/connect/connect_service.dart';
-import 'package:navidrome_client/services/jam_controller.dart';
-import 'package:navidrome_client/services/navidrome_service.dart';
-import 'package:navidrome_client/services/player_controller.dart';
-import 'package:navidrome_client/services/settings_controller.dart';
-import 'package:navidrome_client/services/theme_controller.dart';
-import 'package:navidrome_client/utils/responsive.dart';
-import 'package:navidrome_client/widgets/now_playing_panel.dart';
+import 'package:crotowave/screens/home_screen.dart';
+import 'package:crotowave/screens/home_shell.dart';
+import 'package:crotowave/screens/mobile_home_screen.dart';
+import 'package:crotowave/services/connect/connect_service.dart';
+import 'package:crotowave/services/crotolink_controller.dart';
+import 'package:crotowave/services/navidrome_service.dart';
+import 'package:crotowave/services/player_controller.dart';
+import 'package:crotowave/services/settings_controller.dart';
+import 'package:crotowave/services/theme_controller.dart';
+import 'package:crotowave/utils/responsive.dart';
+import 'package:crotowave/widgets/now_playing_panel.dart';
 
 import 'support/app_fakes.dart';
 
@@ -44,8 +44,10 @@ Future<void> _pump(WidgetTester tester, Widget home, Size size) async {
       ChangeNotifierProvider<PlayerController>.value(value: player),
       ChangeNotifierProvider<ThemeController>.value(value: ThemeController()),
       ChangeNotifierProvider<SettingsController>.value(value: settings),
-      ChangeNotifierProvider<ConnectService>(create: (_) => idleConnectService()),
-      ChangeNotifierProvider<JamController>(create: (_) => IdleJam()),
+      ChangeNotifierProvider<ConnectService>(
+          create: (_) => idleConnectService()),
+      ChangeNotifierProvider<CrotoLinkController>(
+          create: (_) => IdleCrotoLink()),
     ],
     child: MaterialApp(home: home),
   ));

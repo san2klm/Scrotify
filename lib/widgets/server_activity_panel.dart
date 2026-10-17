@@ -6,7 +6,7 @@ import '../screens/artist_screen.dart';
 import '../services/navidrome_service.dart';
 import '../services/player_controller.dart';
 import 'cover_art.dart';
-import 'jam_dialog.dart';
+import 'crotolink_dialog.dart';
 import 'track_context_menu.dart';
 import '../utils/app_colors.dart';
 import '../utils/app_visibility.dart';
@@ -441,9 +441,9 @@ class _ServerActivityPanelState extends State<ServerActivityPanel>
                     final isMe = msg.username.toLowerCase() ==
                         (nav.username ?? '').toLowerCase();
 
-                    // Anuncio de Jam
-                    if (msg.message.startsWith('[JAM_LIVE]:')) {
-                      return _buildJamAnnouncementCard(msg);
+                    // Anuncio de CrotoLink
+                    if (msg.message.startsWith('[CROTOLINK_LIVE]:')) {
+                      return _buildCrotoLinkAnnouncementCard(msg);
                     }
 
                     // Link de canción compartida
@@ -582,7 +582,7 @@ class _ServerActivityPanelState extends State<ServerActivityPanel>
     );
   }
 
-  Widget _buildJamAnnouncementCard(ChatMessage msg) {
+  Widget _buildCrotoLinkAnnouncementCard(ChatMessage msg) {
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(12),
@@ -648,7 +648,7 @@ class _ServerActivityPanelState extends State<ServerActivityPanel>
           FilledButton.tonal(
             onPressed: () {
               Navigator.of(context).pop();
-              JamDialog.show(context);
+              CrotoLinkDialog.show(context);
             },
             style: FilledButton.styleFrom(
               backgroundColor: context.accent.withValues(alpha: 0.2),

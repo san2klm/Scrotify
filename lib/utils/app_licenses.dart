@@ -14,8 +14,9 @@ import 'build_info.dart';
 class AppLicenses {
   const AppLicenses._();
 
-  static const legalese = '© 2026 Lautaro (Dante0Q) y los colaboradores de '
-      'CrotoWave.\nSoftware libre bajo GPL-3.0-or-later, con una excepción '
+  static const legalese =
+      '© 2026 Lautaro (Dante0Q), Thiago (SniperWolfer) y los '
+      'colaboradores de CrotoWave.\nSoftware libre bajo GPL-3.0-or-later, con una excepción '
       'para tiendas de aplicaciones.';
 
   static bool _registered = false;
@@ -46,7 +47,8 @@ class AppLicenses {
     required bool linux,
   }) async* {
     yield LicenseEntryWithLineBreaks(['CrotoWave'], await appLicense());
-    yield const LicenseEntryWithLineBreaks(['CrotoLink server'], _jamServer);
+    yield const LicenseEntryWithLineBreaks(
+        ['CrotoLink server'], _crotoLinkServer);
     if (desktop) {
       yield const LicenseEntryWithLineBreaks(['libmpv'], _libmpv);
       yield const LicenseEntryWithLineBreaks(['FFmpeg', 'ffprobe'], _ffmpeg);
@@ -58,11 +60,11 @@ class AppLicenses {
     }
   }
 
-  static const _jamServer = '''
+  static const _crotoLinkServer = '''
 CrotoLink server
-Copyright (C) 2026 Lautaro (Dante0Q) and the CrotoWave contributors
+Copyright (C) 2026 Lautaro (Dante0Q), Thiago (SniperWolfer) and the CrotoWave contributors
 
-The Jam server is a separate program, licensed under the GNU Affero General Public License version 3 or (at your option) any later version (AGPL-3.0-or-later). The app only talks to it over the network. Anyone may run their own server; whoever modifies it and lets others use it over a network must offer them its source code (AGPL section 13). Each server publishes its source at GET /source.
+The CrotoLink server is a separate program, licensed under the GNU Affero General Public License version 3 or (at your option) any later version (AGPL-3.0-or-later). The app only talks to it over the network. Anyone may run their own server; whoever modifies it and lets others use it over a network must offer them its source code (AGPL section 13). Each server publishes its source at GET /source.
 
 Full text: https://www.gnu.org/licenses/agpl-3.0.html''';
 

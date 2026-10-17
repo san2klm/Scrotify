@@ -72,8 +72,7 @@ mixin _HomeMainContent on _HomeStateBase, _HomeLibraryPanel {
     }
 
     final nav = context.read<NavidromeService>();
-    final songs =
-        _trackFilter.apply(results.songs, isStarred: nav.isStarred);
+    final songs = _trackFilter.apply(results.songs, isStarred: nav.isStarred);
     final albums = results.albums;
     final artists = results.artists;
 
@@ -224,7 +223,7 @@ mixin _HomeMainContent on _HomeStateBase, _HomeLibraryPanel {
           _sectionHeader('Recomendados para ti'),
           const SizedBox(height: 12),
           PlayerSelector.mostPlayed(
-            builder: (_, player) => _recommendedGrid(filteredTracks, player)),
+              builder: (_, player) => _recommendedGrid(filteredTracks, player)),
           const SizedBox(height: 32),
           _sectionHeader('Álbumes destacados'),
           const SizedBox(height: 12),
@@ -773,8 +772,8 @@ mixin _HomeMainContent on _HomeStateBase, _HomeLibraryPanel {
     );
   }
 
-  Widget _recentsList() => PlayerSelector.recents(
-      builder: (_, player) => _recentsListFor(player));
+  Widget _recentsList() =>
+      PlayerSelector.recents(builder: (_, player) => _recentsListFor(player));
 
   Widget _recentsListFor(PlayerController player) {
     final items = player.recentlyPlayed.take(6).toList();

@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
-import 'package:navidrome_client/services/theme_controller.dart';
-import 'package:navidrome_client/widgets/search_explore_field.dart';
+import 'package:crotowave/services/theme_controller.dart';
+import 'package:crotowave/widgets/search_explore_field.dart';
 
 void main() {
   Widget buildTestWidget({

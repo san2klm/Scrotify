@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:navidrome_client/services/replay_gain.dart';
+import 'package:crotowave/services/replay_gain.dart';
 
 void main() {
   group('ReplayGainMode', () {

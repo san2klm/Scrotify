@@ -18,8 +18,7 @@ class WavSynth {
   }) {
     final out = List<double>.filled(numSamples, 0.0);
     for (var i = 0; i < numSamples; i++) {
-      out[i] =
-          amplitude * math.sin(2 * math.pi * freq * i / sampleRate);
+      out[i] = amplitude * math.sin(2 * math.pi * freq * i / sampleRate);
     }
     return out;
   }
@@ -50,8 +49,7 @@ class WavSynth {
   }) {
     final n = (duration.inMilliseconds * sampleRate / 1000).round();
     final edge = (n * edgeFraction).round();
-    final tone = sineTone(
-        numSamples: n, freq: freq, amplitude: amplitude);
+    final tone = sineTone(numSamples: n, freq: freq, amplitude: amplitude);
     final out = List<double>.filled(n, 0.0);
     for (var i = edge; i < n - edge; i++) {
       out[i] = tone[i];

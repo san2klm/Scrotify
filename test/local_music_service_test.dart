@@ -3,10 +3,10 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:navidrome_client/services/local_music_service.dart';
-import 'package:navidrome_client/services/navidrome_service.dart';
-import 'package:navidrome_client/services/offline_cache_service.dart';
-import 'package:navidrome_client/services/offline_download_manager.dart';
+import 'package:crotowave/services/local_music_service.dart';
+import 'package:crotowave/services/navidrome_service.dart';
+import 'package:crotowave/services/offline_cache_service.dart';
+import 'package:crotowave/services/offline_download_manager.dart';
 import 'package:path/path.dart' as p;
 
 void main() {
@@ -77,7 +77,7 @@ void main() {
   }
 
   setUp(() async {
-    temp = await Directory.systemTemp.createTemp('scrotify-local-test-');
+    temp = await Directory.systemTemp.createTemp('crotowave-local-test-');
     transfers = 0;
     cache = newCache();
     music = newMusic(cache);

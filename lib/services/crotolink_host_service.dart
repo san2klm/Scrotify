@@ -1,0 +1,1176 @@
+import 'crotolink_social.dart';
+import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
+import 'dart:math';
+
+import 'package:flutter/foundation.dart';
+
+import '../models/crotolink_models.dart';
+import 'crotolink_network_platform.dart';
+import 'crotolink_security.dart';
+import 'crotolink_tls_identity.dart';
+import 'navidrome_service.dart';
+
+part 'crotolink_host_discovery.dart';
+
+typedef OnCrotoLinkJoinRequested = Future<bool> Function(
+    CrotoLinkParticipant participant, WebSocket socket);
+typedef OnCrotoLinkTrackAddRequested = void Function(
+    Track track, CrotoLinkParticipant participant, bool playNext);
+typedef OnCrotoLinkTrackRemoveRequested = void Function(
+    String queueItemId, CrotoLinkParticipant participant);
+typedef OnCrotoLinkQueueReorderRequested = void Function(
+    int oldIndex, int newIndex, CrotoLinkParticipant participant);
+typedef OnCrotoLinkPlaybackControlRequested = void Function(
+    String action, int? positionMs, CrotoLinkParticipant participant);
+typedef OnCrotoLinkVoteRequested = void Function(
+    String itemId, int value, CrotoLinkParticipant participant);
+typedef OnCrotoLinkParticipantLeft = void Function(
+    CrotoLinkParticipant participant);
+
+/// Limitador de tasa con ventana deslizante y memoria acotada.
+class CrotoLinkRateLimiter {
+  final int maxEvents;
+  final Duration window;
+  final List<int> _timestampsMs = [];
+
+  CrotoLinkRateLimiter({required this.maxEvents, required this.window});
+
+  List<int> get timestamps => List.unmodifiable(_timestampsMs);
+
+  bool tryAcquire([int? nowMs]) {
+    final now = nowMs ?? DateTime.now().millisecondsSinceEpoch;
+    final windowMs = window.inMilliseconds;
+    _timestampsMs.removeWhere((ts) => now - ts >= windowMs);
+    if (_timestampsMs.length >= maxEvents) {
+      return false;
+    }
+    _timestampsMs.add(now);
+    return true;
+  }
+
+  void reset() {
+    _timestampsMs.clear();
+  }
+}
+
+class _ParticipantThrottles {
+  final CrotoLinkRateLimiter playbackLimiter;
+  final CrotoLinkRateLimiter queueLimiter;
+  final CrotoLinkRateLimiter socialLimiter =
+      CrotoLinkRateLimiter(maxEvents: 5, window: const Duration(seconds: 5));
+
+  _ParticipantThrottles({
+    CrotoLinkRateLimiter? playback,
+    CrotoLinkRateLimiter? queue,
+  })  : playbackLimiter = playback ??
+            CrotoLinkRateLimiter(
+                maxEvents: 4, window: const Duration(seconds: 2)),
+        queueLimiter = queue ??
+            CrotoLinkRateLimiter(
+                maxEvents: 10, window: const Duration(seconds: 10));
+}
+
+/// Estado de [CrotoLinkHostService]. Vive en una clase base para que el descubrimiento
+/// (en un archivo aparte) pueda ser un mixin sobre el mismo estado.
+abstract class _CrotoLinkHostBase {
+  HttpServer? _server;
+
+  CrotoLinkTlsIdentity? _tlsIdentity;
+
+  RawDatagramSocket? _discoverySocket;
+
+  Timer? _presenceTimer;
+
+  bool _holdsMulticastReception = false;
+
+  final Map<String, WebSocket> _clientSockets = {};
+
+  final Map<String, CrotoLinkParticipant> _participants = {};
+
+  final Map<String, String> _participantTokens = {};
+
+  final Map<String, DateTime> _lastInboundActivity = {};
+
+  final Map<String, _ParticipantThrottles> _rateLimiters = {};
+
+  final Map<String, Timer> _graceTimers = {};
+
+  CrotoLinkSessionState? _lastSessionState;
+
+  CrotoLinkParticipant? hostParticipant;
+
+  Duration disconnectGracePeriod = const Duration(seconds: 30);
+
+  CrotoLinkSessionState Function()? getCurrentSessionState;
+
+  Duration pingInterval = const Duration(seconds: 15);
+
+  Duration pongTimeout = const Duration(seconds: 10);
+
+  Timer? _heartbeatTimer;
+
+  List<InternetAddress> _cachedBroadcastAddresses = [];
+
+  final List<Timer> _discoveryBurstTimers = [];
+
+  String? _sessionId;
+
+  CrotoLinkCode? _pinCode;
+
+  String _hostName = '';
+
+  String? _hostIp;
+
+  List<String> _allLocalIps = [];
+
+  int _port = 0;
+
+  CrotoLinkMode _mode = CrotoLinkMode.synchronizedListening;
+
+  final Set<String> _kickedNames = {};
+
+  final Set<String> _kickedParticipantIds = {};
+
+  /// Contraseña opcional de la sala (solo en RAM del host).
+  String? roomPassword;
+
+  /// Fallos de unión por IP: un equipo que adivina PINs no bloquea al resto.
+  final Map<String, CrotoLinkFailureBlocker> _joinFailuresByIp = {};
+
+  CrotoLinkFailureBlocker _blockerFor(String ip) =>
+      _joinFailuresByIp.putIfAbsent(ip, CrotoLinkFailureBlocker.new);
+
+  /// Tamaño máximo de un mensaje de cliente (se cierra con 1009 si lo supera).
+  static const int maxClientFrameBytes = 64 * 1024;
+
+  /// Tiempo máximo para mandar `join_request` tras abrir el socket.
+  static const Duration helloTimeout = Duration(seconds: 5);
+
+  bool _allowGuestControls = true;
+
+  bool _allowGuestQueueManage = true;
+
+  bool _isPublic = true;
+
+  int _maxParticipants = 0;
+
+  String? _initialPlaylistId;
+
+  // Metadatos para presencia UDP
+  String? _currentTrackTitle;
+
+  String? _currentTrackArtist;
+
+  String? _albumArtUrl;
+
+  // Callbacks hacia CrotoLinkController
+  OnCrotoLinkJoinRequested? onJoinRequested;
+
+  OnCrotoLinkTrackAddRequested? onTrackAddRequested;
+
+  OnCrotoLinkTrackRemoveRequested? onTrackRemoveRequested;
+
+  OnCrotoLinkQueueReorderRequested? onQueueReorderRequested;
+
+  OnCrotoLinkPlaybackControlRequested? onPlaybackControlRequested;
+
+  OnCrotoLinkVoteRequested? onVoteRequested;
+
+  /// Reacción/chat de un invitado (ya validado y limitado). El host lo muestra.
+  void Function(String from, String? emoji, String? text)? onSocial;
+
+  bool chatEnabled = true;
+
+  OnCrotoLinkParticipantLeft? onParticipantLeft;
+}
+
+/// Servidor de sesión CrotoLink que corre en el dispositivo Anfitrión (Host).
+///
+/// Gestiona:
+/// 1. Servidor WebSocket para comunicación bidireccional en tiempo real con invitados.
+/// 2. Beacon UDP en puerto [kCrotoLinkDiscoveryPort] (47623) para descubrimiento en red local (Radar).
+/// 3. Registro de participantes, control de permisos y difusión de estado.
+class CrotoLinkHostService extends _CrotoLinkHostBase
+    with _CrotoLinkHostDiscovery {
+  /// Genera un token CSPRNG opaco de 128 bits (32 caracteres hexadecimales).
+  static String generateReconnectToken([Random? random]) {
+    final rnd = random ?? Random.secure();
+    final bytes = List<int>.generate(16, (_) => rnd.nextInt(256));
+    return bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
+  }
+
+  String? getTokenForParticipant(String participantId) =>
+      _participantTokens[participantId];
+
+  Map<String, dynamic> attachToken(
+      String participantId, Map<String, dynamic> response) {
+    final token = _participantTokens[participantId];
+    if (token != null) {
+      response['token'] = token;
+    }
+    return response;
+  }
+
+  bool get isRunning => _server != null;
+
+  String? get sessionId => _sessionId;
+
+  CrotoLinkCode? get pinCode => _pinCode;
+
+  String? get hostIp => _hostIp;
+
+  List<String> get allLocalIps => _allLocalIps;
+
+  int get port => _port;
+
+  CrotoLinkMode get mode => _mode;
+
+  bool get allowGuestControls => _allowGuestControls;
+
+  bool get allowGuestQueueManage => _allowGuestQueueManage;
+
+  bool get isPublic => _isPublic;
+
+  int get maxParticipants => _maxParticipants;
+
+  String? get initialPlaylistId => _initialPlaylistId;
+
+  String? get tlsFingerprint => _tlsIdentity?.fingerprintSha256;
+
+  List<CrotoLinkParticipant> get participants => _participants.values.toList();
+
+  String? get qrDataUri => _pinCode != null && _hostIp != null
+      ? CrotoLinkQrData(
+          host: _hostIp!,
+          port: _port,
+          code: _pinCode!.value,
+          sessionId: _sessionId,
+          // Si el dispositivo tiene más de una interfaz local, el escáner
+          // intentará la segunda dirección si la primera no es alcanzable.
+          remoteHost: _allLocalIps.length > 1
+              ? _allLocalIps.firstWhere((address) => address != _hostIp)
+              : null,
+          remotePort: _allLocalIps.length > 1 ? _port : null,
+          tlsFingerprint: _tlsIdentity?.fingerprintSha256,
+        ).toUri()
+      : null;
+
+  /// Inicia el servidor CrotoLink y el beacon de descubrimiento.
+  Future<void> start({
+    required String sessionId,
+    required CrotoLinkCode pinCode,
+    required String hostName,
+    CrotoLinkMode mode = CrotoLinkMode.synchronizedListening,
+    bool allowGuestControls = true,
+    bool allowGuestQueueManage = true,
+    bool isPublic = true,
+    int maxParticipants = 0,
+    String? initialPlaylistId,
+  }) async {
+    await stop();
+
+    _sessionId = sessionId;
+    _pinCode = pinCode;
+    _hostName = hostName;
+    _mode = mode;
+    _allowGuestControls = allowGuestControls;
+    _allowGuestQueueManage = allowGuestQueueManage;
+    _isPublic = isPublic;
+    _maxParticipants = maxParticipants < 0 ? 0 : maxParticipants;
+    _initialPlaylistId = initialPlaylistId;
+
+    hostParticipant = CrotoLinkParticipant(
+      id: 'host_local',
+      name: hostName,
+      avatarColorValue: 0xFFA855F7,
+      isHost: true,
+      joinedAt: DateTime.now(),
+      canControlPlayback: true,
+      canManageQueue: true,
+    );
+
+    _tlsIdentity =
+        CrotoLinkTlsIdentity.generate(commonName: 'CrotoLink $sessionId');
+    final securityContext = SecurityContext(withTrustedRoots: false)
+      ..useCertificateChainBytes(_tlsIdentity!.certificatePem)
+      ..usePrivateKeyBytes(_tlsIdentity!.privateKeyPem);
+
+    // El puerto conocido evita que un código QR o una regla de firewall cambie
+    // en cada sesión. Si está ocupado, la sesión sigue funcionando con uno
+    // dinámico que se anuncia en el QR y el radar.
+    try {
+      _server = await HttpServer.bindSecure(
+        InternetAddress.anyIPv4,
+        kCrotoLinkHostPort,
+        securityContext,
+      );
+    } on SocketException {
+      _server = await HttpServer.bindSecure(
+        InternetAddress.anyIPv4,
+        0,
+        securityContext,
+      );
+    }
+    _port = _server!.port;
+    _allLocalIps = await _getAllLocalIps();
+    _hostIp = _allLocalIps.isNotEmpty ? _allLocalIps.first : '127.0.0.1';
+
+    debugPrint(
+        'CrotoLinkHostService: Server listening on $_hostIp:$_port (code: ${_pinCode?.value}, mode: $_mode)');
+
+    _server!.listen(_handleHttpRequest);
+
+    // En Android, Wi‑Fi puede filtrar paquetes broadcast/multicast aunque el
+    // socket esté abierto. Se mantiene el lock durante toda la sesión host.
+    await CrotoLinkNetworkPlatform.acquireMulticastReception();
+    _holdsMulticastReception = true;
+
+    // Iniciar beacon de radar UDP
+    await _startDiscoveryBeacon();
+
+    // Iniciar monitoreo de heartbeat y pings periódicos
+    _startHeartbeatTimer();
+  }
+
+  void updateTrackMetadata({
+    String? title,
+    String? artist,
+    String? albumArtUrl,
+  }) {
+    _currentTrackTitle = title;
+    _currentTrackArtist = artist;
+    _albumArtUrl = sanitizeArtUrl(albumArtUrl);
+  }
+
+  void updateSettings({
+    CrotoLinkMode? mode,
+    bool? allowGuestControls,
+    bool? allowGuestQueueManage,
+    bool? isPublic,
+    int? maxParticipants,
+    String? initialPlaylistId,
+  }) {
+    if (mode != null) _mode = mode;
+    if (allowGuestControls != null) {
+      _allowGuestControls = allowGuestControls;
+    }
+    if (allowGuestQueueManage != null) {
+      _allowGuestQueueManage = allowGuestQueueManage;
+    }
+    if (isPublic != null) _isPublic = isPublic;
+    if (maxParticipants != null) {
+      _maxParticipants = maxParticipants < 0 ? 0 : maxParticipants;
+    }
+    if (initialPlaylistId != null) _initialPlaylistId = initialPlaylistId;
+
+    for (final participant in _participants.values.toList()) {
+      _participants[participant.id] = participant.copyWith(
+        canControlPlayback: _allowGuestControls,
+        canManageQueue: _allowGuestQueueManage,
+      );
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Manejo de peticiones HTTP y WebSocket
+  // ---------------------------------------------------------------------------
+  Future<void> _handleHttpRequest(HttpRequest req) async {
+    final path = req.uri.path;
+
+    try {
+      if (path == '/crotolink/ws') {
+        if (WebSocketTransformer.isUpgradeRequest(req)) {
+          final socket = await WebSocketTransformer.upgrade(req);
+          _handleWebSocketClient(
+              socket, req.connectionInfo?.remoteAddress.address ?? '?');
+        } else {
+          req.response.statusCode = HttpStatus.badRequest;
+          req.response.write('Expected WebSocket upgrade');
+          await req.response.close();
+        }
+      } else if (path == '/crotolink/status' && req.method == 'GET') {
+        final body = jsonEncode({
+          'tag': kCrotoLinkDiscoveryAppTag,
+          'sessionId': _sessionId,
+          'hostName': _hostName,
+          'pin': _pinCode?.value,
+          'mode': _mode.name,
+          'participantCount': _participants.length + 1,
+          'allowGuestControls': _allowGuestControls,
+        });
+        req.response.headers.contentType = ContentType.json;
+        req.response.write(body);
+        await req.response.close();
+      } else {
+        req.response.statusCode = HttpStatus.notFound;
+        await req.response.close();
+      }
+    } catch (e) {
+      debugPrint('CrotoLinkHostService HTTP error: $e');
+    }
+  }
+
+  void _handleWebSocketClient(WebSocket socket, String remoteIp) {
+    String? participantId;
+    final joinFailures = _blockerFor(remoteIp);
+
+    // Sin saludo en pocos segundos: conexión inútil (o un sondeo lento).
+    final helloTimer = Timer(_CrotoLinkHostBase.helloTimeout, () {
+      if (participantId == null) {
+        unawaited(socket
+            .close(WebSocketStatus.policyViolation, 'hello timeout')
+            .catchError((Object _) {}));
+      }
+    });
+
+    socket.listen(
+      (data) async {
+        try {
+          final size = data is String ? data.length : (data as List).length;
+          if (size > _CrotoLinkHostBase.maxClientFrameBytes) {
+            unawaited(socket
+                .close(WebSocketStatus.messageTooBig, 'frame too large')
+                .catchError((Object _) {}));
+            return;
+          }
+          final raw = data is String ? data : utf8.decode(data as List<int>);
+          final msg = jsonDecode(raw) as Map<String, dynamic>;
+          final op = msg['op'] as String?;
+
+          if (participantId != null) {
+            _lastInboundActivity[participantId!] = DateTime.now();
+          }
+
+          if (participantId != null &&
+              _clientSockets[participantId] != socket) {
+            // Socket was superseded by a reconnect or replaced. Close and ignore.
+            try {
+              unawaited(socket.close());
+            } catch (_) {}
+            return;
+          }
+
+          switch (op) {
+            case 'ping':
+              socket.add(jsonEncode({
+                'op': 'pong',
+                'timestamp':
+                    msg['timestamp'] ?? DateTime.now().millisecondsSinceEpoch,
+              }));
+              break;
+
+            case 'pong':
+              // Inbound liveness ya actualizada
+              break;
+
+            case 'time_ping':
+              // Reloj de referencia en LAN: la hora del host.
+              socket.add(jsonEncode({
+                'op': 'time_pong',
+                'clientTs': msg['clientTs'],
+                'serverNowMs': DateTime.now().millisecondsSinceEpoch,
+              }));
+              break;
+
+            case 'guest_ready':
+              if (participantId != null) {
+                _lastInboundActivity[participantId!] = DateTime.now();
+              }
+              break;
+
+            case 'join_request':
+              final rawPin = msg['pin'] as String?;
+              final pin =
+                  rawPin?.toUpperCase().replaceAll(RegExp(r'[^A-Z0-9]'), '');
+              final bypassToken = msg['token'] as String?;
+              final bypassId = msg['participantId'] as String?;
+              final validReconnect = bypassToken != null &&
+                  bypassId != null &&
+                  _participantTokens[bypassId] != null &&
+                  constantTimeEquals(
+                      bypassToken, _participantTokens[bypassId]!);
+              if (!validReconnect && joinFailures.isBlocked()) {
+                _rejectJoin(socket, 'Demasiados intentos. Prueba más tarde.',
+                    code: 'rate_limited');
+                return;
+              }
+              if (pin == null || pin != _pinCode?.value) {
+                joinFailures.recordFailure();
+                _rejectJoin(socket, 'PIN incorrecto.', code: 'bad_pin');
+                return;
+              }
+
+              final token = msg['token'] as String?;
+              final reconnectParticipantId = msg['participantId'] as String?;
+
+              // Ruta de reconexión de participante existente
+              if (token != null || reconnectParticipantId != null) {
+                final storedToken = reconnectParticipantId != null
+                    ? _participantTokens[reconnectParticipantId]
+                    : null;
+                if (reconnectParticipantId != null &&
+                    !_kickedParticipantIds.contains(reconnectParticipantId) &&
+                    _participants.containsKey(reconnectParticipantId) &&
+                    token != null &&
+                    storedToken != null &&
+                    token == storedToken) {
+                  _graceTimers[reconnectParticipantId]?.cancel();
+                  _graceTimers.remove(reconnectParticipantId);
+
+                  final oldSocket = _clientSockets[reconnectParticipantId];
+                  if (oldSocket != null && oldSocket != socket) {
+                    try {
+                      unawaited(oldSocket.close());
+                    } catch (_) {}
+                  }
+                  _clientSockets[reconnectParticipantId] = socket;
+                  participantId = reconnectParticipantId;
+                  _lastInboundActivity[reconnectParticipantId] = DateTime.now();
+
+                  final existingParticipant =
+                      _participants[reconnectParticipantId]!;
+                  final currentSessionState =
+                      getCurrentSessionState?.call() ?? _lastSessionState;
+                  final stateMap = currentSessionState?.toJson() ??
+                      _defaultSessionStateJson();
+                  socket.add(jsonEncode({
+                    'op': 'join_response',
+                    'accepted': true,
+                    'token': token,
+                    'assignedParticipant': existingParticipant.toJson(),
+                  }));
+                  socket.add(jsonEncode({
+                    'op': 'crotolink_state_snapshot',
+                    'sessionId': _sessionId,
+                    'state': stateMap,
+                    'assignedParticipant': existingParticipant.toJson(),
+                    'queueRevision': currentSessionState?.queueRevision ?? 0,
+                  }));
+                  return;
+                } else {
+                  _rejectJoin(
+                      socket, 'Token de reconexión inválido o sesión expirada.',
+                      code: 'expired');
+                  return;
+                }
+              }
+
+              if (participantId != null) {
+                _rejectJoin(socket, 'Esta conexión ya está unida a la sesión.',
+                    code: 'already_joined');
+                return;
+              }
+
+              // Contraseña de sala: misma respuesta que un PIN erróneo.
+              final expected = roomPassword;
+              if (expected != null && expected.isNotEmpty) {
+                final given = msg['password'];
+                if (given is! String || !constantTimeEquals(given, expected)) {
+                  joinFailures.recordFailure();
+                  _rejectJoin(socket, 'PIN incorrecto.', code: 'bad_password');
+                  return;
+                }
+              }
+
+              // El anfitrión cuenta dentro del límite configurado.
+              if (_maxParticipants > 0 &&
+                  _participants.length + 1 >= _maxParticipants) {
+                _rejectJoin(
+                  socket,
+                  'La sesión alcanzó el límite de $_maxParticipants participantes.',
+                  code: 'full',
+                );
+                return;
+              }
+
+              final requestedName = (msg['name'] as String?)?.trim() ?? '';
+              final name = requestedName.isEmpty
+                  ? 'Invitado'
+                  : requestedName.length > 48
+                      ? requestedName.substring(0, 48)
+                      : requestedName;
+              if (_kickedNames.contains(name.toLowerCase())) {
+                _rejectJoin(socket, 'Has sido expulsado de esta sesión.',
+                    code: 'kicked');
+                return;
+              }
+              final color =
+                  (msg['avatarColorValue'] as num?)?.toInt() ?? 0xFF10B981;
+              final id =
+                  'guest_${DateTime.now().microsecondsSinceEpoch}_${socket.hashCode}';
+
+              final participant = CrotoLinkParticipant(
+                id: id,
+                name: name.isNotEmpty ? name : 'Invitado',
+                avatarColorValue: color,
+                isHost: false,
+                joinedAt: DateTime.now(),
+                canControlPlayback: _allowGuestControls,
+                canManageQueue: _allowGuestQueueManage,
+              );
+
+              final assignedToken = generateReconnectToken();
+              participantId = id;
+              _clientSockets[id] = socket;
+              _participants[id] = participant;
+              _participantTokens[id] = assignedToken;
+              _lastInboundActivity[id] = DateTime.now();
+
+              if (onJoinRequested != null) {
+                final accepted = await onJoinRequested!(participant, socket);
+                if (!accepted) {
+                  _removeParticipant(id);
+                  _rejectJoin(socket, 'El anfitrión rechazó la solicitud.',
+                      code: 'rejected');
+                } else {
+                  final currentSessionState =
+                      getCurrentSessionState?.call() ?? _lastSessionState;
+                  final stateMap = currentSessionState?.toJson() ??
+                      _defaultSessionStateJson();
+                  socket.add(jsonEncode({
+                    'op': 'join_response',
+                    'accepted': true,
+                    'token': assignedToken,
+                    'assignedParticipant': participant.toJson(),
+                  }));
+                  socket.add(jsonEncode({
+                    'op': 'crotolink_state_snapshot',
+                    'sessionId': _sessionId,
+                    'state': stateMap,
+                    'assignedParticipant': participant.toJson(),
+                    'queueRevision': currentSessionState?.queueRevision ?? 0,
+                  }));
+                }
+              } else {
+                final currentSessionState =
+                    getCurrentSessionState?.call() ?? _lastSessionState;
+                final stateMap =
+                    currentSessionState?.toJson() ?? _defaultSessionStateJson();
+                socket.add(jsonEncode({
+                  'op': 'join_response',
+                  'accepted': true,
+                  'token': assignedToken,
+                  'assignedParticipant': participant.toJson(),
+                }));
+                socket.add(jsonEncode({
+                  'op': 'crotolink_state_snapshot',
+                  'sessionId': _sessionId,
+                  'state': stateMap,
+                  'assignedParticipant': participant.toJson(),
+                  'queueRevision': currentSessionState?.queueRevision ?? 0,
+                }));
+              }
+              break;
+
+            case 'add_to_queue':
+              if (participantId != null &&
+                  _participants.containsKey(participantId)) {
+                final participant = _participants[participantId]!;
+                if (!participant.canManageQueue) {
+                  _sendError(socket,
+                      'El anfitrión ha deshabilitado la gestión de cola.');
+                  return;
+                }
+                final throttles = _rateLimiters.putIfAbsent(
+                    participantId!, () => _ParticipantThrottles());
+                if (!throttles.queueLimiter.tryAcquire()) {
+                  _sendError(socket,
+                      'Límite de tasa excedido: máximo 10 modificaciones a la cola cada 10 segundos.');
+                  return;
+                }
+                final rawTrack = msg['track'];
+                if (rawTrack is! Map<String, dynamic>) {
+                  _sendError(socket, 'La canción recibida no es válida.');
+                  return;
+                }
+                final trackJson = rawTrack;
+                final trackId = trackJson['id'] as String?;
+                if (trackId == null || trackId.isEmpty) {
+                  _sendError(
+                      socket, 'La canción no tiene un identificador válido.');
+                  return;
+                }
+                final track = Track(
+                  id: trackId,
+                  title: (trackJson['title'] as String?) ?? 'Unknown',
+                  artist: (trackJson['artist'] as String?) ?? 'Unknown',
+                  album: (trackJson['album'] as String?) ?? 'Unknown',
+                  duration: (trackJson['duration'] as String?) ?? '',
+                  albumArtUrl: trackJson['albumArtUrl'] as String?,
+                );
+                final playNext = msg['playNext'] as bool? ?? false;
+                onTrackAddRequested?.call(track, participant, playNext);
+              }
+              break;
+
+            case 'remove_from_queue':
+              if (participantId != null &&
+                  _participants.containsKey(participantId)) {
+                final participant = _participants[participantId]!;
+                if (!participant.canManageQueue) {
+                  _sendError(socket,
+                      'El anfitrión ha deshabilitado la gestión de cola.');
+                  return;
+                }
+                final throttles = _rateLimiters.putIfAbsent(
+                    participantId!, () => _ParticipantThrottles());
+                if (!throttles.queueLimiter.tryAcquire()) {
+                  _sendError(socket,
+                      'Límite de tasa excedido: máximo 10 modificaciones a la cola cada 10 segundos.');
+                  return;
+                }
+                final queueItemId = msg['queueItemId'] as String?;
+                if (queueItemId != null && queueItemId.trim().isNotEmpty) {
+                  onTrackRemoveRequested?.call(queueItemId, participant);
+                } else {
+                  _sendError(socket, 'Identificador de cola inválido.');
+                }
+              }
+              break;
+
+            case 'reorder_queue':
+              if (participantId != null &&
+                  _participants.containsKey(participantId)) {
+                final participant = _participants[participantId]!;
+                if (!participant.canManageQueue) {
+                  _sendError(socket,
+                      'El anfitrión ha deshabilitado la gestión de cola.');
+                  return;
+                }
+                final throttles = _rateLimiters.putIfAbsent(
+                    participantId!, () => _ParticipantThrottles());
+                if (!throttles.queueLimiter.tryAcquire()) {
+                  _sendError(socket,
+                      'Límite de tasa excedido: máximo 10 modificaciones a la cola cada 10 segundos.');
+                  return;
+                }
+                final oldIdx = (msg['oldIndex'] as num?)?.toInt();
+                final newIdx = (msg['newIndex'] as num?)?.toInt();
+                if (oldIdx != null &&
+                    newIdx != null &&
+                    oldIdx >= 0 &&
+                    newIdx >= 0) {
+                  onQueueReorderRequested?.call(oldIdx, newIdx, participant);
+                } else {
+                  _sendError(socket, 'Índices de reordenamiento inválidos.');
+                }
+              }
+              break;
+
+            case 'reaction':
+            case 'chat_message':
+              if (participantId != null &&
+                  _participants.containsKey(participantId)) {
+                final participant = _participants[participantId]!;
+                final throttles = _rateLimiters.putIfAbsent(
+                    participantId!, () => _ParticipantThrottles());
+                if (!throttles.socialLimiter.tryAcquire()) return; // descartar
+                if (op == 'reaction') {
+                  final emoji = msg['emoji'];
+                  if (emoji is String && kCrotoLinkReactions.contains(emoji)) {
+                    _broadcastSocial(participantId!, {
+                      'op': 'reaction',
+                      'from': participant.name,
+                      'emoji': emoji,
+                    });
+                    onSocial?.call(participant.name, emoji, null);
+                  }
+                } else if (chatEnabled) {
+                  final text = msg['text'] is String
+                      ? sanitizeChatText(msg['text'] as String)
+                      : null;
+                  if (text == null) {
+                    _sendError(socket, 'Mensaje de chat inválido.');
+                  } else {
+                    _broadcastSocial(participantId!, {
+                      'op': 'chat',
+                      'from': participant.name,
+                      'text': text,
+                      'ts': DateTime.now().millisecondsSinceEpoch,
+                    });
+                    onSocial?.call(participant.name, null, text);
+                  }
+                } else {
+                  _sendError(
+                      socket, 'El chat está desactivado en este CrotoLink.');
+                }
+              }
+              break;
+
+            case 'vote':
+              // Votar no requiere gestión de cola; sí pasa por el limitador.
+              if (participantId != null &&
+                  _participants.containsKey(participantId)) {
+                final participant = _participants[participantId]!;
+                final throttles = _rateLimiters.putIfAbsent(
+                    participantId!, () => _ParticipantThrottles());
+                if (!throttles.queueLimiter.tryAcquire()) {
+                  _sendError(socket,
+                      'Límite de tasa excedido: máximo 10 modificaciones a la cola cada 10 segundos.');
+                  return;
+                }
+                final itemId = msg['itemId'];
+                final value = msg['value'];
+                if (itemId is String && itemId.isNotEmpty && value is num) {
+                  onVoteRequested?.call(
+                      itemId, value.toInt().clamp(-1, 1), participant);
+                } else {
+                  _sendError(socket, 'Voto inválido.');
+                }
+              }
+              break;
+
+            case 'playback_control':
+              if (participantId != null &&
+                  _participants.containsKey(participantId)) {
+                final participant = _participants[participantId]!;
+                if (!participant.canControlPlayback) {
+                  _sendError(socket,
+                      'El anfitrión ha deshabilitado el control de reproducción.');
+                  return;
+                }
+                final throttles = _rateLimiters.putIfAbsent(
+                    participantId!, () => _ParticipantThrottles());
+                if (!throttles.playbackLimiter.tryAcquire()) {
+                  _sendError(socket,
+                      'Límite de tasa excedido: máximo 4 controles de reproducción cada 2 segundos.');
+                  return;
+                }
+                final action = msg['action'] as String?;
+                final posMs = (msg['positionMs'] as num?)?.toInt();
+                const validActions = {
+                  'toggle',
+                  'play',
+                  'pause',
+                  'skip_next',
+                  'skip_previous',
+                  'seek',
+                };
+                if (action != null && validActions.contains(action)) {
+                  if (action == 'seek' && (posMs == null || posMs < 0)) {
+                    _sendError(socket, 'Posición de reproducción inválida.');
+                    return;
+                  }
+                  onPlaybackControlRequested?.call(action, posMs, participant);
+                } else {
+                  _sendError(socket, 'La acción de reproducción no es válida.');
+                }
+              }
+              break;
+
+            case 'leave':
+              _graceTimers[participantId]?.cancel();
+              _graceTimers.remove(participantId);
+              _removeParticipant(participantId);
+              break;
+          }
+        } catch (e) {
+          debugPrint('CrotoLinkHostService WebSocket error parsing msg: $e');
+        }
+      },
+      onDone: () {
+        helloTimer.cancel();
+        _handleSocketDisconnect(participantId, socket);
+      },
+      onError: (_) => _handleSocketDisconnect(participantId, socket),
+    );
+  }
+
+  void _handleSocketDisconnect(String? id, WebSocket socket) {
+    if (id == null) return;
+    if (_clientSockets[id] == socket) {
+      _clientSockets.remove(id);
+      if (_participants.containsKey(id) && !_graceTimers.containsKey(id)) {
+        _graceTimers[id] = Timer(disconnectGracePeriod, () {
+          _graceTimers.remove(id);
+          _removeParticipant(id);
+        });
+      }
+    }
+  }
+
+  void _startHeartbeatTimer() {
+    _heartbeatTimer?.cancel();
+    _heartbeatTimer = Timer.periodic(pingInterval, (_) {
+      checkHeartbeatAndPing();
+    });
+  }
+
+  void checkHeartbeatAndPing([DateTime? nowTime]) {
+    final now = nowTime ?? DateTime.now();
+    final timeoutThreshold = pingInterval + pongTimeout;
+
+    for (final id in _participants.keys.toList()) {
+      // Quien está en gracia (socket caído) se desaloja al vencer su temporizador,
+      // no antes: `pingInterval + pongTimeout` es menor que la gracia.
+      if (_graceTimers.containsKey(id)) continue;
+      final lastSeen = _lastInboundActivity[id] ?? now;
+      if (now.difference(lastSeen) > timeoutThreshold) {
+        debugPrint(
+            'CrotoLinkHostService: Desalojando participante $id por inactividad de heartbeat');
+        _removeParticipant(id);
+      }
+    }
+
+    final pingMsg = jsonEncode({
+      'op': 'ping',
+      'timestamp': now.millisecondsSinceEpoch,
+    });
+    for (final socket in _clientSockets.values) {
+      try {
+        if (socket.readyState == WebSocket.open) {
+          socket.add(pingMsg);
+        }
+      } catch (_) {}
+    }
+  }
+
+  Map<String, dynamic> _defaultSessionStateJson() => {
+        'sessionId': _sessionId,
+        'pinCode': _pinCode?.value,
+        'hostName': _hostName,
+        'hostIp': _hostIp,
+        'port': _port,
+        'mode': _mode.name,
+        'isPlaying': false,
+        'positionMs': 0,
+        'updatedAtMs': DateTime.now().millisecondsSinceEpoch,
+        'queue': [],
+        'participants': [
+          if (hostParticipant != null) hostParticipant!.toJson(),
+          ..._participants.values.map((e) => e.toJson()),
+        ],
+        'allowGuestControls': _allowGuestControls,
+        'allowGuestQueueManage': _allowGuestQueueManage,
+        'isPublic': _isPublic,
+        'initialPlaylistId': _initialPlaylistId,
+        'maxParticipants': _maxParticipants,
+        'queueRevision': _lastSessionState?.queueRevision ?? 0,
+      };
+
+  /// [code] es el motivo tipado (`bad_pin`, `bad_password`, `expired`,
+  /// `kicked`, `full`, `rate_limited`, `already_joined`, `rejected`): el
+  /// cliente decide con él si reintenta, sin buscar texto en [reason].
+  void _rejectJoin(WebSocket socket, String reason,
+      {String code = 'rejected'}) {
+    socket.add(jsonEncode({
+      'op': 'join_response',
+      'accepted': false,
+      'reason': reason,
+      'code': code,
+    }));
+    unawaited(socket.close());
+  }
+
+  void _sendError(WebSocket socket, String message) {
+    if (socket.readyState == WebSocket.open) {
+      socket.add(jsonEncode({'op': 'error', 'message': message}));
+    }
+  }
+
+  void _removeParticipant(String? id) {
+    if (id == null) return;
+    _graceTimers[id]?.cancel();
+    _graceTimers.remove(id);
+    _lastInboundActivity.remove(id);
+    _participantTokens.remove(id);
+    _rateLimiters.remove(id);
+    final participant = _participants.remove(id);
+    final socket = _clientSockets.remove(id);
+    try {
+      socket?.close();
+    } catch (_) {}
+    if (participant != null) {
+      onParticipantLeft?.call(participant);
+      broadcastMessage({
+        'op': 'participant_left',
+        'participant': participant.toJson(),
+      });
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Difusión de Mensajes (Broadcasting)
+  // ---------------------------------------------------------------------------
+  void broadcastMessage(Map<String, dynamic> message) {
+    final encoded = jsonEncode(message);
+    for (final socket in _clientSockets.values) {
+      try {
+        if (socket.readyState == WebSocket.open) {
+          socket.add(encoded);
+        }
+      } catch (_) {}
+    }
+  }
+
+  void broadcastSessionState(
+    CrotoLinkSessionState state, {
+    String? excludeParticipantId,
+  }) {
+    _lastSessionState = state;
+    final encoded = jsonEncode({
+      'op': 'state_sync',
+      'state': state.toJson(),
+    });
+    for (final entry in _clientSockets.entries) {
+      if (entry.key == excludeParticipantId) continue;
+      try {
+        if (entry.value.readyState == WebSocket.open) {
+          entry.value.add(encoded);
+        }
+      } catch (e) {
+        // Ese invitado se queda con el estado anterior hasta reconectar.
+        debugPrint(
+            'CrotoLinkHostService: no se pudo enviar el estado a un invitado: $e');
+      }
+    }
+  }
+
+  void broadcastPlaybackUpdate({
+    Track? track,
+    CrotoLinkParticipant? addedBy,
+    required bool isPlaying,
+    required int positionMs,
+  }) {
+    broadcastMessage({
+      'op': 'playback_updated',
+      'track': track == null
+          ? null
+          : {
+              'id': track.id,
+              'title': track.title,
+              'artist': track.artist,
+              'album': track.album,
+              'duration': track.duration,
+              'albumArtUrl': sanitizeArtUrl(track.albumArtUrl),
+            },
+      'addedBy': addedBy?.toJson(),
+      'isPlaying': isPlaying,
+      'positionMs': positionMs,
+      'serverTimestamp': DateTime.now().millisecondsSinceEpoch,
+    });
+  }
+
+  void broadcastQueueUpdate(List<CrotoLinkQueueItem> queue,
+      {int? queueRevision}) {
+    final rev = queueRevision ?? _lastSessionState?.queueRevision ?? 0;
+    broadcastMessage({
+      'op': 'queue_updated',
+      'queue': queue.map((e) => e.toJson()).toList(),
+      'queueRevision': rev,
+    });
+  }
+
+  /// Reenvía un mensaje social a todos menos al emisor.
+  void _broadcastSocial(String exceptParticipantId, Map<String, dynamic> msg) {
+    final encoded = jsonEncode(msg);
+    for (final e in _clientSockets.entries) {
+      if (e.key == exceptParticipantId) continue;
+      try {
+        if (e.value.readyState == WebSocket.open) e.value.add(encoded);
+      } catch (_) {}
+    }
+  }
+
+  void sendToClient(String participantId, Map<String, dynamic> message) {
+    if (message['op'] == 'join_response' && !message.containsKey('token')) {
+      final token = _participantTokens[participantId];
+      if (token != null) {
+        message['token'] = token;
+      }
+    }
+    final socket = _clientSockets[participantId];
+    if (socket != null && socket.readyState == WebSocket.open) {
+      socket.add(jsonEncode(message));
+    }
+  }
+
+  void kickParticipant(String participantId) {
+    _graceTimers[participantId]?.cancel();
+    _graceTimers.remove(participantId);
+    final p = _participants[participantId];
+    if (p != null) {
+      _kickedNames.add(p.name.trim().toLowerCase());
+    }
+    _kickedParticipantIds.add(participantId);
+    final socket = _clientSockets[participantId];
+    if (socket != null) {
+      socket.add(jsonEncode({
+        'op': 'kicked',
+        'reason': 'Has sido removido de la sesión por el anfitrión.',
+      }));
+      socket.close();
+    }
+    _removeParticipant(participantId);
+  }
+
+  Future<void> stop() async {
+    // Notificar cierre a todos los clientes
+    broadcastMessage({
+      'op': 'session_closed',
+      'reason': 'El anfitrión ha finalizado la sesión CrotoLink.',
+    });
+
+    _heartbeatTimer?.cancel();
+    _heartbeatTimer = null;
+    for (final timer in _graceTimers.values) {
+      timer.cancel();
+    }
+    _graceTimers.clear();
+    _kickedNames.clear();
+    _kickedParticipantIds.clear();
+    roomPassword = null;
+    _joinFailuresByIp.clear();
+    hostParticipant = null;
+    _lastInboundActivity.clear();
+    _participantTokens.clear();
+    _rateLimiters.clear();
+    _lastSessionState = null;
+
+    for (final socket in List.of(_clientSockets.values)) {
+      try {
+        await socket.close();
+      } catch (_) {}
+    }
+    _clientSockets.clear();
+    _participants.clear();
+
+    _discoverySocket?.close();
+    _discoverySocket = null;
+
+    for (final timer in _discoveryBurstTimers) {
+      timer.cancel();
+    }
+    _discoveryBurstTimers.clear();
+    _cachedBroadcastAddresses.clear();
+
+    _presenceTimer?.cancel();
+    _presenceTimer = null;
+
+    if (_holdsMulticastReception) {
+      await CrotoLinkNetworkPlatform.releaseMulticastReception();
+      _holdsMulticastReception = false;
+    }
+
+    await _server?.close(force: true);
+    _server = null;
+    _tlsIdentity = null;
+
+    _sessionId = null;
+    _pinCode = null;
+    _hostIp = null;
+    _allLocalIps = [];
+    _port = 0;
+    _currentTrackTitle = null;
+    _currentTrackArtist = null;
+    _albumArtUrl = null;
+    _allowGuestControls = true;
+    _allowGuestQueueManage = true;
+    _isPublic = true;
+    _maxParticipants = 0;
+    _initialPlaylistId = null;
+    debugPrint('CrotoLinkHostService stopped');
+  }
+}

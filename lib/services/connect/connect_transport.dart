@@ -3,7 +3,7 @@ import 'dart:async';
 import 'connect_protocol.dart';
 
 /// Camino por el que se descubren dispositivos y viajan los mensajes cifrados.
-/// Hay uno por LAN y otro por el servidor Jam; `ConnectService` los combina.
+/// Hay uno por LAN y otro por el servidor CrotoLink; `ConnectService` los combina.
 abstract class ConnectTransport {
   /// Dispositivos visibles por este camino (sin incluir el propio).
   Stream<List<ConnectDevice>> get devices;

@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:navidrome_client/services/navidrome_service.dart';
+import 'package:crotowave/services/navidrome_service.dart';
 
 class _RealHttpOverrides extends HttpOverrides {}
 

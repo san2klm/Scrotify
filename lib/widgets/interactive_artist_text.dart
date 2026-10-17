@@ -138,8 +138,7 @@ class _SingleArtistLinkState extends State<_SingleArtistLink> {
             color: color,
             fontSize: widget.fontSize,
             decoration: TextDecoration.underline,
-            decorationColor:
-                _hovering ? color : color.withValues(alpha: 0.3),
+            decorationColor: _hovering ? color : color.withValues(alpha: 0.3),
             decorationStyle: _hovering
                 ? TextDecorationStyle.solid
                 : TextDecorationStyle.dotted,
@@ -187,8 +186,7 @@ class _ArtistHoverLinkState extends State<_ArtistHoverLink> {
             color: color,
             fontSize: widget.fontSize,
             decoration: TextDecoration.underline,
-            decorationColor:
-                _hovering ? color : color.withValues(alpha: 0.3),
+            decorationColor: _hovering ? color : color.withValues(alpha: 0.3),
             decorationStyle: _hovering
                 ? TextDecorationStyle.solid
                 : TextDecorationStyle.dotted,

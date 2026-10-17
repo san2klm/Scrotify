@@ -6,10 +6,10 @@ import '../screens/stats_screen.dart';
 import '../services/navidrome_service.dart';
 import '../services/player_controller.dart';
 import '../utils/app_colors.dart';
-import 'jam_dialog.dart';
+import 'crotolink_dialog.dart';
 
 /// Fila de acciones rápidas para el inicio del teléfono: mezclar la
-/// biblioteca, abrir "Me gusta", iniciar/unirse a una Jam y ver estadísticas.
+/// biblioteca, abrir "Me gusta", iniciar/unirse a una CrotoLink y ver estadísticas.
 /// Hace scroll horizontal si no caben (pantallas muy angostas o texto grande).
 class QuickActionsRow extends StatelessWidget {
   /// Pistas con las que se arma la mezcla.
@@ -36,13 +36,13 @@ class QuickActionsRow extends StatelessWidget {
       _Action(
         icon: Icons.groups_rounded,
         label: 'CrotoLink',
-        onTap: () => JamDialog.showAsBottomSheet(context),
+        onTap: () => CrotoLinkDialog.showAsBottomSheet(context),
       ),
       _Action(
         icon: Icons.bar_chart_rounded,
         label: 'Estadísticas',
-        onTap: () => Navigator.push(context,
-            MaterialPageRoute(builder: (_) => const StatsScreen())),
+        onTap: () => Navigator.push(
+            context, MaterialPageRoute(builder: (_) => const StatsScreen())),
       ),
     ];
 

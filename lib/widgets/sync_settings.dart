@@ -12,7 +12,7 @@ import '../utils/app_colors.dart';
 import 'pairing_panel.dart' show QrScannerSheet;
 import 'pairing_qr_code.dart';
 
-/// Ajustes → Servidor Jam → Sincronización entre dispositivos.
+/// Ajustes → Servidor CrotoLink → Sincronización entre dispositivos.
 ///
 /// Activa la sincronización cifrada de temas, ajustes y datos de la
 /// biblioteca, o vincula este dispositivo con la clave de otro.

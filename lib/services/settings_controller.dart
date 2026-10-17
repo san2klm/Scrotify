@@ -5,7 +5,7 @@ import 'dart:io';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/foundation.dart';
 
-import '../models/jam_models.dart';
+import '../models/crotolink_models.dart';
 import 'hifi/audio_output_devices.dart' show isValidDirectDevice;
 import 'hifi/hifi_profiles.dart' show AudioFidelityMode;
 import 'replay_gain.dart';
@@ -75,7 +75,7 @@ class SettingsController extends ChangeNotifier {
   ReplayGainMode _replayGainMode = ReplayGainMode.off;
   double _replayGainPreamp = 0.0;
   bool _replayGainPreventClipping = true;
-  String _jamServerUrl = kDefaultRemoteJamEndpoint;
+  String _crotoLinkServerUrl = kDefaultRemoteCrotoLinkEndpoint;
   AudioFidelityMode _fidelityMode = AudioFidelityMode.standard;
   bool _losslessOnMobileData = false;
   String? _connectDeviceName;
@@ -178,15 +178,15 @@ class SettingsController extends ChangeNotifier {
   /// Si está activa la prevención de clipping mediante el pico de amplitud.
   bool get replayGainPreventClipping => _replayGainPreventClipping;
 
-  /// URL (normalizada) del servidor Jam usado para salas remotas y el radar.
-  String get jamServerUrl => _jamServerUrl;
+  /// URL (normalizada) del servidor CrotoLink usado para salas remotas y el radar.
+  String get crotoLinkServerUrl => _crotoLinkServerUrl;
 
-  /// Valida y guarda la URL del servidor Jam. Devuelve el resultado de la
+  /// Valida y guarda la URL del servidor CrotoLink. Devuelve el resultado de la
   /// validación; solo persiste si es válida.
-  JamServerEndpoint setJamServerUrl(String input) {
-    final parsed = JamServerEndpoint.parse(input);
-    if (parsed.isValid && parsed.url != _jamServerUrl) {
-      _jamServerUrl = parsed.url!;
+  CrotoLinkServerEndpoint setCrotoLinkServerUrl(String input) {
+    final parsed = CrotoLinkServerEndpoint.parse(input);
+    if (parsed.isValid && parsed.url != _crotoLinkServerUrl) {
+      _crotoLinkServerUrl = parsed.url!;
       _save();
       notifyListeners();
     }
@@ -233,9 +233,9 @@ class SettingsController extends ChangeNotifier {
   }
 
   /// Quita el servidor CrotoLink (vuelve al valor por defecto: ninguno).
-  void resetJamServerUrl() {
-    if (_jamServerUrl == kDefaultRemoteJamEndpoint) return;
-    _jamServerUrl = kDefaultRemoteJamEndpoint;
+  void resetCrotoLinkServerUrl() {
+    if (_crotoLinkServerUrl == kDefaultRemoteCrotoLinkEndpoint) return;
+    _crotoLinkServerUrl = kDefaultRemoteCrotoLinkEndpoint;
     _save();
     notifyListeners();
   }
@@ -411,7 +411,8 @@ class SettingsController extends ChangeNotifier {
       final rawCf = (data['crossfade'] as num?)?.toInt() ?? 0;
       _crossfade = Duration(milliseconds: rawCf.clamp(0, 10000));
       _silenceRemovalEnabled = data['silenceRemovalEnabled'] as bool? ?? false;
-      _thirdPartyArtistImages = data['thirdPartyArtistImages'] as bool? ?? false;
+      _thirdPartyArtistImages =
+          data['thirdPartyArtistImages'] as bool? ?? false;
       _syncQueueToServer = data['syncQueueToServer'] as bool? ?? false;
       _discordPresence = data['discordPresence'] as bool? ?? false;
       _discordClientId = data['discordClientId'] as String? ?? '';
@@ -428,13 +429,14 @@ class SettingsController extends ChangeNotifier {
         orElse: () => AudioFidelityMode.standard,
       );
       _losslessOnMobileData = data['losslessOnMobileData'] as bool? ?? false;
-      final jamUrl =
-          JamServerEndpoint.parse(data['jamServerUrl'] as String? ?? '');
-      _jamServerUrl = jamUrl.url ?? kDefaultRemoteJamEndpoint;
+      final crotoLinkUrl = CrotoLinkServerEndpoint.parse(
+          data['crotoLinkServerUrl'] as String? ?? '');
+      _crotoLinkServerUrl = crotoLinkUrl.url ?? kDefaultRemoteCrotoLinkEndpoint;
       final savedDevice = data['audioOutputDevice'];
-      _audioOutputDevice = savedDevice is String && isValidDirectDevice(savedDevice)
-          ? savedDevice
-          : null;
+      _audioOutputDevice =
+          savedDevice is String && isValidDirectDevice(savedDevice)
+              ? savedDevice
+              : null;
       final savedName = data['connectDeviceName'];
       _connectDeviceName =
           savedName is String ? normalizeDeviceName(savedName) : null;
@@ -465,7 +467,7 @@ class SettingsController extends ChangeNotifier {
         'replayGainMode': _replayGainMode.name,
         'replayGainPreamp': _replayGainPreamp,
         'replayGainPreventClipping': _replayGainPreventClipping,
-        'jamServerUrl': _jamServerUrl,
+        'crotoLinkServerUrl': _crotoLinkServerUrl,
         'fidelityMode': _fidelityMode.name,
         'losslessOnMobileData': _losslessOnMobileData,
         'connectDeviceName': _connectDeviceName,

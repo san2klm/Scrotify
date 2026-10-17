@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:navidrome_client/widgets/app_error_box.dart';
+import 'package:crotowave/widgets/app_error_box.dart';
 
 class _Boom extends StatelessWidget {
   const _Boom();

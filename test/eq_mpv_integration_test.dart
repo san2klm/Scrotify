@@ -6,11 +6,11 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:just_audio_media_kit/just_audio_media_kit.dart';
 import 'package:media_kit/media_kit.dart';
-import 'package:navidrome_client/services/eq/eq_mpv_setup.dart';
-import 'package:navidrome_client/services/hifi/hifi_coordinator.dart';
-import 'package:navidrome_client/services/hifi/hifi_profiles.dart';
-import 'package:navidrome_client/services/eq/eq_presets.dart';
-import 'package:navidrome_client/services/equalizer_service.dart';
+import 'package:crotowave/services/eq/eq_mpv_setup.dart';
+import 'package:crotowave/services/hifi/hifi_coordinator.dart';
+import 'package:crotowave/services/hifi/hifi_profiles.dart';
+import 'package:crotowave/services/eq/eq_presets.dart';
+import 'package:crotowave/services/equalizer_service.dart';
 
 /// WAV estéreo de 16 bits con un tono de 440 Hz.
 Uint8List _tone(int seconds) {
@@ -55,7 +55,7 @@ void main() {
     // `pitch` instala su propio `af` (scaletempo) y pisaría el del ecualizador.
     JustAudioMediaKit.pitch = false;
     JustAudioMediaKit.ensureInitialized(libmpv: libmpv);
-    final dir = await Directory.systemTemp.createTemp('scrotify-eq-mpv-');
+    final dir = await Directory.systemTemp.createTemp('crotowave-eq-mpv-');
     addTearDown(() => dir.delete(recursive: true));
     final file = File('${dir.path}/tono.wav')..writeAsBytesSync(_tone(4));
 
@@ -91,7 +91,7 @@ void main() {
   test('mpv acepta todas las propiedades de los modos de fidelidad', () async {
     JustAudioMediaKit.pitch = false;
     JustAudioMediaKit.ensureInitialized(libmpv: libmpv);
-    final dir = await Directory.systemTemp.createTemp('scrotify-hifi-mpv-');
+    final dir = await Directory.systemTemp.createTemp('crotowave-hifi-mpv-');
     addTearDown(() => dir.delete(recursive: true));
     final file = File('${dir.path}/tono.wav')..writeAsBytesSync(_tone(2));
     final player = AudioPlayer();

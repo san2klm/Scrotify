@@ -101,8 +101,7 @@ mixin _MobileSearchLibraryTabs on _MobileHomeBase {
     }
 
     final nav = context.read<NavidromeService>();
-    final songs =
-        _trackFilter.apply(results.songs, isStarred: nav.isStarred);
+    final songs = _trackFilter.apply(results.songs, isStarred: nav.isStarred);
     final albums = results.albums;
     final artists = results.artists;
 

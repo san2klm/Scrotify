@@ -8,13 +8,13 @@ cumplir al distribuirlo. Los textos legales que valen son los archivos
 
 | Parte | Ruta | Licencia |
 |---|---|---|
-| **Cliente** (Android, Android TV, Linux, Windows, macOS, iOS) | todo el repositorio salvo `jam-server/` y `third_party/` | **GPL-3.0-or-later** + excepción para tiendas de apps (`LICENSE`) |
-| **Servidor CrotoLink** (Node 24 + `ws` + SQLite, Docker) | `jam-server/` | **AGPL-3.0-or-later** (`jam-server/LICENSE`) |
+| **Cliente** (Android, Android TV, Linux, Windows, macOS, iOS) | todo el repositorio salvo `crotolink-server/` y `third_party/` | **GPL-3.0-or-later** + excepción para tiendas de apps (`LICENSE`) |
+| **Servidor CrotoLink** (Node 24 + `ws` + SQLite, Docker) | `crotolink-server/` | **AGPL-3.0-or-later** (`crotolink-server/LICENSE`) |
 | `just_audio_media_kit` (copia parcheada) | `third_party/just_audio_media_kit/` | **The Unlicense** (dominio público), también nuestros cambios |
 | Paquetes de pub.dev (`pubspec.yaml`) | caché de pub | la de cada paquete (ver abajo) |
 | Librerías nativas que viajan con los binarios | AppImage, instalador de Windows | la de cada librería (ver abajo) |
 
-Copyright (C) 2026 Lautaro (Dante0Q) y los colaboradores de CrotoWave.
+Copyright (C) 2026 Lautaro ([Dante0Q](https://github.com/Dante0Q)), Thiago ([SniperWolfer](https://github.com/SniperWolfer)) y los colaboradores de CrotoWave.
 Código fuente: <https://github.com/Dante0Q/CrotoWave>.
 
 ## Cliente: GPLv3 con excepción para tiendas
@@ -52,20 +52,12 @@ posterior»), porque no se puede combinar con GPL-3.0.
 
 ## Nombres y logo
 
-La GPL protege el código, no el nombre. Por eso `LICENSE` y `jam-server/LICENSE`
+La GPL protege el código, no el nombre. Por eso `LICENSE` y `crotolink-server/LICENSE`
 agregan la condición que permite la sección 7(e): los nombres «CrotoWave» y
 «CrotoLink» y el logo no se pueden usar en versiones modificadas; un fork que
 se distribuya debe llevar otro nombre. El código se puede copiar y modificar
 igual. Para una protección más fuerte (por ejemplo, frente a apps ajenas en
 tiendas) haría falta registrar la marca.
-
-Hasta el 2026-10-16 el proyecto se llamaba «Scrotify». Quedan identificadores
-internos con ese nombre a propósito, porque cambiarlos borraría datos o
-rompería la compatibilidad: claves del almacén seguro (`scrotify.*`), nonces de
-cifrado de la sincronización y del emparejamiento, etiquetas de descubrimiento
-en red, canales nativos y nombres de clases. No se ven en la app. Los enlaces
-`scrotify://` y `scrotify-sync://` se siguen aceptando; la app ya genera
-`crotowave://` y `crotowave-sync://`.
 
 ## Servidor CrotoLink: AGPLv3
 
@@ -74,7 +66,7 @@ agrega una sola obligación frente a la GPL (sección 13): si alguien modifica e
 servidor y otras personas lo usan por red, tiene que ofrecerles el código de su
 versión. Para eso el servidor publica la variable `SOURCE_URL` en `GET /source`,
 en `GET /api/capabilities` y en el pie del panel `/admin` (ver
-`jam-server/README.md`).
+`crotolink-server/README.md`).
 
 El cliente y el servidor son programas separados que se hablan por WebSocket:
 la AGPL del servidor no afecta al cliente, y viceversa.

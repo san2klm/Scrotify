@@ -212,7 +212,7 @@ bool FlutterWindow::OnCreate() {
   mouse_channel_ =
       std::make_unique<flutter::MethodChannel<flutter::EncodableValue>>(
           flutter_controller_->engine()->messenger(),
-          "com.scrotify/global_mouse_hotkeys",
+          "com.crotowave/global_mouse_hotkeys",
           &flutter::StandardMethodCodec::GetInstance());
 
   mouse_channel_->SetMethodCallHandler(

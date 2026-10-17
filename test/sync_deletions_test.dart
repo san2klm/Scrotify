@@ -3,8 +3,8 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:navidrome_client/services/sync/sync_crypto.dart';
-import 'package:navidrome_client/services/sync/sync_service.dart';
+import 'package:crotowave/services/sync/sync_crypto.dart';
+import 'package:crotowave/services/sync/sync_service.dart';
 import 'package:path/path.dart' as p;
 
 import 'sync_service_test.dart' show Device, FakeVault, fullSync;

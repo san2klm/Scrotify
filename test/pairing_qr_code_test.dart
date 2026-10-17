@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
-import 'package:navidrome_client/models/pairing_models.dart';
-import 'package:navidrome_client/services/pairing_server.dart';
-import 'package:navidrome_client/services/theme_controller.dart';
-import 'package:navidrome_client/widgets/pairing_panel.dart';
-import 'package:navidrome_client/widgets/pairing_qr_code.dart';
+import 'package:crotowave/models/pairing_models.dart';
+import 'package:crotowave/services/pairing_server.dart';
+import 'package:crotowave/services/theme_controller.dart';
+import 'package:crotowave/widgets/pairing_panel.dart';
+import 'package:crotowave/widgets/pairing_qr_code.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
 class _WaitingPairingServer extends PairingServer {
@@ -22,7 +22,7 @@ class _WaitingPairingServer extends PairingServer {
 
   @override
   String? get qrDataUri =>
-      'scrotify://pair?topic=scrotify-1234567890abcdef1234567890abcdef&code=ABC123';
+      'crotowave://pair?topic=crotowave-1234567890abcdef1234567890abcdef&code=ABC123';
 
   @override
   String get deviceName => 'PC de prueba';
@@ -39,7 +39,7 @@ void main() {
         home: Scaffold(
           body: PairingQrCode(
             data:
-                'scrotify://pair?topic=scrotify-1234567890abcdef1234567890abcdef&code=ABC123',
+                'crotowave://pair?topic=crotowave-1234567890abcdef1234567890abcdef&code=ABC123',
             size: 160,
           ),
         ),

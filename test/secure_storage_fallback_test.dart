@@ -3,7 +3,7 @@ import 'dart:io';
 
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:navidrome_client/services/secure_storage.dart';
+import 'package:crotowave/services/secure_storage.dart';
 
 class _MemoryBackend implements SecureStorageBackend {
   final data = <String, String>{};
@@ -41,7 +41,7 @@ void main() {
   late _MemoryBackend backend;
 
   setUp(() async {
-    tmp = await Directory.systemTemp.createTemp('scrotify-secure-');
+    tmp = await Directory.systemTemp.createTemp('crotowave-secure-');
     fallback = File('${tmp.path}/fallback.json');
     backend = _MemoryBackend();
     SecureStorage.backendOverride = backend;

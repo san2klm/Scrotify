@@ -2,9 +2,9 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:navidrome_client/services/local_music_service.dart';
-import 'package:navidrome_client/services/navidrome_service.dart';
-import 'package:navidrome_client/services/offline_cache_service.dart';
+import 'package:crotowave/services/local_music_service.dart';
+import 'package:crotowave/services/navidrome_service.dart';
+import 'package:crotowave/services/offline_cache_service.dart';
 
 void main() {
   late Directory root;

@@ -1,7 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:navidrome_client/services/offline_cache_service.dart';
+import 'package:crotowave/services/offline_cache_service.dart';
 import 'package:path/path.dart' as p;
 import 'package:sqflite/sqflite.dart';
 
@@ -643,7 +643,7 @@ void main() {
       const serverScope = 'https://music.example.com';
       const trackId = 'auth-url-track';
       const authenticatedUrl =
-          'https://music.example.com/rest/stream.view?u=alice&t=d41d8cd98f00b204e9800998ecf8427e&s=salt123&v=1.16.1&c=scrotify';
+          'https://music.example.com/rest/stream.view?u=alice&t=d41d8cd98f00b204e9800998ecf8427e&s=salt123&v=1.16.1&c=crotowave';
 
       final file = await service.getAudioFile(serverScope, trackId);
       await file.writeAsBytes(List.filled(256, 1));

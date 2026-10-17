@@ -3,15 +3,15 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:navidrome_client/services/diagnostics_log.dart';
-import 'package:navidrome_client/services/theme_controller.dart';
-import 'package:navidrome_client/widgets/diagnostics_panel.dart';
+import 'package:crotowave/services/diagnostics_log.dart';
+import 'package:crotowave/services/theme_controller.dart';
+import 'package:crotowave/widgets/diagnostics_panel.dart';
 import 'package:provider/provider.dart';
 
 void main() {
   late Directory tmp;
 
-  setUp(() => tmp = Directory.systemTemp.createTempSync('scrotify_diag_'));
+  setUp(() => tmp = Directory.systemTemp.createTempSync('crotowave_diag_'));
   tearDown(() => tmp.deleteSync(recursive: true));
 
   Widget host(DiagnosticsLog log) => ChangeNotifierProvider(

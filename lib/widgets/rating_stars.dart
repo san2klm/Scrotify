@@ -24,9 +24,7 @@ class RatingStars extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: List.generate(5, (index) {
         final isFilled = index < rating;
-        final icon = isFilled
-            ? Icons.star
-            : Icons.star_border;
+        final icon = isFilled ? Icons.star : Icons.star_border;
 
         if (!interactive) {
           return Icon(

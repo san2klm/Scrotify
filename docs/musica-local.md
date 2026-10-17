@@ -51,5 +51,5 @@ sin identificar.
 Android utiliza MediaMetadataRetriever. En escritorio se necesita ffprobe en PATH
 para leer etiquetas de archivos desconocidos; las descargas con índice previo
 continúan funcionando sin él. La prueba de integración del lector se ejecuta con
-`SCROTIFY_METADATA_INTEGRATION=1 flutter test test/local_music_recovery_test.dart`
+`CROTOWAVE_METADATA_INTEGRATION=1 flutter test test/local_music_recovery_test.dart`
 (en Linux, con ffmpeg y ffprobe).

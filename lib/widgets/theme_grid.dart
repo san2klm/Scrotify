@@ -23,8 +23,7 @@ class ThemesSection extends StatefulWidget {
 }
 
 class _ThemesSectionState extends State<ThemesSection> {
-  static const _themeFolderChannel =
-      MethodChannel('navidrome_client/theme_folder');
+  static const _themeFolderChannel = MethodChannel('crotowave/theme_folder');
   final _scroll = ScrollController();
 
   /// Id ya centrado con scroll (para no re-saltar en cada rebuild).

@@ -24,7 +24,8 @@ class BiometricAuthResult {
   bool get isSuccess => status == BiometricAuthStatus.success;
 
   @override
-  String toString() => 'BiometricAuthResult(status: $status, errorMessage: $errorMessage)';
+  String toString() =>
+      'BiometricAuthResult(status: $status, errorMessage: $errorMessage)';
 }
 
 /// Servicio encargado de la autenticación biométrica (huella dactilar, Face ID)
@@ -68,7 +69,8 @@ class BiometricAuthService {
       if (!isAvailable) {
         return const BiometricAuthResult(
           status: BiometricAuthStatus.notAvailable,
-          errorMessage: 'La biometría no está disponible o configurada en este dispositivo.',
+          errorMessage:
+              'La biometría no está disponible o configurada en este dispositivo.',
         );
       }
 
@@ -87,13 +89,15 @@ class BiometricAuthService {
         );
       }
     } on LocalAuthException catch (e) {
-      debugPrint('BiometricAuthService.authenticate LocalAuthException: ${e.code} - ${e.description}');
+      debugPrint(
+          'BiometricAuthService.authenticate LocalAuthException: ${e.code} - ${e.description}');
       switch (e.code) {
         case LocalAuthExceptionCode.temporaryLockout:
         case LocalAuthExceptionCode.biometricLockout:
           return const BiometricAuthResult(
             status: BiometricAuthStatus.lockedOut,
-            errorMessage: 'Biometría bloqueada temporalmente por intentos fallidos. Usa tu contraseña.',
+            errorMessage:
+                'Biometría bloqueada temporalmente por intentos fallidos. Usa tu contraseña.',
           );
         case LocalAuthExceptionCode.noCredentialsSet:
         case LocalAuthExceptionCode.noBiometricsEnrolled:
@@ -117,7 +121,8 @@ class BiometricAuthService {
           );
       }
     } on PlatformException catch (e) {
-      debugPrint('BiometricAuthService.authenticate PlatformException: ${e.code} - ${e.message}');
+      debugPrint(
+          'BiometricAuthService.authenticate PlatformException: ${e.code} - ${e.message}');
       return BiometricAuthResult(
         status: BiometricAuthStatus.error,
         errorMessage: e.message ?? 'Error en autenticación biométrica.',

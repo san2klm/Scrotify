@@ -17,8 +17,8 @@ class ServerProfilesController extends ChangeNotifier {
 
   Future<void> ensureLoaded() => _loadFuture;
 
-  static const _kProfilesKey = 'scrotify.server_profiles';
-  static const _kActiveProfileIdKey = 'scrotify.active_profile_id';
+  static const _kProfilesKey = 'crotowave.server_profiles';
+  static const _kActiveProfileIdKey = 'crotowave.active_profile_id';
 
   final _profiles = <ServerProfile>[];
   String? _activeProfileId;
@@ -30,7 +30,8 @@ class ServerProfilesController extends ChangeNotifier {
     if (_activeProfileId == null) return null;
     return _profiles.firstWhere(
       (p) => p.id == _activeProfileId,
-      orElse: () => throw StateError('Active profile not found: $_activeProfileId'),
+      orElse: () =>
+          throw StateError('Active profile not found: $_activeProfileId'),
     );
   }
 
@@ -85,7 +86,8 @@ class ServerProfilesController extends ChangeNotifier {
         final List<dynamic> decoded = jsonDecode(profilesJson);
         if (decoded.isNotEmpty) {
           _profiles.clear();
-          _profiles.addAll(decoded.map((e) => ServerProfile.fromJson(e as Map<String, dynamic>)));
+          _profiles.addAll(decoded
+              .map((e) => ServerProfile.fromJson(e as Map<String, dynamic>)));
           hasProfiles = true;
         }
       }
@@ -96,7 +98,9 @@ class ServerProfilesController extends ChangeNotifier {
       // Migration from old single-credential system
       if (!hasProfiles) {
         final legacy = await SecureStorage.getAll();
-        if (legacy.serverUrl != null && legacy.username != null && legacy.password != null) {
+        if (legacy.serverUrl != null &&
+            legacy.username != null &&
+            legacy.password != null) {
           final profile = ServerProfile(
             url: legacy.serverUrl!,
             username: legacy.username!,
@@ -108,7 +112,6 @@ class ServerProfilesController extends ChangeNotifier {
           await _save();
         }
       }
-
     } catch (e) {
       if (kDebugMode) {
         debugPrint('Failed to load server profiles: $e');
@@ -120,10 +123,12 @@ class ServerProfilesController extends ChangeNotifier {
   /// Saves profiles and active profile ID to secure storage.
   Future<void> _save() async {
     try {
-      final profilesJson = jsonEncode(_profiles.map((p) => p.toJson()).toList());
+      final profilesJson =
+          jsonEncode(_profiles.map((p) => p.toJson()).toList());
       await SecureStorage.secureWrite(_kProfilesKey, profilesJson);
       if (_activeProfileId != null) {
-        await SecureStorage.secureWrite(_kActiveProfileIdKey, _activeProfileId!);
+        await SecureStorage.secureWrite(
+            _kActiveProfileIdKey, _activeProfileId!);
       } else {
         await SecureStorage.secureDelete(_kActiveProfileIdKey);
       }

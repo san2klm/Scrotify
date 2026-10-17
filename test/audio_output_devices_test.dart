@@ -1,10 +1,10 @@
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:navidrome_client/services/hifi/audio_output_devices.dart';
-import 'package:navidrome_client/services/hifi/hifi_coordinator.dart';
-import 'package:navidrome_client/services/hifi/hifi_profiles.dart';
-import 'package:navidrome_client/services/settings_controller.dart';
+import 'package:crotowave/services/hifi/audio_output_devices.dart';
+import 'package:crotowave/services/hifi/hifi_coordinator.dart';
+import 'package:crotowave/services/hifi/hifi_profiles.dart';
+import 'package:crotowave/services/settings_controller.dart';
 
 const _list = [
   {'name': 'auto', 'description': 'Autoselect device'},

@@ -3,7 +3,7 @@ import 'dart:math';
 
 import 'package:crypto/crypto.dart' show md5;
 import 'package:flutter_test/flutter_test.dart';
-import 'package:navidrome_client/services/connect/connect_account.dart';
+import 'package:crotowave/services/connect/connect_account.dart';
 
 void main() {
   test('el token es el de Subsonic: md5(clave + salt) con salt nuevo', () {

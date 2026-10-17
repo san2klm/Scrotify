@@ -5,11 +5,11 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:navidrome_client/services/local_music_service.dart';
-import 'package:navidrome_client/services/navidrome_service.dart';
-import 'package:navidrome_client/services/offline_cache_service.dart';
-import 'package:navidrome_client/services/offline_download_manager.dart';
-import 'package:navidrome_client/services/local_audio_metadata.dart';
+import 'package:crotowave/services/local_music_service.dart';
+import 'package:crotowave/services/navidrome_service.dart';
+import 'package:crotowave/services/offline_cache_service.dart';
+import 'package:crotowave/services/offline_download_manager.dart';
+import 'package:crotowave/services/local_audio_metadata.dart';
 
 void main() {
   late Directory root;
@@ -189,7 +189,7 @@ void main() {
     expect(metadata?['duration'], closeTo(1, 0.01));
   },
       skip: !Platform.isLinux ||
-          Platform.environment['SCROTIFY_METADATA_INTEGRATION'] != '1');
+          Platform.environment['CROTOWAVE_METADATA_INTEGRATION'] != '1');
 
   test('Rechaza otra versión y recupera al volver a conectarse', () async {
     await oldFile('likes/antigua.mp3');

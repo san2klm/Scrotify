@@ -1,6 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:navidrome_client/services/diagnostics_log.dart';
+import 'package:crotowave/services/diagnostics_log.dart';
 
 void main() {
   group('DiagnosticsLog', () {
@@ -75,18 +75,18 @@ void main() {
   group('redactSecrets', () {
     test('oculta credenciales Subsonic en la query', () {
       final out = redactSecrets(
-          'GET https://nd.ejemplo.com/rest/ping?u=lau&t=abc123&s=salt9&v=1.16.1&c=scrotify');
+          'GET https://nd.ejemplo.com/rest/ping?u=lau&t=abc123&s=salt9&v=1.16.1&c=crotowave');
       expect(out, isNot(contains('abc123')));
       expect(out, isNot(contains('salt9')));
       expect(out, isNot(contains('u=lau')));
       expect(out, contains('v=1.16.1'));
-      expect(out, contains('c=scrotify'));
+      expect(out, contains('c=crotowave'));
     });
 
     test('oculta contraseña en claro, tokens y claves', () {
       for (final secret in [
         'http://x/rest/ping?p=enc:70617373',
-        'wss://jam/ws?token=SECRETO&room=AB12',
+        'wss://crotolink/ws?token=SECRETO&room=AB12',
         'https://x/api?apiKey=SECRETO',
         'https://x/api?password=SECRETO',
         'https://x/share?jwt=SECRETO',
@@ -96,7 +96,7 @@ void main() {
         expect(out, isNot(contains('SECRETO')), reason: secret);
         expect(out, isNot(contains('70617373')), reason: secret);
       }
-      expect(redactSecrets('wss://jam/ws?token=S&room=AB12'),
+      expect(redactSecrets('wss://crotolink/ws?token=S&room=AB12'),
           contains('room=AB12'));
     });
 
@@ -107,7 +107,7 @@ void main() {
     });
 
     test('oculta la clave de sincronización y cabeceras de autorización', () {
-      expect(redactSecrets('vinculado con scrotify-sync://AAAA-BBBB-CCCC'),
+      expect(redactSecrets('vinculado con crotowave-sync://AAAA-BBBB-CCCC'),
           isNot(contains('AAAA-BBBB-CCCC')));
       expect(redactSecrets('vinculado con crotowave-sync://AAAA-BBBB-CCCC'),
           isNot(contains('AAAA-BBBB-CCCC')));
@@ -125,7 +125,8 @@ void main() {
     });
 
     test('no toca texto normal', () {
-      const text = 'CrotoLink: reconectando en 4 s (intento 3), pista=42 status: 200';
+      const text =
+          'CrotoLink: reconectando en 4 s (intento 3), pista=42 status: 200';
       expect(redactSecrets(text), text);
     });
 

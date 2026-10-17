@@ -5,16 +5,16 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:provider/provider.dart';
 
-import 'package:navidrome_client/screens/home_screen.dart';
-import 'package:navidrome_client/screens/liked_songs_screen.dart';
-import 'package:navidrome_client/screens/mobile_home_screen.dart';
-import 'package:navidrome_client/services/home_navigation_controller.dart';
-import 'package:navidrome_client/services/connect/connect_service.dart';
-import 'package:navidrome_client/services/jam_controller.dart';
-import 'package:navidrome_client/services/navidrome_service.dart';
-import 'package:navidrome_client/services/player_controller.dart';
-import 'package:navidrome_client/services/settings_controller.dart';
-import 'package:navidrome_client/services/theme_controller.dart';
+import 'package:crotowave/screens/home_screen.dart';
+import 'package:crotowave/screens/liked_songs_screen.dart';
+import 'package:crotowave/screens/mobile_home_screen.dart';
+import 'package:crotowave/services/home_navigation_controller.dart';
+import 'package:crotowave/services/connect/connect_service.dart';
+import 'package:crotowave/services/crotolink_controller.dart';
+import 'package:crotowave/services/navidrome_service.dart';
+import 'package:crotowave/services/player_controller.dart';
+import 'package:crotowave/services/settings_controller.dart';
+import 'package:crotowave/services/theme_controller.dart';
 
 import 'support/app_fakes.dart';
 
@@ -22,7 +22,9 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   group('User Profile & Session Switching', () {
-    test('NavidromeService generates unique userScopes and currentSessionKeys per user', () {
+    test(
+        'NavidromeService generates unique userScopes and currentSessionKeys per user',
+        () {
       final nav = NavidromeService();
 
       nav.setConnectedForTesting(
@@ -84,7 +86,9 @@ void main() {
       expect(nav.isFollowingArtist('artist_alice'), isFalse);
     });
 
-    test('PlayerController clears playback queue and reloads history when user session changes', () {
+    test(
+        'PlayerController clears playback queue and reloads history when user session changes',
+        () {
       final nav = NavidromeService();
       final settings = SettingsController();
       final player = PlayerController(nav, settings);
@@ -117,7 +121,9 @@ void main() {
       expect(player.currentTrack, isNull);
     });
 
-    testWidgets('LikedSongsScreen watches NavidromeService and reloads on sessionKey change', (tester) async {
+    testWidgets(
+        'LikedSongsScreen watches NavidromeService and reloads on sessionKey change',
+        (tester) async {
       tester.view.physicalSize = const Size(1280, 800);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(() {
@@ -129,7 +135,8 @@ void main() {
       int requestCountBob = 0;
 
       final mockClient = MockClient((request) async {
-        if (request.url.path.contains('getStarred2.view') || request.url.path.contains('getStarred.view')) {
+        if (request.url.path.contains('getStarred2.view') ||
+            request.url.path.contains('getStarred.view')) {
           if (request.url.queryParameters['u'] == 'alice') {
             requestCountAlice++;
             return http.Response(
@@ -196,8 +203,10 @@ void main() {
             ChangeNotifierProvider<PlayerController>.value(value: player),
             ChangeNotifierProvider<ThemeController>.value(value: theme),
             ChangeNotifierProvider<SettingsController>.value(value: settings),
-            ChangeNotifierProvider<ConnectService>(create: (_) => idleConnectService()),
-            ChangeNotifierProvider<JamController>(create: (_) => IdleJam()),
+            ChangeNotifierProvider<ConnectService>(
+                create: (_) => idleConnectService()),
+            ChangeNotifierProvider<CrotoLinkController>(
+                create: (_) => IdleCrotoLink()),
           ],
           child: const MaterialApp(
             home: LikedSongsScreen(),
@@ -227,7 +236,9 @@ void main() {
       expect(requestCountBob, greaterThan(0));
     });
 
-    testWidgets('HomeScreen reloads playlists without restarting app when currentSessionKey changes', (tester) async {
+    testWidgets(
+        'HomeScreen reloads playlists without restarting app when currentSessionKey changes',
+        (tester) async {
       tester.view.physicalSize = const Size(1280, 800);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(() {
@@ -258,13 +269,21 @@ void main() {
           );
         }
         if (request.url.path.contains('getGenres.view')) {
-          return http.Response('{"subsonic-response":{"status":"ok","genres":{"genre":[]}}}', 200);
+          return http.Response(
+              '{"subsonic-response":{"status":"ok","genres":{"genre":[]}}}',
+              200);
         }
-        if (request.url.path.contains('getAlbumList2.view') || request.url.path.contains('getAlbumList.view')) {
-          return http.Response('{"subsonic-response":{"status":"ok","albumList2":{"album":[]}}}', 200);
+        if (request.url.path.contains('getAlbumList2.view') ||
+            request.url.path.contains('getAlbumList.view')) {
+          return http.Response(
+              '{"subsonic-response":{"status":"ok","albumList2":{"album":[]}}}',
+              200);
         }
-        if (request.url.path.contains('getRandomSongs.view') || request.url.path.contains('search3.view')) {
-          return http.Response('{"subsonic-response":{"status":"ok","searchResult3":{"song":[]}}}', 200);
+        if (request.url.path.contains('getRandomSongs.view') ||
+            request.url.path.contains('search3.view')) {
+          return http.Response(
+              '{"subsonic-response":{"status":"ok","searchResult3":{"song":[]}}}',
+              200);
         }
         return http.Response('{"subsonic-response":{"status":"ok"}}', 200);
       });
@@ -289,9 +308,12 @@ void main() {
             ChangeNotifierProvider<PlayerController>.value(value: player),
             ChangeNotifierProvider<ThemeController>.value(value: theme),
             ChangeNotifierProvider<SettingsController>.value(value: settings),
-            ChangeNotifierProvider<HomeNavigationController>.value(value: homeNav),
-            ChangeNotifierProvider<ConnectService>(create: (_) => idleConnectService()),
-            ChangeNotifierProvider<JamController>(create: (_) => IdleJam()),
+            ChangeNotifierProvider<HomeNavigationController>.value(
+                value: homeNav),
+            ChangeNotifierProvider<ConnectService>(
+                create: (_) => idleConnectService()),
+            ChangeNotifierProvider<CrotoLinkController>(
+                create: (_) => IdleCrotoLink()),
           ],
           child: const MaterialApp(
             home: HomeScreen(),
@@ -318,7 +340,9 @@ void main() {
       expect(find.text('Alice Hits'), findsNothing);
     });
 
-    testWidgets('MobileHomeScreen reloads playlists without restarting app when currentSessionKey changes', (tester) async {
+    testWidgets(
+        'MobileHomeScreen reloads playlists without restarting app when currentSessionKey changes',
+        (tester) async {
       tester.view.physicalSize = const Size(400, 800);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(() {
@@ -349,13 +373,21 @@ void main() {
           );
         }
         if (request.url.path.contains('getGenres.view')) {
-          return http.Response('{"subsonic-response":{"status":"ok","genres":{"genre":[]}}}', 200);
+          return http.Response(
+              '{"subsonic-response":{"status":"ok","genres":{"genre":[]}}}',
+              200);
         }
-        if (request.url.path.contains('getAlbumList2.view') || request.url.path.contains('getAlbumList.view')) {
-          return http.Response('{"subsonic-response":{"status":"ok","albumList2":{"album":[]}}}', 200);
+        if (request.url.path.contains('getAlbumList2.view') ||
+            request.url.path.contains('getAlbumList.view')) {
+          return http.Response(
+              '{"subsonic-response":{"status":"ok","albumList2":{"album":[]}}}',
+              200);
         }
-        if (request.url.path.contains('getRandomSongs.view') || request.url.path.contains('search3.view')) {
-          return http.Response('{"subsonic-response":{"status":"ok","searchResult3":{"song":[]}}}', 200);
+        if (request.url.path.contains('getRandomSongs.view') ||
+            request.url.path.contains('search3.view')) {
+          return http.Response(
+              '{"subsonic-response":{"status":"ok","searchResult3":{"song":[]}}}',
+              200);
         }
         return http.Response('{"subsonic-response":{"status":"ok"}}', 200);
       });
@@ -380,9 +412,12 @@ void main() {
             ChangeNotifierProvider<PlayerController>.value(value: player),
             ChangeNotifierProvider<ThemeController>.value(value: theme),
             ChangeNotifierProvider<SettingsController>.value(value: settings),
-            ChangeNotifierProvider<HomeNavigationController>.value(value: homeNav),
-            ChangeNotifierProvider<ConnectService>(create: (_) => idleConnectService()),
-            ChangeNotifierProvider<JamController>(create: (_) => IdleJam()),
+            ChangeNotifierProvider<HomeNavigationController>.value(
+                value: homeNav),
+            ChangeNotifierProvider<ConnectService>(
+                create: (_) => idleConnectService()),
+            ChangeNotifierProvider<CrotoLinkController>(
+                create: (_) => IdleCrotoLink()),
           ],
           child: const MaterialApp(
             home: MobileHomeScreen(),

@@ -1,7 +1,7 @@
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:local_auth/local_auth.dart';
-import 'package:navidrome_client/services/biometric_auth_service.dart';
+import 'package:crotowave/services/biometric_auth_service.dart';
 
 class FakeLocalAuthentication implements LocalAuthentication {
   bool isSupported = true;
@@ -48,21 +48,24 @@ void main() {
       service = BiometricAuthService(auth: fakeAuth);
     });
 
-    test('isBiometricsAvailable returns true when supported and capable', () async {
+    test('isBiometricsAvailable returns true when supported and capable',
+        () async {
       fakeAuth.isSupported = true;
       fakeAuth.canCheck = true;
       final available = await service.isBiometricsAvailable();
       expect(available, isTrue);
     });
 
-    test('isBiometricsAvailable returns false when device is not supported', () async {
+    test('isBiometricsAvailable returns false when device is not supported',
+        () async {
       fakeAuth.isSupported = false;
       fakeAuth.canCheck = true;
       final available = await service.isBiometricsAvailable();
       expect(available, isFalse);
     });
 
-    test('getAvailableBiometrics returns list of enrolled biometrics', () async {
+    test('getAvailableBiometrics returns list of enrolled biometrics',
+        () async {
       fakeAuth.biometrics = [BiometricType.fingerprint, BiometricType.face];
       final types = await service.getAvailableBiometrics();
       expect(types, contains(BiometricType.fingerprint));
@@ -83,7 +86,9 @@ void main() {
       expect(res.isSuccess, isFalse);
     });
 
-    test('authenticate returns notAvailable when biometrics unavailable on device', () async {
+    test(
+        'authenticate returns notAvailable when biometrics unavailable on device',
+        () async {
       fakeAuth.isSupported = false;
       final res = await service.authenticate();
       expect(res.status, BiometricAuthStatus.notAvailable);
@@ -118,7 +123,8 @@ void main() {
       expect(res.status, BiometricAuthStatus.cancelled);
     });
 
-    test('authenticate handles noBiometricsEnrolled LocalAuthException', () async {
+    test('authenticate handles noBiometricsEnrolled LocalAuthException',
+        () async {
       fakeAuth.exceptionToThrow = const LocalAuthException(
         code: LocalAuthExceptionCode.noBiometricsEnrolled,
         description: 'No enrolled biometrics',

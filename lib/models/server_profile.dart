@@ -28,7 +28,8 @@ class ServerProfile {
       url: url ?? this.url,
       username: username ?? this.username,
       password: password ?? this.password,
-      nickname: (nickname != null && nickname.isNotEmpty) ? nickname : this.nickname,
+      nickname:
+          (nickname != null && nickname.isNotEmpty) ? nickname : this.nickname,
     );
   }
 

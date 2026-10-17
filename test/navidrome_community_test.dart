@@ -1,8 +1,8 @@
 import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:navidrome_client/models/jam_models.dart';
-import 'package:navidrome_client/services/navidrome_service.dart';
+import 'package:crotowave/models/crotolink_models.dart';
+import 'package:crotowave/services/navidrome_service.dart';
 
 void main() {
   group('NowPlayingEntry Models', () {
@@ -68,8 +68,8 @@ void main() {
     test('parses CrotoLink announcement from chat message payload', () {
       final now = DateTime.now().millisecondsSinceEpoch;
       final payload = jsonEncode({
-        'tag': 'SCROTIFY_JAM',
-        'sessionId': 'jam_server_999',
+        'tag': 'CROTOLINK_LIVE',
+        'sessionId': 'crotolink_server_999',
         'pin': 'XY99ZZ',
         'host': '192.168.1.150',
         'port': 47623,
@@ -83,13 +83,13 @@ void main() {
         'timestamp': now,
       });
 
-      final fullMessage = '[JAM_LIVE]:$payload';
-      expect(fullMessage.startsWith('[JAM_LIVE]:'), isTrue);
+      final fullMessage = '[CROTOLINK_LIVE]:$payload';
+      expect(fullMessage.startsWith('[CROTOLINK_LIVE]:'), isTrue);
 
-      final jsonStr = fullMessage.substring('[JAM_LIVE]:'.length);
+      final jsonStr = fullMessage.substring('[CROTOLINK_LIVE]:'.length);
       final data = jsonDecode(jsonStr) as Map<String, dynamic>;
 
-      final disc = DiscoveredJamSession(
+      final disc = DiscoveredCrotoLinkSession(
         host: data['host'] as String,
         port: data['port'] as int,
         pin: data['pin'] as String,
@@ -99,14 +99,14 @@ void main() {
         currentTrackTitle: data['trackTitle'] as String?,
         currentTrackArtist: data['trackArtist'] as String?,
         albumArtUrl: data['albumArtUrl'] as String?,
-        mode: JamMode.partySpeaker,
+        mode: CrotoLinkMode.partySpeaker,
       );
 
       expect(disc.pin, 'XY99ZZ');
       expect(disc.hostName, 'David');
       expect(disc.currentTrackTitle, 'Bohemian Rhapsody');
       expect(disc.participantCount, 3);
-      expect(disc.mode, JamMode.partySpeaker);
+      expect(disc.mode, CrotoLinkMode.partySpeaker);
     });
   });
 }

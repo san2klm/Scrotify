@@ -135,7 +135,7 @@ class LocalMusicService extends ChangeNotifier {
     if (Platform.isAndroid && defaultRoot == null) {
       final previous = await getExternalStorageDirectory();
       if (previous != null &&
-          _root?.path == p.join(previous.path, 'Music', 'Scrotify')) {
+          _root?.path == p.join(previous.path, 'Music', 'CrotoWave')) {
         _roots.add(_root!.path);
         _root = null;
       }
@@ -541,8 +541,8 @@ class LocalMusicService extends ChangeNotifier {
     await AndroidMusicStorage.requireAccess();
     final next = Directory(normalizePathKeepCase(path));
     await next.create(recursive: true);
-    final probe = File(p.join(
-        next.path, '.scrotify-probe-${DateTime.now().microsecondsSinceEpoch}'));
+    final probe = File(p.join(next.path,
+        '.crotowave-probe-${DateTime.now().microsecondsSinceEpoch}'));
     await probe.writeAsString('');
     await probe.delete();
     _root = next;

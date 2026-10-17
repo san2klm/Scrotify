@@ -52,7 +52,7 @@ if (!keystoreProps.containsKey("storeFile")) {
 }
 
 android {
-    namespace = "com.example.navidrome_client"
+    namespace = "cloud.templo.crotowave"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -63,8 +63,8 @@ android {
 
     defaultConfig {
         // Definitivo: no cambiarlo nunca más (Android lo trata como otra app y
-        // Play no deja publicar con otro). Antes: com.example.navidrome_client
-        // (plantilla) y cloud.templo.scrotify (hasta el cambio de nombre).
+        // Play no deja publicar con otro). Antes: cloud.templo.crotowave
+        // (plantilla).
         applicationId = legacyAppId ?: "cloud.templo.crotowave"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.

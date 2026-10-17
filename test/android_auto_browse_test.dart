@@ -1,10 +1,10 @@
 import 'package:audio_service/audio_service.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:navidrome_client/services/navidrome_service.dart';
-import 'package:navidrome_client/services/player_controller.dart';
-import 'package:navidrome_client/services/scrotify_audio_handler.dart';
+import 'package:crotowave/services/navidrome_service.dart';
+import 'package:crotowave/services/player_controller.dart';
+import 'package:crotowave/services/crotowave_audio_handler.dart';
 
-import 'scrotify_audio_handler_test.dart' show FakePlayerController;
+import 'crotowave_audio_handler_test.dart' show FakePlayerController;
 
 Track t(String id) =>
     Track(id: id, title: 'T$id', artist: 'A', album: 'B', duration: '120');
@@ -34,11 +34,11 @@ class _BrowsePlayer extends FakePlayerController {
 }
 
 void main() {
-  late ScrotifyAudioHandler handler;
+  late CrotoWaveAudioHandler handler;
   late _BrowsePlayer player;
 
   setUp(() {
-    handler = ScrotifyAudioHandler()
+    handler = CrotoWaveAudioHandler()
       ..playlistsLoader = (() async => [
             Playlist(id: 'p1', name: 'Rock', songCount: 2, duration: 200),
           ])

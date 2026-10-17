@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:navidrome_client/services/navidrome_service.dart';
-import 'package:navidrome_client/services/player_controller.dart';
-import 'package:navidrome_client/services/settings_controller.dart';
-import 'package:navidrome_client/utils/player_select.dart';
+import 'package:crotowave/services/navidrome_service.dart';
+import 'package:crotowave/services/player_controller.dart';
+import 'package:crotowave/services/settings_controller.dart';
+import 'package:crotowave/utils/player_select.dart';
 import 'package:provider/provider.dart';
 
 import 'player_queue_test.dart' show SessionNavidrome;

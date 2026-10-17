@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:navidrome_client/services/mpris_service.dart';
-import 'package:navidrome_client/services/navidrome_service.dart';
+import 'package:crotowave/services/mpris_service.dart';
+import 'package:crotowave/services/navidrome_service.dart';
 
 void main() {
   test('el estado MPRIS refleja pista y reproducción', () {

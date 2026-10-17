@@ -8,9 +8,7 @@
 #
 # Instalación vieja: por defecto com.example.navidrome_client (clave debug).
 # Otra: FROM_APP=<id> y, si no se firmó con la clave debug, FROM_KEY=<su
-# key.properties>. Ej., la de antes del cambio de nombre:
-#   FROM_APP=cloud.templo.scrotify \
-#   FROM_KEY=~/.config/crotowave-signing/legacy/key.properties tool/migrate_android_signing.sh …
+# key.properties>.
 #
 # backup:  instala ENCIMA de la vieja el mismo APK pero depurable y en modo
 #          migración (misma firma: conserva los datos), le pide exportar el
@@ -67,14 +65,14 @@ build_apk() {
   local extra=() apks=build/app/outputs/flutter-apk build=release
   # `run-as` solo entra en apps depurables: los de migración son builds debug.
   # El que queda instalado al final es el release normal.
-  [[ $mode == migration ]] && { extra+=(--dart-define=SCROTIFY_SIGNING_MIGRATION=true); build=debug; }
+  [[ $mode == migration ]] && { extra+=(--dart-define=CROTOWAVE_SIGNING_MIGRATION=true); build=debug; }
   [[ $FLAVOR == tv ]] && extra+=(--dart-define=FORCE_TV=true)
   rm -f "$apks/app-$abi-$FLAVOR-"*.apk   # que no se copie uno viejo
   env "$@" flutter build apk "--$build" --flavor "$FLAVOR" --split-per-abi \
     --target-platform "$platform" --build-number "$build_number" \
-    --dart-define=SCROTIFY_VERSION="$ver" \
-    --dart-define=SCROTIFY_COMMIT="$commit" \
-    --dart-define=SCROTIFY_BUILD_DATE="$(date +%F)" \
+    --dart-define=CROTOWAVE_VERSION="$ver" \
+    --dart-define=CROTOWAVE_COMMIT="$commit" \
+    --dart-define=CROTOWAVE_BUILD_DATE="$(date +%F)" \
     "${extra[@]}"
   cp "$apks/app-$abi-$FLAVOR-$build.apk" "$out"
   # Debe llevar el motor de Flutter de la arquitectura del dispositivo.

@@ -3,9 +3,9 @@ import 'dart:io';
 
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:navidrome_client/services/navidrome_service.dart';
-import 'package:navidrome_client/services/playlist_export_service.dart';
-import 'package:navidrome_client/services/settings_controller.dart';
+import 'package:crotowave/services/navidrome_service.dart';
+import 'package:crotowave/services/playlist_export_service.dart';
+import 'package:crotowave/services/settings_controller.dart';
 import 'package:path/path.dart' as p;
 
 /// Servidor falso: escribe unos bytes en vez de descargar.

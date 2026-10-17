@@ -1,10 +1,10 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:navidrome_client/models/eq_models.dart';
-import 'package:navidrome_client/services/eq/eq_backends.dart';
-import 'package:navidrome_client/services/eq/eq_import_export.dart';
-import 'package:navidrome_client/services/eq/eq_math.dart';
-import 'package:navidrome_client/services/eq/eq_presets.dart';
-import 'package:navidrome_client/services/hifi/hifi_profiles.dart';
+import 'package:crotowave/models/eq_models.dart';
+import 'package:crotowave/services/eq/eq_backends.dart';
+import 'package:crotowave/services/eq/eq_import_export.dart';
+import 'package:crotowave/services/eq/eq_math.dart';
+import 'package:crotowave/services/eq/eq_presets.dart';
+import 'package:crotowave/services/hifi/hifi_profiles.dart';
 
 void main() {
   group('Biquads (RBJ)', () {

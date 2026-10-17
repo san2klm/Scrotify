@@ -1,4 +1,4 @@
-# TODO — Mejoras UI/UX Scrotify
+# TODO — Mejoras UI/UX CrotoWave
 
 ## Fase 1 — Visuales puros
 
@@ -26,9 +26,9 @@
 
 - [x] **5.1** `playlist_detail_screen.dart` + `track_context_menu.dart` — Al añadir/eliminar canciones de playlist, refresco inmediato sin salir y volver; `bumpPlaylists()` propaga cambios al Consumer
 
-## Fase 6 — Correcciones pendientes (Jam, Artistas y Pantalla de Inicio)
+## Fase 6 — Correcciones pendientes (CrotoLink, Artistas y Pantalla de Inicio)
 
-- [x] **6.1** `Jam` — Revisar y arreglar detalles pendientes de la funcionalidad Jam (sincronización, UI o conexión). Verificado WSS seguro con TLS pinning sin downgrade, PRNG criptográfico en PINs, reconexión exponencial y tests verdes en jam-server.
+- [x] **6.1** `CrotoLink` — Revisar y arreglar detalles pendientes de la funcionalidad CrotoLink (sincronización, UI o conexión). Verificado WSS seguro con TLS pinning sin downgrade, PRNG criptográfico en PINs, reconexión exponencial y tests verdes en crotolink-server.
 - [x] **6.2** `Artistas (Seguir)` — Arreglar defectos visuales en la interfaz relacionados con la funcionalidad de seguir a los artistas: botones responsivos con LayoutBuilder en ArtistScreen sin overflow en pantallas estrechas, caché en memoria de Artist en NavidromeService para evitar flashes de IDs crudos y llamadas duplicadas, y soporte de artistas seguidos en la biblioteca de la app móvil.
 - [x] **6.3** `Pantalla de Inicio` — Añadir cosas que faltan y pulir defectos visuales en la home (HomeScreen): manejo elegante de estados sin conexión en novedades/recientes tanto en escritorio como en móvil, y ordenamiento de playlists fijadas en la biblioteca móvil.
 
@@ -57,10 +57,10 @@
 - [x] **10.2** `listening_stats_service.dart` + `stats_screen.dart` — Sistema de estadísticas locales "Spotify Wrapped" con tiempo total de reproducción, desglose temporal (diario, semanal, mensual), top artistas, top pistas y top géneros, filtrando reproducciones calificadas (>= 30s o >= 50% de duración).
 - [x] **10.3** `equalizer_service_test.dart` + `listening_stats_service_test.dart` — 9 tests unitarios validando rangos de ganancia, persistencia, presets y agregación estadística.
 
-## Jam 2.0 — Mejoras de Cola y Detección de Duplicados
+## CrotoLink 2.0 — Mejoras de Cola y Detección de Duplicados
 
-- [x] **Jam.1** `jam_controller.dart` + `track_context_menu.dart` — Detección reactiva de canciones ya presentes en la cola de Jam (`isTrackInJamQueue`), advirtiendo al usuario en el menú contextual.
-- [x] **Jam.2** `jam_queue_panel.dart` — Insignia visual `Repetida` en las filas de la cola tanto de Jam como de la reproducción local para pistas duplicadas.
+- [x] **CrotoLink.1** `crotolink_controller.dart` + `track_context_menu.dart` — Detección reactiva de canciones ya presentes en la cola de CrotoLink (`isTrackInCrotoLinkQueue`), advirtiendo al usuario en el menú contextual.
+- [x] **CrotoLink.2** `crotolink_queue_panel.dart` — Insignia visual `Repetida` en las filas de la cola tanto de CrotoLink como de la reproducción local para pistas duplicadas.
 
 ## Fase 11 — Perfiles de Servidor y Cambio de Usuario en Caliente
 
@@ -69,15 +69,15 @@
 - [x] **11.3** `home_screen.dart` + `mobile_home_screen.dart` + `liked_songs_screen.dart` — Recarga reactiva en caliente de todos los `Future` (playlists, canciones, favoritos, géneros, novedades) al detectar cambio en `currentSessionKey` sin requerir cerrar ni reiniciar la aplicación.
 - [x] **11.4** `test/user_profile_switching_test.dart` — Suite completa de 6 tests unitarios y de widgets verificando el aislamiento de credenciales, scopes, limpieza de colas y recarga visual inmediata al cambiar de usuario.
 
-## Jam 3.0 — Auditoría Integral, Sincronización Remota y Resiliencia
+## CrotoLink 3.0 — Auditoría Integral, Sincronización Remota y Resiliencia
 
-- [x] **Jam.3** `jam_controller.dart` — Corrección de indexación de cola compartida (`_playerOrderIndexForQueueItem` y `_reorderQueueAsHost`): soporte para pistas no idénticas por referencia de memoria mediante comparación por `track.id`, y cálculo seguro de offset cuando el reproductor no tiene pista activa (`currentOrderPos < 0`).
-- [x] **Jam.4** `jam_controller.dart` — Corrección de permisos de invitados remotos: validación estricta con operador lógico `&&` (`allowGuestControls && canControlPlayback` y `allowGuestQueueManage && canManageQueue`), impidiendo que invitados omitan las restricciones fijadas por el anfitrión.
-- [x] **Jam.5** `jam-server/src/server.js` + `remote_jam_service.dart` — Normalización de duración (numérica y string) y soporte de actualizaciones de estado parciales (merge con `room.state`) en el servidor central. Propagación de errores reales (`lastError`) en lugar de fallos genéricos.
-- [x] **Jam.6** `jam_controller.dart` — Sincronización completa de la cola de reproducción para invitados remotos (`JamQueueItem.toJson` / `fromJson` con trazabilidad de quién agregó la pista y portada) y actualización en caliente de permisos de participantes remotos.
-- [x] **Jam.7** `jam_queue_panel.dart` — Corrección del contrato de arrastre en `ReorderableListView.builder` con ajuste de `newIndex` (`newIndex > oldIndex ? newIndex - 1 : newIndex`) para reordenar pistas hacia abajo y al final de la cola sin errores.
-- [x] **Jam.8** `jam_dialog.dart` — Exposición de mensajes de error descriptivos (`lastJoinError`) al usuario al unirse por PIN, radar o QR.
-- [x] **Jam.9** `test/jam_test.dart` + `jam-server/test/server.test.js` — Tests adicionales para deserialización remota de cola, permisos estrictos y actualizaciones de estado.
+- [x] **CrotoLink.3** `crotolink_controller.dart` — Corrección de indexación de cola compartida (`_playerOrderIndexForQueueItem` y `_reorderQueueAsHost`): soporte para pistas no idénticas por referencia de memoria mediante comparación por `track.id`, y cálculo seguro de offset cuando el reproductor no tiene pista activa (`currentOrderPos < 0`).
+- [x] **CrotoLink.4** `crotolink_controller.dart` — Corrección de permisos de invitados remotos: validación estricta con operador lógico `&&` (`allowGuestControls && canControlPlayback` y `allowGuestQueueManage && canManageQueue`), impidiendo que invitados omitan las restricciones fijadas por el anfitrión.
+- [x] **CrotoLink.5** `crotolink-server/src/server.js` + `remote_crotolink_service.dart` — Normalización de duración (numérica y string) y soporte de actualizaciones de estado parciales (merge con `room.state`) en el servidor central. Propagación de errores reales (`lastError`) en lugar de fallos genéricos.
+- [x] **CrotoLink.6** `crotolink_controller.dart` — Sincronización completa de la cola de reproducción para invitados remotos (`CrotoLinkQueueItem.toJson` / `fromJson` con trazabilidad de quién agregó la pista y portada) y actualización en caliente de permisos de participantes remotos.
+- [x] **CrotoLink.7** `crotolink_queue_panel.dart` — Corrección del contrato de arrastre en `ReorderableListView.builder` con ajuste de `newIndex` (`newIndex > oldIndex ? newIndex - 1 : newIndex`) para reordenar pistas hacia abajo y al final de la cola sin errores.
+- [x] **CrotoLink.8** `crotolink_dialog.dart` — Exposición de mensajes de error descriptivos (`lastJoinError`) al usuario al unirse por PIN, radar o QR.
+- [x] **CrotoLink.9** `test/crotolink_test.dart` + `crotolink-server/test/server.test.js` — Tests adicionales para deserialización remota de cola, permisos estrictos y actualizaciones de estado.
 
 ## Fase 12 — Autenticación Biométrica Móvil y Temporizador de Apagado Avanzado
 
@@ -87,20 +87,20 @@
 - [x] **12.4** `lib/services/player_controller.dart` + `lib/widgets/track_context_menu.dart` — Temporizador de apagado completo (Fase 5 de especificación): nueva opción "Fin de la canción" (`isSleepTimerEndOfTrack`, pausando automáticamente al finalizar la canción actual sin avanzar ni hacer crossfade), presets estándar y diálogo de minutos personalizados con fade out suave al vencer.
 - [x] **12.5** `test/biometric_auth_test.dart` + `test/mobile_login_screen_test.dart` + `test/sleep_timer_test.dart` — Suites de pruebas unitarias y de widgets con cobertura total para biometría, interfaz móvil y temporizador de apagado.
 
-## Jam 4.0 — Expulsión de Participantes (Kick) y Preferencia de Modo Sincronizado
+## CrotoLink 4.0 — Expulsión de Participantes (Kick) y Preferencia de Modo Sincronizado
 
-- [x] **Jam.10** `jam_controller.dart` + `remote_jam_service.dart` + `jam_host_service.dart` — Corrección de expulsión de participantes (kick): `kickParticipant()` ahora remueve al usuario de `_remoteParticipants`, registra su nombre en `_kickedRemoteNames` para prevenir que `_syncHostState()` lo reinstaure, envía acción `'kick_guest'` por WebSocket, y en el servicio local LAN rechaza reconexiones de nombres expulsados.
-- [x] **Jam.11** `jam-server/src/server.js` + `test/server.test.js` — Implementación en el servidor WebSocket de la acción `'kick_guest'`, notificando al invitado expulsado con evento `'kicked'` y cerrando su socket inmediatamente; test unitario `host can kick a guest from the room` pasando en Node.js.
-- [x] **Jam.12** `jam_dialog.dart` + `jam_host_service.dart` + `jam_controller.dart` — Inversión del orden de modos para priorizar "Escucha sincronizada" / "Sincronizado" como la primera opción en dropdowns y modo por defecto en lugar de "Altavoz".
-- [x] **Jam.13** `server_profiles_controller.dart` + `login_screen.dart` — Detección reactiva de perfiles persistidos (`ensureLoaded()`) para auto-login fluido en la app móvil y de escritorio sin requerir reingreso manual de credenciales en cada arranque.
-- [x] **Jam.14** Verificación E2E en emulador Android (`mobile-mcp`) — Validación en vivo de inicio de sesión automático, reproducción de audio, apertura del diálogo Jam, selección por defecto de "Escucha sincronizada", unión de invitado y expulsión en tiempo real con remoción inmediata de la lista de participantes.
+- [x] **CrotoLink.10** `crotolink_controller.dart` + `remote_crotolink_service.dart` + `crotolink_host_service.dart` — Corrección de expulsión de participantes (kick): `kickParticipant()` ahora remueve al usuario de `_remoteParticipants`, registra su nombre en `_kickedRemoteNames` para prevenir que `_syncHostState()` lo reinstaure, envía acción `'kick_guest'` por WebSocket, y en el servicio local LAN rechaza reconexiones de nombres expulsados.
+- [x] **CrotoLink.11** `crotolink-server/src/server.js` + `test/server.test.js` — Implementación en el servidor WebSocket de la acción `'kick_guest'`, notificando al invitado expulsado con evento `'kicked'` y cerrando su socket inmediatamente; test unitario `host can kick a guest from the room` pasando en Node.js.
+- [x] **CrotoLink.12** `crotolink_dialog.dart` + `crotolink_host_service.dart` + `crotolink_controller.dart` — Inversión del orden de modos para priorizar "Escucha sincronizada" / "Sincronizado" como la primera opción en dropdowns y modo por defecto en lugar de "Altavoz".
+- [x] **CrotoLink.13** `server_profiles_controller.dart` + `login_screen.dart` — Detección reactiva de perfiles persistidos (`ensureLoaded()`) para auto-login fluido en la app móvil y de escritorio sin requerir reingreso manual de credenciales en cada arranque.
+- [x] **CrotoLink.14** Verificación E2E en emulador Android (`mobile-mcp`) — Validación en vivo de inicio de sesión automático, reproducción de audio, apertura del diálogo CrotoLink, selección por defecto de "Escucha sincronizada", unión de invitado y expulsión en tiempo real con remoción inmediata de la lista de participantes.
 
 
 
 ## Auditoría 2026-10-04 — Correcciones de seguridad y robustez
 
-- [x] **Aud.1** `jam_models.dart` + `jam_controller.dart` + `jam_host_service.dart` + `jam-server/src/server.js` — Las URLs de carátula ya no viajan con `u/s/t` (token Subsonic reutilizable): `sanitizeArtUrl` en cliente y saneado de defensa en el servidor (estado y cola).
-- [x] **Aud.2** `jam-server/src/server.js` — `/rooms` solo lista salas con `isPublic: true`; `host` público configurable (`PUBLIC_HOST`); allowlist y validación de `guest_action`; nombres duplicados rechazados; límite de intentos fallidos de PIN; ping/pong para limpiar sockets muertos; `check_room` sin cola; log de cierre corregido. 9 tests Node.
+- [x] **Aud.1** `crotolink_models.dart` + `crotolink_controller.dart` + `crotolink_host_service.dart` + `crotolink-server/src/server.js` — Las URLs de carátula ya no viajan con `u/s/t` (token Subsonic reutilizable): `sanitizeArtUrl` en cliente y saneado de defensa en el servidor (estado y cola).
+- [x] **Aud.2** `crotolink-server/src/server.js` — `/rooms` solo lista salas con `isPublic: true`; `host` público configurable (`PUBLIC_HOST`); allowlist y validación de `guest_action`; nombres duplicados rechazados; límite de intentos fallidos de PIN; ping/pong para limpiar sockets muertos; `check_room` sin cola; log de cierre corregido. 9 tests Node.
 - [x] **Aud.3** `pairing_server.dart` — `/pair/status` ya no devuelve el código; 5 códigos erróneos invalidan la sesión (HTTP y relay); body de claim limitado a 4 KB; el código no se escribe en logs.
 - [x] **Aud.4** `secure_storage.dart` — El archivo de respaldo se crea con `chmod 600` antes de escribir secretos.
 - [x] **Aud.5** `navidrome_service.dart` — Salt/token de carátula estables por sesión (caché de imágenes efectiva); se eliminan logs de cuerpos de respuesta y del usuario.
@@ -124,12 +124,12 @@
 - [x] **UI.1** `waveform_progress_bar.dart` — Espectro optimizado: barras rasterizadas una vez en `Picture` cacheadas y recortadas por progreso (2 draw calls/frame), progreso interpolado con `Ticker` (sin reconstruir el árbol), hover/arrastre/revelado/pulso solo repintan el `CustomPaint`. Animación de revelado y pulso del cabezal (respeta "reducir animaciones"), tiempo en hover (PC), arrastre solo horizontal (móvil), teclado ←/→, semántica de slider, alto adaptable y barras más gruesas en anchos grandes. Integrado en `player_screen.dart` y en la barra persistente de escritorio.
 - [x] **UI.2** `utils/responsive.dart` + `home_shell.dart` — Breakpoints, histéresis al cruzar móvil↔escritorio (evita parpadeo y pérdida de estado al redimensionar).
 - [x] **UI.3** `home_screen.dart` — Biblioteca auto-colapsable (<900 px, se abre como cajón), ancho proporcional, contenido centrado y limitado en monitores enormes.
-- [x] **UI.4** `persistent_player_bar.dart` — Barra de escritorio adaptativa por tramos (antes desbordaba entre 700 y ~1000 px): oculta volumen/Jam/pantalla completa progresivamente, bloque de título acotado, progreso flexible.
+- [x] **UI.4** `persistent_player_bar.dart` — Barra de escritorio adaptativa por tramos (antes desbordaba entre 700 y ~1000 px): oculta volumen/CrotoLink/pantalla completa progresivamente, bloque de título acotado, progreso flexible.
 - [x] **UI.5** `mobile_home_screen.dart` — Etiqueta de la barra inferior sin salto de línea (overflow a 320 px).
 - [x] **W.1** `now_playing_panel.dart` — Panel lateral "Escuchando ahora" (≥1240 px): carátula, controles, cola y letra.
-- [x] **W.2** `quick_actions_row.dart` — Acciones rápidas en el inicio del teléfono (Mezclar, Me gusta, Jam, Estadísticas).
+- [x] **W.2** `quick_actions_row.dart` — Acciones rápidas en el inicio del teléfono (Mezclar, Me gusta, CrotoLink, Estadísticas).
 - [x] **W.3** `mini_player_controller.dart` + `mini_player_view.dart` + `desktop_window_frame.dart` — Modo mini reproductor en PC (ventana pequeña siempre visible, con espectro); la UI normal conserva su estado.
-- [x] **W.4** Android App Widget (`ScrotifyWidgetProvider.kt`, layout/xml/drawables, `home_widget_service.dart`) — carátula, título, artista y prev/play/siguiente en la pantalla de inicio. Verificado en emulador: aparece en el selector y se dibuja al añadirlo.
+- [x] **W.4** Android App Widget (`CrotoWaveWidgetProvider.kt`, layout/xml/drawables, `home_widget_service.dart`) — carátula, título, artista y prev/play/siguiente en la pantalla de inicio. Verificado en emulador: aparece en el selector y se dibuja al añadirlo.
 - Verificación: `flutter analyze` 0 issues; tests de espectro, responsive (anchos 320–2560) y widget.
 
 ## Ventana de escritorio: redimensionar, maximizar y pantalla completa (2026-10-04)
@@ -141,58 +141,58 @@
 - Verificación: analyze 0 issues, 309 tests, `flutter build linux --debug` OK. No se probó el arrastre en una ventana real (sesión Wayland sin herramienta para simular ratón).
 - [x] **Win.5** Aclaración de diseño: la flecha ↑ de la barra inferior abre la **ventana completa** (reproductor con portada y letra dentro de la ventana, sin tocar el escritorio); dentro del reproductor, el botón de **pantalla completa** (o F11) ocupa toda la pantalla y Esc sale; al cerrar el reproductor se restaura si fue él quien la activó. La barra de título vuelve al icono clásico de maximizar/restaurar.
 
-## Pendiente — Jam: el invitado no encuentra al host (2026-10-04, prioridad alta)
+## Pendiente — CrotoLink: el invitado no encuentra al host (2026-10-04, prioridad alta)
 
-- [ ] **Jam.P1** Confirmar la causa real: escenario (lista/PIN/QR, LAN o remoto) y mensaje exacto en el teléfono.
-- [ ] **Jam.P2** Revisar descubrimiento UDP 47623 con PC en Wi-Fi + cable (misma subred), firewall y aislamiento del AP; probar por QR.
-- [x] `jam-server` revertido a `ae8dde3` (pedido del usuario); el cliente conserva `sanitizeArtUrl`.
+- [ ] **CrotoLink.P1** Confirmar la causa real: escenario (lista/PIN/QR, LAN o remoto) y mensaje exacto en el teléfono.
+- [ ] **CrotoLink.P2** Revisar descubrimiento UDP 47623 con PC en Wi-Fi + cable (misma subred), firewall y aislamiento del AP; probar por QR.
+- [x] `crotolink-server` revertido a `ae8dde3` (pedido del usuario); el cliente conserva `sanitizeArtUrl`.
 - Referencia: versión anterior `ae8dde3` (descubrimiento LAN idéntico; solo difiere el servidor remoto).
 
-- Nota: el commit `fc94ddc` (ya en el remoto) aún contiene el servidor Jam nuevo; el revert está sin commit.
+- Nota: el commit `fc94ddc` (ya en el remoto) aún contiene el servidor CrotoLink nuevo; el revert está sin commit.
 
-- [x] **Jam.P3** (2026-10-04) Causa confirmada contra `jam.templo.cloud`: el servidor cierra el socket del anfitrión (1009) cuando un mensaje supera `MAX_MESSAGE_BYTES` (16 KB), o sea con colas de más de ~35 canciones; la sala remota desaparece y el invitado no la encuentra. Arreglo en el cliente: `RemoteJamService.fitStateToMessageLimit` recorta la cola al prefijo que cabe, y el anfitrión vuelve a registrar la sala con retroceso exponencial si pierde la conexión. Verificación: analyze 0 issues, 310 tests. Falta probar en dispositivos reales (hay que reinstalar la app en el anfitrión). Con colas largas el invitado remoto ve sólo las primeras ~34 canciones siguientes.
+- [x] **CrotoLink.P3** (2026-10-04) Causa confirmada contra `jam.templo.cloud`: el servidor cierra el socket del anfitrión (1009) cuando un mensaje supera `MAX_MESSAGE_BYTES` (16 KB), o sea con colas de más de ~35 canciones; la sala remota desaparece y el invitado no la encuentra. Arreglo en el cliente: `RemoteCrotoLinkService.fitStateToMessageLimit` recorta la cola al prefijo que cabe, y el anfitrión vuelve a registrar la sala con retroceso exponencial si pierde la conexión. Verificación: analyze 0 issues, 310 tests. Falta probar en dispositivos reales (hay que reinstalar la app en el anfitrión). Con colas largas el invitado remoto ve sólo las primeras ~34 canciones siguientes.
 
-## Jam Roadmap — Fase 1 (2026-10-06): ajuste "Servidor Jam" + servidor administrable
+## CrotoLink Roadmap — Fase 1 (2026-10-06): ajuste "Servidor CrotoLink" + servidor administrable
 
 - [x] **R1.1** Servidor: ajustes en SQLite (`node:sqlite`, sin dependencia nativa; desvío respecto a `better-sqlite3` del roadmap), panel `/admin` (login scrypt, cookie HttpOnly/SameSite=Strict, CSRF, rate limit de login por IP, pestañas Estado/Límites/Seguridad/Funciones/Persistentes*/Logs), `GET /api/capabilities`, límites en caliente (`maxRooms`, `maxQueueItems`, `publicListingEnabled`…), `/rooms` ya no hardcodea `jam.templo.cloud`. Dockerfile con volumen `/data` + HEALTHCHECK. 13 tests node verdes. (*pestaña de salas persistentes: placeholder hasta la Fase 7.)
-- [x] **R1.2** Cliente: `jamServerUrl` en `SettingsController` (validación `JamServerEndpoint`: `wss://`, `ws://` solo host privado con aviso), `RemoteJamService`/radar/`JamController` usan el ajuste, UI en Ajustes (guardar, probar `/health`, restaurar). `flutter analyze` 0 issues; tests jam verdes.
+- [x] **R1.2** Cliente: `crotoLinkServerUrl` en `SettingsController` (validación `CrotoLinkServerEndpoint`: `wss://`, `ws://` solo host privado con aviso), `RemoteCrotoLinkService`/radar/`CrotoLinkController` usan el ajuste, UI en Ajustes (guardar, probar `/health`, restaurar). `flutter analyze` 0 issues; tests jam verdes.
 - [ ] **R1.3** Pendiente: el cliente aún no lee `/api/capabilities` (se consumirá en las fases que habiliten funciones); no hay despliegue en el servidor real (faltan datos de la sección 1 del roadmap).
 
-## Jam Roadmap — Fase 2 (2026-10-06): modos de cola
-- [x] Modelos + `jam_queue_logic.dart` (11 tests), controlador host (aprobación, votos, fijado, modo en vivo), protocolo LAN/remoto, servidor relay (campos nuevos), UI (selector al crear, menú en vivo, ▲/▼, pin, bandeja de solicitudes). analyze 0, tests verdes.
+## CrotoLink Roadmap — Fase 2 (2026-10-06): modos de cola
+- [x] Modelos + `crotolink_queue_logic.dart` (11 tests), controlador host (aprobación, votos, fijado, modo en vivo), protocolo LAN/remoto, servidor relay (campos nuevos), UI (selector al crear, menú en vivo, ▲/▼, pin, bandeja de solicitudes). analyze 0, tests verdes.
 
-## Jam Roadmap — Fase 3 (2026-10-06): historial + guardar como playlist
-- [x] `jam_history.dart` (umbral 30 s / 50 %, resumen, filtro por participante; 5 tests), registro en el host, diálogo con "Guardar como playlist" (`createPlaylist` + `updatePlaylist`). Historial en RAM del host; se conserva tras finalizar hasta la siguiente Jam.
+## CrotoLink Roadmap — Fase 3 (2026-10-06): historial + guardar como playlist
+- [x] `crotolink_history.dart` (umbral 30 s / 50 %, resumen, filtro por participante; 5 tests), registro en el host, diálogo con "Guardar como playlist" (`createPlaylist` + `updatePlaylist`). Historial en RAM del host; se conserva tras finalizar hasta la siguiente CrotoLink.
 - [ ] No hecho: `history_snapshot` para invitados y "guardar mis aportaciones" del invitado (el historial solo vive en el host).
 
-## Jam Roadmap — Fase 4 (2026-10-06): seguridad
+## CrotoLink Roadmap — Fase 4 (2026-10-06): seguridad
 - [x] Servidor: rate limit por IP (ventana + bloqueo progresivo 1 min→1 h) en `join_room`/`check_room`, IPs bloqueadas por admin (SQLite + panel), respuesta genérica PIN/contraseña, contraseña de sala (scrypt+sal en RAM; `check_room` no revela estado sin ella), baneo por nombre tras kick. 19 tests node.
-- [x] Cliente: contraseña de sala (crear/unirse, LAN y nube), `JamFailureBlocker` en el host LAN, reconexión rechazada para IDs expulsados.
+- [x] Cliente: contraseña de sala (crear/unirse, LAN y nube), `CrotoLinkFailureBlocker` en el host LAN, reconexión rechazada para IDs expulsados.
 - Desvío: el relay recibe la contraseña en claro por TLS y guarda solo su hash (el roadmap decía que el host enviaba el hash; así no hay que compartir sal con los invitados).
 - Límite documentado: el ban por nombre/ID es evadible; el ban por IP es solo del admin.
 
-## Jam Roadmap — Fase 5 (2026-10-06): sincronización avanzada
-- [x] 5.1 `jam_clock.dart` (`ClockOffsetEstimator`: mediana de las muestras de menor RTT; 9 tests). `time_ping`/`time_pong` en relay y host LAN; 5 muestras al unirse y re-medición cada 60 s. El host de nube sella `refTs` (hora del relay); el invitado convierte con su offset. Sin pong → cálculo anterior (clamp 0–5 s).
-- [x] 5.2 Corrección suave: ≤50 ms nada, 50–450 ms `setPlaybackSpeed(1±0.02)` con histéresis, >450 ms seek (`kJamDrift*`). `PlayerController.setPlaybackSpeed` (A/B).
+## CrotoLink Roadmap — Fase 5 (2026-10-06): sincronización avanzada
+- [x] 5.1 `crotolink_clock.dart` (`ClockOffsetEstimator`: mediana de las muestras de menor RTT; 9 tests). `time_ping`/`time_pong` en relay y host LAN; 5 muestras al unirse y re-medición cada 60 s. El host de nube sella `refTs` (hora del relay); el invitado convierte con su offset. Sin pong → cálculo anterior (clamp 0–5 s).
+- [x] 5.2 Corrección suave: ≤50 ms nada, 50–450 ms `setPlaybackSpeed(1±0.02)` con histéresis, >450 ms seek (`kCrotoLinkDrift*`). `PlayerController.setPlaybackSpeed` (A/B).
 - [x] 5.3 `next_track_hint` (LAN op / remoto `nextHint`) ~10 s antes del final: el invitado precarga la pista siguiente tras la actual (el motor A/B la prepara). `startAtServerMs` se envía pero el arranque lo marca el fin natural de la pista (+ corrección de deriva), no un temporizador.
 - [ ] Pendiente de prueba manual: 2 dispositivos, deriva media <100 ms en 10 min.
 
-## Jam Roadmap — Fase 6 (2026-10-06): matching de pistas por metadatos
-- [x] `Track` canónico ampliado (`mbid`, `isrc`, `trackNumber`; opcionales), `NavidromeService.getSong`, protocolo (`trackToJamJson`/`trackFromJamJson`, +`durationSec`), whitelist del relay.
-- [x] `jam_track_matcher.dart` (normalización, MBID > ISRC > título+artista+duración ±3 s; live/remix no equivalen al estudio; sin falsos positivos por homónimos; 10 tests) y `JamTrackResolver` (caché incl. negativos, fast path por ID verificado, errores de red no cacheados, lotes que ceden el hilo; 7 tests).
+## CrotoLink Roadmap — Fase 6 (2026-10-06): matching de pistas por metadatos
+- [x] `Track` canónico ampliado (`mbid`, `isrc`, `trackNumber`; opcionales), `NavidromeService.getSong`, protocolo (`trackToCrotoLinkJson`/`trackFromCrotoLinkJson`, +`durationSec`), whitelist del relay.
+- [x] `crotolink_track_matcher.dart` (normalización, MBID > ISRC > título+artista+duración ±3 s; live/remix no equivalen al estudio; sin falsos positivos por homónimos; 10 tests) y `CrotoLinkTrackResolver` (caché incl. negativos, fast path por ID verificado, errores de red no cacheados, lotes que ceden el hilo; 7 tests).
 - [x] Invitado en modo sincronizado reproduce la pista local equivalente; si no existe, la omite con aviso y la cola la muestra atenuada ("No disponible en tu biblioteca"). Error de red del resolver → comportamiento anterior.
 - Nota: la precarga `next_track_hint` también resuelve la pista local antes de encolarla.
 
-## Jam Roadmap — Fase 7 (2026-10-06): continuidad
-- [x] 7.1 Relay: `hostToken` (128 bits, solo hash en memoria), `transfer_host`/`host_changed`, `resume_host`, failover automático al invitado más antiguo tras `hostFailoverMs` (opt-in del host con `failover`, configurable en `/admin`), `guestId` en `guest_joined`. Cliente: `RemoteJamService` unifica eventos (el rol cambia sin reabrir el socket), `JamController` asume/cede anfitrión (`_becomeRemoteHost`/`_demoteToRemoteGuest`), reanuda con `resume_host` antes de recrear. UI: "Transferir anfitrión", switch de failover.
+## CrotoLink Roadmap — Fase 7 (2026-10-06): continuidad
+- [x] 7.1 Relay: `hostToken` (128 bits, solo hash en memoria), `transfer_host`/`host_changed`, `resume_host`, failover automático al invitado más antiguo tras `hostFailoverMs` (opt-in del host con `failover`, configurable en `/admin`), `guestId` en `guest_joined`. Cliente: `RemoteCrotoLinkService` unifica eventos (el rol cambia sin reabrir el socket), `CrotoLinkController` asume/cede anfitrión (`_becomeRemoteHost`/`_demoteToRemoteGuest`), reanuda con `resume_host` antes de recrear. UI: "Transferir anfitrión", switch de failover.
 - [x] 7.2 Salas persistentes: tabla SQLite (PIN reservado, `ownerToken` solo como hash scrypt, expiración por inactividad o nunca), solo con `persistentRoomsEnabled`; se persiste únicamente la configuración (permisos, modo de cola), nunca qué suena. Panel `/admin` (crear/borrar, token mostrado una sola vez). Cliente: PIN fijo + token en "Sala persistente (avanzado)".
-- [x] 7.3 `GET /j/:code` (si `webLinkEnabled`), `/.well-known/assetlinks.json` y `apple-app-site-association` desde ajustes del panel. Cliente: `JamInviteLink` (`scrotify://join?code=…&server=…` y `https://host/j/PIN`), `app_links`, diálogo de unión, "Copiar enlace de invitación", pegar enlace en el campo PIN. AndroidManifest: filtro `scrotify://join` (el filtro https está comentado: pon tu dominio).
+- [x] 7.3 `GET /j/:code` (si `webLinkEnabled`), `/.well-known/assetlinks.json` y `apple-app-site-association` desde ajustes del panel. Cliente: `CrotoLinkInviteLink` (`crotowave://join?code=…&server=…` y `https://host/j/PIN`), `app_links`, diálogo de unión, "Copiar enlace de invitación", pegar enlace en el campo PIN. AndroidManifest: filtro `crotowave://join` (el filtro https está comentado: pon tu dominio).
 - [ ] No hecho: "migrar a la nube" desde LAN (`migrate_to_remote`); en LAN el host sigue siendo el servidor embebido (limitación documentada). iOS Universal Links/desktop no configurados.
 - Probar a mano: matar la app del host con failover activado; abrir `https://<relay>/j/PIN` en el móvil.
 
-## Jam Roadmap — Fase 8 (2026-10-06): extras sociales
-- [x] Reacciones efímeras (whitelist de 8 emoji, 5/5 s por conexión) y chat ligero (≤280 car., sin historial, 5/10 s). Relay: flags `reactionsEnabled` (por defecto sí) y `chatEnabled` (por defecto NO) en `/api/capabilities` y panel; el host puede desactivar el chat de su sala (`set_chat`). LAN: ops `reaction`/`chat_message`. UI: barra de reacciones + chat en la vista de Jam activa. 3 tests node + 3 dart.
-- [ ] No hecho (opcionales del roadmap): notificación persistente de Jam en Android, cast de letras a otra pantalla, proxy de stream opt-in (rompe el principio de no retransmitir audio; queda sin implementar a propósito).
+## CrotoLink Roadmap — Fase 8 (2026-10-06): extras sociales
+- [x] Reacciones efímeras (whitelist de 8 emoji, 5/5 s por conexión) y chat ligero (≤280 car., sin historial, 5/10 s). Relay: flags `reactionsEnabled` (por defecto sí) y `chatEnabled` (por defecto NO) en `/api/capabilities` y panel; el host puede desactivar el chat de su sala (`set_chat`). LAN: ops `reaction`/`chat_message`. UI: barra de reacciones + chat en la vista de CrotoLink activa. 3 tests node + 3 dart.
+- [ ] No hecho (opcionales del roadmap): notificación persistente de CrotoLink en Android, cast de letras a otra pantalla, proxy de stream opt-in (rompe el principio de no retransmitir audio; queda sin implementar a propósito).
 - Limitación: los mensajes sociales no se reenvían entre invitados LAN y de nube de la misma sala (cada transporte ve los suyos + el host).
 
 ## Backlog de la app (sección 10 del roadmap): NO abordado en esta tanda.
@@ -232,7 +232,7 @@
 
 ## Carpeta predeterminada Android (2026-10-06)
 
-- [x] Usar `/storage/emulated/0/Music` sin subcarpeta Scrotify; conservar descargas anteriores y rutas personalizadas.
+- [x] Usar `/storage/emulated/0/Music` sin subcarpeta CrotoWave; conservar descargas anteriores y rutas personalizadas.
 - [x] Pedir acceso al almacenamiento compartido al descargar o reescanear; análisis limpio, pruebas aprobadas y APK release compilado.
 
 ## Portadas sin conexión (2026-10-06)
@@ -251,11 +251,11 @@
 
 ## Entrega en GitHub (2026-10-06)
 
-- [x] Preparar los cambios del proyecto para la rama `PC123` de `PC123PC123/Scrotify`; análisis limpio y 527 pruebas aprobadas en el estado actual.
+- [x] Preparar los cambios del proyecto para la rama `PC123` de `PC123PC123/CrotoWave`; análisis limpio y 527 pruebas aprobadas en el estado actual.
 
 ## Ecualizador de tres niveles y modos Hi-Fi (2026-10-07)
 
-Origen: carpeta `Eculiza/` (paquete `scrotify_eq` + `EQUALIZER.md`). Estado previo: el EQ de 10 bandas solo guardaba ajustes; no estaba conectado al reproductor.
+Origen: carpeta `Eculiza/` (paquete `crotowave_eq` + `EQUALIZER.md`). Estado previo: el EQ de 10 bandas solo guardaba ajustes; no estaba conectado al reproductor.
 
 - [x] **11.1** Incorporar modelos, matemática biquad, presets, import/export AutoEQ, backends, `EqualizerService` v2, curva y pantalla; retirar el EQ antiguo y sus pruebas; documentación en `docs/equalizer.md`.
 - [x] **11.2** Android (conectado y compilado; falta confirmar el sonido en el teléfono): `AndroidEqualizer` en el `AudioPipeline` de los reproductores A y B del crossfade; verificar en el teléfono.
@@ -265,17 +265,17 @@ Origen: carpeta `Eculiza/` (paquete `scrotify_eq` + `EQUALIZER.md`). Estado prev
 
 ## Datos ocultos y sincronización entre dispositivos (2026-10-07)
 
-- [x] **12.1** Datos de escritorio en la carpeta oculta de soporte de la app (migración desde `~/Documentos/Scrotify`); la carpeta de temas por defecto muestra la real (carpeta de importados). Las descargas finales ya iban a la carpeta de música del usuario; solo los temporales quedan privados.
-- [x] **12.2** `jam-server`: `/api/sync/v1` (bóvedas de blobs cifrados, last-write-wins, límites en `/admin`, desactivado por defecto). 43 pruebas del servidor.
-- [x] **12.3** Cliente: `SyncCrypto` (HKDF + AES-GCM), `SyncService` (ciclo cada 5 min, push/pull por documento) y sección en Ajustes → Servidor Jam. Sincroniza temas importados, ajustes (sin `jamServerUrl`), seguidos/excluidos, playlists fijadas, orden de favoritos, valoraciones y ecualizador.
-- [x] **12.4** `jam-server` redesplegado en 192.168.1.21 (backup previo de `data/` en `/root`) y `syncEnabled` activado (2026-10-07). Falta probar con dos dispositivos reales.
+- [x] **12.1** Datos de escritorio en la carpeta oculta de soporte de la app (migración desde `~/Documentos/CrotoWave`); la carpeta de temas por defecto muestra la real (carpeta de importados). Las descargas finales ya iban a la carpeta de música del usuario; solo los temporales quedan privados.
+- [x] **12.2** `crotolink-server`: `/api/sync/v1` (bóvedas de blobs cifrados, last-write-wins, límites en `/admin`, desactivado por defecto). 43 pruebas del servidor.
+- [x] **12.3** Cliente: `SyncCrypto` (HKDF + AES-GCM), `SyncService` (ciclo cada 5 min, push/pull por documento) y sección en Ajustes → Servidor CrotoLink. Sincroniza temas importados, ajustes (sin `crotoLinkServerUrl`), seguidos/excluidos, playlists fijadas, orden de favoritos, valoraciones y ecualizador.
+- [x] **12.4** `crotolink-server` redesplegado en 192.168.1.21 (backup previo de `data/` en `/root`) y `syncEnabled` activado (2026-10-07). Falta probar con dos dispositivos reales.
 - [ ] **12.5** Pendiente/limitaciones: no se propagan borrados; solo `settings.json` y los temas se recargan al instante, el resto se aplica al reiniciar; vincular escaneando QR (hoy se escribe la clave).
 
-## Scrotify Connect: controlar tus dispositivos (2026-10-07)
+## CrotoWave Connect: controlar tus dispositivos (2026-10-07)
 
-Como Spotify Connect: ver los dispositivos del usuario por LAN y por el servidor Jam, pasarles la reproducción y controlarlos a distancia. El "grupo" es la clave de sincronización (sección 12): solo se ven dispositivos con la misma clave y todo viaja cifrado de extremo a extremo.
+Como Spotify Connect: ver los dispositivos del usuario por LAN y por el servidor CrotoLink, pasarles la reproducción y controlarlos a distancia. El "grupo" es la clave de sincronización (sección 12): solo se ven dispositivos con la misma clave y todo viaja cifrado de extremo a extremo.
 
-- [x] **13.1** `jam-server`: `connect_join` / `connect_send` (presencia y relé de blobs cifrados, 16 dispositivos por grupo). 48 pruebas.
+- [x] **13.1** `crotolink-server`: `connect_join` / `connect_send` (presencia y relé de blobs cifrados, 16 dispositivos por grupo). 48 pruebas.
 - [x] **13.2** Cliente: `ConnectService` (transferir, traer de vuelta, comandos, estado remoto, anti-repetición), `RelayTransport`, `LanTransport` (baliza UDP 47624 + WebSocket directo, saludo cifrado), `PlayerConnectPort`.
 - [x] **13.3** UI: `ConnectPanel` (selector de dispositivos) y botón Connect en la barra en lugar del botón de la cola (escritorio y móvil); la barra muestra y controla el dispositivo remoto (play/pausa, siguiente, anterior, seek, volumen).
 - [x] **13.4** Validación: relé probado contra el servidor Node real; `flutter analyze` limpio y 600 pruebas aprobadas.
@@ -284,12 +284,12 @@ Como Spotify Connect: ver los dispositivos del usuario por LAN y por el servidor
 
 ## Connect por usuario de Navidrome (2026-10-07)
 
-Cambio: Connect ya no depende de la clave de sincronización. Cada usuario de Navidrome forma su grupo (admin solo ve a admin) y la detección ocurre directamente en el servidor Jam.
+Cambio: Connect ya no depende de la clave de sincronización. Cada usuario de Navidrome forma su grupo (admin solo ve a admin) y la detección ocurre directamente en el servidor CrotoLink.
 
-- [x] **14.1** `jam-server`: `connect_join` con `user` + token Subsonic; el servidor verifica con `ping` en el Navidrome fijado por `navidromeUrl` (ajuste de `/admin`, sin SSRF) y agrupa por usuario (sin distinguir mayúsculas). Caché de verificación de 5 min. 52 pruebas.
+- [x] **14.1** `crotolink-server`: `connect_join` con `user` + token Subsonic; el servidor verifica con `ping` en el Navidrome fijado por `navidromeUrl` (ajuste de `/admin`, sin SSRF) y agrupa por usuario (sin distinguir mayúsculas). Caché de verificación de 5 min. 52 pruebas.
 - [x] **14.2** Cliente: `ConnectAccount` (token Subsonic y clave E2E derivada con PBKDF2 de la clave del usuario). Connect arranca solo al iniciar sesión; el panel ya no pide sincronización. LAN y relé usan la misma clave derivada.
 - [x] **14.3** Servidor de producción actualizado (backup previo de `data/`) con `navidromeUrl = https://navidrome.templo.cloud`; verificado el rechazo de claves falsas contra Navidrome real. APK instalado en el teléfono y AppImage regenerado.
-- [x] **14.5** Corregido: el servidor cortaba el WebSocket (1009) con tramas de más de `maxMessageBytes` (16 KB) y los mensajes de Connect con la cola lo superaban; ahora la trama admite hasta 128 KB y solo las salas Jam siguen limitadas. Una instancia desplazada por otra con el mismo id de dispositivo ya no reintenta en bucle.
+- [x] **14.5** Corregido: el servidor cortaba el WebSocket (1009) con tramas de más de `maxMessageBytes` (16 KB) y los mensajes de Connect con la cola lo superaban; ahora la trama admite hasta 128 KB y solo las salas CrotoLink siguen limitadas. Una instancia desplazada por otra con el mismo id de dispositivo ya no reintenta en bucle.
 - [ ] **14.4** Pendiente: probar PC + teléfono con el mismo usuario. Cambiar la clave en Navidrome cambia la clave de cifrado: hay que volver a iniciar sesión en los demás dispositivos.
 
 ## Versión para Android TV (2026-10-07)
@@ -297,18 +297,18 @@ Cambio: Connect ya no depende de la clave de sincronización. Cada usuario de Na
 El mismo APK sirve para teléfono y tele. En una tele se activa un modo con la interfaz amplia, navegación con el control remoto y un anillo de foco visible.
 
 - [x] **15.1** Manifiesto: `LEANBACK_LAUNCHER`, banner 320x180, y `uses-feature` sin exigir pantalla táctil, cámara, micrófono ni leanback (verificado con `aapt2 dump badging`).
-- [x] **15.2** `TvMode` (canal `scrotify/device` → `UiModeManager`/`FEATURE_LEANBACK`; `--dart-define=FORCE_TV=true` para probar en un emulador). En TV: interfaz de escritorio siempre, login empieza en "Vincular" con el teléfono (sin cámara, sin botón de QR), tema con foco marcado y botón A de mandos de juego.
+- [x] **15.2** `TvMode` (canal `crotowave/device` → `UiModeManager`/`FEATURE_LEANBACK`; `--dart-define=FORCE_TV=true` para probar en un emulador). En TV: interfaz de escritorio siempre, login empieza en "Vincular" con el teléfono (sin cámara, sin botón de QR), tema con foco marcado y botón A de mandos de juego.
 - [x] **15.3** `TvFocusRing`: borde visible alrededor del elemento enfocado (botones, tarjetas, listas, campos, sliders) y desplazamiento automático. Probado en emulador 1920x1080 con teclas direccionales: navegar, abrir álbum, reproducir, atrás, volumen y pausa con tecla multimedia.
 - [x] **15.5** Corregido tras probar en un Chromecast HD (Google TV): los selectores de pestaña del login eran `GestureDetector` (no enfocables) y la flecha abajo/arriba dentro de un campo de texto movía el cursor (aserción `isValid`) en vez del foco. Ahora son `InkWell` y `TvTextFieldNavigation` mueve el foco desde los campos. Verificado recorriendo todo el formulario con las flechas.
 - [x] **15.6** Teclado en pantalla propio para la tele (`showTvKeyboard`): OK/Enter en un campo lo abre (letras, mayúsculas, números, símbolos, `.com`, mostrar/ocultar clave, solo dígitos en campos numéricos); se desactiva el teclado del sistema (en Google TV pide conectar el teléfono) y un teclado físico sigue escribiendo.
-- [ ] **15.4** Pendiente: probar en una tele real; el foco inicial al abrir una pantalla cae en la barra superior; no se tocó la pantalla completa del reproductor ni Ajustes con el control remoto; Jam (cámara/QR) no está pensado para tele. La tele funciona como destino de Connect (se controla desde el teléfono).
+- [ ] **15.4** Pendiente: probar en una tele real; el foco inicial al abrir una pantalla cae en la barra superior; no se tocó la pantalla completa del reproductor ni Ajustes con el control remoto; CrotoLink (cámara/QR) no está pensado para tele. La tele funciona como destino de Connect (se controla desde el teléfono).
 
 ## Compatibilidad bit-perfect en esta PC Linux (2026-10-08)
 
 - [x] Reproducir con un WAV silencioso: PipeWire exclusivo termina 3 s en 0,27 s y registra `no target node available`; salida normal funciona.
 - [x] Conservar la salida del sistema sin exclusividad en Linux, mantener el modo sin procesado y aclarar sus límites en Ajustes.
 - [x] Verificar el reloj y la salida real con libmpv y un WAV silencioso (1 integración), 30 pruebas unitarias, análisis limpio y compilación Linux release terminada.
-- [ ] Reabrir Scrotify y comprobar una canción audible con los Galaxy Buds2 Pro.
+- [ ] Reabrir CrotoWave y comprobar una canción audible con los Galaxy Buds2 Pro.
 
 ## Recuperación de descargas antiguas (2026-10-08)
 
@@ -320,24 +320,24 @@ El mismo APK sirve para teléfono y tele. En una tele se activa un modo con la i
 
 ## Publicación del estado local en PC123 (2026-10-08)
 
-- [x] Revisar los cambios locales y verificar análisis limpio, 616 pruebas Flutter aprobadas (2 integraciones omitidas) y 54 pruebas del servidor Jam aprobadas.
+- [x] Revisar los cambios locales y verificar análisis limpio, 616 pruebas Flutter aprobadas (2 integraciones omitidas) y 54 pruebas del servidor CrotoLink aprobadas.
 - [x] Preparar PC123 con los 25 commits posteriores de main y las correcciones locales de recuperación de descargas y salida Hi-Fi en Linux para publicar sin forzar el historial.
 
 ## Mejoras (plan en `tasks/plan-mejoras.md`)
 
 - [x] **M2** Nombre de dispositivo editable en Connect (se guarda en ajustes y se reanuncia por LAN y relé).
 - [x] **M3** Connect transfiere la cola completa (hasta 1000 canciones) en trozos ordenados; clientes viejos siguen recibiendo 40.
-- [x] **M7** El cliente lee `/api/capabilities` completo (`JamCapabilities`) y oculta opciones que el relé no ofrece.
+- [x] **M7** El cliente lee `/api/capabilities` completo (`CrotoLinkCapabilities`) y oculta opciones que el relé no ofrece.
 - [x] **M11** El escaneo de descargas muestra progreso y se puede cancelar sin perder el índice.
 - [x] **M12** Caché de 3 min del catálogo de recuperación (por sesión, sin descargas duplicadas).
 - [x] **M1** Selector de salida ALSA `hw:` para Bit-perfect en Linux (probado con libmpv; falta probar con un DAC real).
-- [x] **M4** Vincular la sincronización por QR (`scrotify-sync://`), con aviso de secreto y biometría; falta probar la cámara en un teléfono real.
+- [x] **M4** Vincular la sincronización por QR (`crotowave-sync://`), con aviso de secreto y biometría; falta probar la cámara en un teléfono real.
 - [x] **M6** Android TV: foco inicial en el contenido, reproductor completo con el mando (saltos de 10 s) y Ajustes recorrible con flechas; falta probar en tele/emulador.
-- [x] **M8** El invitado de una Jam tiene su propio historial (lo que sonó desde que entró) y puede guardar sus aportaciones como playlist; sin cambios de protocolo.
-- [x] **M13** La notificación de medios de Android muestra la Jam y trae el botón de salir (solo con una pista sonando); falta verlo en un teléfono real.
+- [x] **M8** El invitado de una CrotoLink tiene su propio historial (lo que sonó desde que entró) y puede guardar sus aportaciones como playlist; sin cambios de protocolo.
+- [x] **M13** La notificación de medios de Android muestra la CrotoLink y trae el botón de salir (solo con una pista sonando); falta verlo en un teléfono real.
 - [x] **M10** Pruebas de integración de la recuperación de descargas en Android (7/7 en emulador); script `tool/run_android_integration.sh`.
 - [x] **M5** Los temas importados que se borran en un dispositivo se borran en los demás (con papelera de 30 días y varias guardas); falta probar entre dos dispositivos reales.
-- [x] **M9** `navidrome_service`, `player_controller`, `jam_controller` y `home_screen` partidos en mixins/`part` (≤1076 líneas el mayor), sin cambios de comportamiento.
+- [x] **M9** `navidrome_service`, `player_controller`, `crotolink_controller` y `home_screen` partidos en mixins/`part` (≤1076 líneas el mayor), sin cambios de comportamiento.
 
 ## Mejoras, tanda 2 (plan en `tasks/plan-mejoras-2.md`)
 - [x] 1 CI (GitHub Actions) · 4 aviso de firma debug · 17 ignorar APK · 20 versionar build de Android (2026-10-09).
@@ -345,49 +345,49 @@ El mismo APK sirve para teléfono y tele. En una tele se activa un modo con la i
 - [x] Fix: activar Bit-perfect en Linux rompía Ajustes (`setState` del selector ALSA devolvía un Future). Test de regresión en `material_presentation_test.dart` (2026-10-09).
 
 ## Mejoras, tanda 3 (plan en `tasks/plan-mejoras-3.md`)
-- [x] 2 instalación segura · 3 build identificable · 4 recuadro de error · 5 humo de Ajustes · 6 arranque real · 9 APK por ABI · 10 catches · 11 unión a Jam + web_socket_channel 3 · 12 jam_host_service. Suite: 886 verdes (2026-10-09).
+- [x] 2 instalación segura · 3 build identificable · 4 recuadro de error · 5 humo de Ajustes · 6 arranque real · 9 APK por ABI · 10 catches · 11 unión a CrotoLink + web_socket_channel 3 · 12 crotolink_host_service. Suite: 886 verdes (2026-10-09).
 ## Soporte para Android TV y Versiones por Plataforma (2026-10-12)
 
 - [x] **15.1** Control lateral del mouse (`DesktopWindowFrame`): botón lateral trasero (Back / `kBackMouseButton` / `browserBack`) configurado para alternar Reproducir / Pausar (`_togglePlayPause`), y botón lateral delantero (Forward / `kForwardMouseButton` / `browserForward`) para pasar a la siguiente pista (`_skipNext`), además de bindings multimedia directos.
 - [x] **15.2** Soporte Android TV / Google TV (`AndroidManifest.xml` + `tv_banner.xml`): declaración de pantalla táctil opcional (`touchscreen=false`), `leanback=false`, banner horizontal de 320x180 y filtro `LEANBACK_LAUNCHER` para visualización nativa en pantallas de TV y soporte de D-Pad.
 - [x] **15.3** Workflows de GitHub Actions dedicados por plataforma:
-  - `android.yml` ➔ Compilación automática de `Scrotify-Android.apk` (Release `android-latest`).
-  - `tv.yml` ➔ Compilación automática de `Scrotify-TV.apk` (Release `tv-latest`).
-  - `linux.yml` ➔ Compilación automática de `Scrotify-Linux-x64.tar.gz` (Release `linux-latest`).
-  - `windows.yml` ➔ `Scrotify-Windows-x64.zip` (Release `windows-latest`).
-  - `ios.yml` ➔ `Scrotify.ipa` (Release `ios-latest`).
+  - `android.yml` ➔ Compilación automática de `CrotoWave-Android.apk` (Release `android-latest`).
+  - `tv.yml` ➔ Compilación automática de `CrotoWave-TV.apk` (Release `tv-latest`).
+  - `linux.yml` ➔ Compilación automática de `CrotoWave-Linux-x64.tar.gz` (Release `linux-latest`).
+  - `windows.yml` ➔ `CrotoWave-Windows-x64.zip` (Release `windows-latest`).
+  - `ios.yml` ➔ `CrotoWave.ipa` (Release `ios-latest`).
 
 ## Integración de las ramas Lau y santi (2026-10-16)
 
 - [x] `Lau` entró por avance rápido (42 commits: radios, Discord, MPRIS, Chromecast, Android Auto…).
-- [x] `santi` fusionada (23 commits: Windows ThumbBar y botones laterales del ratón, rueda de volumen, 124 temas empaquetados, CI por plataforma, accesos rápidos de escritorio). Conflictos: Android TV, `.gitignore`, `main.cpp` y `Runner.rc` se quedaron con lo de `main` (sabores `phone`/`tv`, marca Scrotify); `flutter_window.*` y el fondo oscuro del splash, de santi.
+- [x] `santi` fusionada (23 commits: Windows ThumbBar y botones laterales del ratón, rueda de volumen, 124 temas empaquetados, CI por plataforma, accesos rápidos de escritorio). Conflictos: Android TV, `.gitignore`, `main.cpp` y `Runner.rc` se quedaron con lo de `main` (sabores `phone`/`tv`, marca CrotoWave); `flutter_window.*` y el fondo oscuro del splash, de santi.
 - [x] Ajuste tras la fusión: el botón «Mezclar todo» se oculta si el campo de búsqueda mide menos de 260 px (desbordaba 2,5 px a 720 px con texto 1,5); `await` en `_shuffleAllTracks`.
 - [x] `flutter analyze` limpio y 964 pruebas aprobadas. Falta compilar y probar el runner de Windows (ThumbBar, botones del ratón) en una máquina Windows.
 
 ## Licencias y firma propia (2026-10-16)
 
-- [x] Licencias: `LICENSE` (GPL-3.0-or-later + excepción para tiendas, inglés vinculante y traducción), `jam-server/LICENSE` (AGPL-3.0-or-later), `LICENSING.md` (por componente, dependencias revisadas: ninguna GPL), `CONTRIBUTING.md` (DCO; las contribuciones heredan la excepción).
-- [x] App: Ajustes → «Licencias de código abierto» (`lib/utils/app_licenses.dart`): licencia propia, servidor Jam y, en escritorio, libmpv/FFmpeg/keybinder. Flutter ya junta las de los paquetes.
-- [x] Servidor Jam: `SOURCE_URL` → `GET /source`, `license`/`sourceUrl` en `/api/capabilities`, pie en `/admin` (AGPL §13).
+- [x] Licencias: `LICENSE` (GPL-3.0-or-later + excepción para tiendas, inglés vinculante y traducción), `crotolink-server/LICENSE` (AGPL-3.0-or-later), `LICENSING.md` (por componente, dependencias revisadas: ninguna GPL), `CONTRIBUTING.md` (DCO; las contribuciones heredan la excepción).
+- [x] App: Ajustes → «Licencias de código abierto» (`lib/utils/app_licenses.dart`): licencia propia, servidor CrotoLink y, en escritorio, libmpv/FFmpeg/keybinder. Flutter ya junta las de los paquetes.
+- [x] Servidor CrotoLink: `SOURCE_URL` → `GET /source`, `license`/`sourceUrl` en `/api/capabilities`, pie en `/admin` (AGPL §13).
 - [x] AppImage: `LICENSE`, `LICENSING.md`, copyright de los 160 paquetes de Debian incluidos y `THIRD_PARTY_SOURCES.txt` con versión y fuente.
-- [x] Firma Android: keystore propio en `~/.config/scrotify-signing/`, `applicationId` `cloud.templo.scrotify`. Teléfono migrado con todos sus datos (`tool/migrate_android_signing.sh`).
+- [x] Firma Android: keystore propio en `~/.config/crotowave-signing/`, `applicationId` `cloud.templo.crotowave`. Teléfono migrado con todos sus datos (`tool/migrate_android_signing.sh`).
 - [x] Secretos: `.gitignore` ampliado y hook `.githooks/pre-commit` (activo con `core.hooksPath`).
 - [x] `scripts/sign_release.sh`: verifica la huella de los APK y genera `SHA256SUMS` (+ minisign).
 - [x] minisign instalado; clave creada con contraseña pedida en ventana (`scripts/sign_release.sh --init`), pública `crotowave-release.pub`.
 - [x] URL del repo público (`https://github.com/Dante0Q/CrotoWave`) en `UPSTREAM_SOURCE_URL`, `LICENSE`, instalador y User-Agent.
-- [ ] Migrar la tele y el Chromecast (`tool/migrate_android_signing.sh <id> tv backup|restore`, desde `com.example.navidrome_client`).
+- [ ] Migrar la tele y el Chromecast (`tool/migrate_android_signing.sh <id> tv backup|restore`, desde `el id de la plantilla de Flutter`).
 - [ ] CI de Android/TV: flavor + firma con secretos (o firmar solo en local). Ver `docs/SIGNING.md`.
 - [ ] Publicar con historial limpio cuando esté terminado (`docs/PUBLICAR.md`); cambiar igual la contraseña de la cuenta `Proyecto` (está en el historial de desarrollo).
 - [ ] Windows: pedir la firma gratis a SignPath Foundation después de la primera publicación (`docs/PUBLICAR.md`).
 
 ## Cambio de nombre: CrotoWave y CrotoLink (2026-10-16)
 
-- [x] App «Scrotify» → **CrotoWave**; Jam → **CrotoLink** (textos, Android/iOS/Linux/Windows, instalador, AppImage, docs, servidor).
-- [x] Enlaces: se generan `crotowave://` y `crotowave-sync://`; se siguen aceptando `scrotify://` y `scrotify-sync://` (`lib/utils/app_links.dart`).
-- [x] Se mantienen los identificadores internos que guardan datos o hacen de protocolo (claves `scrotify.*`, nonces, etiquetas de red, canales nativos). Ver `LICENSING.md` → «Nombres y logo».
+- [x] App «CrotoWave» → **CrotoWave**; CrotoLink → **CrotoLink** (textos, Android/iOS/Linux/Windows, instalador, AppImage, docs, servidor).
+- [x] Enlaces: se generan `crotowave://` y `crotowave-sync://`; se siguen aceptando `crotowave://` y `crotowave-sync://` (`lib/utils/app_links.dart`).
+- [x] Se mantienen los identificadores internos que guardan datos o hacen de protocolo (claves `crotowave.*`, nonces, etiquetas de red, canales nativos). Ver `LICENSING.md` → «Nombres y logo».
 - [x] `LICENSE`: condición de la sección 7(e) sobre los nombres y el logo. `PRIVACY.md` y `docs/CODE_SIGNING_POLICY.md` (requisitos de SignPath).
-- [x] Android: `applicationId` `cloud.templo.crotowave`, clave nueva `CN=CrotoWave` en `~/.config/crotowave-signing/` (la de Scrotify queda en `legacy/` para migrar). Teléfono migrado desde `cloud.templo.scrotify`.
+- [x] Android: `applicationId` `cloud.templo.crotowave`, clave nueva `CN=CrotoWave` en `~/.config/crotowave-signing/` (la de CrotoWave queda en `legacy/` para migrar). Teléfono migrado desde `cloud.templo.crotowave`.
 - [x] `tool/migrate_android_signing.sh`: origen configurable (`FROM_APP`, `FROM_KEY`), arregla la carpeta de datos que quedaba en 755 y ya no usa `tar --delete` (dañaba la copia).
 - [x] Sin servidor CrotoLink por defecto (antes `jam.templo.cloud`): las instalaciones nuevas lo configuran en Ajustes; las existentes conservan el guardado. Sin servidor, crear/unirse a una sala remota avisa «Configurá un servidor CrotoLink…».
-- [ ] Redeploy del servidor: el contenedor pasa a llamarse `crotolink`; cambiar el ingress del túnel de `scrotify-jam:8080` a `crotolink:8080`.
-- [ ] Desinstalar del teléfono `cloud.templo.scrotify` y `com.example.navidrome_client` cuando el usuario confirme que CrotoWave está bien.
+- [ ] Redeploy del servidor: el contenedor pasa a llamarse `crotolink`; cambiar el ingress del túnel de `crotolink:8080` a `crotolink:8080`.
+- [ ] Desinstalar del teléfono `cloud.templo.crotowave` y `el id de la plantilla de Flutter` cuando el usuario confirme que CrotoWave está bien.

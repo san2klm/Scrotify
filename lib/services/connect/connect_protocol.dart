@@ -9,7 +9,7 @@ ConnectKind connectKindFrom(String? name) => ConnectKind.values.firstWhere(
       orElse: () => ConnectKind.other,
     );
 
-/// Dispositivo del mismo usuario visible por LAN y/o por el servidor Jam.
+/// Dispositivo del mismo usuario visible por LAN y/o por el servidor CrotoLink.
 class ConnectDevice {
   const ConnectDevice({
     required this.id,

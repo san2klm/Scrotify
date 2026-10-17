@@ -24,7 +24,7 @@ queue=()
 add() { [[ -n ${seen[$1]:-} ]] || { seen[$1]=1; queue+=("$1"); }; }
 
 # Raíces: lo que ya está en el bundle, libmpv y los binarios de ffmpeg.
-roots=("$appdir"/usr/bin/navidrome_client "$appdir"/usr/bin/lib/*.so)
+roots=("$appdir"/usr/bin/crotowave "$appdir"/usr/bin/lib/*.so)
 mpv=$(ldconfig -p | awk '/libmpv\.so\.2 /{print $NF}' | head -1 || true)
 [[ -n "$mpv" ]] || { echo "Falta libmpv en el sistema" >&2; exit 1; }
 roots+=("$mpv")

@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:navidrome_client/models/jam_models.dart';
+import 'package:crotowave/models/crotolink_models.dart';
 
 void main() {
   group('sanitizeArtUrl', () {
@@ -15,11 +15,11 @@ void main() {
     test('deja intactas null, vacías y URLs sin query', () {
       expect(sanitizeArtUrl(null), isNull);
       expect(sanitizeArtUrl(''), '');
-      expect(sanitizeArtUrl('https://x.example/a.png'),
-          'https://x.example/a.png');
+      expect(
+          sanitizeArtUrl('https://x.example/a.png'), 'https://x.example/a.png');
     });
 
-    test('JamQueueItem.toJson no filtra el token', () {
+    test('CrotoLinkQueueItem.toJson no filtra el token', () {
       final json = sanitizeArtUrl('https://nd/x?u=a&s=b&t=SECRET&id=1');
       expect(json, isNot(contains('SECRET')));
     });

@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:navidrome_client/utils/playback_time.dart';
-import 'package:navidrome_client/screens/player_screen.dart';
-import 'package:navidrome_client/widgets/persistent_player_bar.dart';
-import 'package:navidrome_client/services/connect/connect_service.dart';
-import 'package:navidrome_client/services/jam_controller.dart';
-import 'package:navidrome_client/services/navidrome_service.dart';
-import 'package:navidrome_client/services/player_controller.dart';
-import 'package:navidrome_client/services/theme_controller.dart';
+import 'package:crotowave/utils/playback_time.dart';
+import 'package:crotowave/screens/player_screen.dart';
+import 'package:crotowave/widgets/persistent_player_bar.dart';
+import 'package:crotowave/services/connect/connect_service.dart';
+import 'package:crotowave/services/crotolink_controller.dart';
+import 'package:crotowave/services/navidrome_service.dart';
+import 'package:crotowave/services/player_controller.dart';
+import 'package:crotowave/services/theme_controller.dart';
 import 'package:provider/provider.dart';
 
 import 'support/app_fakes.dart';
@@ -311,14 +311,15 @@ void main() {
         duration: const Duration(minutes: 4, seconds: 17), // 4:17
       );
       final nav = FakeNavidrome();
-      final jam = JamController(player, nav);
+      final crotoLink = CrotoLinkController(player, nav);
 
       await tester.pumpWidget(
         MultiProvider(
           providers: [
             ChangeNotifierProvider<PlayerController>.value(value: player),
-            ChangeNotifierProvider<ConnectService>(create: (_) => idleConnectService()),
-            ChangeNotifierProvider<JamController>.value(value: jam),
+            ChangeNotifierProvider<ConnectService>(
+                create: (_) => idleConnectService()),
+            ChangeNotifierProvider<CrotoLinkController>.value(value: crotoLink),
             ChangeNotifierProvider<NavidromeService>.value(value: nav),
             ChangeNotifierProvider<ThemeController>(
                 create: (_) => ThemeController()),
@@ -409,14 +410,15 @@ void main() {
         duration: const Duration(minutes: 4, seconds: 17),
       );
       final nav = FakeNavidrome();
-      final jam = JamController(player, nav);
+      final crotoLink = CrotoLinkController(player, nav);
 
       await tester.pumpWidget(
         MultiProvider(
           providers: [
             ChangeNotifierProvider<PlayerController>.value(value: player),
-            ChangeNotifierProvider<ConnectService>(create: (_) => idleConnectService()),
-            ChangeNotifierProvider<JamController>.value(value: jam),
+            ChangeNotifierProvider<ConnectService>(
+                create: (_) => idleConnectService()),
+            ChangeNotifierProvider<CrotoLinkController>.value(value: crotoLink),
             ChangeNotifierProvider<NavidromeService>.value(value: nav),
             ChangeNotifierProvider<ThemeController>(
                 create: (_) => ThemeController()),
@@ -507,14 +509,15 @@ void main() {
         duration: const Duration(minutes: 4, seconds: 17),
       );
       final nav = FakeNavidrome();
-      final jam = JamController(player, nav);
+      final crotoLink = CrotoLinkController(player, nav);
 
       await tester.pumpWidget(
         MultiProvider(
           providers: [
             ChangeNotifierProvider<PlayerController>.value(value: player),
-            ChangeNotifierProvider<ConnectService>(create: (_) => idleConnectService()),
-            ChangeNotifierProvider<JamController>.value(value: jam),
+            ChangeNotifierProvider<ConnectService>(
+                create: (_) => idleConnectService()),
+            ChangeNotifierProvider<CrotoLinkController>.value(value: crotoLink),
             ChangeNotifierProvider<NavidromeService>.value(value: nav),
             ChangeNotifierProvider<ThemeController>(
                 create: (_) => ThemeController()),

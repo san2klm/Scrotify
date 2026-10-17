@@ -3,10 +3,10 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:navidrome_client/models/pairing_models.dart';
-import 'package:navidrome_client/services/pairing_client.dart';
-import 'package:navidrome_client/services/pairing_server.dart';
-import 'package:navidrome_client/utils/crypto_helper.dart';
+import 'package:crotowave/models/pairing_models.dart';
+import 'package:crotowave/services/pairing_client.dart';
+import 'package:crotowave/services/pairing_server.dart';
+import 'package:crotowave/utils/crypto_helper.dart';
 
 class _RealHttpOverrides extends HttpOverrides {}
 
@@ -35,9 +35,9 @@ void main() {
       expect(parsed.code, 'X7K9MP');
     });
 
-    test('QrData acepta los QR con el esquema anterior (scrotify://)', () {
+    test('QrData acepta los QR con el esquema anterior (crotowave://)', () {
       final parsed = QrData.fromUri(
-          'scrotify://pair?host=192.168.1.50&port=54321&code=X7K9MP');
+          'crotowave://pair?host=192.168.1.50&port=54321&code=X7K9MP');
       expect(parsed?.host, '192.168.1.50');
       expect(parsed?.code, 'X7K9MP');
       expect(QrData.fromUri('otra://pair?host=1.1.1.1&port=1&code=X7K9MP'),
@@ -47,7 +47,7 @@ void main() {
     test('QrData relay serialization & deserialization', () {
       final original = QrData(
         code: 'X7K9MP',
-        relayTopic: 'scrotify-0123456789abcdefghijklmnopqrstuv',
+        relayTopic: 'crotowave-0123456789abcdefghijklmnopqrstuv',
       );
       final parsed = QrData.fromUri(original.toUri());
       expect(parsed, isNotNull);

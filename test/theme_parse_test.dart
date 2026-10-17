@@ -4,7 +4,7 @@ import 'dart:io';
 import 'package:archive/archive.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:navidrome_client/services/app_theme.dart';
+import 'package:crotowave/services/app_theme.dart';
 
 List<int> _zip(Map<String, String> files) {
   final a = Archive();
@@ -75,8 +75,7 @@ void main() {
       expect(AppTheme.parseCssColor('#123456'), const Color(0xFF123456));
       expect(AppTheme.parseCssColor('#A855F7'), const Color(0xFFA855F7));
       // CSS #rrggbbaa -> 0xaarrggbb.
-      expect(
-          AppTheme.parseCssColor('#12345678'), const Color(0x78123456));
+      expect(AppTheme.parseCssColor('#12345678'), const Color(0x78123456));
       expect(AppTheme.parseCssColor('rgba(0, 0, 0, 0.5)'),
           const Color.fromRGBO(0, 0, 0, 0.5));
       expect(AppTheme.parseCssColor('transparent'), Colors.transparent);

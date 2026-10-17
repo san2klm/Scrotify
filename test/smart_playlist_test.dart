@@ -1,9 +1,9 @@
 import 'dart:math';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:navidrome_client/services/navidrome_service.dart';
-import 'package:navidrome_client/services/smart_playlist.dart';
-import 'package:navidrome_client/services/track_filters.dart';
+import 'package:crotowave/services/navidrome_service.dart';
+import 'package:crotowave/services/smart_playlist.dart';
+import 'package:crotowave/services/track_filters.dart';
 
 Track t(
   String id, {

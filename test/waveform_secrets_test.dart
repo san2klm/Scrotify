@@ -3,8 +3,8 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
-import 'package:navidrome_client/services/audio_waveform_service.dart';
-import 'package:navidrome_client/services/waveform_service.dart';
+import 'package:crotowave/services/audio_waveform_service.dart';
+import 'package:crotowave/services/waveform_service.dart';
 
 void main() {
   test('un fallo de descarga no deja u/t/s en el mensaje de error', () async {

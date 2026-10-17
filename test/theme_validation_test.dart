@@ -2,7 +2,7 @@ import 'dart:convert';
 
 import 'package:archive/archive.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:navidrome_client/services/theme_validation.dart';
+import 'package:crotowave/services/theme_validation.dart';
 
 List<int> _zip(Map<String, String> files) {
   final a = Archive();
@@ -88,8 +88,7 @@ void main() {
 
     test('rechaza @import, javascript: y urls remotas', () {
       expect(
-        ThemeValidation.validateCss(
-            "@import 'http://x/y.css';", 'demo-theme'),
+        ThemeValidation.validateCss("@import 'http://x/y.css';", 'demo-theme'),
         isNotNull,
       );
       expect(
@@ -154,8 +153,8 @@ void main() {
         ThemeValidation.validateZipBytes(sinManifest, reservedIds: {}),
         contains('manifest'),
       );
-      final sinCss = _zip(
-          {'demo-theme/manifest.json': jsonEncode(_manifest())});
+      final sinCss =
+          _zip({'demo-theme/manifest.json': jsonEncode(_manifest())});
       expect(
         ThemeValidation.validateZipBytes(sinCss, reservedIds: {}),
         contains('theme.css'),

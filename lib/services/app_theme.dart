@@ -327,8 +327,8 @@ class AppTheme {
   // Tema por defecto (si la carpeta está vacía o no existe)
   // ---------------------------------------------------------------------------
 
-  static const builtInScrotify = AppTheme(
-    id: 'scrotify-default',
+  static const builtInCrotoWave = AppTheme(
+    id: 'crotowave-default',
     name: 'CrotoWave Oscuro',
     author: 'CrotoWave',
     version: '1.0.0',

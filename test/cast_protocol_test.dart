@@ -1,7 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:navidrome_client/services/cast/cast_protocol.dart';
+import 'package:crotowave/services/cast/cast_protocol.dart';
 
 CastMessage sample([String payload = '{"type":"PING"}']) => CastMessage(
     source: 'sender-0',

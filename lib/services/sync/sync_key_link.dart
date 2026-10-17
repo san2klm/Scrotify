@@ -8,13 +8,10 @@ import 'sync_crypto.dart';
 class SyncKeyLink {
   static const scheme = 'crotowave-sync://';
 
-  /// El de antes del cambio de nombre: se sigue aceptando al leer.
-  static const legacyScheme = 'scrotify-sync://';
-
   /// `true` si [text] parece un enlace de sincronización (antes de validarlo).
   static bool isSyncLink(String text) {
     final t = text.trim().toLowerCase();
-    return t.startsWith(scheme) || t.startsWith(legacyScheme);
+    return t.startsWith(scheme);
   }
 
   /// Enlace para [keyText], o `null` si no es una clave válida.

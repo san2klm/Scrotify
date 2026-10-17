@@ -1,8 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:navidrome_client/services/navidrome_service.dart';
-import 'package:navidrome_client/services/player_controller.dart';
-import 'package:navidrome_client/services/settings_controller.dart';
-import 'package:navidrome_client/services/waveform_service.dart';
+import 'package:crotowave/services/navidrome_service.dart';
+import 'package:crotowave/services/player_controller.dart';
+import 'package:crotowave/services/settings_controller.dart';
+import 'package:crotowave/services/waveform_service.dart';
 
 import 'support/app_fakes.dart';
 
@@ -44,14 +44,17 @@ void main() {
       settings.setSmartMixEnabled(true);
 
       const keepIndex = 2;
-      final order = player.randomOrderKeepingForTesting(keepIndex, tracks.length);
+      final order =
+          player.randomOrderKeepingForTesting(keepIndex, tracks.length);
 
       expect(order.length, tracks.length);
       expect(order[keepIndex], keepIndex);
       expect(order.toSet(), {0, 1, 2, 3, 4});
     });
 
-    test('avoids repeating the same artist within window M=2 when alternatives exist', () {
+    test(
+        'avoids repeating the same artist within window M=2 when alternatives exist',
+        () {
       // 3 tracks of Artist A, 3 of Artist B, 3 of Artist C (9 tracks total)
       final tracks = [
         makeTrack('1', 'Taylor Swift', artistId: 'taylor'),
@@ -74,12 +77,14 @@ void main() {
         expect(order.toSet().length, tracks.length);
 
         // Check the sequence starting from keepIndex (0) onwards in order
-        final artistSequence = order.map((idx) => tracks[idx].artistId).toList();
+        final artistSequence =
+            order.map((idx) => tracks[idx].artistId).toList();
         for (int i = 0; i < artistSequence.length - 1; i++) {
           final current = artistSequence[i];
           final next1 = artistSequence[i + 1];
           expect(current != next1, isTrue,
-              reason: 'Adjacent tracks at $i and ${i + 1} both have artist $current');
+              reason:
+                  'Adjacent tracks at $i and ${i + 1} both have artist $current');
           if (i < artistSequence.length - 2) {
             final next2 = artistSequence[i + 2];
             // In a balanced 3x3 queue, with M=2 window, no artist should repeat at i and i+2
@@ -90,7 +95,8 @@ void main() {
       }
     });
 
-    test('completes gracefully without infinite loop when one artist dominates', () {
+    test('completes gracefully without infinite loop when one artist dominates',
+        () {
       // 8 tracks of Artist A and 1 track of Artist B
       final tracks = [
         makeTrack('1', 'Artist A'),
@@ -131,7 +137,9 @@ void main() {
       player = PlayerController(navService, settings);
     });
 
-    test('detects useful start and end bounds when leading and trailing silence exists', () {
+    test(
+        'detects useful start and end bounds when leading and trailing silence exists',
+        () {
       // 10 bins, 100 seconds (10s per bin)
       // Bins 0, 1: silence (0.005 < 0.01)
       // Bins 2..7: audio (0.50 > 0.01)

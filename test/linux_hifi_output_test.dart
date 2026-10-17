@@ -6,9 +6,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:just_audio_media_kit/just_audio_media_kit.dart';
 import 'package:media_kit/media_kit.dart';
-import 'package:navidrome_client/services/hifi/audio_output_devices.dart';
-import 'package:navidrome_client/services/hifi/hifi_coordinator.dart';
-import 'package:navidrome_client/services/hifi/hifi_profiles.dart';
+import 'package:crotowave/services/hifi/audio_output_devices.dart';
+import 'package:crotowave/services/hifi/hifi_coordinator.dart';
+import 'package:crotowave/services/hifi/hifi_profiles.dart';
 
 /// WAV silencioso: permite verificar la salida real sin emitir un tono.
 Uint8List _silence() {
@@ -40,7 +40,7 @@ void main() {
   test('Linux mantiene audio y reloj real en el modo sin procesado', () async {
     JustAudioMediaKit.pitch = false;
     JustAudioMediaKit.ensureInitialized();
-    final temp = await Directory.systemTemp.createTemp('scrotify-hifi-linux-');
+    final temp = await Directory.systemTemp.createTemp('crotowave-hifi-linux-');
     final audio = File('${temp.path}/silencio.wav');
     await audio.writeAsBytes(_silence());
     final player = AudioPlayer();
@@ -72,8 +72,8 @@ void main() {
     await player.pause();
   },
       skip: !Platform.isLinux ||
-              Platform.environment['SCROTIFY_AUDIO_INTEGRATION'] != '1'
-          ? 'Requiere Linux con salida de audio y SCROTIFY_AUDIO_INTEGRATION=1.'
+              Platform.environment['CROTOWAVE_AUDIO_INTEGRATION'] != '1'
+          ? 'Requiere Linux con salida de audio y CROTOWAVE_AUDIO_INTEGRATION=1.'
           : false,
       timeout: const Timeout(Duration(seconds: 30)));
 
@@ -82,7 +82,7 @@ void main() {
     JustAudioMediaKit.ensureInitialized();
     final player = AudioPlayer();
     addTearDown(player.dispose);
-    final temp = await Directory.systemTemp.createTemp('scrotify-hifi-dev-');
+    final temp = await Directory.systemTemp.createTemp('crotowave-hifi-dev-');
     addTearDown(() => temp.delete(recursive: true));
     final audio = File('${temp.path}/silencio.wav');
     await audio.writeAsBytes(_silence());
@@ -99,8 +99,8 @@ void main() {
     }
   },
       skip: !Platform.isLinux ||
-              Platform.environment['SCROTIFY_AUDIO_INTEGRATION'] != '1'
-          ? 'Requiere Linux con salida de audio y SCROTIFY_AUDIO_INTEGRATION=1.'
+              Platform.environment['CROTOWAVE_AUDIO_INTEGRATION'] != '1'
+          ? 'Requiere Linux con salida de audio y CROTOWAVE_AUDIO_INTEGRATION=1.'
           : false,
       timeout: const Timeout(Duration(seconds: 30)));
 }

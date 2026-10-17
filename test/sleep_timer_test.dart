@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:navidrome_client/services/player_controller.dart';
-import 'package:navidrome_client/services/settings_controller.dart';
+import 'package:crotowave/services/player_controller.dart';
+import 'package:crotowave/services/settings_controller.dart';
 
 import 'support/app_fakes.dart';
 
@@ -63,7 +63,8 @@ void main() {
       expect(player.sleepLabel, contains('Fin de la canción'));
     });
 
-    test('setting duration sleep timer cancels previous end of track timer', () {
+    test('setting duration sleep timer cancels previous end of track timer',
+        () {
       player.setSleepTimerEndOfTrack();
       expect(player.isSleepTimerEndOfTrack, isTrue);
 

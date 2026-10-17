@@ -3,9 +3,9 @@ import 'dart:convert';
 
 import 'package:crypto/crypto.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:navidrome_client/services/connect/connect_account.dart';
-import 'package:navidrome_client/services/connect/connect_protocol.dart';
-import 'package:navidrome_client/services/connect/relay_transport.dart';
+import 'package:crotowave/services/connect/connect_account.dart';
+import 'package:crotowave/services/connect/connect_protocol.dart';
+import 'package:crotowave/services/connect/relay_transport.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
 /// Extremo del servidor en memoria: lo que el cliente envía llega a [sent] y lo
@@ -62,7 +62,7 @@ Future<void> pumpEvents() => Future<void>.delayed(Duration.zero);
 
 void main() {
   const account = ConnectAccount(user: 'Ana', password: 'clave');
-  final server = Uri.parse('wss://jam.test/');
+  final server = Uri.parse('wss://crotolink.test/');
   late List<_FakeChannel> channels;
   late List<Uri> dialed;
   var connectThrows = false;
@@ -316,7 +316,8 @@ void main() {
     expect(channels.length, 1);
   });
 
-  test('el reintento crece de forma exponencial, con jitter y tope de 60 s', () {
+  test('el reintento crece de forma exponencial, con jitter y tope de 60 s',
+      () {
     final relay = make(retry: const Duration(seconds: 5));
     final waits = [for (var i = 0; i < 8; i++) relay.nextRetryDelay()];
     expect(waits.first.inMilliseconds, inInclusiveRange(5000, 7500));

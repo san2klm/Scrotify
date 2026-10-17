@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:navidrome_client/services/theme_controller.dart';
-import 'package:navidrome_client/widgets/cleartext_url_warning.dart';
+import 'package:crotowave/services/theme_controller.dart';
+import 'package:crotowave/widgets/cleartext_url_warning.dart';
 import 'package:provider/provider.dart';
 
 void main() {

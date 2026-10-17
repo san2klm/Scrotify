@@ -80,11 +80,11 @@ class FfmpegWaveformDecoder {
       cancelOnError: true,
     );
     process.stderr.transform(const SystemEncoding().decoder).listen(
-      errBuffer.write,
-      onDone: () => errDone.complete(),
-      onError: (Object e) => errDone.completeError(e),
-      cancelOnError: true,
-    );
+          errBuffer.write,
+          onDone: () => errDone.complete(),
+          onError: (Object e) => errDone.completeError(e),
+          cancelOnError: true,
+        );
 
     final exited = await process.exitCode.timeout(timeout, onTimeout: () {
       process.kill(ProcessSignal.sigkill);
@@ -111,9 +111,9 @@ class FfmpegWaveformDecoder {
     String extensionHint = '.bin',
     int sampleRate = decodeSampleRate,
   }) async {
-    final ext = extensionHint.startsWith('.') ? extensionHint : '.$extensionHint';
-    final tmpDir =
-        await Directory.systemTemp.createTemp('scrotify_waveform_');
+    final ext =
+        extensionHint.startsWith('.') ? extensionHint : '.$extensionHint';
+    final tmpDir = await Directory.systemTemp.createTemp('crotowave_waveform_');
     final tmp = File('${tmpDir.path}/input$ext');
     try {
       await tmp.writeAsBytes(audioBytes, flush: true);
@@ -127,7 +127,8 @@ class FfmpegWaveformDecoder {
 
   static List<double> _bytesToFloat32Mono(List<int> bytes) {
     final usable = bytes.length - (bytes.length % 4);
-    final bd = ByteData.sublistView(Uint8List.fromList(bytes.sublist(0, usable)));
+    final bd =
+        ByteData.sublistView(Uint8List.fromList(bytes.sublist(0, usable)));
     final count = usable ~/ 4;
     final out = List<double>.filled(count, 0.0);
     for (var i = 0; i < count; i++) {

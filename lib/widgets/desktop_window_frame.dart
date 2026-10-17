@@ -8,7 +8,7 @@ import 'package:window_manager/window_manager.dart';
 
 import '../services/connect/connect_protocol.dart';
 import '../services/connect/connect_service.dart';
-import '../services/jam_controller.dart';
+import '../services/crotolink_controller.dart';
 import '../services/mini_player_controller.dart';
 import '../services/player_controller.dart';
 import '../services/window_controls.dart';
@@ -35,7 +35,7 @@ class DesktopWindowFrame extends StatefulWidget {
 class _DesktopWindowFrameState extends State<DesktopWindowFrame>
     with WindowListener {
   static const _mouseChannel =
-      MethodChannel('com.scrotify/global_mouse_hotkeys');
+      MethodChannel('com.crotowave/global_mouse_hotkeys');
 
   bool _maximized = false;
   bool _fullScreen = false;
@@ -312,12 +312,13 @@ class _DesktopWindowFrameState extends State<DesktopWindowFrame>
         connect.command(ConnectCommand.toggle);
         return;
       }
-      final jam = context.read<JamController>();
-      if (jam.isGuest && !(jam.localParticipant?.canControlPlayback ?? false)) {
+      final crotoLink = context.read<CrotoLinkController>();
+      if (crotoLink.isGuest &&
+          !(crotoLink.localParticipant?.canControlPlayback ?? false)) {
         return;
       }
-      if (jam.inJam) {
-        jam.playbackAction('toggle');
+      if (crotoLink.inCrotoLink) {
+        crotoLink.playbackAction('toggle');
         return;
       }
       final player = context.read<PlayerController>();
@@ -335,12 +336,13 @@ class _DesktopWindowFrameState extends State<DesktopWindowFrame>
         connect.command(ConnectCommand.next);
         return;
       }
-      final jam = context.read<JamController>();
-      if (jam.isGuest && !(jam.localParticipant?.canControlPlayback ?? false)) {
+      final crotoLink = context.read<CrotoLinkController>();
+      if (crotoLink.isGuest &&
+          !(crotoLink.localParticipant?.canControlPlayback ?? false)) {
         return;
       }
-      if (jam.inJam) {
-        jam.playbackAction('skip_next');
+      if (crotoLink.inCrotoLink) {
+        crotoLink.playbackAction('skip_next');
         return;
       }
       final player = context.read<PlayerController>();
@@ -358,12 +360,13 @@ class _DesktopWindowFrameState extends State<DesktopWindowFrame>
         connect.command(ConnectCommand.previous);
         return;
       }
-      final jam = context.read<JamController>();
-      if (jam.isGuest && !(jam.localParticipant?.canControlPlayback ?? false)) {
+      final crotoLink = context.read<CrotoLinkController>();
+      if (crotoLink.isGuest &&
+          !(crotoLink.localParticipant?.canControlPlayback ?? false)) {
         return;
       }
-      if (jam.inJam) {
-        jam.playbackAction('skip_previous');
+      if (crotoLink.inCrotoLink) {
+        crotoLink.playbackAction('skip_previous');
         return;
       }
       final player = context.read<PlayerController>();

@@ -2,15 +2,15 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
-import 'package:navidrome_client/screens/home_shell.dart';
-import 'package:navidrome_client/services/home_navigation_controller.dart';
-import 'package:navidrome_client/services/connect/connect_service.dart';
-import 'package:navidrome_client/services/jam_controller.dart';
-import 'package:navidrome_client/services/navidrome_service.dart';
-import 'package:navidrome_client/services/player_controller.dart';
-import 'package:navidrome_client/services/theme_controller.dart';
-import 'package:navidrome_client/widgets/explore_tracks_view.dart';
-import 'package:navidrome_client/widgets/global_top_bar.dart';
+import 'package:crotowave/screens/home_shell.dart';
+import 'package:crotowave/services/home_navigation_controller.dart';
+import 'package:crotowave/services/connect/connect_service.dart';
+import 'package:crotowave/services/crotolink_controller.dart';
+import 'package:crotowave/services/navidrome_service.dart';
+import 'package:crotowave/services/player_controller.dart';
+import 'package:crotowave/services/theme_controller.dart';
+import 'package:crotowave/widgets/explore_tracks_view.dart';
+import 'package:crotowave/widgets/global_top_bar.dart';
 
 import 'support/app_fakes.dart';
 
@@ -33,8 +33,10 @@ void main() {
             ChangeNotifierProvider(create: (_) => ThemeController()),
             ChangeNotifierProvider(create: (_) => HomeNavigationController()),
             ChangeNotifierProvider<PlayerController>.value(value: IdlePlayer()),
-            ChangeNotifierProvider<ConnectService>(create: (_) => idleConnectService()),
-            ChangeNotifierProvider<JamController>.value(value: IdleJam()),
+            ChangeNotifierProvider<ConnectService>(
+                create: (_) => idleConnectService()),
+            ChangeNotifierProvider<CrotoLinkController>.value(
+                value: IdleCrotoLink()),
           ],
           child: const MaterialApp(home: HomeShell()),
         ));

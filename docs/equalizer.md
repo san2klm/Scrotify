@@ -9,7 +9,7 @@
 
 ## 0. Estado de la integración en CrotoWave (2026-10-07)
 
-Lo que difiere del paquete original `Eculiza/scrotify_eq`:
+Lo que difiere del paquete original de Eculiza:
 
 * **Cableado automático.** La sección 8 es la referencia original; en el código ya está resuelto en `lib/main.dart`:
   * Android: `AndroidEqSetup.create()` crea los reproductores A/B con su `AndroidEqualizer`. `AndroidEqBackend` aplica siempre el último estado cuando el motor está listo (`parameters` solo se resuelve al cargar la primera pista).

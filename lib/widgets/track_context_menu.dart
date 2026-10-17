@@ -7,7 +7,7 @@ import '../screens/artist_screen.dart';
 import '../screens/album_detail_screen.dart';
 import '../services/cast/cast_client.dart';
 import '../services/cast/cast_session.dart';
-import '../services/jam_controller.dart';
+import '../services/crotolink_controller.dart';
 import '../services/navidrome_service.dart';
 import '../services/offline_cache_service.dart';
 import '../services/offline_download_manager.dart';
@@ -98,7 +98,7 @@ class TrackContextMenu extends StatelessWidget {
   Widget build(BuildContext context) {
     final nav = context.watch<NavidromeService>();
     final player = context.watch<PlayerController>();
-    final jam = context.watch<JamController>();
+    final crotoLink = context.watch<CrotoLinkController>();
     final isStarred = nav.isStarred(track.id);
 
     return SafeArea(
@@ -215,40 +215,45 @@ class TrackContextMenu extends StatelessWidget {
               Divider(color: context.bgElevated, height: 1),
               const SizedBox(height: 8),
 
-              // Acciones Jam (si hay Jam activo)
-              if (jam.inJam) ...[
-                if (jam.isHost ||
-                    (jam.localParticipant?.canManageQueue ?? false)) ...[
+              // Acciones CrotoLink (si hay CrotoLink activo)
+              if (crotoLink.inCrotoLink) ...[
+                if (crotoLink.isHost ||
+                    (crotoLink.localParticipant?.canManageQueue ?? false)) ...[
                   () {
-                    final inJamQueue =
-                        jam.queue.any((qi) => qi.track.id == track.id);
+                    final inCrotoLinkQueue =
+                        crotoLink.queue.any((qi) => qi.track.id == track.id);
                     return ListTile(
                       leading: Container(
                         padding: const EdgeInsets.all(6),
                         decoration: BoxDecoration(
-                          color: (inJamQueue ? context.accent2 : context.accent)
+                          color: (inCrotoLinkQueue
+                                  ? context.accent2
+                                  : context.accent)
                               .withValues(alpha: 0.15),
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: Icon(Icons.speaker_group_rounded,
-                            color:
-                                inJamQueue ? context.accent2 : context.accent,
+                            color: inCrotoLinkQueue
+                                ? context.accent2
+                                : context.accent,
                             size: 20),
                       ),
                       title: Text(
-                        inJamQueue
+                        inCrotoLinkQueue
                             ? 'Ya está en la cola CrotoLink'
                             : 'Añadir a la cola CrotoLink',
                         style: TextStyle(
-                          color: inJamQueue ? context.accent2 : context.accent,
+                          color: inCrotoLinkQueue
+                              ? context.accent2
+                              : context.accent,
                           fontWeight: FontWeight.bold,
                           fontSize: 14,
                         ),
                       ),
                       subtitle: Text(
-                        inJamQueue
+                        inCrotoLinkQueue
                             ? 'Esta pista ya figura en la cola compartida'
-                            : 'Compartir con los ${jam.participants.length} oyentes de la sesión',
+                            : 'Compartir con los ${crotoLink.participants.length} oyentes de la sesión',
                         style:
                             TextStyle(color: context.textMuted, fontSize: 11),
                       ),
@@ -257,12 +262,12 @@ class TrackContextMenu extends StatelessWidget {
                         final bg =
                             context.read<ThemeController>().active.bgElevated;
                         Navigator.of(context).pop();
-                        jam.addTrackToJam(track);
+                        crotoLink.addTrackToCrotoLink(track);
                         messenger.showSnackBar(
                           SnackBar(
-                            content: Text(inJamQueue
+                            content: Text(inCrotoLinkQueue
                                 ? '"${track.title}" ya figuraba en la cola CrotoLink'
-                                : (jam.isGuest
+                                : (crotoLink.isGuest
                                     ? 'Solicitud enviada para añadir "${track.title}" a la cola CrotoLink'
                                     : '"${track.title}" añadida a la cola CrotoLink')),
                             duration: const Duration(seconds: 2),
@@ -273,8 +278,8 @@ class TrackContextMenu extends StatelessWidget {
                     );
                   }(),
                 ],
-                if (jam.isHost ||
-                    (jam.localParticipant?.canManageQueue ?? false))
+                if (crotoLink.isHost ||
+                    (crotoLink.localParticipant?.canManageQueue ?? false))
                   ListTile(
                     leading: Icon(Icons.playlist_play_rounded,
                         color: context.textSecondary),
@@ -288,10 +293,10 @@ class TrackContextMenu extends StatelessWidget {
                       final bg =
                           context.read<ThemeController>().active.bgElevated;
                       Navigator.of(context).pop();
-                      jam.addTrackToJam(track, playNext: true);
+                      crotoLink.addTrackToCrotoLink(track, playNext: true);
                       messenger.showSnackBar(
                         SnackBar(
-                          content: Text(jam.isGuest
+                          content: Text(crotoLink.isGuest
                               ? 'Solicitud enviada para reproducir "${track.title}" a continuación'
                               : '"${track.title}" sonará a continuación en el CrotoLink'),
                           duration: const Duration(seconds: 2),
@@ -300,8 +305,8 @@ class TrackContextMenu extends StatelessWidget {
                       );
                     },
                   ),
-                if (jam.isGuest &&
-                    !(jam.localParticipant?.canManageQueue ?? false))
+                if (crotoLink.isGuest &&
+                    !(crotoLink.localParticipant?.canManageQueue ?? false))
                   ListTile(
                     enabled: false,
                     leading: Icon(Icons.lock_outline_rounded,
@@ -506,7 +511,7 @@ class TrackContextMenu extends StatelessWidget {
               ),
 
               // 4. Añadir a la fila
-              if (!jam.inJam)
+              if (!crotoLink.inCrotoLink)
                 ListTile(
                   leading: Icon(Icons.queue_music_rounded,
                       color: context.textSecondary),
@@ -530,8 +535,8 @@ class TrackContextMenu extends StatelessWidget {
                   },
                 ),
 
-              // Acción de descarga sin conexión (solo cuando no está en Jam)
-              if (!jam.inJam)
+              // Acción de descarga sin conexión (solo cuando no está en CrotoLink)
+              if (!crotoLink.inCrotoLink)
                 TrackOfflineSection(
                   track: track,
                   serverScope: nav.serverScope,

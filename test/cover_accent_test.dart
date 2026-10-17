@@ -2,8 +2,8 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:navidrome_client/services/app_theme.dart';
-import 'package:navidrome_client/services/cover_palette.dart';
+import 'package:crotowave/services/app_theme.dart';
+import 'package:crotowave/services/cover_palette.dart';
 
 Future<MemoryImage> solid(Color color) async {
   final recorder = ui.PictureRecorder();

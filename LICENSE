@@ -678,10 +678,10 @@ Public License instead of this License.  But first, please read
 ==============================================================================
 
 CrotoWave
-Copyright (C) 2026 Lautaro (Dante0Q) and the CrotoWave contributors
+Copyright (C) 2026 Lautaro (Dante0Q), Thiago (SniperWolfer) and the CrotoWave contributors
 Source code: https://github.com/Dante0Q/CrotoWave
 
-The CrotoWave client (everything in this repository except the jam-server/
+The CrotoWave client (everything in this repository except the crotolink-server/
 directory and the third-party components listed in LICENSING.md) is free
 software: you can redistribute it and/or modify it under the terms of the
 GNU General Public License as published by the Free Software Foundation,

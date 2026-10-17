@@ -1,8 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:navidrome_client/services/connect/track_codec.dart';
-import 'package:navidrome_client/services/jam_guest_service.dart';
-import 'package:navidrome_client/services/navidrome_service.dart';
-import 'package:navidrome_client/services/remote_jam_service.dart';
+import 'package:crotowave/services/connect/track_codec.dart';
+import 'package:crotowave/services/crotolink_guest_service.dart';
+import 'package:crotowave/services/navidrome_service.dart';
+import 'package:crotowave/services/remote_crotolink_service.dart';
 
 void main() {
   final track = Track(
@@ -26,7 +26,8 @@ void main() {
 
   test('add_to_queue del invitado no lleva u, s ni t', () {
     expectNoCredentials(
-        JamGuestService.addToQueueTrackJson(track)['albumArtUrl'] as String?);
+        CrotoLinkGuestService.addToQueueTrackJson(track)['albumArtUrl']
+            as String?);
   });
 
   test('el codec de Connect no envía u, s ni t', () {
@@ -34,23 +35,23 @@ void main() {
   });
 
   test('join_room remoto incluye la clave de la sala', () {
-    final msg = RemoteJamService.buildJoinRoomMessage(
+    final msg = RemoteCrotoLinkService.buildJoinRoomMessage(
         pin: '123456', guestName: 'Ana', roomPassword: 'clave1');
     expect(msg['roomPassword'], 'clave1');
     expect(
-        RemoteJamService.buildJoinRoomMessage(pin: '1', guestName: 'a')
+        RemoteCrotoLinkService.buildJoinRoomMessage(pin: '1', guestName: 'a')
             .containsKey('roomPassword'),
         isFalse);
   });
 
   test('terminar el CrotoLink remoto envía close_room', () {
-    expect(RemoteJamService.closeRoomMessage['action'], 'close_room');
+    expect(RemoteCrotoLinkService.closeRoomMessage['action'], 'close_room');
   });
 
   test('la espera de reconexión crece, lleva jitter y se topa en 60 s', () {
     final ms = [
       for (var i = 0; i < 10; i++)
-        RemoteJamService.reconnectDelay(i).inMilliseconds
+        RemoteCrotoLinkService.reconnectDelay(i).inMilliseconds
     ];
     expect(ms[0], inInclusiveRange(1000, 2000));
     expect(ms[3], inInclusiveRange(8000, 9000));

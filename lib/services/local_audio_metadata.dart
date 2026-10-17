@@ -7,7 +7,7 @@ import 'package:flutter/services.dart';
 Future<Map<String, dynamic>?> readLocalAudioMetadata(File file) async {
   try {
     if (Platform.isAndroid) {
-      return await const MethodChannel('scrotify/music_storage')
+      return await const MethodChannel('crotowave/music_storage')
           .invokeMapMethod<String, dynamic>(
               'readAudioMetadata', {'path': file.path});
     }

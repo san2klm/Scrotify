@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:navidrome_client/services/app_theme.dart';
-import 'package:navidrome_client/services/theme_controller.dart';
-import 'package:navidrome_client/utils/tv_mode.dart';
-import 'package:navidrome_client/widgets/tv_focus_ring.dart';
+import 'package:crotowave/services/app_theme.dart';
+import 'package:crotowave/services/theme_controller.dart';
+import 'package:crotowave/utils/tv_mode.dart';
+import 'package:crotowave/widgets/tv_focus_ring.dart';
 import 'package:provider/provider.dart';
 
 class _Themes extends ThemeController {

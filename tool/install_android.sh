@@ -56,8 +56,15 @@ if [[ $FLAVOR == phone && $is_tv == 1 ]]; then
 fi
 
 ver=$(grep -E '^version:' pubspec.yaml | sed 's/version: *//; s/+.*//')
-apk="CrotoWave-$ver-$FLAVOR-$abi.apk"
-[[ -f "$apk" ]] || apk="CrotoWave-$ver-$FLAVOR-universal.apk"
+case "$FLAVOR-$abi" in
+  phone-arm64-v8a) label=TELEFONO-arm64 ;;
+  tv-arm64-v8a) label=TV-arm64 ;;
+  tv-armeabi-v7a) label=CHROMECAST-HD-armv7 ;;
+  *) label="$FLAVOR-$abi" ;;
+esac
+universal=TELEFONO; [[ $FLAVOR == tv ]] && universal=TV
+apk="dist/CrotoWave-$ver-$label.apk"
+[[ -f "$apk" ]] || apk="dist/CrotoWave-$ver-$universal-universal.apk"
 if [[ ! -f "$apk" ]]; then
   echo "No hay APK de $FLAVOR para $abi ($model)." >&2
   echo "Genéralo con: scripts/build_apks.sh $FLAVOR   (o con --universal para un emulador)" >&2

@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:navidrome_client/services/lyrics_service.dart';
+import 'package:crotowave/services/lyrics_service.dart';
 
 void main() {
   test('parseLrc ordena y convierte tiempos', () {

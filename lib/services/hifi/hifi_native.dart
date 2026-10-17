@@ -32,7 +32,7 @@ class HifiOutputInfo {
 }
 
 class HifiNative {
-  static const _ch = MethodChannel('scrotify/hifi');
+  static const _ch = MethodChannel('crotowave/hifi');
 
   static bool get _mobile => Platform.isAndroid || Platform.isIOS;
 

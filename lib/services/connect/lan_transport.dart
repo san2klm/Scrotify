@@ -5,12 +5,12 @@ import 'dart:io';
 import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
 
-import '../jam_network_platform.dart';
+import '../crotolink_network_platform.dart';
 import '../sync/sync_crypto.dart';
 import 'connect_protocol.dart';
 import 'connect_transport.dart';
 
-/// Puerto UDP de las balizas de descubrimiento de Connect (Jam usa 47623).
+/// Puerto UDP de las balizas de descubrimiento de Connect (CrotoLink usa 47623).
 const int kConnectLanPort = 47624;
 
 typedef BeaconTarget = ({InternetAddress address, int port});
@@ -61,7 +61,7 @@ class LanTransport implements ConnectTransport {
 
   /// Etiqueta de grupo de las balizas: no revela la clave ni el id de bóveda.
   late final String _tag = sha256
-      .convert(utf8.encode('scrotify-connect-lan|${crypto.vaultId}'))
+      .convert(utf8.encode('crotowave-connect-lan|${crypto.vaultId}'))
       .toString()
       .substring(0, 16);
 
@@ -90,7 +90,7 @@ class LanTransport implements ConnectTransport {
       server.listen(_onRequest, onError: (_) {});
       if (useMulticastLock) {
         _lockHeld = true;
-        await JamNetworkPlatform.acquireMulticastReception();
+        await CrotoLinkNetworkPlatform.acquireMulticastReception();
       }
       final udp = await RawDatagramSocket.bind(
           InternetAddress.anyIPv4, beaconPort,
@@ -133,7 +133,7 @@ class LanTransport implements ConnectTransport {
     _pending = 0;
     if (_lockHeld) {
       _lockHeld = false;
-      await JamNetworkPlatform.releaseMulticastReception();
+      await CrotoLinkNetworkPlatform.releaseMulticastReception();
     }
     _devices.add(const []);
   }
@@ -147,7 +147,7 @@ class LanTransport implements ConnectTransport {
     final server = _server;
     if (udp == null || server == null) return;
     final payload = utf8.encode(jsonEncode({
-      'app': 'scrotify-connect',
+      'app': 'crotowave-connect',
       'tag': _tag,
       'id': selfId,
       'name': selfName,
@@ -189,7 +189,7 @@ class LanTransport implements ConnectTransport {
     try {
       final data =
           jsonDecode(utf8.decode(datagram.data)) as Map<String, dynamic>;
-      if (data['app'] != 'scrotify-connect' || data['tag'] != _tag) return;
+      if (data['app'] != 'crotowave-connect' || data['tag'] != _tag) return;
       final id = data['id'];
       final port = data['port'];
       if (id is! String || id == selfId || port is! int) return;

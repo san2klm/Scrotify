@@ -125,8 +125,6 @@ class ThemeController extends ChangeNotifier {
       final userProfile = Platform.environment['USERPROFILE'];
       if (userProfile != null) {
         final candidates = [
-          '$userProfile\\Downloads\\temas-Scrotify-20261006T210310Z-1-001',
-          '$userProfile\\Downloads\\temas-Scrotify',
           '$userProfile\\Downloads\\fondos',
         ];
         for (final candidate in candidates) {

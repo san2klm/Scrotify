@@ -1,9 +1,9 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:just_audio/just_audio.dart' show LoopMode;
-import 'package:navidrome_client/services/connect/connect_protocol.dart';
-import 'package:navidrome_client/services/connect/player_connect_port.dart';
-import 'package:navidrome_client/services/connect/track_codec.dart';
-import 'package:navidrome_client/services/navidrome_service.dart';
+import 'package:crotowave/services/connect/connect_protocol.dart';
+import 'package:crotowave/services/connect/player_connect_port.dart';
+import 'package:crotowave/services/connect/track_codec.dart';
+import 'package:crotowave/services/navidrome_service.dart';
 
 import 'support/app_fakes.dart';
 

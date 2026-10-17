@@ -2,14 +2,14 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:navidrome_client/services/secure_storage.dart';
-import 'package:navidrome_client/utils/signing_migration.dart';
+import 'package:crotowave/services/secure_storage.dart';
+import 'package:crotowave/utils/signing_migration.dart';
 
 void main() {
   late Directory dir;
 
   setUp(() async {
-    dir = await Directory.systemTemp.createTemp('scrotify-migration-');
+    dir = await Directory.systemTemp.createTemp('crotowave-migration-');
     SecureStorage.inMemoryTestStore = {};
   });
 

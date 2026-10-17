@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:navidrome_client/services/local_music_service.dart';
-import 'package:navidrome_client/widgets/local_music_settings.dart';
+import 'package:crotowave/services/local_music_service.dart';
+import 'package:crotowave/widgets/local_music_settings.dart';
 
 void main() {
   test('cada etapa tiene su texto', () {

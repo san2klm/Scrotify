@@ -5,9 +5,9 @@
 #   scripts/build_apks.sh phone --universal
 #       -> un único APK con todas las arquitecturas (más pesado; para emulador)
 #
-# Salida en la raíz: CrotoWave-<versión>-<sabor>-<abi>.apk
-#   phone: arm64-v8a            tv: arm64-v8a y armeabi-v7a (Chromecast HD)
-# Instalar con tool/install_android.sh, que elige el APK correcto.
+# Salida SIEMPRE en dist/ (nunca en la raíz): CrotoWave-<versión>-<DESTINO>-<abi>.apk
+#   TELEFONO-arm64   TV-arm64   CHROMECAST-HD-armv7   (con --universal: <DESTINO>-universal)
+# Firmar la carpeta con scripts/sign_release.sh. Instalar con tool/install_android.sh.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -48,21 +48,29 @@ build() { # sabor  plataformas  [defines extra...]
   [[ $universal == 1 ]] && mode=()
   flutter build apk --release --flavor "$flavor" "${mode[@]}" \
     --build-number "$build_number" \
-    --dart-define=SCROTIFY_VERSION="$ver" \
-    --dart-define=SCROTIFY_COMMIT="$commit" \
-    --dart-define=SCROTIFY_BUILD_DATE="$(date +%F)" \
+    --dart-define=CROTOWAVE_VERSION="$ver" \
+    --dart-define=CROTOWAVE_COMMIT="$commit" \
+    --dart-define=CROTOWAVE_BUILD_DATE="$(date +%F)" \
     "$@"
-  rm -f "CrotoWave-$ver-$flavor"*.apk
+  mkdir -p dist
   if [[ $universal == 1 ]]; then
-    cp "$out/app-$flavor-release.apk" "CrotoWave-$ver-$flavor-universal.apk"
+    local label=TELEFONO
+    [[ $flavor == tv ]] && label=TV
+    cp "$out/app-$flavor-release.apk" "dist/CrotoWave-$ver-$label-universal.apk"
   else
-    local abi
+    local abi label
     for abi in ${platforms//,/ }; do
       case "$abi" in
         android-arm64) abi=arm64-v8a ;;
         android-arm) abi=armeabi-v7a ;;
       esac
-      cp "$out/app-$abi-$flavor-release.apk" "CrotoWave-$ver-$flavor-$abi.apk"
+      case "$flavor-$abi" in
+        phone-arm64-v8a) label=TELEFONO-arm64 ;;
+        tv-arm64-v8a) label=TV-arm64 ;;
+        tv-armeabi-v7a) label=CHROMECAST-HD-armv7 ;;
+        *) label="$flavor-$abi" ;;
+      esac
+      cp "$out/app-$abi-$flavor-release.apk" "dist/CrotoWave-$ver-$label.apk"
     done
   fi
 }
@@ -74,4 +82,4 @@ if [[ "$target" == all || "$target" == tv ]]; then
   build tv android-arm64,android-arm --dart-define=FORCE_TV=true
 fi
 echo "Build $ver ($commit), número $build_number"
-ls -lh CrotoWave-"$ver"-*.apk
+ls -lh dist/CrotoWave-"$ver"-*.apk

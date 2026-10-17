@@ -11,7 +11,7 @@ import '../utils/app_colors.dart';
 import '../utils/responsive.dart';
 
 /// Selector de dispositivos de CrotoWave Connect (estilo Spotify): lista los
-/// dispositivos del usuario por LAN y por el servidor Jam y permite pasarles
+/// dispositivos del usuario por LAN y por el servidor CrotoLink y permite pasarles
 /// la reproducción o traerla de vuelta.
 class ConnectPanel extends StatelessWidget {
   const ConnectPanel({super.key});

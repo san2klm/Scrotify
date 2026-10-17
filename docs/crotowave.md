@@ -1,7 +1,7 @@
 # CrotoWave — Manual Técnico de Arquitectura y Funcionamiento Integral
 
 > **Documentación Maestra del Proyecto**  
-> Aplicación: CrotoWave (`navidrome_client`)  
+> Aplicación: CrotoWave (`crotowave`)  
 > Tipo: Cliente de música moderno, multiplataforma, self-hosted y local-first para Navidrome (API Subsonic v1.16.1)  
 > Plataformas: Linux, Windows, macOS, Android e iOS  
 > Versión del código base: 1.0.0+2002  
@@ -22,7 +22,7 @@
     ┌───────────────────────────────┼───────────────────────────────┐
     ▼                               ▼                               ▼
 ┌────────────────────────┐  ┌────────────────────────┐  ┌────────────────────────┐
-│  REPRODUCCIÓN & DSP    │  │   MODO SOCIAL (JAM)    │  │   ALMACENAMIENTO &     │
+│  REPRODUCCIÓN & DSP    │  │   MODO SOCIAL (CROTOLINK)    │  │   ALMACENAMIENTO &     │
 │ • Doble Player A/B     │  │ • Escucha sincro LAN   │  │   DESCARGAS OFFLINE    │
 │ • Crossfade real       │  │ • Relay Cloud WSS      │  │ • SQLite local         │
 │ • ReplayGain / EQs     │  │ • Altavoz de fiesta    │  │ • Descargas en segundo │
@@ -40,7 +40,7 @@
    * En funciones colaborativas (como CrotoLink), **nunca se retransmite audio P2P**: cada cliente reproduce el flujo desde su propio servidor, ahorrando ancho de banda y batería.
 3. **Adaptabilidad Nativa Multiplataforma:**
    * **Desktop (Linux, Windows, macOS):** Ventana personalizada sin marcos nativos (*frameless*), atajos globales de teclado, decodificación acelerada con FFmpeg/mpv y panel lateral expandido.
-   * **Móvil (Android, iOS):** Integración completa con el sistema de notificaciones de audio en segundo plano ([`audio_service`](lib/services/scrotify_audio_handler.dart)), widget nativo para la pantalla de inicio ([`home_widget`](lib/services/home_widget_service.dart)), bloqueo biométrico y gestos táctiles.
+   * **Móvil (Android, iOS):** Integración completa con el sistema de notificaciones de audio en segundo plano ([`audio_service`](lib/services/crotowave_audio_handler.dart)), widget nativo para la pantalla de inicio ([`home_widget`](lib/services/home_widget_service.dart)), bloqueo biométrico y gestos táctiles.
 
 ---
 
@@ -76,20 +76,20 @@ lib/
 │   ├── album.dart                 # Modelo de álbum musical
 │   ├── track.dart                 # Modelo de pista y metadatos
 │   ├── server_profile.dart        # Configuración de perfiles de servidor
-│   ├── jam_models.dart            # Modelos de estado, participantes y colas CrotoLink
+│   ├── crotolink_models.dart            # Modelos de estado, participantes y colas CrotoLink
 │   └── pairing_models.dart        # Modelos para emparejamiento criptográfico
 ├── services/                      # Lógica de negocio, servicios de red y audio
 │   ├── navidrome_service.dart     # Cliente de API Subsonic v1.16.1
 │   ├── player_controller.dart     # Orquestador del reproductor de audio A/B
-│   ├── scrotify_audio_handler.dart# Servicio de segundo plano y notificaciones OS
+│   ├── crotowave_audio_handler.dart# Servicio de segundo plano y notificaciones OS
 │   ├── audio_waveform_service.dart# Generador de formas de onda por análisis PCM real
 │   ├── offline_download_manager.dart # Gestor de descargas concurrentes en background
 │   ├── offline_cache_service.dart # Base de datos SQLite y caché en disco
 │   ├── server_profiles_controller.dart # Gestor multicuenta de servidores
-│   ├── jam_controller.dart        # Orquestador de sesiones CrotoLink
-│   ├── jam_host_service.dart      # Servidor WebSocket y radar UDP local del Host
-│   ├── jam_guest_service.dart     # Cliente WebSocket y radar del Invitado
-│   ├── remote_jam_service.dart    # Cliente de conexión al servidor CrotoLink en la nube
+│   ├── crotolink_controller.dart        # Orquestador de sesiones CrotoLink
+│   ├── crotolink_host_service.dart      # Servidor WebSocket y radar UDP local del Host
+│   ├── crotolink_guest_service.dart     # Cliente WebSocket y radar del Invitado
+│   ├── remote_crotolink_service.dart    # Cliente de conexión al servidor CrotoLink en la nube
 │   ├── lyrics_service.dart        # Búsqueda de letras sincronizadas (Navidrome + LRCLIB)
 │   ├── equalizer_service.dart     # Configuración y presets del ecualizador de 10 bandas
 │   ├── listening_stats_service.dart # Métricas de escucha personalizadas (CrotoWave Wrapped)
@@ -117,8 +117,8 @@ lib/
 │   ├── waveform_progress_bar.dart # Barra de progreso con forma de onda real interactiva
 │   ├── desktop_window_frame.dart  # Marco de ventana frameless con controles
 │   ├── interactive_artist_text.dart # Texto con enlaces independientes a múltiples artistas
-│   ├── jam_dialog.dart            # Diálogo y modal de gestión de sesiones CrotoLink
-│   ├── jam_queue_panel.dart       # Panel de cola compartida con avatar del usuario
+│   ├── crotolink_dialog.dart            # Diálogo y modal de gestión de sesiones CrotoLink
+│   ├── crotolink_queue_panel.dart       # Panel de cola compartida con avatar del usuario
 │   ├── persistent_player_bar.dart # Barra de reproducción inferior persistente
 │   └── lyrics_overlay.dart        # Panel flotante de letras en seguimiento
 └── utils/                         # Utilidades generales y helpers
@@ -154,7 +154,7 @@ MultiProvider(
     Provider<OfflineCacheService>(create: (_) => OfflineCacheService(), dispose: (_, s) => s.close()),
     ChangeNotifierProvider(create: (ctx) => OfflineDownloadManager(...)..initialize()),
     ChangeNotifierProvider(create: (ctx) => PlayerController(...)),
-    ChangeNotifierProvider(create: (ctx) => JamController(...)),
+    ChangeNotifierProvider(create: (ctx) => CrotoLinkController(...)),
   ],
   child: MyApp(...),
 )
@@ -390,13 +390,13 @@ En Linux, Windows y macOS, la aplicación oculta la barra de título tradicional
 
 ## 15. CrotoLink — Sincronización Social en Tiempo Real
 
-> *Para el desglose técnico exhaustivo de este subsistema, consulte el archivo canónico [**`JAM.md`**](JAM.md).*
+> *Para el desglose técnico exhaustivo de este subsistema, consulte el archivo canónico [**`crotolink.md`**](crotolink.md).*
 
 CrotoLink permite que múltiples personas escuchen juntas o colaboren en una misma cola de reproducción:
 
 ```
 ┌────────────────────────────────────────────────────────────────────────┐
-│                              CROTOWAVE JAM                              │
+│                              CROTOWAVE CROTOLINK                              │
 └───────────────────┬────────────────────────────────┬───────────────────┘
                     │                                │
                     ▼                                ▼
@@ -414,7 +414,7 @@ CrotoLink permite que múltiples personas escuchen juntas o colaboren en una mis
 
 * **Sin Retransmisión de Audio P2P:** Solo se intercambian metadatos, orden de cola y posiciones temporales.
 * **Compensación de Latencia:** Ajuste automático del retardo de tránsito en red ($\Delta T_{\text{transit}}$) con un umbral de corrección de deriva (*drift*) de 450 ms para evitar microcortes.
-* **Seguridad Estricta:** Certificados TLS efímeros RSA-2048 con huella SHA-256 fijada por código QR, tokens de reconexión de 128 bits y sanitización obligatoria de credenciales Subsonic mediante [`sanitizeArtUrl`](lib/models/jam_models.dart#L9-L18).
+* **Seguridad Estricta:** Certificados TLS efímeros RSA-2048 con huella SHA-256 fijada por código QR, tokens de reconexión de 128 bits y sanitización obligatoria de credenciales Subsonic mediante [`sanitizeArtUrl`](lib/models/crotolink_models.dart#L9-L18).
 
 ---
 
@@ -448,13 +448,13 @@ flutter test
 
 Para ejecutar pruebas específicas de subsistemas (ej. CrotoLink):
 ```bash
-flutter test test/jam_test.dart test/jam_ui_recovery_test.dart
+flutter test test/crotolink_test.dart test/crotolink_ui_recovery_test.dart
 ```
 
 ### 17.3. Servidor CrotoLink en Node.js
 Para ejecutar la suite de pruebas del servidor WebSocket central:
 ```bash
-cd jam-server
+cd crotolink-server
 npm install
 node --test test/server.test.js
 ```
@@ -479,11 +479,11 @@ node --test test/server.test.js
 | **Reproductor** | [`PlayerController`](lib/services/player_controller.dart) | Doble `AudioPlayer` A/B (`just_audio` + `media_kit`) | Memoria / `ListeningStatsService` |
 | **Formas de Onda** | [`AudioWaveformService`](lib/services/audio_waveform_service.dart) | Decodificación PCM real (FFmpeg / WAV) | Disco (`waveform_cache_v2/`) |
 | **Letras** | [`LyricsService`](lib/services/lyrics_service.dart) | Subsonic Lyrics + LRCLIB REST API | Memoria / Caché por `trackId` |
-| **Audio en Background** | [`ScrotifyAudioHandler`](lib/services/scrotify_audio_handler.dart) | Android MediaSession / iOS AudioSession | Notificación del Sistema Operativo |
+| **Audio en Background** | [`CrotoWaveAudioHandler`](lib/services/crotowave_audio_handler.dart) | Android MediaSession / iOS AudioSession | Notificación del Sistema Operativo |
 | **Widget Móvil** | [`HomeWidgetService`](lib/services/home_widget_service.dart) | Android AppWidget Provider | SharedPreferences de Android |
 | **Descargas Offline** | [`OfflineDownloadManager`](lib/services/offline_download_manager.dart) | HTTP Streaming por bloques concurrentes | SQLite (`offline_cache.db`) + Disco |
 | **Gestión de Cuentas** | [`ServerProfilesController`](lib/services/server_profiles_controller.dart) | Perfiles multicuenta serializables | [`SecureStorage`](lib/services/secure_storage.dart) (Keystore/Keychain) |
 | **Emparejamiento** | [`PairingServer`](lib/services/pairing_server.dart) | X25519 Diffie-Hellman + ChaCha20-Poly1305 | Sesiones efímeras con TTL de 5 min |
-| **CrotoLink** | [`JamController`](lib/services/jam_controller.dart) | WebSockets (WSS) + UDP Radar (LAN y Cloud) | Estado efímero en RAM |
+| **CrotoLink** | [`CrotoLinkController`](lib/services/crotolink_controller.dart) | WebSockets (WSS) + UDP Radar (LAN y Cloud) | Estado efímero en RAM |
 | **Temas y Estilos** | [`ThemeController`](lib/services/theme_controller.dart) | Paletas CSS variables y paquetes `.zip` | `themes.json` (preload sin flash) |
 | **Estadísticas** | [`ListeningStatsService`](lib/services/listening_stats_service.dart) | Eventos de escucha calificados (>50%) | `listening_events.json` |

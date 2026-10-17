@@ -18,12 +18,12 @@ import 'player_controller.dart';
 class HomeWidgetService {
   /// Nombres calificados de los `AppWidgetProvider` nativos (un diseño cada uno).
   static const List<String> androidProviders = [
-    'com.example.navidrome_client.ScrotifyWidgetProvider',
-    'com.example.navidrome_client.ScrotifyCompactWidgetProvider',
-    'com.example.navidrome_client.ScrotifyCoverWidgetProvider',
+    'cloud.templo.crotowave.CrotoWaveWidgetProvider',
+    'cloud.templo.crotowave.CrotoWaveCompactWidgetProvider',
+    'cloud.templo.crotowave.CrotoWaveCoverWidgetProvider',
   ];
 
-  // Claves compartidas con ScrotifyWidgetProvider.kt
+  // Claves compartidas con CrotoWaveWidgetProvider.kt
   static const String keyTitle = 'widget_title';
   static const String keyArtist = 'widget_artist';
   static const String keyAlbum = 'widget_album';

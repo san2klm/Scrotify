@@ -107,7 +107,9 @@ class WavDecoder {
     final frameCount = dataLen ~/ frameSize;
     if (frameCount <= 0) {
       return WavDecodeResult(
-          monoSamples: const [], sampleRate: sampleRate, numChannels: numChannels);
+          monoSamples: const [],
+          sampleRate: sampleRate,
+          numChannels: numChannels);
     }
 
     final mono = List<double>.filled(frameCount, 0.0);
@@ -126,8 +128,7 @@ class WavDecoder {
     );
   }
 
-  static double _readSample(
-      ByteData bd, int pos, int bits, bool isFloat) {
+  static double _readSample(ByteData bd, int pos, int bits, bool isFloat) {
     if (isFloat) {
       if (bits == 32) {
         return bd.getFloat32(pos, Endian.little).clamp(-1.0, 1.0);

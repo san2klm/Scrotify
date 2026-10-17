@@ -42,8 +42,7 @@ class ThemeValidation {
 
   static final _kebab = RegExp(r'^[a-z0-9]+(-[a-z0-9]+)*$');
   static final _author = RegExp(r'^[A-Za-z0-9](-?[A-Za-z0-9]){0,38}$');
-  static final _semver =
-      RegExp(r'^\d+\.\d+\.\d+(-[\w.]+)?(\+[\w.]+)?$');
+  static final _semver = RegExp(r'^\d+\.\d+\.\d+(-[\w.]+)?(\+[\w.]+)?$');
   static final _tag = RegExp(r'^[a-z0-9]+(-[a-z0-9]+)*$');
 
   static const _assetExts = {
@@ -146,8 +145,7 @@ class ThemeValidation {
     }
 
     // Quitar comentarios antes de chequear (anti-smuggling).
-    final clean =
-        css.replaceAll(RegExp(r'/\*.*?\*/', dotAll: true), '');
+    final clean = css.replaceAll(RegExp(r'/\*.*?\*/', dotAll: true), '');
     final low = clean.toLowerCase();
 
     const forbidden = [
@@ -167,8 +165,7 @@ class ThemeValidation {
     }
 
     // url() solo data: o assets/... válidos.
-    final urlReg =
-        RegExp('url\\(\\s*([\'"]?)([^\'")]+)\\1\\s*\\)');
+    final urlReg = RegExp('url\\(\\s*([\'"]?)([^\'")]+)\\1\\s*\\)');
     for (final m in urlReg.allMatches(clean)) {
       final target = m.group(2)!.trim();
       if (target.startsWith('data:')) continue;
@@ -227,8 +224,7 @@ class ThemeValidation {
       final name = file.name.toLowerCase();
       if (name.endsWith('manifest.json') && manifestRaw == null) {
         manifestRaw = utf8.decode(file.content as List<int>);
-      } else if ((name.endsWith('theme.css') ||
-              name.endsWith('theme.scss')) &&
+      } else if ((name.endsWith('theme.css') || name.endsWith('theme.scss')) &&
           cssRaw == null) {
         cssRaw = utf8.decode(file.content as List<int>);
       }
@@ -243,8 +239,7 @@ class ThemeValidation {
       return 'manifest.json no es JSON válido.';
     }
 
-    final mErr =
-        validateManifest(manifest, reservedIds: reservedIds);
+    final mErr = validateManifest(manifest, reservedIds: reservedIds);
     if (mErr != null) return mErr;
 
     final cssErr = validateCss(cssRaw, manifest['id'].toString());

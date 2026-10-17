@@ -190,7 +190,7 @@ class PairingServer {
   String _newRelayTopic() {
     const alphabet = 'abcdefghijklmnopqrstuvwxyz0123456789';
     final random = Random.secure();
-    return 'scrotify-${List.generate(32, (_) => alphabet[random.nextInt(alphabet.length)]).join()}';
+    return 'crotowave-${List.generate(32, (_) => alphabet[random.nextInt(alphabet.length)]).join()}';
   }
 
   Future<void> _startRelaySubscription() async {

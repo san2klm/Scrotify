@@ -1,6 +1,6 @@
 part of 'navidrome_service.dart';
 
-/// Letras, géneros, "escuchando ahora", chat del lobby y Jams del servidor.
+/// Letras, géneros, "escuchando ahora", chat del lobby y CrotoLinks del servidor.
 mixin _NavidromeExtras on _NavidromeBase {
   // ---------------------------------------------------------------------------
   // Letras locales (prioridad 1): getLyricsBySongId de Navidrome/OpenSubsonic.
@@ -26,7 +26,8 @@ mixin _NavidromeExtras on _NavidromeBase {
       if (response.statusCode != 200) return null;
       final info = jsonDecode(response.body)['subsonic-response']
           ?['artistInfo2'] as Map<String, dynamic>?;
-      final url = (info?['largeImageUrl'] ?? info?['mediumImageUrl']) as String?;
+      final url =
+          (info?['largeImageUrl'] ?? info?['mediumImageUrl']) as String?;
       return (url == null || url.trim().isEmpty) ? null : url;
     } catch (_) {
       return null;
@@ -439,18 +440,18 @@ mixin _NavidromeExtras on _NavidromeBase {
     }
   }
 
-  Future<void> publishServerJam(JamSessionState session) async {
+  Future<void> publishServerCrotoLink(CrotoLinkSessionState session) async {
     if (!_connected || !session.isPublic) return;
     // Se llama en cada cambio de estado: máximo un anuncio cada 30 s.
-    final last = _lastJamAnnounce;
+    final last = _lastCrotoLinkAnnounce;
     if (last != null &&
         DateTime.now().difference(last) < const Duration(seconds: 30)) {
       return;
     }
-    _lastJamAnnounce = DateTime.now();
+    _lastCrotoLinkAnnounce = DateTime.now();
     try {
       final payload = jsonEncode({
-        'tag': 'SCROTIFY_JAM',
+        'tag': 'CROTOLINK_LIVE',
         'sessionId': session.sessionId,
         'pin': session.pinCode,
         'host': session.hostIp,
@@ -468,32 +469,33 @@ mixin _NavidromeExtras on _NavidromeBase {
         'timestamp': DateTime.now().millisecondsSinceEpoch,
       });
 
-      await addChatMessage('[JAM_LIVE]:$payload');
+      await addChatMessage('[CROTOLINK_LIVE]:$payload');
     } catch (e) {
-      debugPrint('NavidromeService.publishServerJam error: $e');
+      debugPrint('NavidromeService.publishServerCrotoLink error: $e');
     }
   }
 
-  /// Retira el anuncio de una Jam que terminó de forma ordenada.
-  Future<void> publishServerJamEnded(JamSessionState session) async {
+  /// Retira el anuncio de una CrotoLink que terminó de forma ordenada.
+  Future<void> publishServerCrotoLinkEnded(
+      CrotoLinkSessionState session) async {
     if (!_connected || !session.isPublic) return;
-    _lastJamAnnounce = null;
+    _lastCrotoLinkAnnounce = null;
     try {
-      await addChatMessage('[JAM_END]:${jsonEncode({
-            'tag': 'SCROTIFY_JAM',
+      await addChatMessage('[CROTOLINK_END]:${jsonEncode({
+            'tag': 'CROTOLINK_LIVE',
             'sessionId': session.sessionId,
             'pin': session.pinCode,
             'timestamp': DateTime.now().millisecondsSinceEpoch,
           })}');
     } catch (e) {
-      debugPrint('NavidromeService.publishServerJamEnded error: $e');
+      debugPrint('NavidromeService.publishServerCrotoLinkEnded error: $e');
     }
   }
 
-  /// Descubre sesiones Jam activas anunciadas en este servidor Navidrome.
-  Future<List<DiscoveredJamSession>> getServerActiveJams() async {
+  /// Descubre sesiones CrotoLink activas anunciadas en este servidor Navidrome.
+  Future<List<DiscoveredCrotoLinkSession>> getServerActiveCrotoLinks() async {
     if (!_connected) return [];
-    final discovered = <String, DiscoveredJamSession>{};
+    final discovered = <String, DiscoveredCrotoLinkSession>{};
 
     try {
       // 1. Buscar en mensajes de chat recientes
@@ -503,10 +505,11 @@ mixin _NavidromeExtras on _NavidromeBase {
       // PIN -> momento en que el anfitrión cerró la sala.
       final endedAt = <String, int>{};
       for (final msg in messages) {
-        if (!msg.message.startsWith('[JAM_END]:')) continue;
+        if (!msg.message.startsWith('[CROTOLINK_END]:')) continue;
         try {
-          final data = jsonDecode(msg.message.substring('[JAM_END]:'.length))
-              as Map<String, dynamic>;
+          final data =
+              jsonDecode(msg.message.substring('[CROTOLINK_END]:'.length))
+                  as Map<String, dynamic>;
           final pin = (data['pin'] as String?) ?? '';
           final ts = (data['timestamp'] as num?)?.toInt() ?? 0;
           if (pin.isNotEmpty && ts > (endedAt[pin] ?? 0)) endedAt[pin] = ts;
@@ -514,9 +517,9 @@ mixin _NavidromeExtras on _NavidromeBase {
       }
 
       for (final msg in messages.reversed) {
-        if (msg.message.startsWith('[JAM_LIVE]:')) {
+        if (msg.message.startsWith('[CROTOLINK_LIVE]:')) {
           try {
-            final jsonStr = msg.message.substring('[JAM_LIVE]:'.length);
+            final jsonStr = msg.message.substring('[CROTOLINK_LIVE]:'.length);
             final data = jsonDecode(jsonStr) as Map<String, dynamic>;
             final ts = (data['timestamp'] as num?)?.toInt() ?? 0;
 
@@ -534,13 +537,13 @@ mixin _NavidromeExtras on _NavidromeBase {
 
               if (pin.isNotEmpty) {
                 final modeName =
-                    data['mode'] as String? ?? JamMode.partySpeaker.name;
-                final mode = JamMode.values.firstWhere(
+                    data['mode'] as String? ?? CrotoLinkMode.partySpeaker.name;
+                final mode = CrotoLinkMode.values.firstWhere(
                   (m) => m.name == modeName,
-                  orElse: () => JamMode.partySpeaker,
+                  orElse: () => CrotoLinkMode.partySpeaker,
                 );
 
-                discovered[key] = DiscoveredJamSession(
+                discovered[key] = DiscoveredCrotoLinkSession(
                   host: host,
                   port: port,
                   pin: pin,
@@ -564,7 +567,7 @@ mixin _NavidromeExtras on _NavidromeBase {
         }
       }
     } catch (e) {
-      debugPrint('NavidromeService.getServerActiveJams error: $e');
+      debugPrint('NavidromeService.getServerActiveCrotoLinks error: $e');
     }
 
     return discovered.values.toList();

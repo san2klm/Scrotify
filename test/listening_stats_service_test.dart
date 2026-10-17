@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:navidrome_client/services/listening_stats_service.dart';
+import 'package:crotowave/services/listening_stats_service.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();

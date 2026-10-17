@@ -3,9 +3,9 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
-import 'package:navidrome_client/services/navidrome_service.dart';
-import 'package:navidrome_client/services/theme_controller.dart';
-import 'package:navidrome_client/widgets/add_playlist_tracks_dialog.dart';
+import 'package:crotowave/services/navidrome_service.dart';
+import 'package:crotowave/services/theme_controller.dart';
+import 'package:crotowave/widgets/add_playlist_tracks_dialog.dart';
 
 class _Playlists extends NavidromeService {
   final searches = <String, Completer<SearchResults>>{};

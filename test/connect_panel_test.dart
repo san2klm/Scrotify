@@ -3,15 +3,15 @@ import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:navidrome_client/services/app_theme.dart';
-import 'package:navidrome_client/services/connect/connect_protocol.dart';
-import 'package:navidrome_client/services/connect/connect_service.dart';
-import 'package:navidrome_client/services/connect/connect_transport.dart';
-import 'package:navidrome_client/services/navidrome_service.dart';
-import 'package:navidrome_client/services/player_controller.dart';
-import 'package:navidrome_client/services/sync/sync_crypto.dart';
-import 'package:navidrome_client/services/theme_controller.dart';
-import 'package:navidrome_client/widgets/connect_panel.dart';
+import 'package:crotowave/services/app_theme.dart';
+import 'package:crotowave/services/connect/connect_protocol.dart';
+import 'package:crotowave/services/connect/connect_service.dart';
+import 'package:crotowave/services/connect/connect_transport.dart';
+import 'package:crotowave/services/navidrome_service.dart';
+import 'package:crotowave/services/player_controller.dart';
+import 'package:crotowave/services/sync/sync_crypto.dart';
+import 'package:crotowave/services/theme_controller.dart';
+import 'package:crotowave/widgets/connect_panel.dart';
 import 'package:provider/provider.dart';
 
 import 'support/app_fakes.dart';

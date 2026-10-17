@@ -1,4 +1,4 @@
-import '../../models/jam_models.dart' show sanitizeArtUrl;
+import '../../models/crotolink_models.dart' show sanitizeArtUrl;
 import '../navidrome_service.dart';
 
 /// `Track` ⇄ JSON para los mensajes de Connect (subconjunto que basta para

@@ -14,12 +14,12 @@ import '../secure_storage.dart';
 import 'sync_crypto.dart';
 
 /// Sincroniza en segundo plano los datos del usuario (ajustes, temas
-/// importados, seguidos, valoraciones…) con el servidor Jam. Todo viaja
+/// importados, seguidos, valoraciones…) con el servidor CrotoLink. Todo viaja
 /// cifrado de extremo a extremo con la clave de sincronización: el servidor
 /// solo ve blobs opacos. Gana el cambio más reciente de cada documento.
 ///
 /// Fuera de la sincronización quedan los datos propios de cada dispositivo
-/// (rutas, cachés, URL del servidor Jam) y la música descargada.
+/// (rutas, cachés, URL del servidor CrotoLink) y la música descargada.
 class SyncService extends ChangeNotifier {
   SyncService({
     required this.dataDir,
@@ -39,8 +39,8 @@ class SyncService extends ChangeNotifier {
         _readKey = readKey ?? (() => SecureStorage.secureRead(_keyName)),
         _writeKey = writeKey ?? _defaultWriteKey;
 
-  static const _keyName = 'scrotify.sync_key';
-  static const _optOutName = 'scrotify.sync_opt_out';
+  static const _keyName = 'crotowave.sync_key';
+  static const _optOutName = 'crotowave.sync_opt_out';
   static const _stateFile = 'sync_state.json';
 
   /// Documentos JSON de la app que se sincronizan (con o sin sufijo de servidor).
@@ -70,7 +70,7 @@ class SyncService extends ChangeNotifier {
   static const trashDir = 'sync_trash';
 
   /// Ajustes que pertenecen al dispositivo y no viajan.
-  static const _deviceSettings = ['jamServerUrl'];
+  static const _deviceSettings = ['crotoLinkServerUrl'];
 
   final Future<Directory> Function() dataDir;
   final Future<Directory> Function() themeImportsDir;
@@ -168,7 +168,7 @@ class SyncService extends ChangeNotifier {
         bits: 256,
       ).deriveKey(
         secretKey: SecretKey(utf8.encode(password)),
-        nonce: utf8.encode('scrotify-sync-account-v1|$server|$username'),
+        nonce: utf8.encode('crotowave-sync-account-v1|$server|$username'),
       );
       return Uint8List.fromList(await key.extractBytes());
     });
@@ -660,13 +660,26 @@ class SyncService extends ChangeNotifier {
       throw const _SyncFailure('Demasiadas peticiones; se reintentará luego.');
     }
     if (code == 507) {
-      throw const _SyncFailure(
+      throw _SyncFailure(_serverError(response) ??
           'El servidor no tiene espacio para sincronizar.');
     }
     if (code >= 400 && code != 404 && code != 409) {
       throw _SyncFailure('El servidor respondió con error ($code).');
     }
     return response;
+  }
+
+  /// Mensaje `error` del cuerpo JSON de una respuesta del servidor, si lo trae.
+  static String? _serverError(http.Response response) {
+    try {
+      // El servidor responde JSON en UTF-8 sin declarar el charset.
+      final body =
+          jsonDecode(utf8.decode(response.bodyBytes, allowMalformed: true));
+      final error = body is Map ? body['error'] : null;
+      return error is String && error.isNotEmpty ? error : null;
+    } catch (_) {
+      return null;
+    }
   }
 
   Future<void> _loadState() async {

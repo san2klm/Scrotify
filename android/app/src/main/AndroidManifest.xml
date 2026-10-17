@@ -1,6 +1,6 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
-    <!-- Jam abre un servidor local y descubre anfitriones por UDP. Estos
+    <!-- CrotoLink abre un servidor local y descubre anfitriones por UDP. Estos
          permisos deben estar en el manifiesto principal, no sólo en debug. -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
@@ -52,15 +52,13 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
 
-            <!-- Enlaces de invitación CrotoLink: crotowave://join?code=ABC234&server=host
-                 (scrotify:// es el esquema anterior, se sigue aceptando) -->
+            <!-- Enlaces de invitación CrotoLink: crotowave://join?code=ABC234&server=host -->
             <meta-data android:name="flutter_deeplinking_enabled" android:value="false" />
             <intent-filter>
                 <action android:name="android.intent.action.VIEW"/>
                 <category android:name="android.intent.category.DEFAULT"/>
                 <category android:name="android.intent.category.BROWSABLE"/>
                 <data android:scheme="crotowave" android:host="join"/>
-                <data android:scheme="scrotify" android:host="join"/>
             </intent-filter>
             <!-- App Links https://<tu-relay>/j/<PIN>: descomenta y pon tu dominio
                  (y publica /.well-known/assetlinks.json desde el panel /admin).
@@ -68,7 +66,7 @@
                 <action android:name="android.intent.action.VIEW"/>
                 <category android:name="android.intent.category.DEFAULT"/>
                 <category android:name="android.intent.category.BROWSABLE"/>
-                <data android:scheme="https" android:host="jam.example.org" android:pathPrefix="/j/"/>
+                <data android:scheme="https" android:host="crotolink.example.org" android:pathPrefix="/j/"/>
             </intent-filter>
             -->
         </activity>
@@ -114,7 +112,7 @@
 
         <!-- Widgets de pantalla de inicio (carátula + controles): tres diseños. -->
         <receiver
-            android:name=".ScrotifyWidgetProvider"
+            android:name=".CrotoWaveWidgetProvider"
             android:label="CrotoWave · Personalizable"
             android:exported="false">
             <intent-filter>
@@ -122,10 +120,10 @@
             </intent-filter>
             <meta-data
                 android:name="android.appwidget.provider"
-                android:resource="@xml/scrotify_widget_info" />
+                android:resource="@xml/crotowave_widget_info" />
         </receiver>
         <receiver
-            android:name=".ScrotifyCompactWidgetProvider"
+            android:name=".CrotoWaveCompactWidgetProvider"
             android:label="CrotoWave · Compacto"
             android:exported="false">
             <intent-filter>
@@ -133,10 +131,10 @@
             </intent-filter>
             <meta-data
                 android:name="android.appwidget.provider"
-                android:resource="@xml/scrotify_widget_compact_info" />
+                android:resource="@xml/crotowave_widget_compact_info" />
         </receiver>
         <receiver
-            android:name=".ScrotifyCoverWidgetProvider"
+            android:name=".CrotoWaveCoverWidgetProvider"
             android:label="CrotoWave · Carátula"
             android:exported="false">
             <intent-filter>
@@ -144,7 +142,7 @@
             </intent-filter>
             <meta-data
                 android:name="android.appwidget.provider"
-                android:resource="@xml/scrotify_widget_cover_info" />
+                android:resource="@xml/crotowave_widget_cover_info" />
         </receiver>
 
         <!-- Don't delete the meta-data below.

@@ -20,10 +20,13 @@ class Album {
   factory Album.fromJson(Map<String, dynamic> json, {String? coverArtUrl}) {
     return Album(
       id: (json['id'] as String?) ?? '',
-      title: (json['name'] as String?) ?? (json['title'] as String?) ?? 'Unknown',
+      title:
+          (json['name'] as String?) ?? (json['title'] as String?) ?? 'Unknown',
       artist: (json['artist'] as String?) ?? 'Unknown',
       coverArtUrl: coverArtUrl ?? json['coverArt'] as String?,
-      trackCount: (json['songCount'] as num?)?.toInt() ?? (json['trackCount'] as num?)?.toInt() ?? 0,
+      trackCount: (json['songCount'] as num?)?.toInt() ??
+          (json['trackCount'] as num?)?.toInt() ??
+          0,
       year: (json['year'] as num?)?.toInt() ?? 0,
       genre: json['genre'] as String?,
     );

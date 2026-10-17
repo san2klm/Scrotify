@@ -2,11 +2,11 @@ import 'dart:math';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:just_audio/just_audio.dart' show LoopMode;
-import 'package:navidrome_client/services/connect/connect_mirror.dart';
-import 'package:navidrome_client/services/connect/connect_protocol.dart';
-import 'package:navidrome_client/services/connect/track_codec.dart';
-import 'package:navidrome_client/services/navidrome_service.dart';
-import 'package:navidrome_client/services/sync/sync_crypto.dart';
+import 'package:crotowave/services/connect/connect_mirror.dart';
+import 'package:crotowave/services/connect/connect_protocol.dart';
+import 'package:crotowave/services/connect/track_codec.dart';
+import 'package:crotowave/services/navidrome_service.dart';
+import 'package:crotowave/services/sync/sync_crypto.dart';
 
 import 'connect_service_test.dart' show FakeNetwork, FakePort, Node, settle;
 

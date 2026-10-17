@@ -19,7 +19,7 @@ ver=$(grep -E '^version:' pubspec.yaml | sed 's/version: *//; s/+.*//')
 commit=$(git rev-parse --short HEAD)
 [[ -n "$(git status --porcelain --untracked-files=no)" ]] && commit="$commit-mod"
 
-flutter build windows --release   --dart-define=SCROTIFY_VERSION="$ver"   --dart-define=SCROTIFY_COMMIT="$commit"   --dart-define=SCROTIFY_BUILD_DATE="$(date +%F)"
+flutter build windows --release   --dart-define=CROTOWAVE_VERSION="$ver"   --dart-define=CROTOWAVE_COMMIT="$commit"   --dart-define=CROTOWAVE_BUILD_DATE="$(date +%F)"
 
 # stage/ lo ignora git: se regenera en cada build.
 rm -rf installer/stage
@@ -27,4 +27,6 @@ mkdir -p installer/stage
 cp -r build/windows/x64/runner/Release/. installer/stage/
 
 "$iscc" "/DAppVersion=$ver" installer/crotowave.iss
-echo "Instalador: installer/output/CrotoWave-Setup-$ver.exe"
+mkdir -p dist
+cp "installer/output/CrotoWave-Setup-$ver.exe" "dist/CrotoWave-$ver-WINDOWS-Setup.exe"
+echo "Instalador: dist/CrotoWave-$ver-WINDOWS-Setup.exe"

@@ -19,7 +19,7 @@ El registro de diagnóstico queda en memoria del dispositivo y solo sale si vos
 lo copiás o compartís (Ajustes → Diagnóstico); antes oculta contraseñas,
 tokens y claves.
 
-Podés usar tu propio servidor CrotoLink (ver `jam-server/README.md`) cambiando
+Podés usar tu propio servidor CrotoLink (ver `crotolink-server/README.md`) cambiando
 la dirección en Ajustes.
 
 Fecha: 2026-10-16. Si esto cambia, se actualiza este archivo en el repositorio.

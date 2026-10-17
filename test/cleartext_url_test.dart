@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:navidrome_client/utils/cleartext_url.dart';
+import 'package:crotowave/utils/cleartext_url.dart';
 
 void main() {
   group('isPublicCleartextUrl', () {

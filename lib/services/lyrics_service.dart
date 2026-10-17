@@ -130,8 +130,8 @@ class LyricsService {
 
   static List<LyricLine> _toLines(StructuredLyricBlock block) {
     final lines = block.lines
-        .map((l) => LyricLine(
-            start: Duration(milliseconds: l.startMs), text: l.text))
+        .map((l) =>
+            LyricLine(start: Duration(milliseconds: l.startMs), text: l.text))
         .toList()
       ..sort((a, b) => a.start.compareTo(b.start));
     return lines;
@@ -271,8 +271,7 @@ class LyricsService {
           millis = int.tryParse(padded) ?? 0;
         }
         lines.add(LyricLine(
-          start: Duration(
-              minutes: min, seconds: sec, milliseconds: millis),
+          start: Duration(minutes: min, seconds: sec, milliseconds: millis),
           text: text,
         ));
       }

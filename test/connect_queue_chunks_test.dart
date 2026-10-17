@@ -1,8 +1,8 @@
 import 'dart:math';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:navidrome_client/services/connect/connect_protocol.dart';
-import 'package:navidrome_client/services/sync/sync_crypto.dart';
+import 'package:crotowave/services/connect/connect_protocol.dart';
+import 'package:crotowave/services/sync/sync_crypto.dart';
 
 import 'connect_service_test.dart' show FakeNetwork, FakePort, Node, settle;
 

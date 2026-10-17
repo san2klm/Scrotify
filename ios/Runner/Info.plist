@@ -86,17 +86,15 @@
 		<key>NSAllowsArbitraryLoads</key>
 		<true/>
 	</dict>
-	<!-- Enlaces de invitación CrotoLink: crotowave://join?code=ABC234&server=host
-	     (scrotify:// es el esquema anterior, se sigue aceptando) -->
+	<!-- Enlaces de invitación CrotoLink: crotowave://join?code=ABC234&server=host -->
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
 			<key>CFBundleURLName</key>
-			<string>com.example.navidromeClient.jam</string>
+			<string>cloud.templo.crotowave.crotolink</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
 				<string>crotowave</string>
-				<string>scrotify</string>
 			</array>
 		</dict>
 	</array>

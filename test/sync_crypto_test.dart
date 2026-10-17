@@ -3,7 +3,7 @@ import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:navidrome_client/services/sync/sync_crypto.dart';
+import 'package:crotowave/services/sync/sync_crypto.dart';
 
 void main() {
   test('la clave se formatea y se vuelve a leer igual', () {

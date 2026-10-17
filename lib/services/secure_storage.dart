@@ -39,12 +39,12 @@ class SecureStorage {
   );
 
   // Claves de almacenamiento
-  static const _kServerUrl = 'scrotify.server_url';
-  static const _kUsername = 'scrotify.username';
-  static const _kPassword = 'scrotify.password';
-  static const _kHasCredentials = 'scrotify.has_credentials';
+  static const _kServerUrl = 'crotowave.server_url';
+  static const _kUsername = 'crotowave.username';
+  static const _kPassword = 'crotowave.password';
+  static const _kHasCredentials = 'crotowave.has_credentials';
 
-  static const _fallbackFileName = 'scrotify_credentials_fallback.json';
+  static const _fallbackFileName = 'crotowave_credentials_fallback.json';
   static const _dpapiPrefix = 'dpapi:';
   static bool _fallbackWarned = false;
 
