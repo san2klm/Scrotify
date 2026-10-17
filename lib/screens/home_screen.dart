@@ -29,6 +29,7 @@ import '../widgets/now_playing_panel.dart';
 import '../widgets/interactive_artist_text.dart';
 import '../widgets/genre_selector.dart';
 import '../widgets/tv_initial_focus.dart';
+import '../widgets/discovery_section.dart';
 
 part 'home_screen_library.dart';
 part 'home_screen_content.dart';

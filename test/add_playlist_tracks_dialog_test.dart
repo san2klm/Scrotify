@@ -6,11 +6,17 @@ import 'package:provider/provider.dart';
 import 'package:crotowave/services/navidrome_service.dart';
 import 'package:crotowave/services/theme_controller.dart';
 import 'package:crotowave/widgets/add_playlist_tracks_dialog.dart';
+import 'package:crotowave/widgets/cover_art.dart';
 
 class _Playlists extends NavidromeService {
   final searches = <String, Completer<SearchResults>>{};
   List<String>? added;
   bool failSave = false;
+  List<Track> existingTracks = [];
+
+  @override
+  Future<List<Track>> getPlaylistTracks(String playlistId) async =>
+      existingTracks;
 
   @override
   Future<SearchResults> search(String query) =>
@@ -58,6 +64,66 @@ Future<void> _open(WidgetTester tester, _Playlists nav) async {
 }
 
 void main() {
+  testWidgets(
+      'existing songs with covers stay disabled without narrow overflow',
+      (tester) async {
+    await tester.binding.setSurfaceSize(const Size(320, 700));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final nav = _Playlists();
+    final result = _result('Canción existente');
+    nav.existingTracks = result.songs;
+    await _open(tester, nav);
+    await tester.enterText(find.byType(TextField), 'existente');
+    await tester.pump(const Duration(milliseconds: 350));
+    nav.searches['existente']!.complete(result);
+    await tester.pumpAndSettle();
+    expect(
+        tester
+            .widget<CheckboxListTile>(find.byType(CheckboxListTile))
+            .onChanged,
+        isNull);
+    expect(find.textContaining('Ya en esta playlist'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('results show uniform covers and a placeholder without artwork',
+      (tester) async {
+    final nav = _Playlists();
+    await _open(tester, nav);
+    await tester.enterText(find.byType(TextField), 'portadas');
+    await tester.pump(const Duration(milliseconds: 350));
+    nav.searches['portadas']!.complete(SearchResults(songs: [
+      Track(
+          id: 'cover',
+          title: 'Con portada',
+          artist: 'Artista',
+          album: 'Álbum',
+          duration: '10',
+          albumArtUrl: 'https://example.com/cover.jpg'),
+      Track(
+          id: 'empty',
+          title: 'Sin portada',
+          artist: 'Otro',
+          album: '',
+          duration: '10'),
+    ], albums: [], artists: []));
+    await tester.pumpAndSettle();
+    final covers = tester.widgetList<CoverArt>(find.byType(CoverArt)).toList();
+    expect(covers, hasLength(2));
+    expect(covers.first.url, 'https://example.com/cover.jpg');
+    expect(covers.last.url, isNull);
+    for (final cover in covers) {
+      expect(cover.width, 44);
+      expect(cover.height, 44);
+      expect(cover.borderRadius, 6);
+    }
+    expect(find.byIcon(Icons.music_note_rounded), findsWidgets);
+    await tester.tap(find.byType(CheckboxListTile).last);
+    await tester.pump();
+    expect(find.text('Añadir (1)'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('adds selected tracks across searches and reports save failures',
       (tester) async {
     final nav = _Playlists();

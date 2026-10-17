@@ -49,6 +49,7 @@ import 'services/connect/relay_transport.dart';
 import 'services/sync/sync_service.dart';
 import 'models/crotolink_models.dart';
 import 'services/theme_controller.dart';
+import 'services/discovery_service.dart';
 import 'utils/app_data_dir.dart';
 import 'utils/app_licenses.dart';
 import 'utils/signing_migration.dart';
@@ -225,6 +226,10 @@ class MyApp extends StatelessWidget {
             settings: ctx.read<SettingsController>(),
             profilesController: ctx.read<ServerProfilesController>(),
           ),
+        ),
+        ChangeNotifierProvider(
+          create: (ctx) => DiscoveryService(
+            ctx.read<NavidromeService>(), ctx.read<ListeningStatsService>()),
         ),
         Provider<OfflineCacheService>(
           create: (_) => OfflineCacheService(

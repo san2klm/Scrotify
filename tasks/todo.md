@@ -391,3 +391,39 @@ El mismo APK sirve para teléfono y tele. En una tele se activa un modo con la i
 - [x] Sin servidor CrotoLink por defecto (antes `jam.templo.cloud`): las instalaciones nuevas lo configuran en Ajustes; las existentes conservan el guardado. Sin servidor, crear/unirse a una sala remota avisa «Configurá un servidor CrotoLink…».
 - [ ] Redeploy del servidor: el contenedor pasa a llamarse `crotolink`; cambiar el ingress del túnel de `crotolink:8080` a `crotolink:8080`.
 - [ ] Desinstalar del teléfono `cloud.templo.crotowave` y `el id de la plantilla de Flutter` cuando el usuario confirme que CrotoWave está bien.
+## Descubrimiento personalizado y portadas (2026-10-16)
+- [x] Especificación en docs/personalized-discovery.md; base main 13b90f8 recuperada en D:\codex\crotowave, respaldo previo intacto.
+- [x] Perfil de biblioteca, favoritos, valoraciones y escuchas recientes por cuenta exacta; catálogo completo, exclusión por MBID/ISRC y metadatos normalizados.
+- [x] ListenBrainz Radio + MusicBrainz: consultas públicas con límites, timeout, caché y regulación; canciones, álbumes y artistas externos en Inicio de escritorio/móvil.
+- [x] Portadas 44x44 con fallback en Añadir canciones; selección múltiple, búsquedas y guardado conservados; probado a 320px y descubrimiento a 360px con texto 1.5.
+- [x] 39 pruebas de verificación aprobadas y consulta real de descubrimiento aprobada. Suite general: 961 aprobadas, 15 omitidas, 3 fallos intermitentes en diagnósticos/descargas; los archivos afectados pasan en la verificación posterior.
+- [x] Conservada corrección previa de arranque Windows (teclas multimedia); test específico aprobado. Análisis: 0 errores/warnings y 11 avisos informativos previos.
+- [x] Release final Windows x64 compilado y probado: ventana CrotoWave respondiendo tras 15 s. Portable y ZIP en outputs/CrotoWave-mejoras-Windows-x64.
+
+## Ajuste de Recomendados para ti: solo Navidrome (2026-10-16)
+- [x] Se sustituye el descubrimiento externo por recomendaciones de canciones del catálogo completo de la cuenta activa, con IDs originales reproducibles.
+- [x] Se retiran proveedores externos, fichas y pestañas de álbumes/artistas de esta sección; se mantienen portadas de Añadir canciones y las demás secciones de biblioteca.
+- [x] Ranking según historial exacto por cuenta, artistas/géneros, favoritos y valoraciones; diversidad y deduplicación, sin descartar toda la biblioteca por ser existente.
+- [x] 15 pruebas aprobadas: ranking, reproducción por ID Navidrome, aislamiento, respuestas tardías, más de 500 canciones y diálogo de añadir canciones.
+- [x] Compilación Flutter release AOT y assets aprobada; empaquetada con el runner nativo anterior (sin cambios nativos). Arranque verificado 12 s, fuentes/JSON y ZIP válidos. El build nativo completo se detuvo por acceso denegado en MSBuild FileTracker. Portable actualizado: outputs/CrotoWave-Navidrome-Windows-x64.
+
+## Carrusel de recomendaciones (2026-10-16)
+- [x] Flechas anterior/siguiente con animación por pantalla de tarjetas y deshabilitadas en los extremos; barra horizontal arrastrable y gesto táctil conservado.
+- [x] Dos pruebas de navegación, extremos, gesto táctil y reproducción aprobadas; análisis sin errores/warnings, 11 infos previos.
+- [x] Release Flutter AOT actualizado y assets sincronizados al runner local y al portable CrotoWave-Carrusel-Windows-x64; fuentes y ZIP válidos; arranque verificado durante 10 s.
+
+## Portadas como Álbumes destacados (2026-10-16)
+- [x] Recomendaciones con dimensiones 130x180 en escritorio y 120x180 en móvil (más ajuste de texto), padding 8, radio 6 y tipografía equivalente; título/artista bajo la portada.
+- [x] Carrusel adaptado al nuevo ancho; dos pruebas aprobadas de tamaño/estilo, flechas, deslizamiento y reproducción; análisis sin errores/warnings nuevos (11 infos anteriores).
+- [x] Release AOT y assets actualizados sobre runner existente, fuentes y ZIP verificados y arranque respondiendo a los 10 s. Portable: outputs/CrotoWave-Portadas-Windows-x64.
+
+## Actualizar recomendaciones junto al título (2026-10-16)
+- [x] Encabezado integrado en DiscoverySection: título, actualizar y flechas en la misma fila en escritorio y móvil, sin título duplicado.
+- [x] Dos pruebas de carrusel/reproducción aprobadas y análisis sin errores/warnings (11 infos previos); build Flutter release AOT aprobado y arranque respondiendo a los 10 s.
+- [x] Por falta de espacio en C:, temporales y nuevo portable/ZIP en D:\codex\crotowave\dist\CrotoWave-Actualizado-Windows-x64, accesible también desde outputs por junction; fuentes y ZIP verificados.
+
+## Alineación vertical del encabezado en DiscoverySection (2026-10-16)
+- [x] Fijada explícitamente la propiedad `crossAxisAlignment: CrossAxisAlignment.center` en el `Row` del encabezado de `DiscoverySection` con `Expanded(child: title)` y los `IconButton` en una sola fila horizontal sin títulos externos duplicados.
+- [x] Verificado con prueba de widgets que el centro vertical del título (`tester.getCenter(find.text('Recomendados para ti')).dy`) coincide con el de los botones (`Icons.refresh_rounded`, `Icons.chevron_left_rounded`, `Icons.chevron_right_rounded`) (`closeTo(..., 1.0)`) y que el título aparece exactamente una vez (`findsOneWidget`).
+- [x] Pruebas (`flutter test test/discovery_section_test.dart`) PASS y `flutter analyze` sin errores ni warnings nuevos.
+- [x] Bundle de Windows Release AOT y assets compilados, y portable completo empaquetado en `D:\gemini\.exes\` con `CrotoWave.exe` y `data/app.so` actualizados.

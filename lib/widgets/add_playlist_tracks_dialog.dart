@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 
 import '../services/navidrome_service.dart';
 import 'interactive_artist_text.dart';
+import 'cover_art.dart';
 import '../utils/app_colors.dart';
 
 /// Devuelve los temas guardados para que la vista que abrió el diálogo pueda
@@ -176,6 +177,16 @@ class _AddPlaylistTracksDialogState extends State<_AddPlaylistTracksDialog> {
                               final track = _results[index];
                               final alreadyIn = _existingIds.contains(track.id);
                               return CheckboxListTile(
+                                secondary: CoverArt(
+                                  key: ValueKey('add-track-cover-${track.id}'),
+                                  url: track.albumArtUrl,
+                                  width: 44,
+                                  height: 44,
+                                  borderRadius: 6,
+                                  fallbackIcon: Icons.music_note_rounded,
+                                  fallbackIconSize: 22,
+                                  fallbackColor: context.bgCard,
+                                ),
                                 value: alreadyIn
                                     ? true
                                     : _selected.containsKey(track.id),
@@ -191,13 +202,17 @@ class _AddPlaylistTracksDialogState extends State<_AddPlaylistTracksDialog> {
                                   ),
                                 ),
                                 subtitle: alreadyIn
-                                    ? Row(
+                                    ? Column(
+                                        mainAxisSize: MainAxisSize.min,
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
                                         children: [
                                           InteractiveArtistText(
                                               artistString: track.artist),
-                                          const SizedBox(width: 6),
                                           Text(
                                             '· Ya en esta playlist',
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
                                             style: TextStyle(
                                               color: context.accent,
                                               fontSize: 11,
