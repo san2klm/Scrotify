@@ -7,6 +7,7 @@ import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 import 'package:flutter/foundation.dart';
 import 'package:crypto/crypto.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
 
 import '../models/jam_models.dart';
 import '../models/server_profile.dart';
@@ -396,6 +397,7 @@ class NavidromeService with ChangeNotifier {
     }
 
     loadLastSelectedGenre();
+    _listenConnectivity();
   }
 
   ServerProfilesController? _profilesController;
@@ -451,6 +453,12 @@ class NavidromeService with ChangeNotifier {
   bool _connected = false;
   http.Client? _injectedClient;
   late http.Client _client;
+  Future<void>? _connectingFuture;
+  String? _connectingUrl;
+  String? _connectingUser;
+  Timer? _autoReconnectTimer;
+  StreamSubscription<List<ConnectivityResult>>? _connectivitySubscription;
+  bool _isAutoReconnecting = false;
 
   int _sessionVersion = 0;
   int get sessionVersion => _sessionVersion;
@@ -616,6 +624,92 @@ class NavidromeService with ChangeNotifier {
         '&size=${size ?? _coverArtSize}';
   }
 
+  void _listenConnectivity() {
+    _connectivitySubscription =
+        Connectivity().onConnectivityChanged.listen((results) {
+      final isConnected = results.any((r) =>
+          r != ConnectivityResult.none && r != ConnectivityResult.bluetooth);
+      if (isConnected && _offlineMode) {
+        debugPrint(
+            'NavidromeService: Red detectada, intentando reconexión automática en segundo plano...');
+        _attemptBackgroundReconnect();
+      }
+    });
+  }
+
+  void _startAutoReconnect() {
+    if (_autoReconnectTimer?.isActive == true) return;
+    _autoReconnectTimer = Timer.periodic(const Duration(seconds: 15), (_) {
+      _attemptBackgroundReconnect();
+    });
+  }
+
+  void _stopAutoReconnect() {
+    _autoReconnectTimer?.cancel();
+    _autoReconnectTimer = null;
+  }
+
+  Future<void> _attemptBackgroundReconnect() async {
+    if (!_offlineMode || _isAutoReconnecting) return;
+    if (_url == null || _user == null || _pass == null) {
+      _stopAutoReconnect();
+      return;
+    }
+    _isAutoReconnecting = true;
+    try {
+      final salt = _randomSalt();
+      final token = _md5('$_pass$salt');
+      final uri = Uri.parse('$_url/rest/ping.view').replace(queryParameters: {
+        'u': _user!,
+        's': salt,
+        't': token,
+        'v': '1.16.1',
+        'c': 'Psysonic',
+        'f': 'json',
+      });
+      final res = await _client.get(uri).timeout(const Duration(seconds: 6));
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body);
+        if (data['subsonic-response']?['status'] == 'ok') {
+          debugPrint(
+              'NavidromeService: Reconexión exitosa en segundo plano. Modo sin conexión desactivado.');
+          _connected = true;
+          _offlineMode = false;
+          _stopAutoReconnect();
+          notifyListeners();
+        }
+      }
+    } catch (_) {
+      // Ignorar fallos de sondeo periódico
+    } finally {
+      _isAutoReconnecting = false;
+    }
+  }
+
+  Future<bool> _fastPingCheck() async {
+    if (_url == null || _user == null || _pass == null) return false;
+    try {
+      final salt = _randomSalt();
+      final token = _md5('$_pass$salt');
+      final uri = Uri.parse('$_url/rest/ping.view').replace(queryParameters: {
+        'u': _user!,
+        's': salt,
+        't': token,
+        'v': '1.16.1',
+        'c': 'Psysonic',
+        'f': 'json',
+      });
+      final res = await _client.get(uri).timeout(const Duration(seconds: 4));
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body);
+        return data['subsonic-response']?['status'] == 'ok';
+      }
+      return false;
+    } catch (_) {
+      return false;
+    }
+  }
+
   Future<void> connectByUrl(String url, String user, String pass) async {
     var processedUrl =
         url.endsWith('/') ? url.substring(0, url.length - 1) : url;
@@ -625,6 +719,37 @@ class NavidromeService with ChangeNotifier {
       processedUrl = 'https://$processedUrl';
     }
 
+    if (_connected &&
+        !_offlineMode &&
+        _url == processedUrl &&
+        _user == user &&
+        _pass == pass) {
+      return;
+    }
+
+    if (_connectingFuture != null &&
+        _connectingUrl == processedUrl &&
+        _connectingUser == user) {
+      return _connectingFuture!;
+    }
+
+    _connectingUrl = processedUrl;
+    _connectingUser = user;
+    final future = _connectInternal(processedUrl, user, pass);
+    _connectingFuture = future;
+    try {
+      await future;
+    } finally {
+      if (identical(_connectingFuture, future)) {
+        _connectingFuture = null;
+        _connectingUrl = null;
+        _connectingUser = null;
+      }
+    }
+  }
+
+  Future<void> _connectInternal(
+      String processedUrl, String user, String pass) async {
     _url = processedUrl;
     _user = user;
     _pass = pass;
@@ -647,8 +772,19 @@ class NavidromeService with ChangeNotifier {
         'f': 'json',
       });
 
-      final response =
-          await _client.get(uri).timeout(const Duration(seconds: 8));
+      http.Response response;
+      try {
+        response =
+            await _client.get(uri).timeout(const Duration(seconds: 20));
+      } on SocketException catch (_) {
+        await Future.delayed(const Duration(milliseconds: 600));
+        response =
+            await _client.get(uri).timeout(const Duration(seconds: 15));
+      } on TimeoutException catch (_) {
+        await Future.delayed(const Duration(milliseconds: 600));
+        response =
+            await _client.get(uri).timeout(const Duration(seconds: 15));
+      }
 
       debugPrint('Auth response status: ${response.statusCode}');
 
@@ -664,6 +800,7 @@ class NavidromeService with ChangeNotifier {
         if (data['subsonic-response']['status'] == 'ok') {
           _connected = true;
           _offlineMode = false;
+          _stopAutoReconnect();
           _sessionVersion++;
           _starredIds.clear();
           _starredSongOrder.clear();
@@ -717,6 +854,7 @@ class NavidromeService with ChangeNotifier {
     _pass = password;
     _connected = false;
     _offlineMode = true;
+    _startAutoReconnect();
     _sessionVersion++;
     _resetCoverAuth();
     _starredIds.clear();
@@ -757,16 +895,34 @@ class NavidromeService with ChangeNotifier {
       rethrow;
     }
     await music.bindLegacyCollections(scope, user);
+
+    if (_connectingFuture != null) {
+      try {
+        await _connectingFuture;
+      } catch (_) {}
+    }
+
     if (!_connected || _offlineMode) return fallback(music, scope, user);
     final session = currentSessionKey;
     T data;
     try {
-      data = await fetch().timeout(const Duration(seconds: 8));
+      data = await fetch().timeout(const Duration(seconds: 25));
     } catch (error) {
       if (currentSessionKey != session) rethrow;
       if (isNetworkFailure(error)) {
+        // Antes de declarar toda la aplicación como offline y deshabilitar la red,
+        // verificamos con un ping rápido si el servidor realmente está caído o si
+        // solo fue esta consulta pesada la que tardó o falló.
+        final serverAlive = await _fastPingCheck();
+        if (serverAlive) {
+          debugPrint(
+              'NavidromeService: Petición demorada pero el servidor responde. Usando fallback sin pasar a offline.');
+          return fallback(music, scope, user);
+        }
+
         _connected = false;
         _offlineMode = true;
+        _startAutoReconnect();
         notifyListeners();
       }
       return fallback(music, scope, user);
@@ -1980,6 +2136,9 @@ class NavidromeService with ChangeNotifier {
   /// URL de reproducción: igual que [getStreamUrl] salvo que el modo de
   /// fidelidad imponga el archivo original (`format=raw`).
   String getPlaybackStreamUrl(String trackId, {AudioQuality? quality}) {
+    if (trackId.startsWith('http://') || trackId.startsWith('https://')) {
+      return trackId;
+    }
     final override = hifiStream;
     if (override == null) return getStreamUrl(trackId, quality: quality);
     return getStreamUrl(trackId,
@@ -2332,6 +2491,11 @@ class NavidromeService with ChangeNotifier {
   /// Protegido contra desconexiones para mantener seguro el montaje de Home.
   Future<List<Track>> getRecentlyAddedTracks({int limit = 20}) async {
     if (limit <= 0) return [];
+    if (_connectingFuture != null) {
+      try {
+        await _connectingFuture;
+      } catch (_) {}
+    }
     if (!_connected || _offlineMode) {
       await localMusic?.initialize();
       return (localMusic?.downloadedTracks(serverScope) ?? [])
@@ -2419,6 +2583,11 @@ class NavidromeService with ChangeNotifier {
   /// Obtiene canciones aleatorias del servidor (`getRandomSongs.view`).
   /// Admite filtrar opcionalmente por [genre].
   Future<List<Track>> getRandomSongs({int size = 50, String? genre}) async {
+    if (_connectingFuture != null) {
+      try {
+        await _connectingFuture;
+      } catch (_) {}
+    }
     if (!_connected || _offlineMode) {
       final downloaded =
           localMusic?.downloadedTracks(userScope ?? serverScope) ?? [];
@@ -3005,6 +3174,7 @@ class NavidromeService with ChangeNotifier {
   }
 
   void disconnect() {
+    _stopAutoReconnect();
     _connected = false;
     _offlineMode = false;
     _url = null;
@@ -3025,5 +3195,12 @@ class NavidromeService with ChangeNotifier {
     _cachedGenres = null;
 
     notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _stopAutoReconnect();
+    _connectivitySubscription?.cancel();
+    super.dispose();
   }
 }

@@ -23,6 +23,9 @@ import '../utils/responsive.dart';
 import '../widgets/now_playing_panel.dart';
 import '../widgets/interactive_artist_text.dart';
 import '../widgets/genre_selector.dart';
+import '../services/music_recommendation_service.dart';
+import '../services/listening_stats_service.dart';
+import '../services/local_music_service.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -58,6 +61,8 @@ class _HomeScreenState extends State<HomeScreen> {
   String? _selectedGenre;
   late Future<List<String>> _futureGenres;
   late Future<List<Track>> _futureRecentlyAdded;
+  late Future<List<Track>> _futureRecommendations;
+  String? _recommendationsUserScope;
 
   @override
   void initState() {
@@ -70,6 +75,7 @@ class _HomeScreenState extends State<HomeScreen> {
     _futureGenres = context.read<NavidromeService>().getGenres();
     _futureRecentlyAdded =
         context.read<NavidromeService>().getRecentlyAddedTracks();
+    _loadRecommendations();
     _serverPlayCountTimer = Timer.periodic(
       const Duration(seconds: 30),
       (_) => _refreshServerPlayCounts(),
@@ -87,10 +93,31 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  void _loadRecommendations({bool forceRefresh = false}) {
+    final nav = context.read<NavidromeService>();
+    final stats = context.read<ListeningStatsService?>();
+    final player = context.read<PlayerController>();
+    final localMusic = context.read<LocalMusicService?>();
+    final recService = context.read<MusicRecommendationService?>() ??
+        MusicRecommendationService.instance;
+
+    _recommendationsUserScope = nav.userScope ?? nav.serverScope;
+    _futureRecommendations = recService.getRecommendations(
+      navOverride: nav,
+      statsOverride: stats,
+      playerOverride: player,
+      localMusicOverride: localMusic,
+      forceRefresh: forceRefresh,
+    );
+  }
+
   Future<List<Track>> _loadTracks() async {
-    final tracks = await context.read<NavidromeService>().getTracks();
+    if (!mounted) return [];
+    final nav = context.read<NavidromeService>();
+    final player = context.read<PlayerController>();
+    final tracks = await nav.getTracks();
     if (mounted) {
-      context.read<PlayerController>().syncServerPlayCounts(tracks);
+      player.syncServerPlayCounts(tracks);
     }
     return tracks;
   }
@@ -99,9 +126,11 @@ class _HomeScreenState extends State<HomeScreen> {
     if (_refreshingPlayCounts || !mounted) return;
     _refreshingPlayCounts = true;
     try {
-      final tracks = await context.read<NavidromeService>().getTracks();
+      final nav = context.read<NavidromeService>();
+      final player = context.read<PlayerController>();
+      final tracks = await nav.getTracks();
       if (mounted) {
-        context.read<PlayerController>().syncServerPlayCounts(tracks);
+        player.syncServerPlayCounts(tracks);
       }
     } catch (_) {
       // La siguiente actualización periódica reintentará si no hay conexión.
@@ -190,7 +219,8 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     final nav = context.watch<NavidromeService>();
     final sessionKey = nav.currentSessionKey;
-    if (sessionKey != _currentSessionKey) {
+    final userScope = nav.userScope ?? nav.serverScope;
+    if (sessionKey != _currentSessionKey || userScope != _recommendationsUserScope) {
       _currentSessionKey = sessionKey;
       _coverArtVersion = nav.coverArtVersion;
       _playlistVersion = nav.playlistVersion;
@@ -198,6 +228,7 @@ class _HomeScreenState extends State<HomeScreen> {
       _futurePlaylists = nav.getPlaylists();
       _futureGenres = nav.getGenres();
       _futureRecentlyAdded = nav.getRecentlyAddedTracks();
+      _loadRecommendations();
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
         _searchController.clear();
@@ -1128,8 +1159,6 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _mainContent(List<Track> tracks) {
-    // Los géneros solo se muestran al buscar o explorar, no en Inicio.
-    final filteredTracks = tracks;
     return SingleChildScrollView(
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
       child: Column(
@@ -1148,9 +1177,14 @@ class _HomeScreenState extends State<HomeScreen> {
           const SizedBox(height: 12),
           _recentlyAddedSection(),
           const SizedBox(height: 32),
-          _sectionHeader('Recomendados para ti'),
+          _sectionHeader(
+            'Recomendados para ti',
+            onReload: () => setState(() {
+              _loadRecommendations(forceRefresh: true);
+            }),
+          ),
           const SizedBox(height: 12),
-          _recommendedGrid(filteredTracks, context.watch<PlayerController>()),
+          _recommendedSection(),
           const SizedBox(height: 32),
           _sectionHeader('Álbumes destacados'),
           const SizedBox(height: 12),
@@ -1415,25 +1449,75 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _recommendedGrid(List<Track> tracks, PlayerController player) {
-    // Calcular peso de artistas basado en reproducciones
-    final artistScores = <String, int>{};
-    for (final item in player.mostPlayed) {
-      if (item.type == MostPlayedItemType.track && item.track != null) {
-        final artist = item.track!.artist;
-        artistScores[artist] = (artistScores[artist] ?? 0) + item.playCount;
+  Widget _recommendedSection() {
+    return FutureBuilder<List<Track>>(
+      future: _futureRecommendations,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return SizedBox(
+            height: 180 + _metadataExtraHeight(),
+            child: Center(
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: context.accent,
+              ),
+            ),
+          );
+        }
+        final tracks = snapshot.data ?? const <Track>[];
+        if (tracks.isEmpty) {
+          return Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.explore_off_rounded,
+                  color: context.textSecondary,
+                  size: 18,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'No se encontraron nuevas recomendaciones por el momento.',
+                    style:
+                        TextStyle(color: context.textSecondary, fontSize: 13),
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+        return _recommendedGrid(tracks, context.watch<PlayerController>(),
+            isDiscovery: true);
+      },
+    );
+  }
+
+  Widget _recommendedGrid(List<Track> tracks, PlayerController player,
+      {bool isDiscovery = false}) {
+    List<Track> items;
+    if (isDiscovery) {
+      // Las recomendaciones del servicio ya vienen analizadas, deduplicadas y priorizadas
+      items = tracks.take(10).toList();
+    } else {
+      // Calcular peso de artistas basado en reproducciones (para recientemente añadidos)
+      final artistScores = <String, int>{};
+      for (final item in player.mostPlayed) {
+        if (item.type == MostPlayedItemType.track && item.track != null) {
+          final artist = item.track!.artist;
+          artistScores[artist] = (artistScores[artist] ?? 0) + item.playCount;
+        }
       }
+
+      final sortedTracks = List<Track>.from(tracks);
+      sortedTracks.sort((a, b) {
+        final scoreA = artistScores[a.artist] ?? 0;
+        final scoreB = artistScores[b.artist] ?? 0;
+        return scoreB.compareTo(scoreA);
+      });
+      items = sortedTracks.take(10).toList();
     }
 
-    // Ordenar tracks basado en el artista más escuchado
-    final sortedTracks = List<Track>.from(tracks);
-    sortedTracks.sort((a, b) {
-      final scoreA = artistScores[a.artist] ?? 0;
-      final scoreB = artistScores[b.artist] ?? 0;
-      return scoreB.compareTo(scoreA);
-    });
-
-    final items = sortedTracks.take(10).toList();
     return GridView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
@@ -1447,12 +1531,17 @@ class _HomeScreenState extends State<HomeScreen> {
       itemCount: items.length,
       itemBuilder: (context, index) {
         final track = items[index];
-        return _recommendedCard(track, tracks);
+        return _recommendedCard(track, items);
       },
     );
   }
 
   Widget _recommendedCard(Track track, List<Track> allTracks) {
+    final isDiscovery = track.id.startsWith('http://') ||
+        track.id.startsWith('https://') ||
+        track.id.startsWith('deezer_') ||
+        track.id.startsWith('itunes_') ||
+        track.id.startsWith('ext_');
     return HomeContentCard(
       onTap: () => _openPlayer(allTracks, allTracks.indexOf(track)),
       child: Container(
@@ -1461,17 +1550,46 @@ class _HomeScreenState extends State<HomeScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Expanded(
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(8),
-                child: CoverArt(
-                  url: track.albumArtUrl,
-                  artist: track.artist,
-                  album: track.album,
-                  title: track.title,
-                  borderRadius: 0,
-                  fallbackIcon: Icons.music_note,
-                  fallbackColor: context.bgCard,
-                ),
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: CoverArt(
+                      url: track.albumArtUrl,
+                      artist: track.artist,
+                      album: track.album,
+                      title: track.title,
+                      borderRadius: 0,
+                      fallbackIcon: Icons.music_note,
+                      fallbackColor: context.bgCard,
+                    ),
+                  ),
+                  if (isDiscovery)
+                    Positioned(
+                      right: 6,
+                      bottom: 6,
+                      child: Tooltip(
+                        message: 'Descubrimiento musical',
+                        child: Container(
+                          padding: const EdgeInsets.all(4),
+                          decoration: BoxDecoration(
+                            color: context.bgCard.withValues(alpha: 0.88),
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: context.accent.withValues(alpha: 0.45),
+                              width: 1,
+                            ),
+                          ),
+                          child: Icon(
+                            Icons.auto_awesome_rounded,
+                            size: 14,
+                            color: context.accent,
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
               ),
             ),
             const SizedBox(height: 8),

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../services/navidrome_service.dart';
+import 'cover_art.dart';
 import 'interactive_artist_text.dart';
 import '../utils/app_colors.dart';
 
@@ -143,8 +144,8 @@ class _AddPlaylistTracksDialogState extends State<_AddPlaylistTracksDialog> {
         backgroundColor: context.bgCard,
         title: const Text('Añadir canciones'),
         content: SizedBox(
-          width: 460,
-          height: 360,
+          width: 500,
+          height: 400,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -176,6 +177,22 @@ class _AddPlaylistTracksDialogState extends State<_AddPlaylistTracksDialog> {
                               final track = _results[index];
                               final alreadyIn = _existingIds.contains(track.id);
                               return CheckboxListTile(
+                                controlAffinity:
+                                    ListTileControlAffinity.trailing,
+                                secondary: CoverArt(
+                                  url: track.albumArtUrl,
+                                  artist: track.artist,
+                                  album: track.album,
+                                  title: track.title,
+                                  width: 44,
+                                  height: 44,
+                                  borderRadius: 6,
+                                  fallbackIcon: Icons.music_note,
+                                  fallbackIconSize: 22,
+                                  fallbackColor: context.bgCard,
+                                ),
+                                contentPadding: const EdgeInsets.symmetric(
+                                    horizontal: 8, vertical: 2),
                                 value: alreadyIn
                                     ? true
                                     : _selected.containsKey(track.id),
@@ -192,9 +209,12 @@ class _AddPlaylistTracksDialogState extends State<_AddPlaylistTracksDialog> {
                                 ),
                                 subtitle: alreadyIn
                                     ? Row(
+                                        mainAxisSize: MainAxisSize.min,
                                         children: [
-                                          InteractiveArtistText(
-                                              artistString: track.artist),
+                                          Flexible(
+                                            child: InteractiveArtistText(
+                                                artistString: track.artist),
+                                          ),
                                           const SizedBox(width: 6),
                                           Text(
                                             '· Ya en esta playlist',

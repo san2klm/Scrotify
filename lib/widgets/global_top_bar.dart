@@ -328,33 +328,44 @@ class _GlobalTopBarState extends State<GlobalTopBar> {
           const SizedBox(width: 8),
 
           // Botón Rápido: Vincular Celular
-          FilledButton.tonalIcon(
-            onPressed: () => _openPairingDialog(context),
-            style: FilledButton.styleFrom(
-              backgroundColor: context.bgElevated,
-              foregroundColor: context.accent,
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10)),
-            ),
-            icon: const Icon(Icons.qr_code_2_rounded, size: 17),
-            label: Tooltip(
-              message: 'Vincular celular',
-              child: ConstrainedBox(
-                constraints: BoxConstraints(
-                  maxWidth: MediaQuery.sizeOf(context).width < 900
-                      ? 128
-                      : double.infinity,
-                ),
-                child: const Text(
-                  'Vincular celular',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+          if (MediaQuery.sizeOf(context).width < 800)
+            IconButton(
+              tooltip: 'Vincular celular',
+              style: IconButton.styleFrom(
+                backgroundColor: context.bgElevated,
+                foregroundColor: context.accent,
+              ),
+              icon: const Icon(Icons.qr_code_2_rounded, size: 19),
+              onPressed: () => _openPairingDialog(context),
+            )
+          else
+            FilledButton.tonalIcon(
+              onPressed: () => _openPairingDialog(context),
+              style: FilledButton.styleFrom(
+                backgroundColor: context.bgElevated,
+                foregroundColor: context.accent,
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10)),
+              ),
+              icon: const Icon(Icons.qr_code_2_rounded, size: 17),
+              label: Tooltip(
+                message: 'Vincular celular',
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxWidth: MediaQuery.sizeOf(context).width < 900
+                        ? 128
+                        : double.infinity,
+                  ),
+                  child: const Text(
+                    'Vincular celular',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                  ),
                 ),
               ),
             ),
-          ),
 
           const SizedBox(width: 10),
 

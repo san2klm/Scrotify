@@ -69,9 +69,11 @@ class _LoginScreenState extends State<LoginScreen> {
       }
 
       // Si no hay credenciales guardadas (primer inicio), usar las de Rubia
-      _savedUrl ??= 'https://navidrome.templo.cloud';
-      _savedUser ??= 'Rubia';
-      _savedPass ??= 'Rubia';
+      if (allowLegacyCredentials) {
+        _savedUrl ??= 'https://navidrome.templo.cloud';
+        _savedUser ??= 'Rubia';
+        _savedPass ??= 'Rubia';
+      }
 
       if (_savedUrl != null && _savedUser != null && _savedPass != null) {
         if (mounted) {

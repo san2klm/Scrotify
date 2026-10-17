@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import 'package:navidrome_client/services/navidrome_service.dart';
 import 'package:navidrome_client/services/theme_controller.dart';
 import 'package:navidrome_client/widgets/add_playlist_tracks_dialog.dart';
+import 'package:navidrome_client/widgets/cover_art.dart';
 
 class _Playlists extends NavidromeService {
   final searches = <String, Completer<SearchResults>>{};
@@ -112,4 +113,45 @@ void main() {
     expect(nav.added, isNull);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('renders CoverArt to the left of title and artist in search results',
+      (tester) async {
+    final nav = _Playlists();
+    await _open(tester, nav);
+    await tester.enterText(find.byType(TextField), 'prueba');
+    await tester.pump(const Duration(milliseconds: 350));
+    nav.searches['prueba']!.complete(SearchResults(
+      songs: [
+        Track(
+          id: 'song-1',
+          title: 'Cancion Con Portada',
+          artist: 'Artista Famoso',
+          album: 'Album Uno',
+          duration: '180',
+          albumArtUrl: 'https://example.com/cover.jpg',
+        ),
+      ],
+      albums: [],
+      artists: [],
+    ));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(CoverArt), findsOneWidget);
+    final coverFinder = find.byType(CoverArt);
+    final titleFinder = find.text('Cancion Con Portada');
+    expect(coverFinder, findsOneWidget);
+    expect(titleFinder, findsOneWidget);
+
+    // Verify CoverArt is to the left of the title
+    final coverTopLeft = tester.getTopLeft(coverFinder);
+    final titleTopLeft = tester.getTopLeft(titleFinder);
+    expect(coverTopLeft.dx, lessThan(titleTopLeft.dx));
+
+    final cover = tester.widget<CoverArt>(coverFinder);
+    expect(cover.width, 44);
+    expect(cover.height, 44);
+    expect(cover.borderRadius, 6);
+    expect(cover.fallbackIcon, Icons.music_note);
+  });
 }
+

@@ -516,8 +516,11 @@ class TrackContextMenu extends StatelessWidget {
                   },
                 ),
 
-              // Acción de descarga sin conexión (solo cuando no está en Jam)
-              if (!jam.inJam)
+              // Acción de descarga sin conexión (solo cuando no está en Jam y no es descubrimiento externo)
+              if (!jam.inJam &&
+                  !track.id.startsWith('http://') &&
+                  !track.id.startsWith('https://') &&
+                  !track.id.startsWith('ext_'))
                 TrackOfflineSection(
                   track: track,
                   serverScope: nav.serverScope,

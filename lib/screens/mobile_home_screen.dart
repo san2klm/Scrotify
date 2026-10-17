@@ -27,6 +27,9 @@ import 'artist_screen.dart';
 import 'settings_screen.dart';
 import '../utils/app_colors.dart';
 import '../widgets/quick_actions_row.dart';
+import '../services/music_recommendation_service.dart';
+import '../services/listening_stats_service.dart';
+import '../services/local_music_service.dart';
 
 /// Interfaz móvil de Scrotify (estilo Spotify AMOLED).
 /// Diseñada exclusivamente para pantallas táctiles de teléfonos.
@@ -45,6 +48,8 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
   late Future<List<Track>> _futureTracks;
   late Future<List<Playlist>> _futurePlaylists;
   late Future<List<Track>> _futureRecentlyAdded;
+  late Future<List<Track>> _futureRecommendations;
+  String? _recommendationsUserScope;
   int _coverArtVersion = -1;
   int _playlistVersion = -1;
   String? _currentSessionKey;
@@ -75,6 +80,7 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
     _futureGenres = context.read<NavidromeService>().getGenres();
     _futureRecentlyAdded =
         context.read<NavidromeService>().getRecentlyAddedTracks();
+    _loadRecommendations();
     _serverPlayCountTimer = Timer.periodic(
       const Duration(seconds: 30),
       (_) => _refreshServerPlayCounts(),
@@ -89,6 +95,24 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
           });
         }
       },
+    );
+  }
+
+  void _loadRecommendations({bool forceRefresh = false}) {
+    final nav = context.read<NavidromeService>();
+    final stats = context.read<ListeningStatsService?>();
+    final player = context.read<PlayerController>();
+    final localMusic = context.read<LocalMusicService?>();
+    final recService = context.read<MusicRecommendationService?>() ??
+        MusicRecommendationService.instance;
+
+    _recommendationsUserScope = nav.userScope ?? nav.serverScope;
+    _futureRecommendations = recService.getRecommendations(
+      navOverride: nav,
+      statsOverride: stats,
+      playerOverride: player,
+      localMusicOverride: localMusic,
+      forceRefresh: forceRefresh,
     );
   }
 
@@ -302,7 +326,8 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
   Widget build(BuildContext context) {
     final nav = context.watch<NavidromeService>();
     final sessionKey = nav.currentSessionKey;
-    if (sessionKey != _currentSessionKey) {
+    final userScope = nav.userScope ?? nav.serverScope;
+    if (sessionKey != _currentSessionKey || userScope != _recommendationsUserScope) {
       _currentSessionKey = sessionKey;
       _coverArtVersion = nav.coverArtVersion;
       _playlistVersion = nav.playlistVersion;
@@ -310,6 +335,7 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
       _futurePlaylists = nav.getPlaylists();
       _futureGenres = nav.getGenres();
       _futureRecentlyAdded = nav.getRecentlyAddedTracks();
+      _loadRecommendations();
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
         _searchController.clear();
@@ -598,9 +624,14 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
               const SizedBox(height: 12),
               _recentlyAddedCarousel(),
               const SizedBox(height: 24),
-              _sectionHeader('Recomendados para ti'),
+              _sectionHeader(
+                'Recomendados para ti',
+                onReload: () => setState(() {
+                  _loadRecommendations(forceRefresh: true);
+                }),
+              ),
               const SizedBox(height: 12),
-              _carousel(filteredTracks),
+              _recommendedSection(),
               const SizedBox(height: 24),
               _sectionHeader('Álbumes'),
               const SizedBox(height: 12),
@@ -811,8 +842,51 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
     );
   }
 
+  Widget _recommendedSection() {
+    return FutureBuilder<List<Track>>(
+      future: _futureRecommendations,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return SizedBox(
+            height: 196 + _metadataExtraHeight(),
+            child: Center(
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: context.accent,
+              ),
+            ),
+          );
+        }
+        final tracks = snapshot.data ?? const <Track>[];
+        if (tracks.isEmpty) {
+          return Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.explore_off_rounded,
+                  color: context.textSecondary,
+                  size: 18,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'No se encontraron nuevas recomendaciones por el momento.',
+                    style:
+                        TextStyle(color: context.textSecondary, fontSize: 13),
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+        return _carousel(tracks);
+      },
+    );
+  }
+
   Widget _carousel(List<Track> tracks) {
-    final items = tracks.take(8).toList();
+    final items = tracks.take(10).toList();
     return SizedBox(
       height: 196 + _metadataExtraHeight(),
       child: ListView.builder(
@@ -820,10 +894,15 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
         itemCount: items.length,
         itemBuilder: (context, index) {
           final track = items[index];
+          final isDiscovery = track.id.startsWith('http://') ||
+              track.id.startsWith('https://') ||
+              track.id.startsWith('deezer_') ||
+              track.id.startsWith('itunes_') ||
+              track.id.startsWith('ext_');
           return Padding(
             padding: const EdgeInsets.only(right: 12),
             child: HomeContentCard(
-              onTap: () => _openPlayer(tracks, tracks.indexOf(track)),
+              onTap: () => _openPlayer(items, items.indexOf(track)),
               onLongPress: () => TrackContextMenu.show(context, track),
               child: Container(
                 width: 145,
@@ -846,14 +925,34 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
                           ),
                         ),
                         Positioned(
-                            right: 0,
-                            bottom: 0,
-                            child: Material(
-                              color: context.bgCard,
-                              borderRadius: BorderRadius.circular(20),
-                              child: LocalDownloadButton(
-                                  tracks: [track], compact: true),
-                            )),
+                          right: 0,
+                          bottom: 0,
+                          child: isDiscovery
+                              ? Container(
+                                  padding: const EdgeInsets.all(5),
+                                  decoration: BoxDecoration(
+                                    color:
+                                        context.bgCard.withValues(alpha: 0.9),
+                                    shape: BoxShape.circle,
+                                    border: Border.all(
+                                      color: context.accent
+                                          .withValues(alpha: 0.45),
+                                      width: 1,
+                                    ),
+                                  ),
+                                  child: Icon(
+                                    Icons.auto_awesome_rounded,
+                                    size: 14,
+                                    color: context.accent,
+                                  ),
+                                )
+                              : Material(
+                                  color: context.bgCard,
+                                  borderRadius: BorderRadius.circular(20),
+                                  child: LocalDownloadButton(
+                                      tracks: [track], compact: true),
+                                ),
+                        ),
                       ]),
                     ),
                     const SizedBox(height: 8),

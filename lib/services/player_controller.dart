@@ -1110,6 +1110,9 @@ class PlayerController extends ChangeNotifier {
   // ---------------------------------------------------------------------------
 
   AudioSource _sourceFor(Track t) {
+    if (t.id.startsWith('http://') || t.id.startsWith('https://')) {
+      return AudioSource.uri(Uri.parse(t.id));
+    }
     final path = localFileResolver?.call(t.id);
     return AudioSource.uri(path != null
         ? Uri.file(path)

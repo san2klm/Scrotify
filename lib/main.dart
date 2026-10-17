@@ -23,6 +23,7 @@ import 'services/eq/eq_mpv_setup.dart';
 import 'services/equalizer_service.dart';
 import 'services/jam_controller.dart';
 import 'services/listening_stats_service.dart';
+import 'services/music_recommendation_service.dart';
 import 'services/navidrome_service.dart';
 import 'services/offline_cache_service.dart';
 import 'services/local_music_service.dart';
@@ -265,6 +266,14 @@ class MyApp extends StatelessWidget {
             }
             return player;
           },
+        ),
+        ChangeNotifierProvider<MusicRecommendationService>(
+          create: (ctx) => MusicRecommendationService(
+            nav: ctx.read<NavidromeService>(),
+            stats: ctx.read<ListeningStatsService>(),
+            player: ctx.read<PlayerController>(),
+            localMusic: ctx.read<LocalMusicService>(),
+          ),
         ),
         // Modos de fidelidad (Estándar / Alta fidelidad / Bit-perfect). Se crea al
         // arrancar para aplicar el modo guardado antes de la primera canción.
