@@ -18,7 +18,7 @@ mixin _NavidromeDiscovery on _NavidromeBase {
       's': salt,
       't': token,
       'v': '1.16.1',
-      'c': 'Scrotify',
+      'c': 'CrotoWave',
       'f': 'json',
       ...params,
     };
@@ -91,7 +91,7 @@ mixin _NavidromeDiscovery on _NavidromeBase {
     final (salt, token) = _auth();
     final buffer = StringBuffer('$_url/rest/savePlayQueue.view')
       ..write('?u=${Uri.encodeQueryComponent(_user!)}')
-      ..write('&s=$salt&t=$token&v=1.16.1&c=Scrotify&f=json');
+      ..write('&s=$salt&t=$token&v=1.16.1&c=CrotoWave&f=json');
     for (final id in ids) {
       buffer.write('&id=${Uri.encodeQueryComponent(id)}');
     }

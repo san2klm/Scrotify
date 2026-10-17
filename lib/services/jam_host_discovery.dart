@@ -105,7 +105,7 @@ mixin _JamHostDiscovery on _JamHostBase {
       'transport': 'wss',
       'tlsFingerprint': _tlsIdentity?.fingerprintSha256,
       'pin': _pinCode!.value,
-      'sessionTitle': 'Jam de $_hostName',
+      'sessionTitle': 'CrotoLink de $_hostName',
       'hostName': _hostName,
       'participantCount': _participants.length + 1,
       'currentTrackTitle': _currentTrackTitle,

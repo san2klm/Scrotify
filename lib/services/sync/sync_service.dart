@@ -247,7 +247,7 @@ class SyncService extends ChangeNotifier {
     final base = serverBase();
     if (!_enabled || crypto == null || _syncing) return;
     if (base == null) {
-      _fail('Configura un servidor Jam válido para sincronizar.');
+      _fail('Configura un servidor CrotoLink válido para sincronizar.');
       return;
     }
     _syncing = true;
@@ -650,7 +650,7 @@ class SyncService extends ChangeNotifier {
     final code = response.statusCode;
     if (code == 403) {
       throw const _SyncFailure(
-          'El servidor Jam no tiene la sincronización activada.');
+          'El servidor CrotoLink no tiene la sincronización activada.');
     }
     if (code == 401) {
       throw const _SyncFailure(

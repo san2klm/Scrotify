@@ -17,7 +17,7 @@ mixin _NavidromeExtras on _NavidromeBase {
       's': salt,
       't': token,
       'v': '1.16.1',
-      'c': 'Scrotify',
+      'c': 'CrotoWave',
       'f': 'json',
       'id': artistId,
     });
@@ -456,7 +456,7 @@ mixin _NavidromeExtras on _NavidromeBase {
         'host': session.hostIp,
         'port': session.port,
         'hostName': session.hostName,
-        'title': 'Jam de ${session.hostName}',
+        'title': 'CrotoLink de ${session.hostName}',
         'trackTitle': session.currentTrack?.title,
         'trackArtist': session.currentTrack?.artist,
         'albumArtUrl': session.currentTrack?.albumArtUrl,
@@ -545,7 +545,7 @@ mixin _NavidromeExtras on _NavidromeBase {
                   port: port,
                   pin: pin,
                   sessionTitle: (data['title'] as String?) ??
-                      'Jam de ${data['hostName'] ?? "Comunidad"}',
+                      'CrotoLink de ${data['hostName'] ?? "Comunidad"}',
                   hostName: (data['hostName'] as String?) ?? msg.username,
                   participantCount:
                       (data['participantCount'] as num?)?.toInt() ?? 1,

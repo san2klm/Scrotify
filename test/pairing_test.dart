@@ -26,13 +26,22 @@ void main() {
       final original =
           QrData(host: '192.168.1.50', port: 54321, code: 'X7K9MP');
       final uri = original.toUri();
-      expect(uri, 'scrotify://pair?host=192.168.1.50&port=54321&code=X7K9MP');
+      expect(uri, 'crotowave://pair?host=192.168.1.50&port=54321&code=X7K9MP');
 
       final parsed = QrData.fromUri(uri);
       expect(parsed, isNotNull);
       expect(parsed!.host, '192.168.1.50');
       expect(parsed.port, 54321);
       expect(parsed.code, 'X7K9MP');
+    });
+
+    test('QrData acepta los QR con el esquema anterior (scrotify://)', () {
+      final parsed = QrData.fromUri(
+          'scrotify://pair?host=192.168.1.50&port=54321&code=X7K9MP');
+      expect(parsed?.host, '192.168.1.50');
+      expect(parsed?.code, 'X7K9MP');
+      expect(QrData.fromUri('otra://pair?host=1.1.1.1&port=1&code=X7K9MP'),
+          isNull);
     });
 
     test('QrData relay serialization & deserialization', () {

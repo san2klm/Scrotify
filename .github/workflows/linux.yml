@@ -59,15 +59,15 @@ jobs:
       - name: Empaquetar Release
         run: |
           cd build/linux/x64/release/bundle
-          tar -czvf ../../../../../Scrotify-Linux-x64.tar.gz *
+          tar -czvf ../../../../../CrotoWave-Linux-x64.tar.gz *
           cd ../../../../..
-          ls -lh Scrotify-Linux-x64.tar.gz
+          ls -lh CrotoWave-Linux-x64.tar.gz
 
       - name: Subir como artefacto
         uses: actions/upload-artifact@v4
         with:
-          name: Scrotify-Linux
-          path: Scrotify-Linux-x64.tar.gz
+          name: CrotoWave-Linux
+          path: CrotoWave-Linux-x64.tar.gz
           retention-days: 30
 
       - name: Publicar en la release linux-latest
@@ -75,7 +75,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release delete linux-latest --yes --cleanup-tag || true
-          gh release create linux-latest Scrotify-Linux-x64.tar.gz \
+          gh release create linux-latest CrotoWave-Linux-x64.tar.gz \
             --target "$GITHUB_SHA" \
-            --title "Scrotify para Linux x64 (última compilación)" \
+            --title "CrotoWave para Linux x64 (última compilación)" \
             --notes "Binario nativo para Linux x64 compilado desde ${GITHUB_SHA::7}. Descomprimir y ejecutar navidrome_client."

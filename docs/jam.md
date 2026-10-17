@@ -1,23 +1,23 @@
-# Scrotify Jam — Arquitectura, Protocolo y Funcionamiento Integral
+# CrotoLink — Arquitectura, Protocolo y Funcionamiento Integral
 
 > **Documento Técnico de Referencia**  
-> Proyecto: Scrotify (Cliente Flutter para Navidrome / Subsonic)  
-> Componente: Scrotify Jam (Sincronización social y cola colaborativa en tiempo real)  
+> Proyecto: CrotoWave (Cliente Flutter para Navidrome / Subsonic)  
+> Componente: CrotoLink (Sincronización social y cola colaborativa en tiempo real)  
 > Fecha de actualización: 2026-10-06  
 
 ---
 
 ## 1. Visión General y Filosofía de Diseño
 
-**Scrotify Jam** es el subsistema de escucha social compartida y gestión colaborativa de colas en tiempo real de Scrotify, inspirado conceptualmente en *Spotify Jam*, pero adaptado al ecosistema de servidores de música autohospedados (*self-hosted*) bajo la API de Subsonic / Navidrome (v1.16.1).
+**CrotoLink** es el subsistema de escucha social compartida y gestión colaborativa de colas en tiempo real de CrotoWave, inspirado conceptualmente en *Spotify CrotoLink*, pero adaptado al ecosistema de servidores de música autohospedados (*self-hosted*) bajo la API de Subsonic / Navidrome (v1.16.1).
 
 ### 1.1. Principio Fundamental: Streaming Local Desacoplado (Sin Retransmisión de Audio P2P)
 
-A diferencia de sistemas que retransmiten el flujo binario de audio punto a punto (lo que saturaría el ancho de banda del dispositivo anfitrión y consumiría planes de datos móviles), **Scrotify Jam no transmite audio entre dispositivos**. 
+A diferencia de sistemas que retransmiten el flujo binario de audio punto a punto (lo que saturaría el ancho de banda del dispositivo anfitrión y consumiría planes de datos móviles), **CrotoLink no transmite audio entre dispositivos**. 
 
 * **Lo que viaja por la red:** Identificadores canónicos de pista (`trackId`), metadatos (`title`, `artist`, `album`, `duration`), marcas temporales de alta precisión, estado de reproducción (`isPlaying`, `positionMs`), revisiones de la cola colaborativa y eventos de usuarios.
 * **Lo que hace cada dispositivo:** Cada cliente conectado resuelve el `trackId` y descarga/reproduce el flujo de audio de forma independiente desde su propio servidor Navidrome (o el catálogo Subsonic configurado en su perfil).
-* **Beneficio:** Consumo de ancho de banda insignificante para el Jam (mensajes JSON de pocos kilobytes), cero sobrecarga de compresión o codificación en el host, y fidelidad de audio original (FLAC, Opus o MP3 directo del servidor).
+* **Beneficio:** Consumo de ancho de banda insignificante para el CrotoLink (mensajes JSON de pocos kilobytes), cero sobrecarga de compresión o codificación en el host, y fidelidad de audio original (FLAC, Opus o MP3 directo del servidor).
 
 ```
    ┌────────────────────────────────────────────────────────┐
@@ -39,7 +39,7 @@ A diferencia de sistemas que retransmiten el flujo binario de audio punto a punt
 
 ## 2. Modos de Funcionamiento
 
-La sesión Jam ofrece dos modos de operación mutuamente excluyentes, configurados por el anfitrión al crear la sesión:
+La sesión CrotoLink ofrece dos modos de operación mutuamente excluyentes, configurados por el anfitrión al crear la sesión:
 
 ### 2.1. Modo Altavoz de Fiesta (`JamMode.partySpeaker`)
 * **Propósito:** Situaciones sociales donde la música suena a través de un único equipo físico (altavoces Bluetooth en el salón, barra de sonido, PC de la fiesta).
@@ -59,11 +59,11 @@ La sesión Jam ofrece dos modos de operación mutuamente excluyentes, configurad
 
 ## 3. Topología de Red Dual: LAN Directa vs. Cloud Relay
 
-Scrotify Jam implementa una arquitectura híbrida de doble canal que funciona de manera transparente para el usuario:
+CrotoLink implementa una arquitectura híbrida de doble canal que funciona de manera transparente para el usuario:
 
 ```
                       ┌────────────────────────────────────────┐
-                      │          SCROTIFY JAM NETWORK          │
+                      │          CROTOWAVE JAM NETWORK          │
                       └──────────────────┬─────────────────────┘
                                          │
                  ┌───────────────────────┴───────────────────────┐
@@ -86,7 +86,7 @@ Scrotify Jam implementa una arquitectura híbrida de doble canal que funciona de
 * **Autonomía:** Funciona incluso si se cae la conexión a Internet externa, siempre que la red local siga enrutando paquetes.
 * **Seguridad:** Utiliza certificados TLS efímeros generados en memoria y validados estrictamente mediante *Certificate Pinning* con código QR.
 
-### 3.2. Canal Nube / Remoto (Cloud Jam Relay)
+### 3.2. Canal Nube / Remoto (Cloud CrotoLink Relay)
 * **Caso de uso:** Invitados que están fuera de casa, usando redes móviles (4G/5G) o en distintas ubicaciones geográficas.
 * **Servidor Central:** Servidor ligero en Node.js (`jam-server`) alojado en infraestructura propia y expuesto mediante **Cloudflare Tunnel** con TLS terminado por Cloudflare (`wss://jam.templo.cloud/`).
 * **Intermediación:** No requiere abrir puertos en el router del host (cero configuración UPnP o port forwarding). El host abre un WebSocket saliente hacia la nube y los invitados se conectan al mismo túnel.
@@ -106,7 +106,7 @@ Los modelos encapsulan el estado inmutable, la serialización JSON y las utilida
 ### 4.2. Datos del Código QR (`JamQrData`)
 Define el esquema del enlace profundo (*deep link*) embebido en el código QR:
 ```text
-scrotify://jam?host=192.168.1.50&port=47620&code=AB34EF&sessionId=jam_1728182000&transport=wss&tlsFingerprint=3a8f...&remoteHost=192.168.1.51&remotePort=47620
+crotowave://jam?host=192.168.1.50&port=47620&code=AB34EF&sessionId=jam_1728182000&transport=wss&tlsFingerprint=3a8f...&remoteHost=192.168.1.51&remotePort=47620
 ```
 * `host` y `port`: Dirección IP y puerto TCP primarios del anfitrión en la LAN.
 * `code`: Código PIN de la sesión.
@@ -128,7 +128,7 @@ Representa a cada usuario conectado:
 ### 4.4. Elemento de la Cola (`JamQueueItem`)
 Envuelve una canción (`Track`) con metadatos sociales:
 * `id`: Identificador único del ítem en la cola.
-* `track`: Pista canónica de Scrotify (`id`, `title`, `artist`, `album`, `duration`, `albumArtUrl`).
+* `track`: Pista canónica de CrotoWave (`id`, `title`, `artist`, `album`, `duration`, `albumArtUrl`).
 * `addedBy`: Instancia de `JamParticipant` que agregó la canción (para mostrar el chip *"Añadida por Laura"*).
 * `addedAt`: Fecha y hora de incorporación.
 
@@ -173,7 +173,7 @@ El anfitrión ejecuta un servidor local con capacidad criptográfica y descubrim
 ### 5.1. Ciclo de Vida y Servidor Seguro Embebido
 1. **Generación de Identidad TLS Efímera (`JamTlsIdentity`):**
    * Al iniciar la sesión, se genera un par de claves asimétricas RSA de 2048 bits en memoria.
-   * Se crea y autofirma un certificado X.509 con vigencia de 1 día y `CN = "Scrotify Jam $sessionId"`.
+   * Se crea y autofirma un certificado X.509 con vigencia de 1 día y `CN = "CrotoLink $sessionId"`.
    * La clave privada permanece estrictamente en la memoria RAM del host y nunca se transmite.
    * Se extrae el hash SHA-256 en formato hexadecimal de la codificación binaria DER del certificado.
 2. **Enlace HTTP/WSS (`HttpServer.bindSecure`):**
@@ -268,7 +268,7 @@ El componente en la nube permite sesiones a través de Internet:
 `JamController` es la clase central que extiende `ChangeNotifier` y actúa como orquestador entre la UI, los servicios de red (`JamHostService`, `JamGuestService`, `RemoteJamService`) y el reproductor de audio (`PlayerController`).
 
 ### 8.1. Dualidad Simultánea Host: LAN + Nube
-Cuando un usuario pulsa *"Crear Jam"*, `JamController` ejecuta simultáneamente:
+Cuando un usuario pulsa *"Crear CrotoLink"*, `JamController` ejecuta simultáneamente:
 1. Inicia `JamHostService` en la red local (HTTPS/WSS + Radar UDP).
 2. Se conecta al servidor en la nube y crea la sala en `RemoteJamService.createRoom`.
 3. Notifica al servidor Navidrome mediante `_navidrome.publishServerJam`.
@@ -287,7 +287,7 @@ Cuando un usuario pulsa *"Crear Jam"*, `JamController` ejecuta simultáneamente:
 └──────────────────┘      └──────────────────┘      └──────────────────┘
 ```
 
-### 8.2. Reconciliación de Cola entre el Reproductor y la Jam
+### 8.2. Reconciliación de Cola entre el Reproductor y el CrotoLink
 El reproductor local maneja su propio orden y la pista en curso. `JamController` realiza una reconciliación bidireccional continua mediante `_rebuildHostQueueFromPlayer()`:
 * Separa la pista actual (`currentTrack`) de las pistas futuras (`orderedQueue.skip(currentOrderPos + 1)`).
 * Mantiene la trazabilidad de qué participante añadió cada pista (`_trackAddedBy[track.id]`).
@@ -323,7 +323,7 @@ En modo **Escucha Sincronizada** (`JamMode.synchronizedListening`), el método `
 
 ## 10. Sistema de Radar de Descubrimiento Multi-Vía
 
-Al abrir el panel de Jam o pulsar *"Buscar Jam en Radar"*, Scrotify dispara **tres consultas concurrentes** mediante `Future.wait`:
+Al abrir el panel de CrotoLink o pulsar *"Buscar CrotoLink en Radar"*, CrotoWave dispara **tres consultas concurrentes** mediante `Future.wait`:
 
 ```
                            ┌────────────────────────┐
@@ -333,7 +333,7 @@ Al abrir el panel de Jam o pulsar *"Buscar Jam en Radar"*, Scrotify dispara **tr
          ▼                             ▼                             ▼
 ┌──────────────────┐         ┌──────────────────┐          ┌──────────────────┐
 │   Canal 1: LAN   │         │ Canal 2: Navidro │          │ Canal 3: Cloud   │
-│  UDP Broadcast   │         │ REST / API Jams  │          │ HTTP GET /rooms  │
+│  UDP Broadcast   │         │ REST / API CrotoLinks  │          │ HTTP GET /rooms  │
 └────────┬─────────┘         └────────┬─────────┘          └────────┬─────────┘
          │                            │                             │
          └────────────────────────► Deduplicación ◄─────────────────┘
@@ -518,7 +518,7 @@ Enviado inmediatamente tras aceptar al invitado con el estado completo de la sal
 ### 14.1. Archivo Docker Compose (`jam-server/docker-compose.yml`)
 ```yaml
 services:
-  scrotify-jam:
+  crotolink:
     build: .
     restart: unless-stopped
     environment:
@@ -533,13 +533,13 @@ services:
 ```yaml
 ingress:
   - hostname: jam.templo.cloud
-    service: http://scrotify-jam:8080
+    service: http://crotolink:8080
   - service: http_status:404
 ```
 
 ### 14.3. Verificación de Salud
 ```sh
-curl http://scrotify-jam:8080/health
+curl http://crotolink:8080/health
 # Respuesta: {"status":"ok","rooms":0}
 ```
 
@@ -553,7 +553,7 @@ curl http://scrotify-jam:8080/health
 | **Puerto UDP Radar** | `47623` (`kJamDiscoveryPort`) | Puerto para anuncios broadcast y peticiones de descubrimiento. |
 | **Grupo Multicast** | `239.255.0.1` | Grupo de multidifusión local para redes que bloquean broadcast. |
 | **Tag de Descubrimiento** | `scrotify-jam` | Identificador de protocolo en los datagramas UDP. |
-| **Endpoint Nube por Defecto** | `wss://jam.templo.cloud/` | URL pública protegida con TLS para Jam remota. |
+| **Endpoint Nube por Defecto** | ninguno | Cada usuario configura su servidor CrotoLink en Ajustes (`wss://`). |
 | **Longitud del PIN** | `6` caracteres (`JamCode.length`) | PIN sin caracteres ambiguos (`ABC-DEF`). |
 | **Umbral de Deriva (Audio)** | `450` milisegundos | Desfase mínimo para forzar un `seek` en escucha sincronizada. |
 | **Período de Gracia Host** | `30` segundos | Tiempo que el host reserva el lugar de un invitado desconectado. |
@@ -569,7 +569,7 @@ curl http://scrotify-jam:8080/health
 
 ## Anexo: servidor configurable (Roadmap Fase 1)
 
-- El endpoint remoto ya no es fijo: `SettingsController.jamServerUrl` (por defecto `wss://jam.templo.cloud/`) alimenta `RemoteJamService`, el radar (`GET /rooms`) y los anuncios de sala. Validación en `JamServerEndpoint` (`wss://`; `ws://` solo en hosts privados).
+- El endpoint remoto ya no es fijo: `SettingsController.jamServerUrl` (vacío por defecto: cada usuario configura el suyo) alimenta `RemoteJamService`, el radar (`GET /rooms`) y los anuncios de sala. Validación en `JamServerEndpoint` (`wss://`; `ws://` solo en hosts privados).
 - `jam-server`: `GET /api/capabilities` → `{protocolVersion: 2, features, limits, publicUrl}`; panel `/admin` y ajustes persistentes en `/data/jam.db`. Ver `jam-server/README.md`.
 
 ## Anexo: modos de cola (Roadmap Fase 2)
@@ -581,7 +581,7 @@ curl http://scrotify-jam:8080/health
 
 ## Anexo: historial (Roadmap Fase 3)
 
-El historial (`JamHistory`) vive solo en la RAM del host; el servidor no guarda nada. Una pista entra si sonó ≥30 s o ≥50 %. `JamController.saveHistoryAsPlaylist` crea "Jam YYYY-MM-DD" en Navidrome. Pendiente: compartir snapshot con invitados.
+El historial (`JamHistory`) vive solo en la RAM del host; el servidor no guarda nada. Una pista entra si sonó ≥30 s o ≥50 %. `JamController.saveHistoryAsPlaylist` crea "CrotoLink YYYY-MM-DD" en Navidrome. Pendiente: compartir snapshot con invitados.
 
 ## Anexo: seguridad (Roadmap Fase 4)
 

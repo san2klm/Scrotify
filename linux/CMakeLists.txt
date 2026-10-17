@@ -129,8 +129,8 @@ install(DIRECTORY "${PROJECT_BUILD_DIR}/${FLUTTER_ASSET_DIR_NAME}"
 
 # Icono de la aplicación usado por el runner GTK. Se instala dentro del bundle
 # para que también funcione al distribuir la app sin depender del sistema.
-install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/../assets/icons/scrotify_app_icon.png"
-  DESTINATION "${INSTALL_BUNDLE_DATA_DIR}/icons" RENAME "scrotify_app_icon.png" COMPONENT Runtime)
+install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/../assets/icons/crotowave_app_icon.png"
+  DESTINATION "${INSTALL_BUNDLE_DATA_DIR}/icons" RENAME "crotowave_app_icon.png" COMPONENT Runtime)
 
 # Install the AOT library on non-Debug builds only.
 if(NOT CMAKE_BUILD_TYPE MATCHES "Debug")

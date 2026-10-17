@@ -4,7 +4,7 @@
 - Descargas individuales en la raíz; favoritos en `likes`; playlists en `playlist(Nombre)`.
 - Identidad por servidor/canción, independiente de la ubicación. Reutilizar archivos existentes, incluso tras reiniciar, mover o copiar dentro de la biblioteca; no descargar otra vez por pertenecer a otra colección.
 - Reescaneo recursivo por huella de contenido y metadatos persistentes. Archivos desconocidos no se atribuyen a canciones del servidor solo por su nombre.
-- Linux usa XDG Music (o ~/Música); Windows/macOS Music; Android usa `/storage/emulated/0/Music` (sin subcarpeta Scrotify); iOS usa una ubicación específica de la aplicación. Cambiar carpeta no borra la anterior.
+- Linux usa XDG Music (o ~/Música); Windows/macOS Music; Android usa `/storage/emulated/0/Music` (sin subcarpeta CrotoWave); iOS usa una ubicación específica de la aplicación. Cambiar carpeta no borra la anterior.
 - En Android, solicitar acceso al almacenamiento compartido al descargar, cambiar carpeta o reescanear; no abrir permisos durante el arranque. Migrar la ruta predeterminada anterior conservando sus archivos y las carpetas elegidas manualmente.
 - Mantener la caché anterior y su aislamiento por servidor. No sobrescribir archivos ajenos ni seguir enlaces fuera de la carpeta autorizada.
 - Verificar deduplicación, concurrencia, reinicio, reescaneo y carpetas mediante pruebas; análisis y compilación Linux.

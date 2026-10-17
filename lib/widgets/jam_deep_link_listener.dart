@@ -7,7 +7,7 @@ import 'package:provider/provider.dart';
 import '../models/jam_models.dart';
 import '../services/jam_controller.dart';
 
-/// Escucha enlaces de invitación (`scrotify://join?...` y `https://<relay>/j/<PIN>`)
+/// Escucha enlaces de invitación (`crotowave://join?...` y `https://<relay>/j/<PIN>`)
 /// y ofrece unirse a la Jam. Si la plataforma no soporta enlaces, no hace nada.
 class JamDeepLinkListener extends StatefulWidget {
   final GlobalKey<NavigatorState> navigatorKey;
@@ -61,13 +61,13 @@ class _JamDeepLinkListenerState extends State<JamDeepLinkListener> {
     final accepted = await showDialog<bool>(
       context: ctx,
       builder: (dialogContext) => AlertDialog(
-        title: Text('Unirte a la Jam ${invite.code}'),
+        title: Text('Unirte al CrotoLink ${invite.code}'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(invite.server == null
-                ? 'Se usará el servidor Jam configurado en Ajustes.'
+                ? 'Se usará el servidor CrotoLink configurado en Ajustes.'
                 : 'Servidor: ${invite.server}'),
             TextField(
               controller: password,
@@ -97,7 +97,7 @@ class _JamDeepLinkListenerState extends State<JamDeepLinkListener> {
     final after = widget.navigatorKey.currentContext;
     if (!ok && after != null && after.mounted) {
       ScaffoldMessenger.maybeOf(after)?.showSnackBar(SnackBar(
-        content: Text(jam.lastJoinError ?? 'No se pudo unir a la Jam.'),
+        content: Text(jam.lastJoinError ?? 'No se pudo unir al CrotoLink.'),
       ));
     }
   }

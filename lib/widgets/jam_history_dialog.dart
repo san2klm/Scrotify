@@ -63,7 +63,7 @@ class _JamHistoryDialogState extends State<JamHistoryDialog> {
 
     return AlertDialog(
       backgroundColor: context.bgApp,
-      title: Text('Historial de la Jam',
+      title: Text('Historial del CrotoLink',
           style: TextStyle(color: context.textPrimary)),
       content: SizedBox(
         width: 420,

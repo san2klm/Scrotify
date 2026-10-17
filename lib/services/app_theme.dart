@@ -329,8 +329,8 @@ class AppTheme {
 
   static const builtInScrotify = AppTheme(
     id: 'scrotify-default',
-    name: 'Scrotify Oscuro',
-    author: 'Scrotify',
+    name: 'CrotoWave Oscuro',
+    author: 'CrotoWave',
     version: '1.0.0',
     description: 'Tema oscuro por defecto.',
     mode: 'dark',
@@ -385,7 +385,7 @@ class AppTheme {
   static AppTheme fixed({
     required String id,
     required String name,
-    String author = 'Scrotify',
+    String author = 'CrotoWave',
     String version = '1.0.0',
     String description = '',
     String mode = 'dark',

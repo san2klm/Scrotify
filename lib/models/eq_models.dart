@@ -1,4 +1,4 @@
-// Scrotify — Modelos del Ecualizador de tres niveles.
+// CrotoWave — Modelos del Ecualizador de tres niveles.
 //
 // Un único modelo de datos (lista de filtros biquad + preamp) sirve a los tres
 // modos de la UI. Lo que cambia entre modos es CUÁNTO del modelo se expone:

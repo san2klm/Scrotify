@@ -4,7 +4,7 @@ import 'package:just_audio/just_audio.dart';
 import 'navidrome_service.dart';
 
 /// Reproductor de otro dispositivo al que esta app está haciendo de mando
-/// (Scrotify Connect). Mientras [active], `PlayerController` actúa de espejo:
+/// (CrotoWave Connect). Mientras [active], `PlayerController` actúa de espejo:
 /// muestra la cola y el estado del dispositivo remoto y envía allí cada
 /// acción (reproducir, encolar, reordenar, pausar…).
 abstract class RemotePlayback implements Listenable {

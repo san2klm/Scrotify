@@ -59,14 +59,14 @@ jobs:
 
       - name: Preparar instalador
         run: |
-          cp build/app/outputs/flutter-apk/app-release.apk Scrotify-Android.apk
-          ls -lh Scrotify-Android.apk
+          cp build/app/outputs/flutter-apk/app-release.apk CrotoWave-Android.apk
+          ls -lh CrotoWave-Android.apk
 
       - name: Subir como artefacto
         uses: actions/upload-artifact@v4
         with:
-          name: Scrotify-Android
-          path: Scrotify-Android.apk
+          name: CrotoWave-Android
+          path: CrotoWave-Android.apk
           retention-days: 30
 
       - name: Publicar en la release android-latest
@@ -74,7 +74,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release delete android-latest --yes --cleanup-tag || true
-          gh release create android-latest Scrotify-Android.apk \
+          gh release create android-latest CrotoWave-Android.apk \
             --target "$GITHUB_SHA" \
-            --title "Scrotify para Android Móvil (última compilación)" \
+            --title "CrotoWave para Android Móvil (última compilación)" \
             --notes "APK para teléfonos y tablets Android compilado desde ${GITHUB_SHA::7}."

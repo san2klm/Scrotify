@@ -734,7 +734,7 @@ void main() {
     }
 
     testWidgets(
-        'renders offline action when not in Jam mode (!jam.inJam) and preserves existing menu actions',
+        'renders offline action when not in CrotoLink mode (!jam.inJam) and preserves existing menu actions',
         (tester) async {
       await tester.pumpWidget(createContextMenuHarness(inJam: false));
       await tester.pump();
@@ -752,7 +752,7 @@ void main() {
       expect(find.text('Modo Karaoke'), findsOneWidget);
     });
 
-    testWidgets('does NOT render offline action when in Jam mode (jam.inJam)',
+    testWidgets('does NOT render offline action when in CrotoLink mode (jam.inJam)',
         (tester) async {
       await tester.pumpWidget(createContextMenuHarness(inJam: true));
       await tester.pump();

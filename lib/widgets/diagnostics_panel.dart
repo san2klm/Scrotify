@@ -23,7 +23,7 @@ class DiagnosticsPanel extends StatelessWidget {
   DiagnosticsLog get _log => log ?? DiagnosticsLog.instance;
 
   String _export() => _log.export(header: {
-        'App': 'Scrotify ${BuildInfo.label}',
+        'App': 'CrotoWave ${BuildInfo.label}',
         'Sistema':
             '${Platform.operatingSystem} ${Platform.operatingSystemVersion}',
         'Generado': DateTime.now().toIso8601String(),
@@ -66,8 +66,8 @@ class DiagnosticsPanel extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Scrotify guarda en memoria los últimos mensajes internos '
-              '(conexión, reproducción, Jam). No salen del dispositivo salvo '
+              'CrotoWave guarda en memoria los últimos mensajes internos '
+              '(conexión, reproducción, CrotoLink). No salen del dispositivo salvo '
               'que los copies o guardes, y las contraseñas y claves se ocultan.',
               style: secondary,
             ),

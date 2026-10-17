@@ -147,14 +147,14 @@ class _AmoledSplashScreen extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             Image.asset(
-              'assets/icons/scrotify_app_icon.png',
+              'assets/icons/crotowave_app_icon.png',
               width: 60,
               height: 60,
-              semanticLabel: 'Logo de Scrotify',
+              semanticLabel: 'Logo de CrotoWave',
             ),
             const SizedBox(height: 16),
             Text(
-              'SCROTIFY',
+              'CROTOWAVE',
               style: TextStyle(
                 color: context.textPrimary,
                 fontSize: 22,

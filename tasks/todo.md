@@ -363,3 +363,31 @@ El mismo APK sirve para teléfono y tele. En una tele se activa un modo con la i
 - [x] `santi` fusionada (23 commits: Windows ThumbBar y botones laterales del ratón, rueda de volumen, 124 temas empaquetados, CI por plataforma, accesos rápidos de escritorio). Conflictos: Android TV, `.gitignore`, `main.cpp` y `Runner.rc` se quedaron con lo de `main` (sabores `phone`/`tv`, marca Scrotify); `flutter_window.*` y el fondo oscuro del splash, de santi.
 - [x] Ajuste tras la fusión: el botón «Mezclar todo» se oculta si el campo de búsqueda mide menos de 260 px (desbordaba 2,5 px a 720 px con texto 1,5); `await` en `_shuffleAllTracks`.
 - [x] `flutter analyze` limpio y 964 pruebas aprobadas. Falta compilar y probar el runner de Windows (ThumbBar, botones del ratón) en una máquina Windows.
+
+## Licencias y firma propia (2026-10-16)
+
+- [x] Licencias: `LICENSE` (GPL-3.0-or-later + excepción para tiendas, inglés vinculante y traducción), `jam-server/LICENSE` (AGPL-3.0-or-later), `LICENSING.md` (por componente, dependencias revisadas: ninguna GPL), `CONTRIBUTING.md` (DCO; las contribuciones heredan la excepción).
+- [x] App: Ajustes → «Licencias de código abierto» (`lib/utils/app_licenses.dart`): licencia propia, servidor Jam y, en escritorio, libmpv/FFmpeg/keybinder. Flutter ya junta las de los paquetes.
+- [x] Servidor Jam: `SOURCE_URL` → `GET /source`, `license`/`sourceUrl` en `/api/capabilities`, pie en `/admin` (AGPL §13).
+- [x] AppImage: `LICENSE`, `LICENSING.md`, copyright de los 160 paquetes de Debian incluidos y `THIRD_PARTY_SOURCES.txt` con versión y fuente.
+- [x] Firma Android: keystore propio en `~/.config/scrotify-signing/`, `applicationId` `cloud.templo.scrotify`. Teléfono migrado con todos sus datos (`tool/migrate_android_signing.sh`).
+- [x] Secretos: `.gitignore` ampliado y hook `.githooks/pre-commit` (activo con `core.hooksPath`).
+- [x] `scripts/sign_release.sh`: verifica la huella de los APK y genera `SHA256SUMS` (+ minisign).
+- [x] minisign instalado; clave creada con contraseña pedida en ventana (`scripts/sign_release.sh --init`), pública `crotowave-release.pub`.
+- [x] URL del repo público (`https://github.com/Dante0Q/CrotoWave`) en `UPSTREAM_SOURCE_URL`, `LICENSE`, instalador y User-Agent.
+- [ ] Migrar la tele y el Chromecast (`tool/migrate_android_signing.sh <id> tv backup|restore`, desde `com.example.navidrome_client`).
+- [ ] CI de Android/TV: flavor + firma con secretos (o firmar solo en local). Ver `docs/SIGNING.md`.
+- [ ] Publicar con historial limpio cuando esté terminado (`docs/PUBLICAR.md`); cambiar igual la contraseña de la cuenta `Proyecto` (está en el historial de desarrollo).
+- [ ] Windows: pedir la firma gratis a SignPath Foundation después de la primera publicación (`docs/PUBLICAR.md`).
+
+## Cambio de nombre: CrotoWave y CrotoLink (2026-10-16)
+
+- [x] App «Scrotify» → **CrotoWave**; Jam → **CrotoLink** (textos, Android/iOS/Linux/Windows, instalador, AppImage, docs, servidor).
+- [x] Enlaces: se generan `crotowave://` y `crotowave-sync://`; se siguen aceptando `scrotify://` y `scrotify-sync://` (`lib/utils/app_links.dart`).
+- [x] Se mantienen los identificadores internos que guardan datos o hacen de protocolo (claves `scrotify.*`, nonces, etiquetas de red, canales nativos). Ver `LICENSING.md` → «Nombres y logo».
+- [x] `LICENSE`: condición de la sección 7(e) sobre los nombres y el logo. `PRIVACY.md` y `docs/CODE_SIGNING_POLICY.md` (requisitos de SignPath).
+- [x] Android: `applicationId` `cloud.templo.crotowave`, clave nueva `CN=CrotoWave` en `~/.config/crotowave-signing/` (la de Scrotify queda en `legacy/` para migrar). Teléfono migrado desde `cloud.templo.scrotify`.
+- [x] `tool/migrate_android_signing.sh`: origen configurable (`FROM_APP`, `FROM_KEY`), arregla la carpeta de datos que quedaba en 755 y ya no usa `tar --delete` (dañaba la copia).
+- [x] Sin servidor CrotoLink por defecto (antes `jam.templo.cloud`): las instalaciones nuevas lo configuran en Ajustes; las existentes conservan el guardado. Sin servidor, crear/unirse a una sala remota avisa «Configurá un servidor CrotoLink…».
+- [ ] Redeploy del servidor: el contenedor pasa a llamarse `crotolink`; cambiar el ingress del túnel de `scrotify-jam:8080` a `crotolink:8080`.
+- [ ] Desinstalar del teléfono `cloud.templo.scrotify` y `com.example.navidrome_client` cuando el usuario confirme que CrotoWave está bien.

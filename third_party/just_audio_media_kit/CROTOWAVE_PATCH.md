@@ -2,7 +2,7 @@
 
 Origen: https://pub.dev/packages/just_audio_media_kit (dominio público, Unlicense).
 
-Cambios para Scrotify (solo añaden API, no cambian el comportamiento):
+Cambios para CrotoWave (solo añaden API, no cambian el comportamiento):
 
 * `MediaKitPlayer.player`: acceso al `Player` de media_kit (mpv). El campo
   original era privado y no había forma de fijar propiedades de mpv.

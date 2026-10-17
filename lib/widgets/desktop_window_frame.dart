@@ -126,14 +126,14 @@ class _DesktopWindowFrameState extends State<DesktopWindowFrame>
                   children: [
                     const SizedBox(width: 12),
                     Image.asset(
-                      'assets/icons/scrotify_app_icon.png',
+                      'assets/icons/crotowave_app_icon.png',
                       width: 15,
                       height: 15,
-                      semanticLabel: 'Logo de Scrotify',
+                      semanticLabel: 'Logo de CrotoWave',
                     ),
                     const SizedBox(width: 7),
                     Text(
-                      'Scrotify',
+                      'CrotoWave',
                       maxLines: 1,
                       softWrap: false,
                       overflow: TextOverflow.ellipsis,

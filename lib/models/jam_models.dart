@@ -3,6 +3,7 @@ import 'dart:math';
 import 'package:flutter/foundation.dart' show debugPrint;
 
 import '../services/navidrome_service.dart';
+import '../utils/app_links.dart';
 
 /// Elimina las credenciales Subsonic (`u`, `s`, `t`, `p`) de una URL de
 /// carátula antes de compartirla con invitados o servidores Jam.
@@ -33,8 +34,17 @@ const String kJamDiscoveryMulticastGroup = '239.255.0.1';
 /// Identificador de protocolo para las tramas UDP de Jam.
 const String kJamDiscoveryAppTag = 'scrotify-jam';
 
-/// Endpoint WebSocket remoto por defecto para Scrotify Jam en la nube.
-const String kDefaultRemoteJamEndpoint = 'wss://jam.templo.cloud/';
+/// Servidor CrotoLink por defecto: ninguno. Cada usuario configura el suyo (o
+/// el de quien se lo comparta) en Ajustes; sin él no hay salas remotas,
+/// CrotoWave Connect por internet ni sincronización.
+const String kDefaultRemoteJamEndpoint = '';
+
+/// Ejemplo para el campo de Ajustes.
+const String kExampleRemoteJamEndpoint = 'wss://crotolink.tu-dominio.com/';
+
+/// Mensaje cuando una función necesita el servidor y no hay ninguno.
+const String kNoJamServerMessage =
+    'Configurá un servidor CrotoLink en Ajustes para usar salas remotas.';
 
 /// Resultado de validar la URL del servidor Jam configurada por el usuario.
 class JamServerEndpoint {
@@ -153,7 +163,7 @@ Track trackFromJamJson(Map<String, dynamic> j) {
   );
 }
 
-/// Enlace de invitación a una Jam en la nube: `scrotify://join?code=ABC234&server=host`
+/// Enlace de invitación a una Jam en la nube: `crotowave://join?code=ABC234&server=host`
 /// o `https://host/j/ABC234`. Solo lleva el PIN (y el servidor) — nunca credenciales.
 class JamInviteLink {
   final String code;
@@ -177,7 +187,7 @@ class JamInviteLink {
     if (uri == null || uri.scheme.isEmpty) return null;
     String? rawCode;
     String? server;
-    if (uri.scheme == 'scrotify' && uri.host == 'join') {
+    if (isAppLinkScheme(uri.scheme) && uri.host == 'join') {
       rawCode = uri.queryParameters['code'];
       server = uri.queryParameters['server'];
     } else if ((uri.scheme == 'https' || uri.scheme == 'http') &&
@@ -263,7 +273,7 @@ class JamCode {
     final upper = value.toUpperCase().replaceAll(RegExp(r'[^A-Z0-9]'), '');
     if (upper.length != length ||
         upper.split('').any((character) => !_charset.contains(character))) {
-      throw ArgumentError('Código Jam debe tener $length caracteres');
+      throw ArgumentError('Código CrotoLink debe tener $length caracteres');
     }
     return JamCode._(upper);
   }
@@ -275,7 +285,7 @@ class JamCode {
   String get formatted => '${value.substring(0, 3)}-${value.substring(3)}';
 }
 
-/// Datos contenidos en el código QR de Jam: `scrotify://jam?host=...&port=...&code=...&sessionId=...`
+/// Datos contenidos en el código QR de Jam: `crotowave://jam?host=...&port=...&code=...&sessionId=...`
 class JamQrData {
   final String host;
   final int port;
@@ -297,7 +307,7 @@ class JamQrData {
 
   String toUri() {
     return Uri(
-      scheme: 'scrotify',
+      scheme: kAppLinkScheme,
       host: 'jam',
       queryParameters: {
         'host': host,
@@ -316,7 +326,7 @@ class JamQrData {
   static JamQrData? fromUri(String uri) {
     try {
       final u = Uri.parse(uri);
-      if (u.scheme != 'scrotify' || u.host != 'jam') return null;
+      if (!isAppLinkScheme(u.scheme) || u.host != 'jam') return null;
       final host = u.queryParameters['host'];
       final port = int.tryParse(u.queryParameters['port'] ?? '');
       final code = u.queryParameters['code'];
@@ -803,7 +813,7 @@ class DiscoveredJamSession {
               : fallbackHost,
       port: (json['port'] as num?)?.toInt() ?? 0,
       pin: (json['pin'] as String?) ?? '',
-      sessionTitle: (json['sessionTitle'] as String?) ?? 'Jam de Scrotify',
+      sessionTitle: (json['sessionTitle'] as String?) ?? 'CrotoLink',
       hostName: (json['hostName'] as String?) ?? 'Anfitrión',
       participantCount: (json['participantCount'] as num?)?.toInt() ?? 1,
       currentTrackTitle: json['currentTrackTitle'] as String?,
@@ -846,7 +856,7 @@ List<T> _parseEach<T>(
     try {
       out.add(parse(Map<String, dynamic>.from(raw[i] as Map)));
     } catch (e) {
-      debugPrint('Jam: elemento $i de «$what» inválido, se descarta ($e)');
+      debugPrint('CrotoLink: elemento $i de «$what» inválido, se descarta ($e)');
     }
   }
   return out;

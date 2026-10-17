@@ -44,7 +44,7 @@ void main() {
           await tester.tap(find.text('Buscar').last);
           await tester.pumpAndSettle();
         } else {
-          expect(find.text('SCROTIFY'), findsNothing);
+          expect(find.text('CROTOWAVE'), findsNothing);
         }
         await tester.tap(find.byTooltip('Explorar'));
         await tester.pumpAndSettle();

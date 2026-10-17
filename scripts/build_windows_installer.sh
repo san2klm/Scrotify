@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Genera el instalador de Windows: installer/output/Scrotify-Setup-<versión>.exe
+# Genera el instalador de Windows: installer/output/CrotoWave-Setup-<versión>.exe
 #
 # Necesita Inno Setup 6 (iscc): en el PATH, o con su ruta en ISCC.
 # Se ejecuta desde Git Bash en Windows.
@@ -26,5 +26,5 @@ rm -rf installer/stage
 mkdir -p installer/stage
 cp -r build/windows/x64/runner/Release/. installer/stage/
 
-"$iscc" "/DAppVersion=$ver" installer/scrotify.iss
-echo "Instalador: installer/output/Scrotify-Setup-$ver.exe"
+"$iscc" "/DAppVersion=$ver" installer/crotowave.iss
+echo "Instalador: installer/output/CrotoWave-Setup-$ver.exe"

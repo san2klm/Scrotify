@@ -1,6 +1,6 @@
-# Servidor remoto de Scrotify Jam
+# Servidor remoto de CrotoLink
 
-Servidor WebSocket en Node.js para salas Jam remotas. Conserva las salas sólo en memoria: reiniciar el contenedor cierra todas las salas activas. Los **ajustes y la cuenta de admin** sí persisten en `/data/jam.db` (SQLite vía `node:sqlite`, requiere Node ≥ 22.13; la imagen usa Node 24).
+Servidor WebSocket en Node.js para salas CrotoLink remotas. Conserva las salas sólo en memoria: reiniciar el contenedor cierra todas las salas activas. Los **ajustes y la cuenta de admin** sí persisten en `/data/jam.db` (SQLite vía `node:sqlite`, requiere Node ≥ 22.13; la imagen usa Node 24).
 
 ## Configuración y panel `/admin`
 
@@ -10,6 +10,7 @@ Servidor WebSocket en Node.js para salas Jam remotas. Conserva las salas sólo e
 | `PUBLIC_URL` | Valor inicial de `publicUrl` (el panel lo sobrescribe). |
 | `TRUST_PROXY` | `none` (defecto) \| `cloudflare` (`CF-Connecting-IP`) \| `forwarded` (`X-Forwarded-For`). Solo así se confía en cabeceras de proxy para el rate limit del login. |
 | `DATA_DIR` | Directorio de la base (defecto `/data`). |
+| `SOURCE_URL` | Dónde descargar el código de **tu** versión. Obligatorio si modificás el servidor y otros lo usan por red (AGPL §13, ver «Licencia»). Se publica en `GET /source`. |
 | `PORT`, `MAX_MESSAGE_BYTES`, `MAX_PARTICIPANTS`, `ROOM_IDLE_MS` | Valores iniciales de los límites. |
 
 El panel (`/admin`) edita límites (participantes, salas, cola, tamaño de mensaje, inactividad) y funciones (listado público, chat, salas persistentes, enlaces web). Los cambios se aplican sin reiniciar. Sesión por cookie `HttpOnly; SameSite=Strict`, CSRF en mutaciones y límite de intentos de login por IP.
@@ -27,15 +28,15 @@ El panel (`/admin`) edita límites (participantes, salas, cola, tamaño de mensa
 1. En Portainer, creá un **Stack** y cargá el contenido de `docker-compose.yml`.
 2. Si usás *Git repository* como método de despliegue, elegí `jam-server/docker-compose.yml` como fichero del stack. Para el editor web, construí/pusheá la imagen antes o adaptá `build: .` a la imagen publicada.
 3. Desplegá el stack. El servicio escucha internamente en `8080` y no publica un puerto a Internet.
-4. En Cloudflare Tunnel, añadí un hostname público con `jam.templo.cloud` apuntando a `http://scrotify-jam:8080` (o `http://192.168.1.21:8080`). Cloudflare hace el upgrade WebSocket automáticamente.
-5. En Scrotify configurá `wss://jam.templo.cloud/` como endpoint de Jam remota.
+4. En Cloudflare Tunnel, añadí un hostname público con `crotolink.tu-dominio.com` apuntando a `http://crotolink:8080` (o `http://<IP-del-servidor>:8080`). Cloudflare hace el upgrade WebSocket automáticamente.
+5. En CrotoWave configurá `wss://crotolink.tu-dominio.com/` como endpoint de CrotoLink remoto.
 
 Cloudflare debe terminar TLS. No expongas `8080` directamente a Internet ni configures el cliente Flutter con `ws://` para un uso remoto.
 
 ## Health check
 
 ```sh
-curl http://scrotify-jam:8080/health
+curl http://crotolink:8080/health
 # {"status":"ok","rooms":0}
 ```
 
@@ -112,7 +113,7 @@ npm test
 Para probar manualmente se puede usar `wscat` contra un endpoint local o el hostname `wss` publicado:
 
 ```sh
-npx wscat -c wss://jam.templo.cloud/
+npx wscat -c wss://crotolink.tu-dominio.com/
 ```
 
 Nunca pegues tokens, contraseñas ni credenciales de Navidrome en los mensajes WebSocket: el servicio sólo recibe PIN, nombres de sala y estado de reproducción.
@@ -132,7 +133,7 @@ Todas las rutas llevan `Authorization: Bearer <64 hex>`. `vaultId` (64 hex) y el
 
 Límites editables: tamaño por documento (4 MB), documentos por bóveda (64) y bóvedas (100). Credenciales erróneas cuentan para el bloqueo progresivo por IP.
 
-## Scrotify Connect (control remoto entre tus dispositivos)
+## CrotoWave Connect (control remoto entre tus dispositivos)
 
 Cada **usuario de Navidrome** forma su grupo: los dispositivos de `admin` solo ven a los de `admin`. Se activa configurando `navidromeUrl` en `/admin` (URL de tu Navidrome; vacío = desactivado). El servidor verifica al usuario llamando a `ping` en esa URL con el token de Subsonic (`md5(clave + salt)`): nunca recibe la clave ni consulta URLs enviadas por el cliente. Por el WebSocket normal:
 
@@ -142,3 +143,13 @@ Cada **usuario de Navidrome** forma su grupo: los dispositivos de `admin` solo v
 | `{"action":"connect_send","to":"<deviceId>"\|"*","blob":"…"}` | El destinatario recibe `{"event":"connect_msg","from","blob"}` |
 
 El servidor solo reenvía `blob`, cifrado de extremo a extremo por los clientes con una clave derivada de la clave del usuario (máx. 64 KB). Hasta 16 dispositivos por usuario y 100 mensajes/s por dispositivo. La verificación correcta se recuerda 5 minutos y los fallos cuentan para el bloqueo por IP. Una segunda conexión del mismo `deviceId` reemplaza a la anterior.
+
+## Licencia
+
+El servidor CrotoLink es software libre bajo **GNU AGPL-3.0-or-later** (ver `LICENSE`).
+Podés instalar tu propio servidor, usarlo y modificarlo. Una sola condición
+extra frente a la GPL: si **modificás** el servidor y otras personas lo usan por
+red, tenés que ofrecerles el código fuente de tu versión. Configurá
+`SOURCE_URL` con el enlace a tu código (repositorio, archivo `.tar.gz`…) y el
+servidor lo publica en `GET /source`, en `GET /api/capabilities` y en el pie
+del panel `/admin`. Si lo usás sin cambios, no hace falta nada más.

@@ -36,7 +36,7 @@ mixin _JamJoin on _JamBase {
     _startGuestHistory(name);
     if (!JamTlsIdentity.isValidFingerprint(tlsFingerprint)) {
       lastJoinError =
-          'Esta Jam LAN no ofrece una identidad TLS verificable. Actualizá al anfitrión o usá una Jam remota WSS.';
+          'Este CrotoLink LAN no ofrece una identidad TLS verificable. Actualizá al anfitrión o usá un CrotoLink remoto WSS.';
       return false;
     }
 
@@ -117,7 +117,7 @@ mixin _JamJoin on _JamBase {
       _role = JamRole.none;
       _localParticipant = null;
       _session = null;
-      lastJoinError ??= 'No se pudo conectar a la sesión Jam.';
+      lastJoinError ??= 'No se pudo conectar a la sesión CrotoLink.';
       notifyListeners();
       return false;
     }
@@ -207,7 +207,7 @@ mixin _JamJoin on _JamBase {
     // session but cannot supply a trustworthy certificate pin, so LAN joining
     // remains QR-only until discovery messages have their own signed protocol.
     lastJoinError =
-        'La Jam LAN fue descubierta, pero para unirse de forma segura escaneá el QR del anfitrión.';
+        'El CrotoLink LAN fue descubierto, pero para unirse de forma segura escaneá el QR del anfitrión.';
     notifyListeners();
     return false;
   }
@@ -362,7 +362,7 @@ mixin _JamJoin on _JamBase {
       _localParticipant = null;
       _session = null;
       lastJoinError ??= _remoteService.lastError ??
-          'No se encontró la sala Jam en el servidor central.';
+          'No se encontró la sala CrotoLink en el servidor central.';
       notifyListeners();
       return false;
     }

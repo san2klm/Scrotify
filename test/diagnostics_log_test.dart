@@ -43,8 +43,8 @@ void main() {
       log.add('primero');
       now = now.add(const Duration(seconds: 5));
       log.add('segundo');
-      final text = log.export(header: {'App': 'Scrotify 1.0.0'});
-      expect(text, contains('App: Scrotify 1.0.0'));
+      final text = log.export(header: {'App': 'CrotoWave 1.0.0'});
+      expect(text, contains('App: CrotoWave 1.0.0'));
       expect(text.indexOf('primero'), lessThan(text.indexOf('segundo')));
       expect(text, contains('2026-10-09T12:00:05'));
     });
@@ -109,6 +109,8 @@ void main() {
     test('oculta la clave de sincronización y cabeceras de autorización', () {
       expect(redactSecrets('vinculado con scrotify-sync://AAAA-BBBB-CCCC'),
           isNot(contains('AAAA-BBBB-CCCC')));
+      expect(redactSecrets('vinculado con crotowave-sync://AAAA-BBBB-CCCC'),
+          isNot(contains('AAAA-BBBB-CCCC')));
       expect(redactSecrets('Authorization: Bearer abc.def.ghi'),
           isNot(contains('abc.def.ghi')));
     });
@@ -123,7 +125,7 @@ void main() {
     });
 
     test('no toca texto normal', () {
-      const text = 'Jam: reconectando en 4 s (intento 3), pista=42 status: 200';
+      const text = 'CrotoLink: reconectando en 4 s (intento 3), pista=42 status: 200';
       expect(redactSecrets(text), text);
     });
 

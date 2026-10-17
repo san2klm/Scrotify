@@ -13,6 +13,10 @@ import { createSyncHandler, isSyncPath } from './sync.js';
 export const PROTOCOL_VERSION = 2;
 /// Tamaño máximo de una trama WebSocket. Las salas Jam se limitan además a
 /// `maxMessageBytes`; Connect necesita más (cola de reproducción cifrada).
+// Licencia del servidor y dónde está su código (AGPL-3.0 §13). Si modificás
+// el servidor y lo ofrecés por red, SOURCE_URL debe apuntar a TU versión.
+const LICENSE_ID = 'AGPL-3.0-or-later';
+const UPSTREAM_SOURCE_URL = 'https://github.com/Dante0Q/CrotoWave';
 const MAX_FRAME_BYTES = 128 * 1024;
 const MAX_NAME_LENGTH = 48;
 const REACTIONS = new Set(['👍', '❤️', '🔥', '😂', '🎉', '👏', '😮', '🎶']);
@@ -188,6 +192,7 @@ export function createJamServer({
   setupToken,
   loginMaxFailures,
   navidromeAuth,
+  sourceUrl = UPSTREAM_SOURCE_URL,
   ...overrides
 } = {}) {
   const store = openStore(dbPath, overrides);
@@ -259,14 +264,14 @@ export function createJamServer({
         return;
       }
       const server = limits.publicUrl ? new URL(limits.publicUrl).host : (request.headers.host ?? '');
-      const deep = `scrotify://join?code=${code}&server=${encodeURIComponent(server)}`;
+      const deep = `crotowave://join?code=${code}&server=${encodeURIComponent(server)}`;
       response.writeHead(200, {
         'content-type': 'text/html; charset=utf-8',
         'content-security-policy': "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; base-uri 'none'",
         'x-frame-options': 'DENY',
         'referrer-policy': 'no-referrer',
       });
-      response.end(`<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Unirse a la Jam</title><style>body{font:16px system-ui;background:#121212;color:#eee;text-align:center;padding:48px 16px}a.b{display:inline-block;background:#1db954;color:#000;padding:12px 24px;border-radius:24px;text-decoration:none;margin:16px}code{font-size:28px;letter-spacing:4px}</style></head><body><h1>Te invitaron a una Jam de Scrotify</h1><p>PIN de la sala</p><p><code>${code}</code></p><a class="b" href="${deep}">Abrir en Scrotify</a><p>¿No tienes la app? Instala Scrotify, abre <b>Jam → Unirse</b> e introduce el PIN.</p><script>setTimeout(function(){location.href=${JSON.stringify(deep)}},300)</script></body></html>`);
+      response.end(`<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Unirse al CrotoLink</title><style>body{font:16px system-ui;background:#121212;color:#eee;text-align:center;padding:48px 16px}a.b{display:inline-block;background:#1db954;color:#000;padding:12px 24px;border-radius:24px;text-decoration:none;margin:16px}code{font-size:28px;letter-spacing:4px}</style></head><body><h1>Te invitaron a una CrotoLink</h1><p>PIN de la sala</p><p><code>${code}</code></p><a class="b" href="${deep}">Abrir en CrotoWave</a><p>¿No tienes la app? Instala CrotoWave, abre <b>CrotoLink → Unirse</b> e introduce el PIN.</p><script>setTimeout(function(){location.href=${JSON.stringify(deep)}},300)</script></body></html>`);
       return;
     }
     if (path === '/api/lobby/messages') {
@@ -292,7 +297,21 @@ export function createJamServer({
           maxMessageBytes: limits.maxMessageBytes,
         },
         publicUrl: limits.publicUrl || null,
+        license: LICENSE_ID,
+        sourceUrl: sourceUrl || null,
       }));
+      return;
+    }
+    // AGPL-3.0 §13: quien usa el servidor por red puede obtener su código.
+    if (request.method === 'GET' && path === '/source') {
+      if (sourceUrl) {
+        response.writeHead(302, { location: sourceUrl, 'access-control-allow-origin': '*' });
+        response.end();
+      } else {
+        response.writeHead(200, { 'content-type': 'text/plain; charset=utf-8' });
+        response.end(`CrotoLink server (${LICENSE_ID}). Este servidor no tiene ` +
+          'SOURCE_URL configurada: pedí el código fuente a quien lo administra.\n');
+      }
       return;
     }
     if (request.method === 'GET' && request.url === '/health') {
@@ -317,7 +336,7 @@ export function createJamServer({
         publicRooms.push({
           pin: room.pin,
           hostName: room.hostName,
-          sessionTitle: `Jam de ${room.hostName}`,
+          sessionTitle: `CrotoLink de ${room.hostName}`,
           participantCount: room.guests.size + 1,
           currentTrackTitle: room.state?.title ?? null,
           currentTrackArtist: room.state?.artist ?? null,
@@ -422,7 +441,7 @@ export function createJamServer({
     store.touchPersistentRoom(room.pin, config);
   }
 
-  function closeRoom(room, reason = 'El anfitrión ha finalizado la sesión Jam') {
+  function closeRoom(room, reason = 'El anfitrión ha finalizado la sesión CrotoLink') {
     if (rooms.get(room.pin) !== room) return;
     rooms.delete(room.pin);
     clearTimeout(room.failoverTimer);
@@ -438,7 +457,7 @@ export function createJamServer({
       send(room.host, { event: 'room_closed', message: reason });
       socketRooms.delete(room.host);
     }
-    console.info('Jam room closed');
+    console.info('CrotoLink room closed');
   }
 
   /// El anfitrión termina la sala a propósito: no es una caída, así que no hay
@@ -562,7 +581,7 @@ export function createJamServer({
       status: 'room_created', pin, hostToken,
       ...(persistent ? { persistent: true, name: persistent.name, config: persistent.config } : {}),
     });
-    console.info('Jam room created');
+    console.info('CrotoLink room created');
   }
 
   /// El anfitrión recupera su sala tras una caída (dentro de hostFailoverMs).
@@ -831,7 +850,7 @@ export function createJamServer({
   const expiryTimer = setInterval(() => {
     const threshold = Date.now() - limits.roomIdleMs;
     for (const room of rooms.values()) {
-      if (room.updatedAt < threshold) closeRoom(room, 'La sala Jam expiró por inactividad.');
+      if (room.updatedAt < threshold) closeRoom(room, 'La sala CrotoLink expiró por inactividad.');
     }
   }, 5 * 1000);
   expiryTimer.unref();
@@ -860,12 +879,12 @@ export function createJamServer({
           resolve();
         });
       });
-      console.info(`Scrotify Jam server listening on ${host}:${this.port}`);
+      console.info(`CrotoLink server listening on ${host}:${this.port}`);
     },
     async stop() {
       clearInterval(expiryTimer);
       clearInterval(heartbeatTimer);
-      for (const room of [...rooms.values()]) closeRoom(room, 'El servidor Jam se está apagando.');
+      for (const room of [...rooms.values()]) closeRoom(room, 'El servidor CrotoLink se está apagando.');
       for (const client of websocketServer.clients) client.terminate();
       await new Promise((resolve) => websocketServer.close(() => resolve()));
       const closed = new Promise((resolve) => httpServer.close(() => resolve()));
@@ -889,6 +908,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     adminPassword: process.env.ADMIN_PASSWORD,
     trustProxy: process.env.TRUST_PROXY ?? 'none',
     publicUrl: process.env.PUBLIC_URL || undefined,
+    sourceUrl: process.env.SOURCE_URL || undefined,
     maxMessageBytes: envInt('MAX_MESSAGE_BYTES'),
     maxParticipants: envInt('MAX_PARTICIPANTS'),
     roomIdleMs: envInt('ROOM_IDLE_MS'),

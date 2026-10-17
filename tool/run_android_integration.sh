@@ -21,7 +21,7 @@ if [[ -z "${ADB:-}" ]]; then
   fi
   ADB="$sdk/platform-tools/adb"
 fi
-PACKAGE=com.example.navidrome_client
+PACKAGE=cloud.templo.crotowave   # applicationId (android/app/build.gradle.kts)
 DEVICE=${1:-}
 
 if [[ -z "$DEVICE" ]]; then

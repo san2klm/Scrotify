@@ -14,7 +14,7 @@ class JamNotificationInfo {
   final int? participants;
 
   /// Línea que acompaña al artista: «Jam de Ana» o «Tu Jam».
-  String get roomLabel => isHost ? 'Tu Jam' : 'Jam de ${_clean(hostName)}';
+  String get roomLabel => isHost ? 'Tu CrotoLink' : 'CrotoLink de ${_clean(hostName)}';
 
   /// «1 persona» / «3 personas», o `null` si no se conoce.
   String? get peopleLabel {
@@ -23,7 +23,7 @@ class JamNotificationInfo {
     return n == 1 ? '1 persona' : '$n personas';
   }
 
-  String get leaveLabel => isHost ? 'Terminar la Jam' : 'Salir de la Jam';
+  String get leaveLabel => isHost ? 'Terminar el CrotoLink' : 'Salir del CrotoLink';
 
   /// El nombre lo elige otra persona: sin caracteres de control y acotado.
   static String _clean(String raw) {

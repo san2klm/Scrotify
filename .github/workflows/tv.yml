@@ -59,14 +59,14 @@ jobs:
 
       - name: Preparar instalador TV
         run: |
-          cp build/app/outputs/flutter-apk/app-release.apk Scrotify-TV.apk
-          ls -lh Scrotify-TV.apk
+          cp build/app/outputs/flutter-apk/app-release.apk CrotoWave-TV.apk
+          ls -lh CrotoWave-TV.apk
 
       - name: Subir como artefacto
         uses: actions/upload-artifact@v4
         with:
-          name: Scrotify-TV
-          path: Scrotify-TV.apk
+          name: CrotoWave-TV
+          path: CrotoWave-TV.apk
           retention-days: 30
 
       - name: Publicar en la release tv-latest
@@ -74,7 +74,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release delete tv-latest --yes --cleanup-tag || true
-          gh release create tv-latest Scrotify-TV.apk \
+          gh release create tv-latest CrotoWave-TV.apk \
             --target "$GITHUB_SHA" \
-            --title "Scrotify para Android TV / Google TV (última compilación)" \
+            --title "CrotoWave para Android TV / Google TV (última compilación)" \
             --notes "APK para Smart TVs (Philips 4K, TCL, Xiaomi, Chromecast con Google TV, Fire TV). Compatible con control remoto D-Pad."

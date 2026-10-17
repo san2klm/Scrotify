@@ -317,6 +317,24 @@ test('GET /api/capabilities reports defaults', async () => {
   assert.equal(json.features.chat, false);
   assert.equal(json.limits.maxParticipants, 50);
   assert.equal(json.limits.maxQueueItems, 500);
+  assert.equal(json.license, 'AGPL-3.0-or-later');
+  assert.equal(json.sourceUrl, 'https://github.com/Dante0Q/CrotoWave');
+});
+
+test('GET /source redirige al código fuente (AGPL §13)', async () => {
+  const server = await startServer({ sourceUrl: 'https://example.org/crotolink' });
+  const res = await fetch(`http://127.0.0.1:${server.port}/source`, { redirect: 'manual' });
+  assert.equal(res.status, 302);
+  assert.equal(res.headers.get('location'), 'https://example.org/crotolink');
+  const caps = await http(server, 'GET', '/api/capabilities');
+  assert.equal(caps.json.sourceUrl, 'https://example.org/crotolink');
+});
+
+test('GET /source sin URL configurada explica la licencia', async () => {
+  const server = await startServer({ sourceUrl: '' });
+  const { status, text } = await http(server, 'GET', '/source');
+  assert.equal(status, 200);
+  assert.match(text, /AGPL-3\.0-or-later/);
 });
 
 test('admin API requires login and sets a hardened cookie', async () => {
@@ -829,7 +847,7 @@ test('web link landing: gated by setting, sanitized, well-known served from sett
 
   const page = await http(server, 'GET', '/j/abc-234');
   assert.equal(page.status, 200);
-  assert.match(page.text, /scrotify:\/\/join\?code=ABC234&server=jam\.example\.org/);
+  assert.match(page.text, /crotowave:\/\/join\?code=ABC234&server=jam\.example\.org/);
   assert.equal((await http(server, 'GET', '/j/<script>')).status, 404);
   const wk = await http(server, 'GET', '/.well-known/assetlinks.json');
   assert.equal(wk.status, 200);

@@ -260,7 +260,7 @@ mixin _JamHostQueue on _JamBase {
       } else if (_remoteService.isConnected) {
         _remoteService.sendGuestAction('vote', {'itemId': itemId, 'value': v});
       } else {
-        _reportActionError('No hay conexión activa con el anfitrión Jam.');
+        _reportActionError('No hay conexión activa con el anfitrión CrotoLink.');
         return;
       }
       _myVotes[itemId] = v;

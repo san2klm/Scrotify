@@ -249,7 +249,7 @@ void main() {
     expect(calls, 1);
   });
 
-  group('ScrotifyAudioHandler - notificación de Jam', () {
+  group('ScrotifyAudioHandler - notificación de CrotoLink', () {
     late FakePlayerController player;
     late ScrotifyAudioHandler handler;
 
@@ -266,20 +266,20 @@ void main() {
             c.customAction?.name == ScrotifyAudioHandler.customActionLeaveJam)
         .firstOrNull;
 
-    test('sin Jam la notificación es la de siempre', () {
+    test('sin CrotoLink la notificación es la de siempre', () {
       expect(handler.playbackState.value.controls, hasLength(4));
       expect(leaveControl(), isNull);
       expect(handler.mediaItem.value!.displaySubtitle, isNull);
       expect(handler.mediaItem.value!.displayDescription, isNull);
     });
 
-    test('en una Jam muestra la sala y añade el botón de salir', () {
+    test('en un CrotoLink muestra la sala y añade el botón de salir', () {
       handler.setJam(const JamNotificationInfo(
           hostName: 'Ana', participants: 3, isHost: false));
 
       final item = handler.mediaItem.value!;
       expect(item.title, 'Starman');
-      expect(item.displaySubtitle, 'David Bowie · Jam de Ana');
+      expect(item.displaySubtitle, 'David Bowie · CrotoLink de Ana');
       expect(item.displayDescription, '3 personas');
       expect(leaveControl(), isNotNull);
       expect(leaveControl()!.androidIcon, 'drawable/audio_service_leave_jam');
@@ -288,18 +288,18 @@ void main() {
           handler.playbackState.value.androidCompactActionIndices, [0, 1, 3]);
     });
 
-    test('el anfitrión ve «Tu Jam» y el botón dice terminar', () {
+    test('el anfitrión ve «Tu CrotoLink» y el botón dice terminar', () {
       handler.setJam(const JamNotificationInfo(
           hostName: 'Ana', participants: 1, isHost: true));
-      expect(handler.mediaItem.value!.displaySubtitle, 'David Bowie · Tu Jam');
+      expect(handler.mediaItem.value!.displaySubtitle, 'David Bowie · Tu CrotoLink');
       expect(handler.mediaItem.value!.displayDescription, '1 persona');
-      expect(leaveControl()!.label, 'Terminar la Jam');
+      expect(leaveControl()!.label, 'Terminar el CrotoLink');
     });
 
-    test('el invitado ve «Salir de la Jam»', () {
+    test('el invitado ve «Salir del CrotoLink»', () {
       handler.setJam(const JamNotificationInfo(
           hostName: 'Ana', participants: 2, isHost: false));
-      expect(leaveControl()!.label, 'Salir de la Jam');
+      expect(leaveControl()!.label, 'Salir del CrotoLink');
     });
 
     test('cambiar de participantes actualiza sin cambiar de pista', () {
@@ -313,12 +313,12 @@ void main() {
     test('si no se conoce el número de personas no se muestra ninguno', () {
       handler.setJam(const JamNotificationInfo(hostName: 'Ana', isHost: false));
       expect(
-          handler.mediaItem.value!.displaySubtitle, 'David Bowie · Jam de Ana');
+          handler.mediaItem.value!.displaySubtitle, 'David Bowie · CrotoLink de Ana');
       expect(handler.mediaItem.value!.displayDescription, isNull);
       expect(leaveControl(), isNotNull);
     });
 
-    test('al salir de la Jam vuelve la notificación normal', () {
+    test('al salir del CrotoLink vuelve la notificación normal', () {
       handler.setJam(const JamNotificationInfo(
           hostName: 'Ana', participants: 3, isHost: false));
       handler.setJam(null);
@@ -339,7 +339,7 @@ void main() {
       handler.setJam(const JamNotificationInfo(
           hostName: 'An\u0000a\nB', participants: 2, isHost: false));
       expect(handler.mediaItem.value!.displaySubtitle,
-          'David Bowie · Jam de Ana B');
+          'David Bowie · CrotoLink de Ana B');
     });
 
     test('un nombre larguísimo se recorta', () {
@@ -348,7 +348,7 @@ void main() {
       expect(handler.mediaItem.value!.displaySubtitle!.length, lessThan(80));
     });
 
-    test('sin pista no hay notificación aunque haya Jam', () {
+    test('sin pista no hay notificación aunque haya CrotoLink', () {
       player.setTrack(null);
       handler.setJam(const JamNotificationInfo(
           hostName: 'Ana', participants: 3, isHost: false));
@@ -356,7 +356,7 @@ void main() {
       // Y al volver a sonar algo, la Jam aparece sin repetir setJam.
       player.setTrack(sampleTrack2, queue: [sampleTrack2]);
       expect(
-          handler.mediaItem.value!.displaySubtitle, 'David Bowie · Jam de Ana');
+          handler.mediaItem.value!.displaySubtitle, 'David Bowie · CrotoLink de Ana');
     });
   });
 

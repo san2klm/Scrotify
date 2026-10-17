@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'dart:math';
 
+import '../utils/app_links.dart';
+
 /// Puerto UDP por defecto para el descubrimiento broadcast en la LAN.
 const int kPairingDiscoveryPort = 47622;
 
@@ -27,24 +29,24 @@ class QrData {
 
   bool get usesRelay => relayTopic != null;
 
-  /// URI nueva: `scrotify://pair?topic=scrotify-...&code=X7K9MP`.
+  /// URI nueva: `crotowave://pair?topic=scrotify-...&code=X7K9MP`.
   String toUri() {
     if (relayTopic != null) {
       return Uri(
-        scheme: 'scrotify',
+        scheme: kAppLinkScheme,
         host: 'pair',
         queryParameters: {'topic': relayTopic!, 'code': code},
       ).toString();
     }
-    // Mantener exactamente el formato de los QR LAN ya emitidos.
-    return 'scrotify://pair?host=$host&port=$port&code=$code';
+    // Mismo formato que los QR LAN ya emitidos (solo cambia el esquema).
+    return '$kAppLinkScheme://pair?host=$host&port=$port&code=$code';
   }
 
   /// Parsea tanto el relay actual como el QR LAN anterior.
   static QrData? fromUri(String uri) {
     try {
       final u = Uri.parse(uri);
-      if (u.scheme != 'scrotify' || u.host != 'pair') return null;
+      if (!isAppLinkScheme(u.scheme) || u.host != 'pair') return null;
       final code = u.queryParameters['code'];
       if (code == null) return null;
       final topic = u.queryParameters['topic'];

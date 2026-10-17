@@ -1,4 +1,4 @@
-// Scrotify — salida bit-perfect por USB en Android 14+ (API 34).
+// CrotoWave — salida bit-perfect por USB en Android 14+ (API 34).
 //
 // Registro en MainActivity.configureFlutterEngine():
 //   HifiAudioPlugin(applicationContext).register(flutterEngine.dartExecutor.binaryMessenger)

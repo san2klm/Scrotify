@@ -51,9 +51,52 @@ while (( i < ${#queue[@]} )); do
 done
 
 n=0
+shipped=()   # archivos de terceros que viajan en el AppImage (para los avisos)
 for f in "${queue[@]}"; do
+  case "$f" in "$appdir"/*|*/release/bundle/*) continue ;; esac
+  shipped+=("$f")
   # Solo las dependencias (no el ejecutable ni los .so del propio bundle).
-  case "$f" in "$appdir"/*|/usr/bin/*|*/release/bundle/*) continue ;; esac
+  case "$f" in /usr/bin/*) continue ;; esac
   cp -L "$f" "$lib/$(basename "$f")"; n=$((n+1))
 done
 echo "Librerías incluidas: $n ($(du -sh "$lib" | cut -f1))"
+
+# Avisos legales: copyright de cada paquete incluido y dónde está su código
+# fuente (obligación de GPL/LGPL al redistribuir binarios). Ver LICENSING.md.
+notices="$appdir/THIRD_PARTY_SOURCES.txt"
+if ! command -v dpkg-query >/dev/null; then
+  echo "AVISO: sin dpkg no se generan los avisos de terceros; para distribuir usa" \
+    "scripts/build_appimage_portable.sh (Debian 12)." >&2
+  exit 0
+fi
+declare -A pkgs
+for f in "${shipped[@]}"; do
+  real=$(readlink -f "$f")
+  # Debian 12 usa /usr fusionado: dpkg puede registrar la ruta con o sin /usr.
+  pkg=$(dpkg -S "$real" 2>/dev/null || dpkg -S "${real#/usr}" 2>/dev/null ||
+    dpkg -S "/usr$real" 2>/dev/null || true)
+  pkg=${pkg%%:*}
+  [[ -n "$pkg" ]] && pkgs[$pkg]=1 || echo "AVISO: sin paquete para $f" >&2
+done
+{
+  echo "CrotoWave AppImage: componentes de terceros incluidos"
+  echo "===================================================="
+  echo
+  echo "Estos paquetes de Debian 12 viajan dentro del AppImage. El aviso de"
+  echo "copyright y la licencia de cada uno están en usr/share/doc/<paquete>/copyright."
+  echo "Su código fuente exacto se puede descargar de Debian:"
+  echo "  https://snapshot.debian.org/package/<fuente>/<versión>/"
+  echo "  o: apt-get source <fuente>=<versión>"
+  echo
+  printf '%-40s %-36s %s\n' "PAQUETE" "FUENTE" "VERSIÓN"
+  for pkg in $(printf '%s\n' "${!pkgs[@]}" | sort); do
+    dpkg-query -W -f='${Package} ${source:Package} ${source:Version}\n' "$pkg" |
+      awk '{printf "%-40s %-36s %s\n", $1, $2, $3}'
+    src=/usr/share/doc/${pkg%%:*}/copyright
+    if [[ -f "$src" ]]; then
+      mkdir -p "$appdir/usr/share/doc/${pkg%%:*}"
+      cp -L "$src" "$appdir/usr/share/doc/${pkg%%:*}/copyright"
+    fi
+  done
+} > "$notices"
+echo "Avisos de terceros: ${#pkgs[@]} paquetes (THIRD_PARTY_SOURCES.txt)"

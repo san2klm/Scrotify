@@ -302,7 +302,7 @@ class _ServerActivityPanelState extends State<ServerActivityPanel>
             ),
             const SizedBox(height: 4),
             Text(
-              '¡Inicia una canción o sesión Jam para que otros la vean!',
+              '¡Inicia una canción o sesión CrotoLink para que otros la vean!',
               style: TextStyle(color: context.textMuted, fontSize: 12),
             ),
           ],
@@ -612,7 +612,7 @@ class _ServerActivityPanelState extends State<ServerActivityPanel>
                 Row(
                   children: [
                     Text(
-                      '¡Jam Activo de ${msg.username}!',
+                      '¡CrotoLink activo de ${msg.username}!',
                       style: TextStyle(
                         color: context.textPrimary,
                         fontSize: 13,
@@ -656,7 +656,7 @@ class _ServerActivityPanelState extends State<ServerActivityPanel>
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(8)),
             ),
-            child: const Text('Ver Jam',
+            child: const Text('Ver CrotoLink',
                 style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold)),
           ),
         ],

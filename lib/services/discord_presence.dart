@@ -90,7 +90,7 @@ class DiscordRichPresence {
       'state':
           line(track.artist.isEmpty ? 'Artista desconocido' : track.artist),
       'assets': {
-        'large_text': line(track.album.isEmpty ? 'Scrotify' : track.album),
+        'large_text': line(track.album.isEmpty ? 'CrotoWave' : track.album),
         'small_text': playing ? 'Reproduciendo' : 'En pausa',
       },
     };

@@ -224,7 +224,7 @@ void main() {
     'Audio y calidad': 'Detectar red automáticamente',
     'Reproducción': 'Crossfade',
     'Apariencia y temas': 'Resolución de portadas',
-    'Servidor Jam': 'Servidor Jam',
+    'Servidor CrotoLink': 'Servidor CrotoLink',
   }.entries) {
     testWidgets('ajustes: categoría ${entry.key} abre su subpantalla',
         (tester) async {
@@ -309,7 +309,7 @@ void main() {
         'Ecualizador',
         'Apariencia y temas',
         'Biblioteca y descargas',
-        'Servidor Jam',
+        'Servidor CrotoLink',
         'Estadísticas de escucha',
       ]) {
         expect(focusedHasText(title), isTrue, reason: 'debía estar en $title');

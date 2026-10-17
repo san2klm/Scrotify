@@ -26,7 +26,7 @@ mixin _JamDialogSession on _JamDialogBase {
                   children: [
                     Expanded(
                       child: Text(
-                        'Escanear código Jam',
+                        'Escanear código CrotoLink',
                         style: TextStyle(
                           color: context.textPrimary,
                           fontSize: 16,
@@ -57,7 +57,7 @@ mixin _JamDialogSession on _JamDialogBase {
                 ),
                 const SizedBox(height: 12),
                 Text(
-                  'Abrí Scrotify y elegí “Escanear QR” para unirte.',
+                  'Abrí CrotoWave y elegí “Escanear QR” para unirte.',
                   textAlign: TextAlign.center,
                   style: TextStyle(color: context.textMuted, fontSize: 12),
                 ),
@@ -163,7 +163,7 @@ mixin _JamDialogSession on _JamDialogBase {
                   textCapitalization: TextCapitalization.characters,
                   style: TextStyle(color: context.textPrimary, fontSize: 13),
                   decoration: const InputDecoration(
-                    labelText: 'PIN Jam',
+                    labelText: 'PIN CrotoLink',
                     hintText: 'Ej. 3GE68W',
                     isDense: true,
                   ),
@@ -252,8 +252,8 @@ mixin _JamDialogSession on _JamDialogBase {
                     children: [
                       Text(
                         isHost
-                            ? 'Tu Sesión Jam'
-                            : 'Jam de ${session?.hostName ?? "Anfitrión"}',
+                            ? 'Tu sesión CrotoLink'
+                            : 'CrotoLink de ${session?.hostName ?? "Anfitrión"}',
                         style: TextStyle(
                           color: context.textPrimary,
                           fontSize: 17,
@@ -387,7 +387,7 @@ mixin _JamDialogSession on _JamDialogBase {
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
                         content:
-                            const Text('Código Jam copiado al portapapeles'),
+                            const Text('Código CrotoLink copiado al portapapeles'),
                         duration: const Duration(seconds: 2),
                         backgroundColor: context.bgElevated,
                       ),
@@ -671,7 +671,7 @@ mixin _JamDialogSession on _JamDialogBase {
           TextButton.icon(
             onPressed: () => JamHistoryDialog.show(context, jam),
             icon: const Icon(Icons.history_rounded, size: 18),
-            label: const Text('Historial de la Jam'),
+            label: const Text('Historial del CrotoLink'),
           ),
 
         // Botón de Salir o Terminar
@@ -694,7 +694,7 @@ mixin _JamDialogSession on _JamDialogBase {
             size: 18,
           ),
           label: Text(
-            isHost ? 'Finalizar Sesión Jam' : 'Salir del Jam',
+            isHost ? 'Finalizar sesión CrotoLink' : 'Salir del CrotoLink',
             style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
           ),
         ),
@@ -716,7 +716,7 @@ mixin _JamDialogSession on _JamDialogBase {
             child: TextButton.icon(
               onPressed: () => JamHistoryDialog.show(context, jam),
               icon: const Icon(Icons.history_rounded, size: 18),
-              label: const Text('Historial de la última Jam'),
+              label: const Text('Historial del último CrotoLink'),
             ),
           ),
         // Header
@@ -737,7 +737,7 @@ mixin _JamDialogSession on _JamDialogBase {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Scrotify Jam',
+                    'CrotoLink',
                     style: TextStyle(
                       color: context.textPrimary,
                       fontSize: 18,
@@ -780,8 +780,8 @@ mixin _JamDialogSession on _JamDialogBase {
             labelStyle:
                 const TextStyle(fontSize: 12.5, fontWeight: FontWeight.bold),
             tabs: const [
-              Tab(text: 'Iniciar Jam'),
-              Tab(text: 'Unirse a Jam'),
+              Tab(text: 'Iniciar CrotoLink'),
+              Tab(text: 'Unirse a CrotoLink'),
             ],
           ),
         ),

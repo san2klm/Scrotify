@@ -298,7 +298,7 @@ class _MobileLoginScreenState extends State<MobileLoginScreen> {
                       ),
                       const SizedBox(width: 6),
                       Text(
-                        'Scrotify Mobile · Cifrado E2E X25519',
+                        'CrotoWave Mobile · Cifrado E2E X25519',
                         style: TextStyle(
                           color: context.textPrimary.withValues(alpha: 0.35),
                           fontSize: 11,
@@ -320,14 +320,14 @@ class _MobileLoginScreenState extends State<MobileLoginScreen> {
     return Column(
       children: [
         Image.asset(
-          'assets/icons/scrotify_app_icon.png',
+          'assets/icons/crotowave_app_icon.png',
           width: 52,
           height: 52,
-          semanticLabel: 'Logo de Scrotify',
+          semanticLabel: 'Logo de CrotoWave',
         ),
         const SizedBox(height: 10),
         Text(
-          'SCROTIFY',
+          'CROTOWAVE',
           style: TextStyle(
             color: context.textPrimary,
             fontSize: 22,

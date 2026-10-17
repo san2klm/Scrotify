@@ -57,7 +57,7 @@ void main() {
       );
 
       final uriStr = qr.toUri();
-      expect(uriStr, startsWith('scrotify://jam?'));
+      expect(uriStr, startsWith('crotowave://jam?'));
 
       final parsed = JamQrData.fromUri(uriStr);
       expect(parsed, isNotNull);
@@ -72,6 +72,15 @@ void main() {
     test('fromUri returns null on invalid schemes', () {
       expect(JamQrData.fromUri('http://example.com'), isNull);
       expect(JamQrData.fromUri('scrotify://other?host=1.1.1.1'), isNull);
+      expect(JamQrData.fromUri('crotowave://other?host=1.1.1.1'), isNull);
+    });
+
+    test('fromUri acepta el esquema anterior (scrotify://)', () {
+      final parsed = JamQrData.fromUri(
+          'scrotify://jam?host=10.0.0.2&port=47620&code=ABC234'
+          '&transport=wss&tlsFingerprint=${'a' * 64}');
+      expect(parsed?.host, '10.0.0.2');
+      expect(parsed?.port, 47620);
     });
 
     test('roundtrips optional remote connection data', () {
@@ -111,7 +120,7 @@ void main() {
     });
   });
 
-  group('Jam Models Serialization', () {
+  group('CrotoLink Models Serialization', () {
     test('JamParticipant JSON roundtrip', () {
       final p = JamParticipant(
         id: 'p1',
@@ -233,7 +242,7 @@ void main() {
         host: '192.168.1.100',
         port: 45000,
         pin: 'AB34EF',
-        sessionTitle: 'Jam de Alice',
+        sessionTitle: 'CrotoLink de Alice',
         hostName: 'Alice',
         participantCount: 3,
         currentTrackTitle: 'Awesome Track',
@@ -270,7 +279,7 @@ void main() {
     });
   });
 
-  group('Jam Network Services (Host & Guest Handshake)', () {
+  group('CrotoLink Network Services (Host & Guest Handshake)', () {
     late JamHostService hostService;
     late JamGuestService guestService;
 
@@ -334,7 +343,7 @@ void main() {
       expect(initialSyncCount, 1);
     });
 
-    test('Guest discovers a public host through the Jam radar', () async {
+    test('Guest discovers a public host through the CrotoLink radar', () async {
       final pin = JamCode('JK94MN');
       await hostService.start(
         sessionId: 'jam_radar_session',
@@ -388,7 +397,7 @@ void main() {
         id: 't_collab_1',
         title: 'Collaborative Tune',
         artist: 'The Guests',
-        album: 'Jam Party',
+        album: 'CrotoLink Party',
         duration: '180',
       );
 
@@ -465,7 +474,7 @@ void main() {
         id: 'blocked_track',
         title: 'Blocked track',
         artist: 'Guest',
-        album: 'Jam',
+        album: 'CrotoLink',
         duration: '180',
       ));
       await Future<void>.delayed(const Duration(milliseconds: 150));
@@ -553,14 +562,14 @@ void main() {
     });
   });
 
-  group('Jam queue duplicate tracking', () {
+  group('CrotoLink queue duplicate tracking', () {
     test('isTrackInJamQueue detects existing tracks correctly', () {
       final fakeJam = IdleJam();
       expect(fakeJam.isTrackInJamQueue('trk_1'), isFalse);
     });
   });
 
-  group('Jam Controller & Remote Jam Resiliency', () {
+  group('CrotoLink Controller & Remote CrotoLink Resiliency', () {
     test('Track instances with identical ID but different object references match queue items', () {
       final trackA1 = Track(
         id: 'track_123',

@@ -14,7 +14,7 @@ mixin _NavidromeLibrary on _NavidromeBase {
       's': salt,
       't': token,
       'v': '1.16.1',
-      'c': 'Scrotify',
+      'c': 'CrotoWave',
       'f': 'json',
     });
     try {
@@ -608,7 +608,7 @@ mixin _NavidromeLibrary on _NavidromeBase {
           's': salt,
           't': token,
           'v': '1.16.1',
-          'c': 'Scrotify',
+          'c': 'CrotoWave',
           'f': 'json',
           'id': trackId,
           'submission': 'false',
@@ -648,7 +648,7 @@ mixin _NavidromeLibrary on _NavidromeBase {
           's': salt,
           't': token,
           'v': '1.16.1',
-          'c': 'Scrotify',
+          'c': 'CrotoWave',
           'f': 'json',
           'id': trackId,
           'time': timeMs.toString(),

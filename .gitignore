@@ -40,10 +40,23 @@ build/
 *.swo
 *~
 
-# Secretos de firma Android
-**/key.properties
+# Claves de firma y certificados privados (ver docs/SIGNING.md).
+# Las claves públicas de verificación van en *.pub, que sí se versiona.
 *.jks
 *.keystore
+*.pfx
+*.p12
+*.pem
+*.key
+*.asc
+*.sig
+**/key.properties
+android/key.properties
+signing/
+.signing/
+cosign.key
+# Copias de datos de la migración de firma (pueden contener contraseñas).
+migration-backup/
 
 # Jam server
 jam-server/data/
@@ -52,11 +65,14 @@ jam-server/.env
 # Local/IDE artifacts
 *.iml
 *.AppImage
-# Instalador de Windows: se versiona solo installer/scrotify.iss.
+# Instalador de Windows: se versiona solo installer/crotowave.iss.
 installer/output/
 installer/stage/
 
 # Binarios de entrega (scripts/build_apks.sh): se publican como release, no en git.
+/CrotoWave-*.apk
 /Scrotify-*.apk
+# Carpeta de entrega (binarios firmados y SHA256SUMS).
+/dist/
 temp/
 resultados.txt

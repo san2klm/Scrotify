@@ -10,6 +10,7 @@ import 'package:qr_flutter/qr_flutter.dart';
 
 import '../models/jam_models.dart';
 import '../services/jam_controller.dart';
+import '../utils/app_links.dart';
 import '../services/theme_controller.dart';
 import 'cover_art.dart';
 import '../utils/app_colors.dart';

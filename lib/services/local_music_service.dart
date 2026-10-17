@@ -187,7 +187,7 @@ class LocalMusicService extends ChangeNotifier {
     }
     if (Platform.isIOS) {
       return Directory(p.join((await getApplicationDocumentsDirectory()).path,
-          'Music', 'Scrotify'));
+          'Music', 'CrotoWave'));
     }
     final home =
         Platform.environment['HOME'] ?? Platform.environment['USERPROFILE'];
@@ -203,10 +203,10 @@ class LocalMusicService extends ChangeNotifier {
           if (match != null) music = match.group(1)!.replaceAll(r'$HOME', home);
         }
       }
-      return Directory(p.join(music, 'Scrotify'));
+      return Directory(p.join(music, 'CrotoWave'));
     }
     return Directory(
-        p.join((await getApplicationDocumentsDirectory()).path, 'Scrotify'));
+        p.join((await getApplicationDocumentsDirectory()).path, 'CrotoWave'));
   }
 
   static String safeName(String name) {

@@ -51,10 +51,10 @@ class JustAudioMediaKit extends JustAudioPlatform {
   static final _logger = Logger('JustAudioMediaKit');
   final _players = HashMap<String, MediaKitPlayer>();
 
-  /// Scrotify: reproductores mpv activos (uno por `AudioPlayer` de just_audio).
+  /// CrotoWave: reproductores mpv activos (uno por `AudioPlayer` de just_audio).
   Iterable<MediaKitPlayer> get activePlayers => _players.values;
 
-  /// Scrotify: se invoca cuando un reproductor mpv nuevo queda listo, para que
+  /// CrotoWave: se invoca cuando un reproductor mpv nuevo queda listo, para que
   /// el ecualizador y los ajustes Hi-Fi se le apliquen también.
   static void Function()? onPlayerReady;
 
@@ -94,7 +94,7 @@ class JustAudioMediaKit extends JustAudioPlatform {
 
   static JustAudioMediaKit? _instance;
 
-  /// Scrotify: los [Player] de mpv de todos los `AudioPlayer` activos.
+  /// CrotoWave: los [Player] de mpv de todos los `AudioPlayer` activos.
   static Iterable<Player> get mpvPlayers =>
       _instance?._players.values.map((p) => p.player) ?? const <Player>[];
 

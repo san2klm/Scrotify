@@ -87,7 +87,7 @@ class _ThemesSectionState extends State<ThemesSection> {
                             fontSize: 20,
                             fontWeight: FontWeight.w600)),
                     const SizedBox(height: 4),
-                    Text('Personaliza los colores de Scrotify',
+                    Text('Personaliza los colores de CrotoWave',
                         style: TextStyle(
                             color: context.textSecondary, fontSize: 13)),
                   ],

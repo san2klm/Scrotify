@@ -119,12 +119,12 @@ class RelayTransport implements ConnectTransport {
     // solo provocaría una pelea sin fin entre las dos.
     if (channel?.closeCode == 4000) {
       _problem =
-          'Scrotify ya está abierto en otra ventana de este dispositivo.';
+          'CrotoWave ya está abierto en otra ventana de este dispositivo.';
       _running = false;
       _devices.add(const []);
       return;
     }
-    _problem ??= 'Sin conexión con el servidor Jam.';
+    _problem ??= 'Sin conexión con el servidor CrotoLink.';
     _retry?.cancel();
     _retry = Timer(nextRetryDelay(), _open);
   }

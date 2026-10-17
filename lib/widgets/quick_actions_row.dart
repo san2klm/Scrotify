@@ -35,7 +35,7 @@ class QuickActionsRow extends StatelessWidget {
       ),
       _Action(
         icon: Icons.groups_rounded,
-        label: 'Jam',
+        label: 'CrotoLink',
         onTap: () => JamDialog.showAsBottomSheet(context),
       ),
       _Action(

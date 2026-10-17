@@ -13,7 +13,7 @@ mixin _PlayerKaraoke on _PlayerBase {
     final p = mk.Player(
       configuration: const mk.PlayerConfiguration(
         pitch: false,
-        title: 'Scrotify Karaoke',
+        title: 'CrotoWave Karaoke',
       ),
     );
     _karaokePlayer = p;

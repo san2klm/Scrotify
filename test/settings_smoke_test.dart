@@ -50,7 +50,7 @@ class _Nav extends FakeNavidrome {
 /// Biblioteca local mínima: lo que lee la sección «Música local» de Ajustes.
 class _Music extends ChangeNotifier implements LocalMusicService {
   @override
-  String? get folderPath => '/storage/emulated/0/Music/Scrotify';
+  String? get folderPath => '/storage/emulated/0/Music/CrotoWave';
   @override
   bool get scanning => false;
   @override
@@ -237,14 +237,14 @@ void main() {
       'Reproducción',
       'Apariencia y temas',
       'Biblioteca y descargas',
-      'Servidor Jam',
+      'Servidor CrotoLink',
     ]) {
       testWidgets('$page: abrir, tocar todo y volver', (tester) async {
         await pumpSettings(tester);
         await open(tester, page);
         final touched = await exerciseControls(tester, page);
         if (!const {
-          'Servidor Jam',
+          'Servidor CrotoLink',
           'Apariencia y temas',
           'Biblioteca y descargas'
         }.contains(page)) {
@@ -272,7 +272,7 @@ void main() {
           'Reproducción',
           'Apariencia y temas',
           'Biblioteca y descargas',
-          'Servidor Jam',
+          'Servidor CrotoLink',
         ]) {
           await open(tester, page);
           await exerciseControls(tester, page);

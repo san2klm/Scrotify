@@ -22,7 +22,7 @@ dependencies:
   cupertino_icons: ^1.0.6
   flutter_animate: ^4.3.0
   just_audio: ^0.9.44
-  # Copia local parcheada (acceso al Player de mpv): ver third_party/just_audio_media_kit/SCROTIFY_PATCH.md
+  # Copia local parcheada (acceso al Player de mpv): ver third_party/just_audio_media_kit/CROTOWAVE_PATCH.md
   just_audio_media_kit:
     path: third_party/just_audio_media_kit
   media_kit_libs_linux: ^1.2.1
@@ -62,6 +62,8 @@ dev_dependencies:
 flutter:
   uses-material-design: true
   assets:
+    # Licencia propia, mostrada en Ajustes → Licencias (lib/utils/app_licenses.dart).
+    - LICENSE
     - assets/images/
     - assets/icons/
     - assets/themes/bundled_themes.zip

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Instala Scrotify en UN dispositivo concreto y comprueba que arranca.
+# Instala CrotoWave en UN dispositivo concreto y comprueba que arranca.
 #
 #   tool/install_android.sh <id-del-dispositivo> phone|tv
 #   tool/install_android.sh <id> phone --check     (solo valida, no instala)
@@ -18,7 +18,7 @@
 set -euo pipefail
 
 ADB=${ADB:-/opt/android-sdk/platform-tools/adb}
-PACKAGE=com.example.navidrome_client
+PACKAGE=cloud.templo.crotowave   # applicationId (android/app/build.gradle.kts)
 DEVICE=${1:-}
 FLAVOR=${2:-}
 CHECK_ONLY=0
@@ -56,8 +56,8 @@ if [[ $FLAVOR == phone && $is_tv == 1 ]]; then
 fi
 
 ver=$(grep -E '^version:' pubspec.yaml | sed 's/version: *//; s/+.*//')
-apk="Scrotify-$ver-$FLAVOR-$abi.apk"
-[[ -f "$apk" ]] || apk="Scrotify-$ver-$FLAVOR-universal.apk"
+apk="CrotoWave-$ver-$FLAVOR-$abi.apk"
+[[ -f "$apk" ]] || apk="CrotoWave-$ver-$FLAVOR-universal.apk"
 if [[ ! -f "$apk" ]]; then
   echo "No hay APK de $FLAVOR para $abi ($model)." >&2
   echo "Genéralo con: scripts/build_apks.sh $FLAVOR   (o con --universal para un emulador)" >&2

@@ -345,7 +345,7 @@ class PersistentPlayerBar extends StatelessWidget {
                   color: context.accent, size: 15),
               const SizedBox(width: 5),
               Text(
-                'Jam · ${jam.participants.length}',
+                'CrotoLink · ${jam.participants.length}',
                 style: TextStyle(
                   color: context.accent,
                   fontSize: 11.5,
@@ -359,7 +359,7 @@ class PersistentPlayerBar extends StatelessWidget {
     }
 
     return IconButton(
-      tooltip: 'Iniciar o unirse a Jam',
+      tooltip: 'Iniciar o unirse a CrotoLink',
       visualDensity: VisualDensity.compact,
       icon: Icon(Icons.speaker_group_outlined,
           color: context.textSecondary, size: 20),

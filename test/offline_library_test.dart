@@ -84,7 +84,7 @@ void main() {
       metadataStore: InMemoryOfflineCacheMetadataStore());
   LocalMusicService newMusic() => LocalMusicService(cache,
       stateFile: File(p.join(temp.path, 'biblioteca.json')),
-      defaultRoot: Directory(p.join(temp.path, 'Música', 'Scrotify')));
+      defaultRoot: Directory(p.join(temp.path, 'Música', 'CrotoWave')));
   NavidromeService newNav() {
     final client = MockClient((request) async {
       requests++;

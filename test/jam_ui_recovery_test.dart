@@ -192,9 +192,9 @@ class TestJamController extends ChangeNotifier implements JamController {
 void main() {
   final canonicalTrack = Track(
     id: 'canonical_101',
-    title: 'Authoritative Jam Track',
-    artist: 'Authoritative Jam Artist',
-    album: 'Authoritative Jam Album',
+    title: 'Authoritative CrotoLink Track',
+    artist: 'Authoritative CrotoLink Artist',
+    album: 'Authoritative CrotoLink Album',
     duration: '240',
   );
 
@@ -210,9 +210,9 @@ void main() {
     id: 'queue_item_1',
     track: Track(
       id: 'canonical_next_1',
-      title: 'Next Jam Queue Track',
-      artist: 'Next Jam Queue Artist',
-      album: 'Next Jam Queue Album',
+      title: 'Next CrotoLink Queue Track',
+      artist: 'Next CrotoLink Queue Artist',
+      album: 'Next CrotoLink Queue Album',
       duration: '200',
     ),
     addedBy: JamParticipant(
@@ -312,8 +312,8 @@ void main() {
     await tester.pumpAndSettle();
 
     // Assert canonical track is rendered, NOT the empty player fallback
-    expect(find.text('Authoritative Jam Track'), findsOneWidget);
-    expect(find.text('Authoritative Jam Artist'), findsOneWidget);
+    expect(find.text('Authoritative CrotoLink Track'), findsOneWidget);
+    expect(find.text('Authoritative CrotoLink Artist'), findsOneWidget);
     expect(find.text('Nada en reproducción'), findsNothing);
 
     // Tap play/pause button (currently playing -> pause icon)
@@ -381,7 +381,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 500));
 
     // Canonical track still visible
-    expect(find.text('Authoritative Jam Track'), findsOneWidget);
+    expect(find.text('Authoritative CrotoLink Track'), findsOneWidget);
 
     // Controls must have null onPressed
     final playBtn = tester.widget<IconButton>(
@@ -416,7 +416,7 @@ void main() {
   });
 
   testWidgets(
-      'PlayerScreen in non-Jam mode routes controls to local PlayerController',
+      'PlayerScreen in non-CrotoLink mode routes controls to local PlayerController',
       (tester) async {
     tester.view.physicalSize = const Size(800, 1000);
     tester.view.devicePixelRatio = 1;
@@ -511,7 +511,7 @@ void main() {
         const Duration(seconds: 5));
   });
 
-  testWidgets('JamQueuePanel renders canonical Jam queue items',
+  testWidgets('JamQueuePanel renders canonical CrotoLink queue items',
       (tester) async {
     tester.view.physicalSize = const Size(800, 1000);
     tester.view.devicePixelRatio = 1;
@@ -541,8 +541,8 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 500));
 
-    expect(find.text('Next Jam Queue Track'), findsOneWidget);
-    expect(find.text('Next Jam Queue Artist'), findsOneWidget);
+    expect(find.text('Next CrotoLink Queue Track'), findsOneWidget);
+    expect(find.text('Next CrotoLink Queue Artist'), findsOneWidget);
     expect(find.text('Añadido por DJ Friend'), findsOneWidget);
   });
 }

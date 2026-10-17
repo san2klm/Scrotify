@@ -13,13 +13,13 @@ import '../utils/pairing_proof.dart';
 /// Cliente de emparejamiento para el teléfono.
 ///
 /// Permite:
-/// 1. Escanear la red Wi-Fi buscando computadoras con Scrotify en modo emparejamiento ([discoverPcs]).
+/// 1. Escanear la red Wi-Fi buscando computadoras con CrotoWave en modo emparejamiento ([discoverPcs]).
 /// 2. Encontrar un PC en la red local por su código de 6 caracteres ([findPcByCode]).
 /// 3. Reclamar credenciales de forma segura vía HTTP + sealed-box ([claim]).
 /// 4. Procesar un URI escaneado desde el QR ([claimFromQr]).
 class PairingClient {
   /// Escanea la red local por broadcast UDP buscando todas las instancias de
-  /// Scrotify activas en modo emparejamiento.
+  /// CrotoWave activas en modo emparejamiento.
   static Future<List<DiscoveredPc>> discoverPcs({
     Duration timeout = const Duration(seconds: 3),
   }) async {
@@ -280,7 +280,7 @@ class PairingClient {
   static Future<PairCredentials> claimFromQr(String qrContent) async {
     final qrData = QrData.fromUri(qrContent);
     if (qrData == null) {
-      throw Exception('El código QR escaneado no es un QR de Scrotify válido');
+      throw Exception('El código QR escaneado no es un QR de CrotoWave válido');
     }
     if (qrData.usesRelay) return _claimViaNtfy(qrData);
     return claim(

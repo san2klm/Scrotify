@@ -3,7 +3,7 @@ import 'dart:io';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
-/// Carpeta única de datos de Scrotify.
+/// Carpeta única de datos de CrotoWave.
 ///
 /// En escritorio es el directorio de soporte de la app (oculto para el
 /// usuario: `~/.local/share/...` en Linux, `%APPDATA%` en Windows), para no

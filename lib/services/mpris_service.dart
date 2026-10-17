@@ -12,7 +12,7 @@ import 'player_controller.dart';
 /// [start] no hace nada.
 ///
 /// Expone `org.mpris.MediaPlayer2` y `org.mpris.MediaPlayer2.Player` en el bus
-/// de sesión con el nombre `org.mpris.MediaPlayer2.scrotify`.
+/// de sesión con el nombre `org.mpris.MediaPlayer2.crotowave`.
 class MprisService {
   MprisService(this._player);
 
@@ -21,7 +21,7 @@ class MprisService {
   DBusClient? _client;
   VoidCallback? _listener;
 
-  static const busName = 'org.mpris.MediaPlayer2.scrotify';
+  static const busName = 'org.mpris.MediaPlayer2.crotowave';
 
   /// `false` fuera de Linux o si no hay bus de sesión.
   Future<bool> start() async {
@@ -98,7 +98,7 @@ class _MprisObject extends DBusObject {
     final seconds = double.tryParse(track.duration) ?? 0;
     return {
       'mpris:trackid':
-          DBusObjectPath('/org/scrotify/track/${_safeId(track.id)}'),
+          DBusObjectPath('/org/crotowave/track/${_safeId(track.id)}'),
       'mpris:length': DBusInt64((seconds * 1000000).round()),
       'xesam:title': DBusString(track.title),
       'xesam:artist': DBusArray.string([track.artist]),
@@ -220,7 +220,7 @@ class _MprisObject extends DBusObject {
         'CanQuit': const DBusBoolean(false),
         'CanRaise': const DBusBoolean(false),
         'HasTrackList': const DBusBoolean(false),
-        'Identity': const DBusString('Scrotify'),
+        'Identity': const DBusString('CrotoWave'),
       };
     }
     if (interface == _playerIface) {

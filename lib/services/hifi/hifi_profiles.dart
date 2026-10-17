@@ -1,4 +1,4 @@
-// Modos de alta fidelidad de Scrotify, por plataforma.
+// Modos de alta fidelidad de CrotoWave, por plataforma.
 //
 //   Estándar       → lo que hay hoy: sonido seguro y compatible en todo.
 //   Alta fidelidad → stream sin transcodificar, procesado en float, remuestreo
@@ -133,7 +133,7 @@ class HifiPlanner {
     if (mpvEngine) {
       mpv['gapless-audio'] = 'weak';
       mpv['volume-max'] = '100'; // nunca amplificar digitalmente > 0 dB
-      mpv['replaygain'] = 'no'; // ReplayGain lo calcula Scrotify, no mpv
+      mpv['replaygain'] = 'no'; // ReplayGain lo calcula CrotoWave, no mpv
       if (mode != AudioFidelityMode.standard) {
         // Remuestreo de calidad de estudio cuando el dispositivo lo exige.
         mpv['audio-swresample-o'] = 'resampler=soxr,precision=28';
@@ -185,7 +185,7 @@ class HifiPlanner {
               initOnly.add('ao');
               notes
                   .add('Salida WASAPI exclusiva: Windows deja de mezclar otros '
-                      'sonidos mientras Scrotify reproduce.');
+                      'sonidos mientras CrotoWave reproduce.');
             case HifiPlatform.macos:
               mpv['ao'] = 'coreaudio';
               // Cambia el formato físico del DAC a la frecuencia de cada pista.
@@ -210,7 +210,7 @@ class HifiPlanner {
                 notes.add(
                     'En Linux se conserva la salida del sistema, incluido '
                     'Bluetooth, sin pedir exclusividad a PipeWire. Se '
-                    'desactiva el procesado de Scrotify, pero la salida '
+                    'desactiva el procesado de CrotoWave, pero la salida '
                     'compartida o Bluetooth no garantiza bit-perfect real. '
                     'Para eso elegí una salida ALSA directa (hw:) de tu DAC '
                     'en Ajustes.');

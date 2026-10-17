@@ -1,16 +1,21 @@
 import 'sync_crypto.dart';
 
-/// Enlace `scrotify-sync://<clave>` para pasar la clave de sincronización de
+/// Enlace `crotowave-sync://<clave>` para pasar la clave de sincronización de
 /// un dispositivo a otro con un código QR, sin teclearla.
 ///
 /// Es un secreto: quien lo lea puede descifrar lo sincronizado. Solo se genera
 /// a petición expresa del usuario y nunca se escribe en registros.
 class SyncKeyLink {
-  static const scheme = 'scrotify-sync://';
+  static const scheme = 'crotowave-sync://';
+
+  /// El de antes del cambio de nombre: se sigue aceptando al leer.
+  static const legacyScheme = 'scrotify-sync://';
 
   /// `true` si [text] parece un enlace de sincronización (antes de validarlo).
-  static bool isSyncLink(String text) =>
-      text.trim().toLowerCase().startsWith(scheme);
+  static bool isSyncLink(String text) {
+    final t = text.trim().toLowerCase();
+    return t.startsWith(scheme) || t.startsWith(legacyScheme);
+  }
 
   /// Enlace para [keyText], o `null` si no es una clave válida.
   static String? build(String keyText) {
@@ -24,7 +29,7 @@ class SyncKeyLink {
     var text = input.trim();
     if (text.contains('://')) {
       if (!isSyncLink(text)) return null;
-      text = text.substring(scheme.length);
+      text = text.substring(text.indexOf('://') + 3);
     }
     final secret = SyncKey.parse(text);
     return secret == null ? null : SyncKey.format(secret);

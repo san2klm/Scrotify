@@ -318,7 +318,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
               ),
               const SizedBox(width: 6),
               Text(
-                'Jam · ${jam.participants.length}',
+                'CrotoLink · ${jam.participants.length}',
                 style: TextStyle(
                   color: context.accent,
                   fontSize: 11.5,
@@ -333,7 +333,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
     return IconButton(
       icon: Icon(Icons.speaker_group_outlined,
           color: context.textSecondary, size: 22),
-      tooltip: 'Jam',
+      tooltip: 'CrotoLink',
       onPressed: () => JamDialog.showAsBottomSheet(context),
     );
   }
@@ -360,7 +360,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
             ),
             const SizedBox(width: 6),
             Text(
-              'Añadido al Jam por ${p.name}',
+              'Añadido al CrotoLink por ${p.name}',
               style: TextStyle(
                 color: Color(p.avatarColorValue),
                 fontSize: 11,

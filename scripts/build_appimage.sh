@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Genera el AppImage de Linux: Scrotify-<versión>-x86_64.AppImage en la raíz.
+# Genera el AppImage de Linux: CrotoWave-<versión>-x86_64.AppImage en la raíz.
 #
 # Necesita `appimagetool` (https://github.com/AppImage/appimagetool/releases):
 # en el PATH, o indicando su ruta en APPIMAGETOOL.
@@ -29,18 +29,19 @@ appdir=$(mktemp -d)
 trap 'rm -rf "$appdir"' EXIT
 mkdir -p "$appdir/usr/bin"
 cp -a build/linux/x64/release/bundle/. "$appdir/usr/bin/"
-cp assets/icons/scrotify_app_icon.png "$appdir/scrotify.png"
-ln -s scrotify.png "$appdir/.DirIcon"
-cat > "$appdir/scrotify.desktop" <<'DESKTOP'
+cp assets/icons/crotowave_app_icon.png "$appdir/crotowave.png"
+ln -s crotowave.png "$appdir/.DirIcon"
+cat > "$appdir/crotowave.desktop" <<'DESKTOP'
 [Desktop Entry]
 Type=Application
-Name=Scrotify
+Name=CrotoWave
 Comment=Cliente Navidrome/Subsonic
 Exec=navidrome_client
-Icon=scrotify
+Icon=crotowave
 Categories=AudioVideo;Audio;Player;
 DESKTOP
 scripts/bundle_linux_libs.sh "$appdir"
+cp LICENSE LICENSING.md "$appdir/"   # licencia propia junto a la de terceros
 cat > "$appdir/AppRun" <<'APPRUN'
 #!/bin/sh
 HERE="$(dirname "$(readlink -f "$0")")"
@@ -51,7 +52,7 @@ exec "$HERE/usr/bin/navidrome_client" "$@"
 APPRUN
 chmod +x "$appdir/AppRun"
 
-out="Scrotify-$ver-x86_64.AppImage"
+out="CrotoWave-$ver-x86_64.AppImage"
 # --appimage-extract-and-run: funciona también sin FUSE.
 ARCH=x86_64 "$tool" --appimage-extract-and-run "$appdir" "$out" >/dev/null
 chmod +x "$out"

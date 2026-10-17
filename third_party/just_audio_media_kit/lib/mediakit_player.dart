@@ -15,7 +15,7 @@ class MediaKitPlayer extends AudioPlayerPlatform {
   /// `package:media_kit`'s [Player]
   late final Player _player;
 
-  /// Scrotify: acceso al [Player] de media_kit (mpv) para poder aplicar el
+  /// CrotoWave: acceso al [Player] de media_kit (mpv) para poder aplicar el
   /// ecualizador (propiedad `af`) y los modos de alta fidelidad.
   Player get player => _player;
 

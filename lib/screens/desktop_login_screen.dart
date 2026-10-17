@@ -370,7 +370,7 @@ class _DesktopLoginScreenState extends State<DesktopLoginScreen> {
                           ),
                           const SizedBox(width: 8),
                           Text(
-                            'Scrotify Desktop · Cifrado E2E X25519 + XChaCha20',
+                            'CrotoWave Desktop · Cifrado E2E X25519 + XChaCha20',
                             style: TextStyle(
                               color:
                                   context.textPrimary.withValues(alpha: 0.35),
@@ -396,17 +396,17 @@ class _DesktopLoginScreenState extends State<DesktopLoginScreen> {
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
         Image.asset(
-          'assets/icons/scrotify_app_icon.png',
+          'assets/icons/crotowave_app_icon.png',
           width: 48,
           height: 48,
-          semanticLabel: 'Logo de Scrotify',
+          semanticLabel: 'Logo de CrotoWave',
         ),
         const SizedBox(width: 14),
         Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'SCROTIFY',
+              'CROTOWAVE',
               style: TextStyle(
                 color: context.textPrimary,
                 fontSize: 22,

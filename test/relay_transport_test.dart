@@ -240,7 +240,7 @@ void main() {
     await pumpEvents();
     expect(relay.canReach('tel-0002'), isFalse);
     expect(lists.last, isEmpty);
-    expect(relay.problem, 'Sin conexión con el servidor Jam.');
+    expect(relay.problem, 'Sin conexión con el servidor CrotoLink.');
 
     await Future<void>.delayed(const Duration(milliseconds: 80));
     expect(channels.length, greaterThanOrEqualTo(2), reason: 'reconectó');
@@ -273,7 +273,7 @@ void main() {
     await Future<void>.delayed(const Duration(milliseconds: 90));
 
     expect(dialed.length, greaterThanOrEqualTo(3));
-    expect(relay.problem, 'Sin conexión con el servidor Jam.');
+    expect(relay.problem, 'Sin conexión con el servidor CrotoLink.');
 
     connectThrows = false;
     await Future<void>.delayed(const Duration(milliseconds: 60));

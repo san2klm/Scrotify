@@ -32,8 +32,8 @@ typedef OnRemoteError = void Function(String error);
 /// anfitrión, que la sala desaparezca.
 const int kRemoteJamMaxMessageBytes = 16384;
 
-/// Servicio cliente WebSocket para conectar con el servidor central de Scrotify Jam en la nube
-/// (por defecto `wss://jam.templo.cloud/`).
+/// Servicio cliente WebSocket para conectar con el servidor central de CrotoLink en la nube
+/// (el que se configure en Ajustes; no hay ninguno por defecto).
 ///
 /// Permite que un Anfitrión (Host) publique su sala globalmente y que Invitados (Guests)
 /// se conecten por datos móviles (4G/5G) o desde cualquier red sin depender de LAN ni UPnP.
@@ -153,9 +153,7 @@ class RemoteJamService {
   }
 
   void setEndpoint(String endpoint) {
-    if (endpoint.trim().isNotEmpty) {
-      _endpoint = endpoint.trim();
-    }
+    _endpoint = endpoint.trim();
   }
 
   /// Comprueba `GET /health` del servidor [endpoint]. Devuelve `null` si
@@ -176,7 +174,7 @@ class RemoteJamService {
       final data = jsonDecode(body);
       return data is Map && data['status'] == 'ok'
           ? null
-          : 'La respuesta no parece de un servidor Jam.';
+          : 'La respuesta no parece de un servidor CrotoLink.';
     } on TimeoutException {
       return 'Tiempo de espera agotado.';
     } catch (e) {
@@ -205,6 +203,10 @@ class RemoteJamService {
     hostToken = keepToken;
     _lastError = null;
     final targetEndpoint = customEndpoint ?? _endpoint;
+    if (targetEndpoint.trim().isEmpty) {
+      _lastError = kNoJamServerMessage;
+      return false;
+    }
     final normalizedPin =
         pin.toUpperCase().replaceAll(RegExp(r'[^A-Z0-9]'), '');
 
@@ -267,7 +269,7 @@ class RemoteJamService {
           final wasUp = _isConnected;
           _isConnected = false;
           if (wasUp) _notifyConnectionLost();
-          _lastError ??= 'Error de conexión con el servidor Jam central.';
+          _lastError ??= 'Error de conexión con el servidor CrotoLink central.';
           timeoutTimer?.cancel();
           if (!completer.isCompleted) completer.complete(false);
         },
@@ -306,7 +308,7 @@ class RemoteJamService {
         if (!completer.isCompleted) {
           debugPrint('RemoteJamService: timeout al crear sala');
           _lastError ??=
-              'Tiempo de espera agotado al conectar con el servidor Jam central.';
+              'Tiempo de espera agotado al conectar con el servidor CrotoLink central.';
           completer.complete(false);
         }
       });
@@ -383,6 +385,10 @@ class RemoteJamService {
     _intentionalClose = false;
     _lastError = null;
     final targetEndpoint = customEndpoint ?? _endpoint;
+    if (targetEndpoint.trim().isEmpty) {
+      _lastError = kNoJamServerMessage;
+      return null;
+    }
     final normalizedPin =
         pin.toUpperCase().replaceAll(RegExp(r'[^A-Z0-9]'), '');
 
@@ -439,7 +445,7 @@ class RemoteJamService {
           final wasUp = _isConnected;
           _isConnected = false;
           if (wasUp) _notifyConnectionLost();
-          _lastError ??= 'Error de conexión con el servidor Jam central.';
+          _lastError ??= 'Error de conexión con el servidor CrotoLink central.';
           timeoutTimer?.cancel();
           if (!completer.isCompleted) completer.complete(null);
         },
@@ -501,6 +507,7 @@ class RemoteJamService {
   Future<Map<String, dynamic>?> checkRoom(String pin,
       {String? customEndpoint}) async {
     final targetEndpoint = customEndpoint ?? _endpoint;
+    if (targetEndpoint.trim().isEmpty) return null;
     final normalizedPin =
         pin.toUpperCase().replaceAll(RegExp(r'[^A-Z0-9]'), '');
 
@@ -591,7 +598,7 @@ class RemoteJamService {
             port: parsed.port,
             pin: (m['pin'] as String?) ?? '',
             sessionTitle: (m['sessionTitle'] as String?) ??
-                'Jam de ${(m['hostName'] as String?) ?? "Anfitrión"}',
+                'CrotoLink de ${(m['hostName'] as String?) ?? "Anfitrión"}',
             hostName: (m['hostName'] as String?) ?? 'Anfitrión',
             participantCount: (m['participantCount'] as num?)?.toInt() ?? 1,
             currentTrackTitle: m['currentTrackTitle'] as String?,
@@ -678,7 +685,7 @@ class RemoteJamService {
         final reason = json['message']?.toString() ??
             (event == 'kicked'
                 ? 'Has sido expulsado de la sala por el anfitrión.'
-                : 'La sala Jam fue cerrada.');
+                : 'La sala CrotoLink fue cerrada.');
         onRoomClosed?.call(reason);
         disconnect();
     }

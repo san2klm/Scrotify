@@ -1,5 +1,5 @@
-; Instalador de Scrotify (Inno Setup 6)
-#define AppName "Scrotify"
+; Instalador de CrotoWave (Inno Setup 6)
+#define AppName "CrotoWave"
 ; La versión la pasa scripts/build_windows_installer.sh (/DAppVersion=...);
 ; este valor solo se usa al compilar el .iss a mano.
 #ifndef AppVersion
@@ -11,14 +11,14 @@
 AppId={{B7E1C5A2-4D3F-4F6A-9C1E-5C0A7F2D9E11}
 AppName={#AppName}
 AppVersion={#AppVersion}
-AppPublisher=Scrotify
-AppPublisherURL=https://github.com/PC123PC123/Scrotify
+AppPublisher=CrotoWave
+AppPublisherURL=https://github.com/Dante0Q/CrotoWave
 SetupIconFile=..\windows\runner\resources\app_icon.ico
 DefaultDirName={autopf}\{#AppName}
 DefaultGroupName={#AppName}
 UninstallDisplayIcon={app}\{#AppExe}
 OutputDir=output
-OutputBaseFilename=Scrotify-Setup-{#AppVersion}
+OutputBaseFilename=CrotoWave-Setup-{#AppVersion}
 Compression=lzma2
 SolidCompression=yes
 ArchitecturesAllowed=x64compatible
@@ -36,6 +36,9 @@ Name: "desktopicon"; Description: "Crear un acceso directo en el escritorio"; Gr
 
 [Files]
 Source: "stage\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+; Licencias (GPL): la de CrotoWave y el detalle de los componentes de terceros.
+Source: "..\LICENSE"; DestDir: "{app}"; DestName: "LICENSE.txt"; Flags: ignoreversion
+Source: "..\LICENSING.md"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
 Name: "{group}\{#AppName}"; Filename: "{app}\{#AppExe}"

@@ -288,7 +288,7 @@ class JamHostService extends _JamHostBase with _JamHostDiscovery {
     );
 
     _tlsIdentity =
-        JamTlsIdentity.generate(commonName: 'Scrotify Jam $sessionId');
+        JamTlsIdentity.generate(commonName: 'CrotoLink $sessionId');
     final securityContext = SecurityContext(withTrustedRoots: false)
       ..useCertificateChainBytes(_tlsIdentity!.certificatePem)
       ..usePrivateKeyBytes(_tlsIdentity!.privateKeyPem);
@@ -789,7 +789,7 @@ class JamHostService extends _JamHostBase with _JamHostDiscovery {
                     onSocial?.call(participant.name, null, text);
                   }
                 } else {
-                  _sendError(socket, 'El chat está desactivado en esta Jam.');
+                  _sendError(socket, 'El chat está desactivado en este CrotoLink.');
                 }
               }
               break;
@@ -1104,7 +1104,7 @@ class JamHostService extends _JamHostBase with _JamHostDiscovery {
     // Notificar cierre a todos los clientes
     broadcastMessage({
       'op': 'session_closed',
-      'reason': 'El anfitrión ha finalizado la sesión Jam.',
+      'reason': 'El anfitrión ha finalizado la sesión CrotoLink.',
     });
 
     _heartbeatTimer?.cancel();

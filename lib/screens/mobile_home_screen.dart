@@ -36,7 +36,7 @@ import '../widgets/quick_actions_row.dart';
 part 'mobile_home_tab.dart';
 part 'mobile_search_library_tabs.dart';
 
-/// Interfaz móvil de Scrotify (estilo Spotify AMOLED).
+/// Interfaz móvil de CrotoWave (estilo Spotify AMOLED).
 /// Diseñada exclusivamente para pantallas táctiles de teléfonos.
 class MobileHomeScreen extends StatefulWidget {
   const MobileHomeScreen({super.key});

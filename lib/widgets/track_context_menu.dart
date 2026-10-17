@@ -237,8 +237,8 @@ class TrackContextMenu extends StatelessWidget {
                       ),
                       title: Text(
                         inJamQueue
-                            ? 'Ya está en la cola Jam'
-                            : 'Añadir a la cola Jam',
+                            ? 'Ya está en la cola CrotoLink'
+                            : 'Añadir a la cola CrotoLink',
                         style: TextStyle(
                           color: inJamQueue ? context.accent2 : context.accent,
                           fontWeight: FontWeight.bold,
@@ -261,10 +261,10 @@ class TrackContextMenu extends StatelessWidget {
                         messenger.showSnackBar(
                           SnackBar(
                             content: Text(inJamQueue
-                                ? '"${track.title}" ya figuraba en la cola Jam'
+                                ? '"${track.title}" ya figuraba en la cola CrotoLink'
                                 : (jam.isGuest
-                                    ? 'Solicitud enviada para añadir "${track.title}" a la cola Jam'
-                                    : '"${track.title}" añadida a la cola Jam')),
+                                    ? 'Solicitud enviada para añadir "${track.title}" a la cola CrotoLink'
+                                    : '"${track.title}" añadida a la cola CrotoLink')),
                             duration: const Duration(seconds: 2),
                             backgroundColor: bg,
                           ),
@@ -279,7 +279,7 @@ class TrackContextMenu extends StatelessWidget {
                     leading: Icon(Icons.playlist_play_rounded,
                         color: context.textSecondary),
                     title: Text(
-                      'Reproducir siguiente en Jam',
+                      'Reproducir siguiente en CrotoLink',
                       style:
                           TextStyle(color: context.textPrimary, fontSize: 14),
                     ),
@@ -293,7 +293,7 @@ class TrackContextMenu extends StatelessWidget {
                         SnackBar(
                           content: Text(jam.isGuest
                               ? 'Solicitud enviada para reproducir "${track.title}" a continuación'
-                              : '"${track.title}" sonará a continuación en el Jam'),
+                              : '"${track.title}" sonará a continuación en el CrotoLink'),
                           duration: const Duration(seconds: 2),
                           backgroundColor: bg,
                         ),

@@ -50,8 +50,8 @@ class LyricsService {
   static final Map<String, Future<LyricsResult?>> _cache = {};
 
   static const _lrclibHeaders = {
-    'Lrclib-Client': 'Scrotify/1.0 (+https://github.com)',
-    'User-Agent': 'Scrotify/1.0',
+    'Lrclib-Client': 'CrotoWave/1.0 (+https://github.com/Dante0Q/CrotoWave)',
+    'User-Agent': 'CrotoWave/1.0',
     'Accept': 'application/json',
   };
 

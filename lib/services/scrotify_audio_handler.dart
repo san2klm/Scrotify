@@ -8,7 +8,7 @@ import 'jam_notification.dart';
 import 'navidrome_service.dart' show Playlist, Track;
 import 'player_controller.dart';
 
-/// Controlador del servicio de medios en segundo plano para Scrotify.
+/// Controlador del servicio de medios en segundo plano para CrotoWave.
 /// Conecta los controles del sistema (notificación de medios, pantalla de
 /// bloqueo, botones de auriculares/Bluetooth) con la única instancia
 /// activa de [PlayerController], sin crear motores de audio secundarios.

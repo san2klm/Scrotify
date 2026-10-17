@@ -1,10 +1,10 @@
-# Jam — pruebas y despliegue remoto
+# CrotoLink — pruebas y despliegue remoto
 
 Fecha: 2026-09-17
 
 ## Objetivo
 
-Desplegar el servidor remoto de Scrotify Jam en Portainer para que los clientes Flutter se conecten mediante Cloudflare Tunnel usando una URL segura `wss://`.
+Desplegar el servidor remoto de CrotoLink en Portainer para que los clientes Flutter se conecten mediante Cloudflare Tunnel usando una URL segura `wss://`.
 
 El servidor administra salas temporales en memoria. No transmite audio: sólo sincroniza identificador de pista, posición, play/pause y cola. Cada dispositivo reproduce desde su propio servidor Navidrome.
 
@@ -12,7 +12,7 @@ El servidor administra salas temporales en memoria. No transmite audio: sólo si
 
 El stack y el servidor están en [`jam-server/`](jam-server/):
 
-- [`jam-server/src/server.js`](jam-server/src/server.js): servidor HTTP/WebSocket con salas Jam.
+- [`jam-server/src/server.js`](jam-server/src/server.js): servidor HTTP/WebSocket con salas CrotoLink.
 - [`jam-server/Dockerfile`](jam-server/Dockerfile): imagen Node.js 24 Alpine.
 - [`jam-server/docker-compose.yml`](jam-server/docker-compose.yml): stack para Portainer.
 - [`jam-server/.env.example`](jam-server/.env.example): límites configurables.
@@ -25,7 +25,7 @@ El stack y el servidor están en [`jam-server/`](jam-server/):
 1. Crear un Stack nuevo en Portainer.
 2. Usar el archivo [`jam-server/docker-compose.yml`](jam-server/docker-compose.yml).
 3. Si Portainer despliega desde Git, seleccionar ese archivo como Compose path.
-4. Desplegar el stack. El servicio se llama `scrotify-jam` y escucha internamente en el puerto `8080`.
+4. Desplegar el stack. El servicio se llama `crotolink` y escucha internamente en el puerto `8080`.
 5. No publicar ese puerto en Internet. Cloudflare Tunnel debe ser el único punto de entrada público y de TLS.
 
 Configuración de ejemplo del túnel Cloudflare:
@@ -33,11 +33,11 @@ Configuración de ejemplo del túnel Cloudflare:
 ```yaml
 ingress:
   - hostname: jam.templo.cloud
-    service: http://scrotify-jam:8080
+    service: http://crotolink:8080
   - service: http_status:404
 ```
 
-> `cloudflared` y `scrotify-jam` deben estar en la misma red Docker para que el nombre del servicio se resuelva. Si no lo están, conectar ambos servicios a una red externa común y apuntar el túnel al nombre/contenedor accesible en esa red (o a `http://192.168.1.21:8080`).
+> `cloudflared` y `crotolink` deben estar en la misma red Docker para que el nombre del servicio se resuelva. Si no lo están, conectar ambos servicios a una red externa común y apuntar el túnel al nombre/contenedor accesible en esa red (o a `http://192.168.1.21:8080`).
 
 Endpoint que deberá configurarse luego en Flutter:
 
@@ -50,7 +50,7 @@ wss://jam.templo.cloud/
 Desde otro contenedor de la misma red Docker o desde el host si se publica temporalmente el puerto:
 
 ```sh
-curl http://scrotify-jam:8080/health
+curl http://crotolink:8080/health
 ```
 
 Respuesta esperada:
@@ -167,7 +167,7 @@ Si se desconecta el host, los invitados reciben:
 ```json
 {
   "event": "room_closed",
-  "message": "El anfitrión ha finalizado la sesión Jam"
+  "message": "El anfitrión ha finalizado la sesión CrotoLink"
 }
 ```
 
@@ -208,7 +208,7 @@ docker compose -f jam-server/docker-compose.yml config
 
 1. Desplegar el stack y comprobar `GET /health`.
 2. Configurar el hostname de Cloudflare y comprobar que responde `wss://jam.templo.cloud/`.
-3. Con dos clientes WebSocket (`wscat` o, más adelante, dos instalaciones de Scrotify): crear una sala y unirse con el PIN.
+3. Con dos clientes WebSocket (`wscat` o, más adelante, dos instalaciones de CrotoWave): crear una sala y unirse con el PIN.
 4. Enviar `update_state` desde el host y confirmar que el invitado recibe `sync_state`.
 5. Probar play/pause, seek, cambio de pista y cola.
 6. Cerrar la conexión del host y confirmar que el invitado recibe `room_closed`.
@@ -216,7 +216,7 @@ docker compose -f jam-server/docker-compose.yml config
 
 ## Próximo paso en Flutter
 
-Implementar la capa cliente remota en paralelo a la Jam LAN actual:
+Implementar la capa cliente remota en paralelo al CrotoLink LAN actual:
 
 - modelo `RemoteJamState`;
 - servicio WebSocket con `web_socket_channel`;

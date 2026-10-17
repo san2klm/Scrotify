@@ -46,7 +46,7 @@ class _PreviewApp extends StatelessWidget {
         ),
       ],
       child: MaterialApp(
-        title: 'Scrotify preview',
+        title: 'CrotoWave preview',
         debugShowCheckedModeBanner: false,
         theme: ThemeData(
           colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),

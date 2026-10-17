@@ -10,7 +10,7 @@ import '../services/theme_controller.dart';
 import '../utils/app_colors.dart';
 import '../utils/responsive.dart';
 
-/// Selector de dispositivos de Scrotify Connect (estilo Spotify): lista los
+/// Selector de dispositivos de CrotoWave Connect (estilo Spotify): lista los
 /// dispositivos del usuario por LAN y por el servidor Jam y permite pasarles
 /// la reproducción o traerla de vuelta.
 class ConnectPanel extends StatelessWidget {
@@ -149,7 +149,7 @@ class ConnectPanel extends StatelessWidget {
         const _Tip(
             Icons.wifi,
             'Verifica tu conexión',
-            'Abre Scrotify en el otro dispositivo con tu mismo usuario, en la '
+            'Abre CrotoWave en el otro dispositivo con tu mismo usuario, en la '
                 'misma red o con internet.'),
         const _Tip(Icons.devices_other, 'Reproduce desde otro dispositivo',
             'Va a aparecer aquí de forma automática.'),

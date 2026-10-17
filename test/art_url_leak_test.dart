@@ -43,7 +43,7 @@ void main() {
         isFalse);
   });
 
-  test('terminar la Jam remota envía close_room', () {
+  test('terminar el CrotoLink remoto envía close_room', () {
     expect(RemoteJamService.closeRoomMessage['action'], 'close_room');
   });
 

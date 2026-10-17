@@ -26,6 +26,12 @@ class _MemoryBackend implements SecureStorageBackend {
     if (broken) throw PlatformException(code: 'libsecret');
     data.remove(key);
   }
+
+  @override
+  Future<Map<String, String>> readAll() async {
+    if (broken) throw PlatformException(code: 'libsecret');
+    return Map.of(data);
+  }
 }
 
 void main() {
@@ -58,6 +64,15 @@ void main() {
       expect(await fallback.readAsString(), isNot(contains('secreto')));
     }
     expect(await SecureStorage.secureRead('k'), 'secreto');
+  });
+
+  test('secureReadAll junta el keyring y el respaldo en disco', () async {
+    backend.broken = true;
+    await SecureStorage.secureWrite('a', 'del-respaldo');
+    backend.broken = false;
+    backend.data['b'] = 'del-keyring';
+    expect(await SecureStorage.secureReadAll(),
+        {'a': 'del-respaldo', 'b': 'del-keyring'});
   });
 
   test('keyring recuperado + respaldo presente: la escritura borra el respaldo',

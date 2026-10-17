@@ -1,7 +1,7 @@
-# Scrotify — Manual Técnico de Arquitectura y Funcionamiento Integral
+# CrotoWave — Manual Técnico de Arquitectura y Funcionamiento Integral
 
 > **Documentación Maestra del Proyecto**  
-> Aplicación: Scrotify (`navidrome_client`)  
+> Aplicación: CrotoWave (`navidrome_client`)  
 > Tipo: Cliente de música moderno, multiplataforma, self-hosted y local-first para Navidrome (API Subsonic v1.16.1)  
 > Plataformas: Linux, Windows, macOS, Android e iOS  
 > Versión del código base: 1.0.0+2002  
@@ -11,11 +11,11 @@
 
 ## 1. Visión General y Filosofía de Diseño
 
-**Scrotify** es un reproductor de música de alta fidelidad diseñado para conectarse a servidores personales de música basados en el estándar **Subsonic API v1.16.1**, con optimización de primer nivel para **Navidrome**.
+**CrotoWave** es un reproductor de música de alta fidelidad diseñado para conectarse a servidores personales de música basados en el estándar **Subsonic API v1.16.1**, con optimización de primer nivel para **Navidrome**.
 
 ```
 ┌────────────────────────────────────────────────────────────────────────┐
-│                                SCROTIFY                                │
+│                                CROTOWAVE                                │
 │         (Cliente de Música Multiplataforma Local-First & Seguro)        │
 └───────────────────────────────────┬────────────────────────────────────┘
                                     │
@@ -37,7 +37,7 @@
    * Almacenamiento seguro de credenciales en el llavero nativo del sistema operativo mediante [`SecureStorage`](lib/services/secure_storage.dart).
 2. **Fidelidad y Streaming Directo:**
    * Reproducción bit-perfect directa desde el servidor Navidrome en formatos Lossless (FLAC) o Lossy de alta tasa (Opus, MP3 320k, AAC).
-   * En funciones colaborativas (como Jam), **nunca se retransmite audio P2P**: cada cliente reproduce el flujo desde su propio servidor, ahorrando ancho de banda y batería.
+   * En funciones colaborativas (como CrotoLink), **nunca se retransmite audio P2P**: cada cliente reproduce el flujo desde su propio servidor, ahorrando ancho de banda y batería.
 3. **Adaptabilidad Nativa Multiplataforma:**
    * **Desktop (Linux, Windows, macOS):** Ventana personalizada sin marcos nativos (*frameless*), atajos globales de teclado, decodificación acelerada con FFmpeg/mpv y panel lateral expandido.
    * **Móvil (Android, iOS):** Integración completa con el sistema de notificaciones de audio en segundo plano ([`audio_service`](lib/services/scrotify_audio_handler.dart)), widget nativo para la pantalla de inicio ([`home_widget`](lib/services/home_widget_service.dart)), bloqueo biométrico y gestos táctiles.
@@ -48,7 +48,7 @@
 
 El proyecto está construido sobre el ecosistema de **Flutter** (Dart 3.x) con dependencias seleccionadas por su robustez y rendimiento nativo:
 
-| Paquete | Versión | Rol en Scrotify |
+| Paquete | Versión | Rol en CrotoWave |
 | :--- | :--- | :--- |
 | `just_audio` | `^0.9.44` | Motor de audio primario en Dart con soporte de pipelines avanzados. |
 | `just_audio_media_kit` | `^2.1.0` | Backend nativo de audio para sistemas operativos de escritorio basado en `libmpv`. |
@@ -58,10 +58,10 @@ El proyecto está construido sobre el ecosistema de **Flutter** (Dart 3.x) con d
 | `sqflite` + `path` | `^2.4.4` / `^1.9.1` | Base de datos relacional local SQLite para descargas, caché y metadatos offline. |
 | `flutter_secure_storage` | `^11.1.1` | Almacenamiento cifrado en Keychain (iOS/macOS), Keystore (Android) y Secret Service (Linux). |
 | `cryptography` | `^2.9.0` | Primitivas criptográficas modernas (X25519, ChaCha20-Poly1305) para emparejamiento PC-móvil. |
-| `basic_utils` + `crypto` | `^5.8.2` / `^3.0.3` | Generación de certificados X.509 RSA-2048 y hashing SHA-256 para Jam LAN. |
+| `basic_utils` + `crypto` | `^5.8.2` / `^3.0.3` | Generación de certificados X.509 RSA-2048 y hashing SHA-256 para CrotoLink LAN. |
 | `window_manager` | `^0.5.2` | Manejo de ventana frameless y controles de minimizar/maximizar/cerrar en desktop. |
-| `mobile_scanner` + `qr_flutter` | `^5.0.0` / `^4.1.0` | Escaneo y generación de códigos QR para Jam y emparejamiento rápido. |
-| `web_socket_channel` | `^2.4.0` | Comunicación bidireccional en tiempo real para sesiones Jam (LAN y Cloud). |
+| `mobile_scanner` + `qr_flutter` | `^5.0.0` / `^4.1.0` | Escaneo y generación de códigos QR para CrotoLink y emparejamiento rápido. |
+| `web_socket_channel` | `^2.4.0` | Comunicación bidireccional en tiempo real para sesiones CrotoLink (LAN y Cloud). |
 | `provider` | `^6.1.1` | Inyección de dependencias y gestión de estado reactiva desacoplada. |
 | `local_auth` | `^3.0.2` | Autenticación biométrica nativa (huella dactilar y reconocimiento facial). |
 
@@ -76,7 +76,7 @@ lib/
 │   ├── album.dart                 # Modelo de álbum musical
 │   ├── track.dart                 # Modelo de pista y metadatos
 │   ├── server_profile.dart        # Configuración de perfiles de servidor
-│   ├── jam_models.dart            # Modelos de estado, participantes y colas Jam
+│   ├── jam_models.dart            # Modelos de estado, participantes y colas CrotoLink
 │   └── pairing_models.dart        # Modelos para emparejamiento criptográfico
 ├── services/                      # Lógica de negocio, servicios de red y audio
 │   ├── navidrome_service.dart     # Cliente de API Subsonic v1.16.1
@@ -86,13 +86,13 @@ lib/
 │   ├── offline_download_manager.dart # Gestor de descargas concurrentes en background
 │   ├── offline_cache_service.dart # Base de datos SQLite y caché en disco
 │   ├── server_profiles_controller.dart # Gestor multicuenta de servidores
-│   ├── jam_controller.dart        # Orquestador de sesiones Jam
+│   ├── jam_controller.dart        # Orquestador de sesiones CrotoLink
 │   ├── jam_host_service.dart      # Servidor WebSocket y radar UDP local del Host
 │   ├── jam_guest_service.dart     # Cliente WebSocket y radar del Invitado
-│   ├── remote_jam_service.dart    # Cliente de conexión al servidor Jam en la nube
+│   ├── remote_jam_service.dart    # Cliente de conexión al servidor CrotoLink en la nube
 │   ├── lyrics_service.dart        # Búsqueda de letras sincronizadas (Navidrome + LRCLIB)
 │   ├── equalizer_service.dart     # Configuración y presets del ecualizador de 10 bandas
-│   ├── listening_stats_service.dart # Métricas de escucha personalizadas (Scrotify Wrapped)
+│   ├── listening_stats_service.dart # Métricas de escucha personalizadas (CrotoWave Wrapped)
 │   ├── pairing_server.dart        # Servidor de emparejamiento con cifrado de clave pública
 │   ├── pairing_client.dart        # Cliente móvil de emparejamiento por QR
 │   ├── theme_controller.dart      # Gestor de temas bundleados y comunitarios .zip
@@ -117,7 +117,7 @@ lib/
 │   ├── waveform_progress_bar.dart # Barra de progreso con forma de onda real interactiva
 │   ├── desktop_window_frame.dart  # Marco de ventana frameless con controles
 │   ├── interactive_artist_text.dart # Texto con enlaces independientes a múltiples artistas
-│   ├── jam_dialog.dart            # Diálogo y modal de gestión de sesiones Jam
+│   ├── jam_dialog.dart            # Diálogo y modal de gestión de sesiones CrotoLink
 │   ├── jam_queue_panel.dart       # Panel de cola compartida con avatar del usuario
 │   ├── persistent_player_bar.dart # Barra de reproducción inferior persistente
 │   └── lyrics_overlay.dart        # Panel flotante de letras en seguimiento
@@ -134,7 +134,7 @@ lib/
 El punto de entrada del sistema garantiza un arranque inmediato sin artefactos visuales:
 
 ### 4.1. Arranque sin Parpadeo de Tema (*Flash-Free Startup*)
-Antes de ejecutar `runApp()`, Scrotify invoca de forma asíncrona [`ThemeController.readInitial()`](lib/services/theme_controller.dart#L79-L89), leyendo la configuración del archivo local `themes.json`. Al renderizar el primer cuadro, el `ThemeData` ya posee la paleta exacta elegida por el usuario (evitando destellos blancos sobre temas oscuros).
+Antes de ejecutar `runApp()`, CrotoWave invoca de forma asíncrona [`ThemeController.readInitial()`](lib/services/theme_controller.dart#L79-L89), leyendo la configuración del archivo local `themes.json`. Al renderizar el primer cuadro, el `ThemeData` ya posee la paleta exacta elegida por el usuario (evitando destellos blancos sobre temas oscuros).
 
 ### 4.2. Inyección de Dependencias mediante `MultiProvider`
 El árbol de la aplicación registra los servicios en estricto orden de dependencia topológica:
@@ -167,11 +167,11 @@ MultiProvider(
 [`NavidromeService`](lib/services/navidrome_service.dart) es la fachada central de comunicación HTTP contra el servidor.
 
 ### 5.1. Protocolo de Autenticación Criptográfica
-Por motivos de seguridad, Scrotify **no envía la contraseña en texto plano**. Implementa el esquema canónico de Subsonic:
+Por motivos de seguridad, CrotoWave **no envía la contraseña en texto plano**. Implementa el esquema canónico de Subsonic:
 1. Genera un valor aleatorio de sal (*salt*) de 16 caracteres alfanuméricos en minúsculas.
 2. Calcula el token de autenticación:
    $$\text{token} = \text{MD5}(\text{password} + \text{salt})$$
-3. Cada petición HTTP incluye los parámetros: `?u=usuario&t=token&s=salt&v=1.16.1&c=Scrotify&f=json`.
+3. Cada petición HTTP incluye los parámetros: `?u=usuario&t=token&s=salt&v=1.16.1&c=CrotoWave&f=json`.
 
 ### 5.2. Catálogo de Endpoints Implementados
 * **Exploración de Biblioteca:**
@@ -198,7 +198,7 @@ Por motivos de seguridad, Scrotify **no envía la contraseña en texto plano**. 
 
 ## 6. Motor de Audio Avanzado (`lib/services/player_controller.dart`)
 
-El reproductor de Scrotify incorpora una arquitectura especializada para satisfacer exigencias audiófilas y operativas:
+El reproductor de CrotoWave incorpora una arquitectura especializada para satisfacer exigencias audiófilas y operativas:
 
 ### 6.1. Doble Reproductor A/B para Crossfade Real y Gapless Playback
 En lugar de depender de un único reproductor con pausas entre pistas, `PlayerController` mantiene dos instancias de `AudioPlayer`: `_a` y `_b`.
@@ -227,13 +227,13 @@ El usuario puede configurar límites de ancho de banda independientes en [`Setti
 * **Modo Red Móvil (Datos 4G/5G):** Transcodificación en servidor a 320 kbps, 256 kbps, 192 kbps o 128 kbps para ahorrar datos móviles.
 
 ### 6.4. Modo Karaoke y Cancelación Vocal
-En plataformas de escritorio (Linux, Windows, macOS), Scrotify aprovecha el backend [`media_kit`](lib/services/player_controller.dart#L113-L139) para aplicar un filtro DSP nativo de inversión de fase y ecualización paramétrica sobre el canal central, atenuando las frecuencias vocales de la música y permitiendo cantar sobre la pista instrumental en tiempo real.
+En plataformas de escritorio (Linux, Windows, macOS), CrotoWave aprovecha el backend [`media_kit`](lib/services/player_controller.dart#L113-L139) para aplicar un filtro DSP nativo de inversión de fase y ecualización paramétrica sobre el canal central, atenuando las frecuencias vocales de la música y permitiendo cantar sobre la pista instrumental en tiempo real.
 
 ---
 
 ## 7. Formas de Onda Reales por Análisis PCM (`lib/services/audio_waveform_service.dart`)
 
-Una de las características visuales distintivas de Scrotify es su barra de progreso basada en la **forma de onda acústica real** de la pista:
+Una de las características visuales distintivas de CrotoWave es su barra de progreso basada en la **forma de onda acústica real** de la pista:
 
 ```
 Archivo de Audio (FLAC/MP3/Opus)
@@ -279,7 +279,7 @@ CustomPainter reactivo en WaveformProgressBar (con seeking suave)
 
 ## 9. Modo Offline y Gestor de Descargas (`lib/services/offline_download_manager.dart`)
 
-Scrotify permite almacenar canciones y álbumes completos localmente para reproducir en aviones, viajes o zonas sin cobertura:
+CrotoWave permite almacenar canciones y álbumes completos localmente para reproducir en aviones, viajes o zonas sin cobertura:
 
 ```
 ┌────────────────────────────────────────────────────────────────────────┐
@@ -316,7 +316,7 @@ Para usuarios que administran más de una biblioteca (servidor en el hogar, serv
 
 ## 11. Emparejamiento Rápido entre Dispositivos (`lib/services/pairing_server.dart`)
 
-Configurar un cliente de música en un teléfono móvil escribiendo URLs largas y contraseñas complejas suele ser tedioso. Scrotify resuelve esto con su sistema de **Emparejamiento por Código QR Criptográfico**:
+Configurar un cliente de música en un teléfono móvil escribiendo URLs largas y contraseñas complejas suele ser tedioso. CrotoWave resuelve esto con su sistema de **Emparejamiento por Código QR Criptográfico**:
 
 ```
 [ PC / Servidor Desktop ]                             [ Teléfono Móvil ]
@@ -347,7 +347,7 @@ Configurar un cliente de música en un teléfono móvil escribiendo URLs largas 
 
 ## 12. Métricas y Estadísticas de Escucha (`lib/services/listening_stats_service.dart`)
 
-Scrotify incorpora su propio motor de estadísticas de escucha privadas (*Scrotify Wrapped* local):
+CrotoWave incorpora su propio motor de estadísticas de escucha privadas (*CrotoWave Wrapped* local):
 * **Registro de Eventos Calificados:** Una reproducción solo cuenta como escucha legítima si supera el 50% de la pista o al menos 30 segundos continuos.
 * **Métricas Disponibles en [`StatsScreen`](lib/screens/stats_screen.dart):**
   * Minutos totales de música reproducidos.
@@ -370,7 +370,7 @@ Scrotify incorpora su propio motor de estadísticas de escucha privadas (*Scroti
 
 ## 14. Sistema de Temas y Personalización Visual (`lib/services/app_theme.dart`)
 
-El diseño de Scrotify sigue estándares visuales modernos y adaptables:
+El diseño de CrotoWave sigue estándares visuales modernos y adaptables:
 
 ### 14.1. Temas Fijos Integrados (*Built-in Themes*)
 * **Catppuccin Mocha:** Tema oscuro cálido pastel (predeterminado).
@@ -388,15 +388,15 @@ En Linux, Windows y macOS, la aplicación oculta la barra de título tradicional
 
 ---
 
-## 15. Scrotify Jam — Sincronización Social en Tiempo Real
+## 15. CrotoLink — Sincronización Social en Tiempo Real
 
 > *Para el desglose técnico exhaustivo de este subsistema, consulte el archivo canónico [**`JAM.md`**](JAM.md).*
 
-Scrotify Jam permite que múltiples personas escuchen juntas o colaboren en una misma cola de reproducción:
+CrotoLink permite que múltiples personas escuchen juntas o colaboren en una misma cola de reproducción:
 
 ```
 ┌────────────────────────────────────────────────────────────────────────┐
-│                              SCROTIFY JAM                              │
+│                              CROTOWAVE JAM                              │
 └───────────────────┬────────────────────────────────┬───────────────────┘
                     │                                │
                     ▼                                ▼
@@ -446,12 +446,12 @@ Para ejecutar las pruebas unitarias y de integración de widgets:
 flutter test
 ```
 
-Para ejecutar pruebas específicas de subsistemas (ej. Jam):
+Para ejecutar pruebas específicas de subsistemas (ej. CrotoLink):
 ```bash
 flutter test test/jam_test.dart test/jam_ui_recovery_test.dart
 ```
 
-### 17.3. Servidor Jam en Node.js
+### 17.3. Servidor CrotoLink en Node.js
 Para ejecutar la suite de pruebas del servidor WebSocket central:
 ```bash
 cd jam-server
@@ -471,7 +471,7 @@ node --test test/server.test.js
 
 ---
 
-## 18. Matriz Resumen de Subsistemas de Scrotify
+## 18. Matriz Resumen de Subsistemas de CrotoWave
 
 | Subsistema | Componente Principal | Protocolo / Tecnología | Persistencia / Almacenamiento |
 | :--- | :--- | :--- | :--- |
@@ -484,6 +484,6 @@ node --test test/server.test.js
 | **Descargas Offline** | [`OfflineDownloadManager`](lib/services/offline_download_manager.dart) | HTTP Streaming por bloques concurrentes | SQLite (`offline_cache.db`) + Disco |
 | **Gestión de Cuentas** | [`ServerProfilesController`](lib/services/server_profiles_controller.dart) | Perfiles multicuenta serializables | [`SecureStorage`](lib/services/secure_storage.dart) (Keystore/Keychain) |
 | **Emparejamiento** | [`PairingServer`](lib/services/pairing_server.dart) | X25519 Diffie-Hellman + ChaCha20-Poly1305 | Sesiones efímeras con TTL de 5 min |
-| **Scrotify Jam** | [`JamController`](lib/services/jam_controller.dart) | WebSockets (WSS) + UDP Radar (LAN y Cloud) | Estado efímero en RAM |
+| **CrotoLink** | [`JamController`](lib/services/jam_controller.dart) | WebSockets (WSS) + UDP Radar (LAN y Cloud) | Estado efímero en RAM |
 | **Temas y Estilos** | [`ThemeController`](lib/services/theme_controller.dart) | Paletas CSS variables y paquetes `.zip` | `themes.json` (preload sin flash) |
 | **Estadísticas** | [`ListeningStatsService`](lib/services/listening_stats_service.dart) | Eventos de escucha calificados (>50%) | `listening_events.json` |

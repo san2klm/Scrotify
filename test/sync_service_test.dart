@@ -234,7 +234,7 @@ void main() {
         a.file('followed_artists_srv_x.json').readAsStringSync(), '["de-b"]');
   });
 
-  test('la URL del servidor Jam no se sincroniza entre dispositivos', () async {
+  test('la URL del servidor CrotoLink no se sincroniza entre dispositivos', () async {
     final a = device('a');
     a.write(
         'settings.json', '{"gapless":true,"jamServerUrl":"wss://a.example/"}');

@@ -298,7 +298,7 @@ mixin _JamDialogTabs on _JamDialogBase {
                   ),
                   icon: const Icon(Icons.play_arrow_rounded, size: 20),
                   label: const Text(
-                    'Iniciar Sesión Jam en este equipo',
+                    'Iniciar sesión CrotoLink en este equipo',
                     style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
                   ),
                 ),
@@ -434,7 +434,7 @@ mixin _JamDialogTabs on _JamDialogBase {
                       SnackBar(
                         content: Text(
                           jam.lastJoinError ??
-                              'No se pudo encontrar la sesión Jam con ese PIN',
+                              'No se pudo encontrar la sesión CrotoLink con ese PIN',
                         ),
                         backgroundColor: context.danger,
                       ),
@@ -522,7 +522,7 @@ mixin _JamDialogTabs on _JamDialogBase {
                       Text(
                         jam.isScanningRadar
                             ? 'Buscando sesiones en la red y servidor...'
-                            : 'No se encontraron sesiones Jam en la red o servidor',
+                            : 'No se encontraron sesiones CrotoLink en la red o servidor',
                         style:
                             TextStyle(color: context.textMuted, fontSize: 12),
                       ),
@@ -675,7 +675,7 @@ mixin _JamDialogTabs on _JamDialogBase {
                 for (final barcode in barcodes) {
                   final raw = barcode.rawValue;
                   if (raw != null &&
-                      (raw.startsWith('scrotify://jam') ||
+                      (hasAppLinkPrefix(raw, 'jam') ||
                           JamInviteLink.parse(raw) != null)) {
                     _closeScanner();
                     final ok = await jam.joinByQr(raw,

@@ -197,6 +197,21 @@ class SecureStorage {
     }
   }
 
+  /// Todo el contenido del almacén seguro (más el respaldo en disco, si lo
+  /// hay). Lo usa la migración de firma de Android (`SigningMigration`).
+  static Future<Map<String, String>> secureReadAll() async {
+    if (inMemoryTestStore != null) {
+      return Map.of(inMemoryTestStore!);
+    }
+    final all = await _loadFallback();
+    try {
+      all.addAll(await _backend.readAll());
+    } catch (e) {
+      _noteFallback(e);
+    }
+    return all;
+  }
+
   /// Guarda las credenciales completas.
   static Future<void> saveCredentials({
     required String serverUrl,
@@ -263,6 +278,7 @@ abstract class SecureStorageBackend {
   Future<String?> read(String key);
   Future<void> write(String key, String value);
   Future<void> delete(String key);
+  Future<Map<String, String>> readAll();
 }
 
 class _FlutterBackend implements SecureStorageBackend {
@@ -275,4 +291,7 @@ class _FlutterBackend implements SecureStorageBackend {
 
   @override
   Future<void> delete(String key) => SecureStorage._storage.delete(key: key);
+
+  @override
+  Future<Map<String, String>> readAll() => SecureStorage._storage.readAll();
 }

@@ -6,6 +6,7 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 import '../models/pairing_models.dart';
 import '../services/pairing_client.dart';
 import '../services/pairing_server.dart';
+import '../utils/app_links.dart';
 import '../utils/app_colors.dart';
 import '../utils/tv_mode.dart';
 import 'material_surface.dart';

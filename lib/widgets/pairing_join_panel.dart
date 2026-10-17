@@ -551,7 +551,7 @@ class _PairingJoinPanelState extends State<PairingJoinPanel> {
         ),
         const SizedBox(height: 2),
         Text(
-          'Computadoras con Scrotify listas para emparejar:',
+          'Computadoras con CrotoWave listas para emparejar:',
           style: TextStyle(color: context.textMuted, fontSize: 11.5),
         ),
         const SizedBox(height: 10),

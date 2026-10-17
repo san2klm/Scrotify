@@ -246,7 +246,7 @@ void main() {
       await tester.tap(find.text('Guardar mis aportaciones'));
       await tester.pumpAndSettle();
 
-      expect(nav.created.single, startsWith('Mis aportaciones a la Jam'));
+      expect(nav.created.single, startsWith('Mis aportaciones al CrotoLink'));
       expect(nav.added.single, ['mia1', 'mia2']);
       expect(find.textContaining('2 pistas'), findsWidgets);
     });

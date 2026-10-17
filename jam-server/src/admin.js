@@ -35,7 +35,7 @@ export function createAdmin({ store, adminPassword, getStatus, loginMaxFailures 
   let pendingSetupToken = null;
   if (!store.getAdmin()) {
     pendingSetupToken = typeof setupToken === 'string' && setupToken ? setupToken : crypto.randomBytes(16).toString('hex');
-    console.info(`Scrotify Jam: primer arranque sin administrador. Token de configuración (un solo uso): ${pendingSetupToken}`);
+    console.info(`CrotoLink: primer arranque sin administrador. Token de configuración (un solo uso): ${pendingSetupToken}`);
   }
 
   function setupTokenOk(given) {

@@ -172,7 +172,7 @@ class JamGuestService {
                 final key = '${session.host}:${session.port}:${session.pin}';
                 discovered[key] = session;
                 debugPrint(
-                  'Jam radar: respuesta de ${dg.address.address} para ${session.host}:${session.port}',
+                  'CrotoLink radar: respuesta de ${dg.address.address} para ${session.host}:${session.port}',
                 );
               }
             }
@@ -373,7 +373,7 @@ class JamGuestService {
   /// Direct HTTP probing was intentionally removed: a manually entered host
   /// has no certificate pin and therefore cannot be authenticated safely.
   Future<String> testHostReachable(String host, int port) async =>
-      'Jam LAN segura requiere escanear el QR del anfitrión; el sondeo HTTP inseguro está deshabilitado.';
+      'CrotoLink LAN segura requiere escanear el QR del anfitrión; el sondeo HTTP inseguro está deshabilitado.';
 
   String _describeSocketException(SocketException e, String host, int port) {
     final os = e.osError;
@@ -381,7 +381,7 @@ class JamGuestService {
     // 111 = connection refused (el host existe pero nada escucha / Jam cerrado).
     // 113 = no route to host, 101 = network unreachable.
     if (code == 111) {
-      return 'Conexión rechazada por $host:$port. El equipo existe pero la Jam no está iniciada ahí (o cambió el puerto).';
+      return 'Conexión rechazada por $host:$port. El equipo existe pero el CrotoLink no está iniciado ahí (o cambió el puerto).';
     }
     if (code == 113 || code == 101 || code == 110) {
       return 'No hay ruta a $host:$port. Estás en otra red/VPN o el router aísla Wi-Fi de cable.';
@@ -468,7 +468,7 @@ class JamGuestService {
     }
     if (!JamTlsIdentity.isValidFingerprint(tlsFingerprint)) {
       lastError =
-          'La Jam no anunció un fingerprint TLS válido; se rechaza la conexión insegura.';
+          'El CrotoLink no anunció un fingerprint TLS válido; se rechaza la conexión insegura.';
       return false;
     }
 
@@ -845,7 +845,7 @@ class JamGuestService {
           lastError ??= joinAccepted
               ? 'El anfitrión aceptó la unión pero no envió el estado de la '
                   'sala a tiempo.'
-              : 'El host no respondió al PIN en 5s (red lenta o Jam colgada).';
+              : 'El host no respondió al PIN en 5s (red lenta o CrotoLink colgado).';
           return false;
         },
       );

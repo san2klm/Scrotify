@@ -5,7 +5,7 @@
 #   scripts/build_apks.sh phone --universal
 #       -> un único APK con todas las arquitecturas (más pesado; para emulador)
 #
-# Salida en la raíz: Scrotify-<versión>-<sabor>-<abi>.apk
+# Salida en la raíz: CrotoWave-<versión>-<sabor>-<abi>.apk
 #   phone: arm64-v8a            tv: arm64-v8a y armeabi-v7a (Chromecast HD)
 # Instalar con tool/install_android.sh, que elige el APK correcto.
 set -euo pipefail
@@ -52,9 +52,9 @@ build() { # sabor  plataformas  [defines extra...]
     --dart-define=SCROTIFY_COMMIT="$commit" \
     --dart-define=SCROTIFY_BUILD_DATE="$(date +%F)" \
     "$@"
-  rm -f "Scrotify-$ver-$flavor"*.apk
+  rm -f "CrotoWave-$ver-$flavor"*.apk
   if [[ $universal == 1 ]]; then
-    cp "$out/app-$flavor-release.apk" "Scrotify-$ver-$flavor-universal.apk"
+    cp "$out/app-$flavor-release.apk" "CrotoWave-$ver-$flavor-universal.apk"
   else
     local abi
     for abi in ${platforms//,/ }; do
@@ -62,7 +62,7 @@ build() { # sabor  plataformas  [defines extra...]
         android-arm64) abi=arm64-v8a ;;
         android-arm) abi=armeabi-v7a ;;
       esac
-      cp "$out/app-$abi-$flavor-release.apk" "Scrotify-$ver-$flavor-$abi.apk"
+      cp "$out/app-$abi-$flavor-release.apk" "CrotoWave-$ver-$flavor-$abi.apk"
     done
   fi
 }
@@ -74,4 +74,4 @@ if [[ "$target" == all || "$target" == tv ]]; then
   build tv android-arm64,android-arm --dart-define=FORCE_TV=true
 fi
 echo "Build $ver ($commit), número $build_number"
-ls -lh Scrotify-"$ver"-*.apk
+ls -lh CrotoWave-"$ver"-*.apk

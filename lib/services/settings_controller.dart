@@ -232,7 +232,13 @@ class SettingsController extends ChangeNotifier {
     notifyListeners();
   }
 
-  void resetJamServerUrl() => setJamServerUrl(kDefaultRemoteJamEndpoint);
+  /// Quita el servidor CrotoLink (vuelve al valor por defecto: ninguno).
+  void resetJamServerUrl() {
+    if (_jamServerUrl == kDefaultRemoteJamEndpoint) return;
+    _jamServerUrl = kDefaultRemoteJamEndpoint;
+    _save();
+    notifyListeners();
+  }
 
   /// Activa o desactiva la eliminación de silencios.
   void setSilenceRemovalEnabled(bool enabled) {

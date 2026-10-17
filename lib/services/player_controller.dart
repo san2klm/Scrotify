@@ -29,7 +29,7 @@ part 'player_quality.dart';
 
 enum MostPlayedItemType { track, playlist }
 
-/// Un contenido reproducido desde Scrotify. Las playlists y las canciones se
+/// Un contenido reproducido desde CrotoWave. Las playlists y las canciones se
 /// registran por separado para que escuchar una playlist no infle el contador
 /// de cada una de sus canciones.
 class MostPlayedItem {
@@ -220,7 +220,7 @@ abstract class _PlayerBase extends ChangeNotifier {
   bool _sleepEndsAtEndOfTrack = false;
 
   // ---------------------------------------------------------------------------
-  // Scrotify Connect: modo espejo
+  // CrotoWave Connect: modo espejo
   // ---------------------------------------------------------------------------
 
   RemotePlayback? _remote;

@@ -21,6 +21,7 @@ import '../widgets/local_music_settings.dart';
 import 'equalizer_screen.dart';
 import 'stats_screen.dart';
 import '../utils/app_colors.dart';
+import '../utils/app_licenses.dart';
 import '../utils/build_info.dart';
 import '../utils/responsive.dart';
 import '../widgets/material_surface.dart';
@@ -90,12 +91,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
               _menuRow(
                 icon: Icons.podcasts_rounded,
-                title: nav.connected ? 'Jam y dispositivos' : 'Servidor Jam',
+                title: nav.connected ? 'CrotoLink y dispositivos' : 'Servidor CrotoLink',
                 subtitle: nav.connected
-                    ? 'Servidor Jam y vincular teléfono'
+                    ? 'Servidor CrotoLink y vincular teléfono'
                     : 'Servidor de sesiones grupales',
                 onTap: () => _openPage(
-                    nav.connected ? 'Jam y dispositivos' : 'Servidor Jam',
+                    nav.connected ? 'CrotoLink y dispositivos' : 'Servidor CrotoLink',
                     _jamPage),
               ),
               _menuRow(
@@ -115,11 +116,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           _card(children: const [DiagnosticsPanel()]),
                         ]),
               ),
+              _menuRow(
+                icon: Icons.gavel_rounded,
+                title: 'Licencias de código abierto',
+                subtitle: 'Licencia de CrotoWave y de las librerías que usa',
+                onTap: () => AppLicenses.show(context),
+              ),
             ]),
             const SizedBox(height: 24),
             Center(
               child: Text(
-                'Scrotify · ${BuildInfo.label}\n'
+                'CrotoWave · ${BuildInfo.label}\n'
                 'Cliente de Navidrome (Subsonic API)',
                 textAlign: TextAlign.center,
                 style: TextStyle(color: context.textMuted, fontSize: 12),
@@ -478,7 +485,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   List<Widget> _jamPage(SettingsController settings) {
     final nav = context.read<NavidromeService>();
     return [
-      _sectionTitle('Servidor Jam'),
+      _sectionTitle('Servidor CrotoLink'),
       _card(children: [_JamServerField(settings: settings)]),
       _sectionTitle('Sincronización'),
       _card(children: const [SyncSettings()]),
@@ -975,7 +982,7 @@ class _JamServerFieldState extends State<_JamServerField> {
           style: TextStyle(color: context.textPrimary, fontSize: 14),
           decoration: InputDecoration(
             labelText: 'URL del servidor',
-            hintText: kDefaultRemoteJamEndpoint,
+            hintText: kExampleRemoteJamEndpoint,
             errorText: _error,
             helperText: _info,
           ),
@@ -991,13 +998,15 @@ class _JamServerFieldState extends State<_JamServerField> {
               child: Text(_testing ? 'Probando…' : 'Probar conexión'),
             ),
             TextButton(
-                onPressed: _reset, child: const Text('Restaurar por defecto')),
+                onPressed: _reset, child: const Text('Quitar servidor')),
           ],
         ),
         const SizedBox(height: 8),
         const _InfoText(
-            'Relay para salas Jam remotas. Puedes alojar el tuyo con el '
-            'Docker de jam-server/. Usa wss://; ws:// solo en red local.'),
+            'Servidor para salas CrotoLink remotas, CrotoWave Connect por '
+            'internet y sincronización. No hay ninguno por defecto: alojá el '
+            'tuyo con el Docker de jam-server/ o usá el de alguien de confianza. '
+            'Usa wss://; ws:// solo en red local.'),
       ],
     );
   }

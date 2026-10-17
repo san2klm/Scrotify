@@ -127,7 +127,7 @@ class _JamChatDialogState extends State<JamChatDialog> {
       title: Row(
         children: [
           Expanded(
-              child: Text('Chat de la Jam',
+              child: Text('Chat del CrotoLink',
                   style: TextStyle(color: context.textPrimary))),
         ],
       ),

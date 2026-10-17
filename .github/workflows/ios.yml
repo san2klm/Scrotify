@@ -1,4 +1,4 @@
-# Compila Scrotify para iPhone en un Mac de GitHub (gratis en repos públicos)
+# Compila CrotoWave para iPhone en un Mac de GitHub (gratis en repos públicos)
 # y publica el .ipa sin firmar en la release "ios-latest".
 # El .ipa se firma e instala desde Windows con Sideloadly y un Apple ID gratuito.
 name: iOS (IPA sin firmar)
@@ -46,14 +46,14 @@ jobs:
         run: |
           mkdir -p Payload
           cp -R build/ios/iphoneos/Runner.app Payload/
-          zip -qry Scrotify.ipa Payload
-          ls -lh Scrotify.ipa
+          zip -qry CrotoWave.ipa Payload
+          ls -lh CrotoWave.ipa
 
       - name: Subir como artefacto
         uses: actions/upload-artifact@v4
         with:
-          name: Scrotify-iOS
-          path: Scrotify.ipa
+          name: CrotoWave-iOS
+          path: CrotoWave.ipa
           retention-days: 30
 
       - name: Publicar en la release ios-latest
@@ -61,7 +61,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release delete ios-latest --yes --cleanup-tag || true
-          gh release create ios-latest Scrotify.ipa \
+          gh release create ios-latest CrotoWave.ipa \
             --target "$GITHUB_SHA" \
-            --title "Scrotify para iPhone (última compilación)" \
+            --title "CrotoWave para iPhone (última compilación)" \
             --notes "IPA sin firmar compilado desde ${GITHUB_SHA::7}. Instalar con Sideloadly usando un Apple ID; con cuenta gratuita hay que reinstalar cada 7 días."

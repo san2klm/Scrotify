@@ -20,7 +20,7 @@ class JamTlsIdentity {
     required this.fingerprintSha256,
   });
 
-  static JamTlsIdentity generate({String commonName = 'Scrotify Jam'}) {
+  static JamTlsIdentity generate({String commonName = 'CrotoLink'}) {
     final pair = CryptoUtils.generateRSAKeyPair(keySize: 2048);
     final privateKey = pair.privateKey as RSAPrivateKey;
     final publicKey = pair.publicKey as RSAPublicKey;

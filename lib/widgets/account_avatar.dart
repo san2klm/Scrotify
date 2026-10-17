@@ -60,7 +60,7 @@ class _AccountAvatarState extends State<AccountAvatar> {
             's': salt,
             't': token,
             'v': '1.16.1',
-            'c': 'Scrotify',
+            'c': 'CrotoWave',
           },
           fragment: '',
         )

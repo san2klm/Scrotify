@@ -2,7 +2,7 @@ import crypto from 'node:crypto';
 
 import { normalizeUser } from './navidrome-auth.js';
 
-/// Scrotify Connect: presencia y relé de mensajes entre los dispositivos de un
+/// CrotoWave Connect: presencia y relé de mensajes entre los dispositivos de un
 /// mismo usuario de Navidrome (admin solo ve a admin). El servidor verifica
 /// al usuario con Navidrome y agrupa por usuario; los mensajes son blobs
 /// cifrados de extremo a extremo que solo se reenvían.
@@ -35,7 +35,7 @@ export function createConnectHub({ store, limits, guard, send, ipOf, auth }) {
   }
 
   async function join(socket, message) {
-    if (!limits.navidromeUrl) return fail(socket, 'Scrotify Connect no está configurado en este servidor.');
+    if (!limits.navidromeUrl) return fail(socket, 'CrotoWave Connect no está configurado en este servidor.');
     const ip = ipOf(socket);
     if (store.isBlockedIp(ip)) return fail(socket, 'Acceso denegado.');
     if (joining.has(socket)) return;

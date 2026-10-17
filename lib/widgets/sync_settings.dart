@@ -171,7 +171,7 @@ class SyncSettings extends StatelessWidget {
         content: Column(mainAxisSize: MainAxisSize.min, children: [
           const Text(
               'Introduce esta clave en tus otros dispositivos (Ajustes → '
-              'Servidor Jam) para que reciban los mismos datos. Quien la '
+              'Servidor CrotoLink) para que reciban los mismos datos. Quien la '
               'tenga puede leer lo sincronizado: guárdala en un lugar seguro.'),
           const SizedBox(height: 16),
           SelectableText(key,
@@ -296,7 +296,7 @@ class _LinkDialogState extends State<_LinkDialog> {
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (_) => const QrScannerSheet(
-        prefix: SyncKeyLink.scheme,
+        accept: SyncKeyLink.isSyncLink,
         hint: 'Apunta al QR de «Mostrar QR» en tu otro dispositivo.',
       ),
     );

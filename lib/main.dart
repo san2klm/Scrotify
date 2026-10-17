@@ -50,6 +50,8 @@ import 'services/sync/sync_service.dart';
 import 'models/jam_models.dart';
 import 'services/theme_controller.dart';
 import 'utils/app_data_dir.dart';
+import 'utils/app_licenses.dart';
+import 'utils/signing_migration.dart';
 import 'screens/login_screen.dart';
 import 'widgets/cover_accent_sync.dart';
 import 'widgets/discord_presence_sync.dart';
@@ -59,6 +61,9 @@ import 'widgets/desktop_window_frame.dart';
 /// Psysonic): el primer frame ya usa el tema correcto, sin flash.
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // Solo en builds de migración de firma (no-op en los normales).
+  await SigningMigration.maybeRun();
+  AppLicenses.register();
 
   // Un error no capturado no debe dejar la app en un estado inconsistente en
   // silencio: se registra y se mantiene la ejecución.
@@ -109,7 +114,7 @@ Future<void> main() async {
         config: const AudioServiceConfig(
           androidNotificationChannelId:
               'com.example.navidrome_client.channel.audio',
-          androidNotificationChannelName: 'Scrotify Playback',
+          androidNotificationChannelName: 'CrotoWave Playback',
           androidNotificationIcon: 'mipmap/ic_launcher',
           androidNotificationOngoing: false,
           androidStopForegroundOnPause: true,
@@ -362,7 +367,7 @@ class MyApp extends StatelessWidget {
             return jam;
           },
         ),
-        // Scrotify Connect: ver y controlar tus otros dispositivos.
+        // CrotoWave Connect: ver y controlar tus otros dispositivos.
         ChangeNotifierProvider<ConnectService>(
           lazy: false,
           create: (ctx) {
@@ -435,7 +440,7 @@ class MyApp extends StatelessWidget {
         builder: (context, themes, _) {
           final appTheme = themes.active;
           return MaterialApp(
-            title: 'Scrotify',
+            title: 'CrotoWave',
             debugShowCheckedModeBanner: false,
             navigatorKey: rootNavigatorKey,
             theme: TvMode.isTv

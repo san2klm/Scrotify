@@ -6,9 +6,9 @@ void main() {
   final key = SyncKey.format(SyncKey.generate());
 
   group('SyncKeyLink.build', () {
-    test('genera scrotify-sync:// con la clave', () {
+    test('genera crotowave-sync:// con la clave', () {
       final link = SyncKeyLink.build(key);
-      expect(link, startsWith('scrotify-sync://'));
+      expect(link, startsWith('crotowave-sync://'));
       expect(SyncKeyLink.parse(link!), key);
     });
 
@@ -22,7 +22,12 @@ void main() {
     test('acepta el enlace en mayúsculas, minúsculas y con espacios', () {
       expect(
           SyncKeyLink.parse('  scrotify-sync://${key.toLowerCase()}\n'), key);
-      expect(SyncKeyLink.parse('SCROTIFY-SYNC://$key'), key);
+      expect(SyncKeyLink.parse('CROTOWAVE-SYNC://$key'), key);
+    });
+
+    test('acepta el esquema anterior al cambio de nombre (scrotify-sync://)', () {
+      expect(SyncKeyLink.parse('scrotify-sync://$key'), key);
+      expect(SyncKeyLink.isSyncLink('SCROTIFY-SYNC://$key'), isTrue);
     });
 
     test('acepta también la clave a pelo (pegada o escrita)', () {
@@ -38,17 +43,18 @@ void main() {
 
     test('rechaza basura, claves truncadas y restos añadidos', () {
       expect(SyncKeyLink.parse(''), isNull);
-      expect(SyncKeyLink.parse('scrotify-sync://'), isNull);
+      expect(SyncKeyLink.parse('crotowave-sync://'), isNull);
       expect(
-          SyncKeyLink.parse('scrotify-sync://${key.substring(0, 20)}'), isNull);
-      expect(SyncKeyLink.parse('scrotify-sync://$key?x=1'), isNull);
+          SyncKeyLink.parse('crotowave-sync://${key.substring(0, 20)}'), isNull);
+      expect(SyncKeyLink.parse('crotowave-sync://$key?x=1'), isNull);
       expect(SyncKeyLink.parse('scrotify-sync://$key$key'), isNull);
     });
   });
 
   test('isSyncLink distingue el QR de sincronización del de emparejamiento',
       () {
-    expect(SyncKeyLink.isSyncLink('scrotify-sync://algo'), isTrue);
+    expect(SyncKeyLink.isSyncLink('crotowave-sync://algo'), isTrue);
+    expect(SyncKeyLink.isSyncLink('crotowave://pair?x=1'), isFalse);
     expect(SyncKeyLink.isSyncLink('scrotify://pair?x=1'), isFalse);
   });
 }

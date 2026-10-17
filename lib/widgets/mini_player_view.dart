@@ -36,7 +36,7 @@ class MiniPlayerView extends StatelessWidget {
           final track = player.currentTrack;
           final liked = track != null && nav.isStarred(track.id);
           final details = track == null
-              ? 'Elegí una canción en Scrotify'
+              ? 'Elegí una canción en CrotoWave'
               : [track.artist, track.album]
                   .where((text) => text.trim().isNotEmpty)
                   .join(' / ');

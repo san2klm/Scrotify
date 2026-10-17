@@ -1,13 +1,13 @@
-# Scrotify — Ecualizador de Tres Niveles y Modos de Alta Fidelidad
+# CrotoWave — Ecualizador de Tres Niveles y Modos de Alta Fidelidad
 
 > **Documento Técnico de Referencia**  
-> Proyecto: Scrotify (Cliente Flutter para Navidrome / Subsonic)  
+> Proyecto: CrotoWave (Cliente Flutter para Navidrome / Subsonic)  
 > Componentes: `EqualizerService` v2, backends de EQ por plataforma, `HifiPlanner`  
 > Fecha de actualización: 2026-10-07  
 
 ---
 
-## 0. Estado de la integración en Scrotify (2026-10-07)
+## 0. Estado de la integración en CrotoWave (2026-10-07)
 
 Lo que difiere del paquete original `Eculiza/scrotify_eq`:
 
@@ -15,7 +15,7 @@ Lo que difiere del paquete original `Eculiza/scrotify_eq`:
   * Android: `AndroidEqSetup.create()` crea los reproductores A/B con su `AndroidEqualizer`. `AndroidEqBackend` aplica siempre el último estado cuando el motor está listo (`parameters` solo se resuelve al cargar la primera pista).
   * Escritorio: `createDesktopEqBackend()` fija `af` en todos los reproductores mpv.
   * Hi-Fi: `HifiCoordinator` calcula el `HifiPlan` y lo reparte a `PlayerController.applyHifi`, al EQ y a mpv.
-* **`just_audio_media_kit` parcheado** en `third_party/just_audio_media_kit` (ver `SCROTIFY_PATCH.md`): el `Player` de mpv era privado. Además `JustAudioMediaKit.pitch = false`, porque su modo de tono instala un `af` propio (`scaletempo`) que pisaba el del ecualizador; mpv sigue conservando el tono al cambiar la velocidad.
+* **`just_audio_media_kit` parcheado** en `third_party/just_audio_media_kit` (ver `CROTOWAVE_PATCH.md`): el `Player` de mpv era privado. Además `JustAudioMediaKit.pitch = false`, porque su modo de tono instala un `af` propio (`scaletempo`) que pisaba el del ecualizador; mpv sigue conservando el tono al cambiar la velocidad.
 * **Modo Estándar = comportamiento anterior.** No cambia el origen del stream ni toca mpv. Alta fidelidad y Bit-perfect piden `format=raw` solo para **reproducción** (`NavidromeService.getPlaybackStreamUrl`); las descargas no cambian.
 * **Bit-perfect:** volumen digital fijo al 100 %, sin EQ, ReplayGain ni crossfade. En Android 14+ con DAC USB se pide el mezclador bit-perfect por pista (`HifiAudioPlugin.kt`, con `samplingRate`/`bitDepth` que ahora lee `Track`).
 * **No incluido:** el plugin de iOS (`HifiAudioPlugin.swift`; el proyecto no tiene carpeta `ios/`), la opción de motor mpv en móvil, y las propiedades de inicio de mpv (`ao`), que requerirían recrear el reproductor.
@@ -133,7 +133,7 @@ AVPlayer no permite insertar DSP propio. En lugar de simular un EQ que no hace n
 | :--- | :--- | :--- |
 | **Windows** | mpv + SoXr, frecuencia nativa | `ao=wasapi`, `audio-exclusive=yes` (WASAPI exclusivo) |
 | **macOS** | mpv + SoXr | `ao=coreaudio`, hog mode, `coreaudio-change-physical-format=yes` (el DAC cambia a 44.1/96/192 kHz por pista) |
-| **Linux** | mpv + SoXr | Sin procesado de Scrotify, usando la salida del sistema sin exclusividad. Bluetooth/PipeWire compartido no garantiza bit-perfect real. Para bit-perfect real, en Ajustes > Fidelidad se puede elegir una salida ALSA `hw:` directa (tu DAC). |
+| **Linux** | mpv + SoXr | Sin procesado de CrotoWave, usando la salida del sistema sin exclusividad. Bluetooth/PipeWire compartido no garantiza bit-perfect real. Para bit-perfect real, en Ajustes > Fidelidad se puede elegir una salida ALSA `hw:` directa (tu DAC). |
 | **Android** | Stream original; el sistema mezcla a 48 kHz | Android 14+ con DAC USB: `AudioManager.setPreferredMixerAttributes` con `MIXER_BEHAVIOR_BIT_PERFECT` (`HifiAudioPlugin.kt`). Bluetooth y parlante interno no pueden ser bit-perfect. |
 | **iOS** | `AVAudioSession.setPreferredSampleRate` igual a la pista (`HifiAudioPlugin.swift`) | Igual + sin procesamiento. iOS no ofrece modo exclusivo. |
 
@@ -149,7 +149,7 @@ Cada plan incluye `notes` que la pantalla de Ajustes muestra tal cual. Ejemplos:
 
 * **Crossfade A/B:** el EQ se aplica a ambos reproductores; en Bit-perfect el crossfade se desactiva (mezclar dos pistas ya no es bit-perfect).
 * **ReplayGain:** se suma al preamp del EQ en el mismo nodo `volume` (mpv) para un único cálculo de headroom. En Bit-perfect se desactiva.
-* **Scrotify Jam:** el EQ es **local de cada dispositivo** y no se sincroniza. En escucha sincronizada el limitador añade ~5 ms de latencia, muy por debajo del umbral de deriva de 450 ms.
+* **CrotoLink:** el EQ es **local de cada dispositivo** y no se sincroniza. En escucha sincronizada el limitador añade ~5 ms de latencia, muy por debajo del umbral de deriva de 450 ms.
 * **Karaoke:** sus filtros se concatenan vía `MpvEqBackend.extraFilters`.
 
 ---
@@ -277,4 +277,4 @@ hace falta recrear el reproductor) y se guarda en `settings.json`
   lo avisa; al reconectarlo basta con «Buscar salidas de nuevo» o reabrir.
 - Al salir de Bit-perfect se restaura `audio-device=auto`.
 - Con una salida `hw:` el resto de aplicaciones no puede usar ese dispositivo
-  mientras Scrotify reproduce.
+  mientras CrotoWave reproduce.

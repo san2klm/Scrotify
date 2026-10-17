@@ -95,7 +95,7 @@ mixin _JamHostSession on _JamBase {
     _onPlayerChangedAsHost();
     _syncHostState();
 
-    // Publicar sala en el servidor WebSocket central (jam.templo.cloud)
+    // Publicar sala en el servidor WebSocket central (el configurado en Ajustes)
     await _createRemoteRoom();
 
     _publishToNavidromeIfPublic();

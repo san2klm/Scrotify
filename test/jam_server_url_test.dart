@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:navidrome_client/models/jam_models.dart';
+import 'package:navidrome_client/services/remote_jam_service.dart';
 
 void main() {
   inviteTests();
@@ -44,9 +45,20 @@ void main() {
       expect(JamServerEndpoint.parse('wss://').isValid, isFalse);
     });
 
-    test('default endpoint is valid', () {
-      expect(JamServerEndpoint.parse(kDefaultRemoteJamEndpoint).url,
-          kDefaultRemoteJamEndpoint);
+    test('no hay servidor por defecto; el ejemplo de Ajustes es válido', () {
+      expect(kDefaultRemoteJamEndpoint, isEmpty);
+      expect(JamServerEndpoint.parse(kDefaultRemoteJamEndpoint).isValid, isFalse);
+      expect(JamServerEndpoint.parse(kExampleRemoteJamEndpoint).isValid, isTrue);
+    });
+
+    test('sin servidor, crear o unirse a una sala explica qué falta', () async {
+      final remote = RemoteJamService();
+      expect(
+          await remote.createRoom(
+              pin: 'ABC234', hostName: 'Ana', initialState: const {}),
+          isFalse);
+      expect(remote.lastError, kNoJamServerMessage);
+      expect(await remote.checkRoom('ABC234'), isNull);
     });
   });
 }
@@ -54,9 +66,13 @@ void main() {
 void inviteTests() {
   group('JamInviteLink', () {
     test('custom scheme with server', () {
-      final l = JamInviteLink.parse('scrotify://join?code=abc-234&server=jam.example.org')!;
+      final l = JamInviteLink.parse('crotowave://join?code=abc-234&server=jam.example.org')!;
       expect(l.code, 'ABC234');
       expect(l.endpoint, 'wss://jam.example.org/');
+    });
+    test('legacy scrotify:// scheme still works', () {
+      final l = JamInviteLink.parse('scrotify://join?code=abc-234&server=jam.example.org')!;
+      expect(l.code, 'ABC234');
     });
     test('https landing link', () {
       final l = JamInviteLink.parse('https://jam.example.org/j/ABC234')!;

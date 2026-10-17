@@ -31,7 +31,7 @@ void main() {
   LocalMusicService newMusic(OfflineCacheService cache) =>
       LocalMusicService(cache,
           stateFile: File(p.join(temp.path, 'estado.json')),
-          defaultRoot: Directory(p.join(temp.path, 'Música', 'Scrotify')));
+          defaultRoot: Directory(p.join(temp.path, 'Música', 'CrotoWave')));
 
   OfflineDownloadManager newManager(
           OfflineCacheService cache, LocalMusicService music) =>

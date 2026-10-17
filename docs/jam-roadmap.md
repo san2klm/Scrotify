@@ -1,7 +1,7 @@
-# JAM-ROADMAP — Plan de implementación autónoma para Scrotify Jam
+# JAM-ROADMAP — Plan de implementación autónoma para CrotoLink
 
-> Archivo de instrucciones para Claude (Claude Code) trabajando en el repo de Scrotify.
-> Léelo completo antes de tocar código. Referencias: `SCROTIFY.md` y `JAM.md` (arquitectura actual).
+> Archivo de instrucciones para Claude (Claude Code) trabajando en el repo de CrotoWave.
+> Léelo completo antes de tocar código. Referencias: `CROTOWAVE.md` y `JAM.md` (arquitectura actual).
 > Idioma de código/commits: inglés. Comentarios de UI/strings: español (preparar para localización).
 
 ---
@@ -16,9 +16,9 @@
    - En `jam-server/`: `npm install && node --test test/server.test.js`.
 4. **Tests primero** para lógica pura (orden de cola, votos, round-robin, offset de reloj, matching).
 5. **No romper compatibilidad:** los clientes viejos deben seguir uniéndose a salas nuevas (campos nuevos opcionales, `op` desconocidos se ignoran). Subir `protocolVersion` y negociar en `join`.
-6. **Principios innegociables (de SCROTIFY.md / JAM.md):**
+6. **Principios innegociables (de CROTOWAVE.md / JAM.md):**
    - Cero telemetría. El servidor no guarda qué escucha la gente.
-   - **Nunca** retransmitir audio por Jam (el proxy de stream, si se hace, es módulo opt-in aparte, Fase 8).
+   - **Nunca** retransmitir audio por CrotoLink (el proxy de stream, si se hace, es módulo opt-in aparte, Fase 8).
    - **Nunca** enviar credenciales Subsonic (`u`, `t`, `s`, `p`, `apiKey`) por la red; usar `sanitizeArtUrl`.
    - Mensajes WS ≤ 16 KB (`fitStateToMessageLimit`).
 7. **Open source:** no hardcodear dominios/secretos. `jam.templo.cloud` pasa a ser solo el *valor por defecto* de un ajuste.
@@ -52,7 +52,7 @@ Reglas de despliegue:
 
 ---
 
-## 2. Fase 1 — Ajuste "Servidor Jam" + esqueleto del servidor administrable
+## 2. Fase 1 — Ajuste "Servidor CrotoLink" + esqueleto del servidor administrable
 
 **Objetivo:** que cualquiera pueda autohostear su relay y que el servidor sea configurable sin tocar código.
 
@@ -122,18 +122,18 @@ Reglas de despliegue:
 
 ---
 
-## 4. Fase 3 — Historial de Jam + guardar como playlist
+## 4. Fase 3 — Historial de CrotoLink + guardar como playlist
 
 **Objetivo:** lista de lo que sonó, quién lo añadió, y botón para guardarlo. Vive en el **cliente del host** (RAM); el servidor no guarda nada.
 
 - `JamHistoryEntry { track, addedBy, playedAt }` en `JamController`. Se registra al cambiar de pista (solo si sonó ≥ 30 s o ≥ 50 %, mismo criterio que stats).
 - Opcional: el host puede compartir el historial con invitados (`history_snapshot`), por defecto solo lo ve el host y se envía al cerrar la sesión.
-- UI: pestaña "Historial" en la vista de sesión activa + botón **"Guardar como playlist"** → `createPlaylist.view` (nombre sugerido: "Jam {fecha}"). Opción de filtrar por participante.
+- UI: pestaña "Historial" en la vista de sesión activa + botón **"Guardar como playlist"** → `createPlaylist.view` (nombre sugerido: "CrotoLink {fecha}"). Opción de filtrar por participante.
 - Resumen de fin de sesión (mini-Wrapped): quién añadió más, pista más votada, duración total. Reutilizar `ListeningStatsService` si encaja.
 - Los invitados pueden "Guardar mis aportaciones" en su propio servidor Navidrome (matching por Fase 6 si el servidor difiere).
 
 **Aceptación:**
-- [ ] Tras una Jam de prueba, la playlist se crea en Navidrome con las pistas en orden.
+- [ ] Tras un CrotoLink de prueba, la playlist se crea en Navidrome con las pistas en orden.
 - [ ] Pistas saltadas antes del umbral no aparecen.
 - [ ] Tests del registro de historial.
 
@@ -216,8 +216,8 @@ Reglas de despliegue:
 - Persistir solo configuración de la sala (PIN, nombre, permisos, modo de cola) — **no** historial de escucha.
 
 ### 7.3 Enlace web compartible
-- Servidor: `GET /j/:code` → landing HTML mínima (si `webLinkEnabled`) que intenta abrir `scrotify://jam?...` y muestra instrucciones de instalación. Servir `/.well-known/assetlinks.json` y `apple-app-site-association` configurables desde `/admin`.
-- Cliente: manejar App Links/Universal Links y el esquema `scrotify://`. Botón "Compartir enlace" en la Jam activa (usa `publicUrl` del servidor configurado).
+- Servidor: `GET /j/:code` → landing HTML mínima (si `webLinkEnabled`) que intenta abrir `crotowave://jam?...` y muestra instrucciones de instalación. Servir `/.well-known/assetlinks.json` y `apple-app-site-association` configurables desde `/admin`.
+- Cliente: manejar App Links/Universal Links y el esquema `crotowave://`. Botón "Compartir enlace" en el CrotoLink activo (usa `publicUrl` del servidor configurado).
 
 **Aceptación:**
 - [ ] Matar la app del host: la sala sobrevive y otro participante puede continuar (nube).
@@ -232,13 +232,13 @@ Hacer solo si las fases anteriores están estables. Cada una detrás de un flag 
 
 - **Reacciones efímeras** (emoji flotante): `reaction { emoji }`, sin estado, rate limit propio.
 - **Chat ligero:** `chat_message { text }` (máx. 280 car., sin historial persistente). El admin puede desactivarlo globalmente; el host por sala.
-- **Notificación persistente de Jam** en Android con estado de sala y controles (`audio_service`).
+- **Notificación persistente de CrotoLink** en Android con estado de sala y controles (`audio_service`).
 - **Cast de letras:** el host proyecta la letra sincronizada (Karaoke) en otra pantalla/tablet.
 - **Proxy de stream opt-in (módulo aparte del Docker):** enlaces temporales firmados para que invitados sin cuenta escuchen. **Aviso explícito en UI y docs** de que rompe el principio de "sin retransmisión de audio". Desactivado por defecto.
 
 ---
 
-## 10. Backlog de la app (fuera de Jam, 100 % cliente)
+## 10. Backlog de la app (fuera de CrotoLink, 100 % cliente)
 
 Orden sugerido, cada ítem en su propia rama/PR:
 
@@ -259,7 +259,7 @@ Orden sugerido, cada ítem en su propia rama/PR:
 
 ```yaml
 services:
-  scrotify-jam:
+  crotolink:
     build: .
     restart: unless-stopped
     environment:
@@ -278,7 +278,7 @@ services:
       retries: 3
 ```
 
-Ingress de Cloudflare Tunnel sin cambios (`jam.templo.cloud → http://scrotify-jam:8080`). `/admin` queda expuesto por el mismo hostname: **protegerlo además con Cloudflare Access** o restringir por IP/ruta (recomendado) y documentarlo en el README.
+Ingress de Cloudflare Tunnel sin cambios (`jam.templo.cloud → http://crotolink:8080`). `/admin` queda expuesto por el mismo hostname: **protegerlo además con Cloudflare Access** o restringir por IP/ruta (recomendado) y documentarlo en el README.
 
 ---
 
@@ -286,7 +286,7 @@ Ingress de Cloudflare Tunnel sin cambios (`jam.templo.cloud → http://scrotify-
 
 Al cerrar cada fase, actualizar en el mismo PR:
 - `JAM.md` (protocolo: nuevos `op`, campos de `JamSessionState`, tabla de referencia rápida).
-- `SCROTIFY.md` si cambia la arquitectura general.
+- `CROTOWAVE.md` si cambia la arquitectura general.
 - `jam-server/README.md` (variables de entorno, panel `/admin`, backups de `/data`, reverse proxy).
 - `CHANGELOG.md` (una línea por cambio visible).
 

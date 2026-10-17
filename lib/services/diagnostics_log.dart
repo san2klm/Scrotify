@@ -93,7 +93,7 @@ final RegExp _queryParam = RegExp(
   caseSensitive: false,
 );
 final RegExp _userInfo = RegExp(r'(://)[^/\s@]+@');
-final RegExp _syncLink = RegExp(r'(scrotify-sync://)\S+', caseSensitive: false);
+final RegExp _syncLink = RegExp(r'((?:crotowave|scrotify)-sync://)\S+', caseSensitive: false);
 final RegExp _authHeader =
     RegExp(r'(authorization\s*[:=]\s*)\S+(\s+\S+)?', caseSensitive: false);
 final RegExp _jsonSecret = RegExp(

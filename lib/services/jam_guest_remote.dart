@@ -264,7 +264,7 @@ mixin _JamGuestRemote on _JamBase {
     // Caída silenciosa del relé: avisar y dejar que el servicio reconecte.
     _remoteService.onConnectionLost = () {
       lastActionError =
-          'Se perdió la conexión con el servidor Jam central. Reconectando…';
+          'Se perdió la conexión con el servidor CrotoLink central. Reconectando…';
       notifyListeners();
     };
     _remoteService.onReconnecting = (reconnecting) {

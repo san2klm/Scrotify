@@ -12,6 +12,18 @@ val keystoreProps = Properties().apply {
     val f = rootProject.file("key.properties")
     if (f.exists()) f.inputStream().use { load(it) }
 }
+// Solo para tool/migrate_android_signing.sh (ver docs/SIGNING.md), que usa
+// builds debug porque `run-as` solo funciona con apps depurables:
+// - legacyAppId: id de la instalación vieja, así se actualiza encima sin
+//   perder datos y se copian. legacyKeyProperties: el key.properties de la
+//   clave con que se firmó (sin él, la clave debug).
+// - signingMigration: el build debug se firma con la clave propia, así el
+//   release normal se instala después encima conservando los datos.
+val legacyAppId = project.findProperty("legacyAppId") as String?
+val legacyKeyProps = (project.findProperty("legacyKeyProperties") as String?)?.let { path ->
+    Properties().apply { file(path).inputStream().use { load(it) } }
+}
+val signingMigration = project.hasProperty("signingMigration")
 // Un release sin clave propia solo se permite si se pide explícitamente
 // (`ORG_GRADLE_PROJECT_allowDebugSigning=true` o `-PallowDebugSigning`); así
 // nadie distribuye por error un APK firmado con la clave debug.
@@ -34,7 +46,7 @@ gradle.taskGraph.whenReady {
 }
 if (!keystoreProps.containsKey("storeFile")) {
     logger.warn(
-        "AVISO Scrotify: no hay android/key.properties; los builds release se firman " +
+        "AVISO CrotoWave: no hay android/key.properties; los builds release se firman " +
             "con la clave DEBUG. Sirve para instalar por adb, no para distribuir."
     )
 }
@@ -50,8 +62,10 @@ android {
     }
 
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId = "com.example.navidrome_client"
+        // Definitivo: no cambiarlo nunca más (Android lo trata como otra app y
+        // Play no deja publicar con otro). Antes: com.example.navidrome_client
+        // (plantilla) y cloud.templo.scrotify (hasta el cambio de nombre).
+        applicationId = legacyAppId ?: "cloud.templo.crotowave"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion
@@ -70,11 +84,11 @@ android {
     productFlavors {
         create("phone") {
             dimension = "device"
-            manifestPlaceholders["appLabel"] = "Scrotify"
+            manifestPlaceholders["appLabel"] = "CrotoWave"
         }
         create("tv") {
             dimension = "device"
-            manifestPlaceholders["appLabel"] = "Scrotify TV"
+            manifestPlaceholders["appLabel"] = "CrotoWave TV"
         }
     }
 
@@ -87,6 +101,14 @@ android {
                 keyPassword = keystoreProps["keyPassword"] as String
             }
         }
+        if (legacyKeyProps != null) {
+            create("legacy") {
+                storeFile = file(legacyKeyProps["storeFile"] as String)
+                storePassword = legacyKeyProps["storePassword"] as String
+                keyAlias = legacyKeyProps["keyAlias"] as String
+                keyPassword = legacyKeyProps["keyPassword"] as String
+            }
+        }
     }
 
     buildTypes {
@@ -94,6 +116,13 @@ android {
             signingConfig =
                 if (keystoreProps.containsKey("storeFile")) signingConfigs.getByName("release")
                 else signingConfigs.getByName("debug")
+        }
+        debug {
+            if (legacyKeyProps != null) {
+                signingConfig = signingConfigs.getByName("legacy")
+            } else if (signingMigration && keystoreProps.containsKey("storeFile")) {
+                signingConfig = signingConfigs.getByName("release")
+            }
         }
     }
 }

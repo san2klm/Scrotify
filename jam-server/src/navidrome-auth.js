@@ -28,7 +28,7 @@ export function createNavidromeAuth({ getBaseUrl, fetchImpl = fetch, now = () =>
     if (hit && hit > now()) return true;
     const url = new URL('/rest/ping.view', base);
     url.search = new URLSearchParams({
-      u: user.trim(), t: token, s: salt, v: '1.16.1', c: 'scrotify-jam', f: 'json',
+      u: user.trim(), t: token, s: salt, v: '1.16.1', c: 'crotolink', f: 'json',
     }).toString();
     const response = await fetchImpl(url, { signal: AbortSignal.timeout(timeoutMs), redirect: 'error' });
     if (!response.ok) throw new Error(`navidrome-${response.status}`);

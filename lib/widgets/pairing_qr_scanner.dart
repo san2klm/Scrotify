@@ -4,14 +4,16 @@ part of 'pairing_panel.dart';
 class QrScannerSheet extends StatefulWidget {
   const QrScannerSheet({
     super.key,
-    this.prefix = 'scrotify://pair',
+    this.accept = _isPairingQr,
     this.hint =
         'Apunta con la cámara al código QR que aparece en la pantalla de tu PC.',
   });
 
-  /// Solo se aceptan códigos que empiecen por este texto.
-  final String prefix;
+  /// Solo se aceptan los códigos para los que devuelve `true`.
+  final bool Function(String value) accept;
   final String hint;
+
+  static bool _isPairingQr(String value) => hasAppLinkPrefix(value, 'pair');
 
   @override
   State<QrScannerSheet> createState() => _QrScannerSheetState();
@@ -84,7 +86,7 @@ class _QrScannerSheetState extends State<QrScannerSheet>
     if (_handled || !mounted) return;
     for (final barcode in capture.barcodes) {
       final value = barcode.rawValue;
-      if (value != null && value.startsWith(widget.prefix)) {
+      if (value != null && widget.accept(value)) {
         _handled = true;
         unawaited(_controller.stop());
         Navigator.of(context).pop(value);

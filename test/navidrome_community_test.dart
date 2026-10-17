@@ -64,8 +64,8 @@ void main() {
     });
   });
 
-  group('Server Jam Announcements', () {
-    test('parses Jam announcement from chat message payload', () {
+  group('Server CrotoLink Announcements', () {
+    test('parses CrotoLink announcement from chat message payload', () {
       final now = DateTime.now().millisecondsSinceEpoch;
       final payload = jsonEncode({
         'tag': 'SCROTIFY_JAM',
@@ -74,7 +74,7 @@ void main() {
         'host': '192.168.1.150',
         'port': 47623,
         'hostName': 'David',
-        'title': 'Jam de David en el Servidor',
+        'title': 'CrotoLink de David en el Servidor',
         'trackTitle': 'Bohemian Rhapsody',
         'trackArtist': 'Queen',
         'albumArtUrl': 'https://example.com/queen.jpg',

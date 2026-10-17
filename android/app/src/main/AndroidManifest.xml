@@ -52,12 +52,14 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
 
-            <!-- Enlaces de invitación Jam: scrotify://join?code=ABC234&server=host -->
+            <!-- Enlaces de invitación CrotoLink: crotowave://join?code=ABC234&server=host
+                 (scrotify:// es el esquema anterior, se sigue aceptando) -->
             <meta-data android:name="flutter_deeplinking_enabled" android:value="false" />
             <intent-filter>
                 <action android:name="android.intent.action.VIEW"/>
                 <category android:name="android.intent.category.DEFAULT"/>
                 <category android:name="android.intent.category.BROWSABLE"/>
+                <data android:scheme="crotowave" android:host="join"/>
                 <data android:scheme="scrotify" android:host="join"/>
             </intent-filter>
             <!-- App Links https://<tu-relay>/j/<PIN>: descomenta y pon tu dominio
@@ -113,7 +115,7 @@
         <!-- Widgets de pantalla de inicio (carátula + controles): tres diseños. -->
         <receiver
             android:name=".ScrotifyWidgetProvider"
-            android:label="Scrotify · Personalizable"
+            android:label="CrotoWave · Personalizable"
             android:exported="false">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
@@ -124,7 +126,7 @@
         </receiver>
         <receiver
             android:name=".ScrotifyCompactWidgetProvider"
-            android:label="Scrotify · Compacto"
+            android:label="CrotoWave · Compacto"
             android:exported="false">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
@@ -135,7 +137,7 @@
         </receiver>
         <receiver
             android:name=".ScrotifyCoverWidgetProvider"
-            android:label="Scrotify · Carátula"
+            android:label="CrotoWave · Carátula"
             android:exported="false">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />

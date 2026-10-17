@@ -11,7 +11,7 @@ import 'account_menu_button.dart';
 import 'server_activity_panel.dart';
 import 'search_explore_field.dart';
 
-/// Barra superior persistente y global de Scrotify.
+/// Barra superior persistente y global de CrotoWave.
 /// Se muestra tanto en la pantalla de inicio como en las pantallas de detalle
 /// (playlists, favoritos, álbumes, etc.), adaptándose automáticamente a escritorio
 /// y móvil.
@@ -176,7 +176,7 @@ class _GlobalTopBarState extends State<GlobalTopBar> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
-                    widget.title ?? 'Scrotify',
+                    widget.title ?? 'CrotoWave',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(

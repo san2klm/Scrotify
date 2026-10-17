@@ -94,7 +94,7 @@ class JamQueuePanel extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      inJam ? 'Cola Colaborativa Jam' : 'Cola de Reproducción',
+                      inJam ? 'Cola Colaborativa CrotoLink' : 'Cola de Reproducción',
                       style: TextStyle(
                         color: context.textPrimary,
                         fontSize: 16,

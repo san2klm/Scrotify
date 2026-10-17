@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import '../models/jam_capabilities.dart';
 import '../models/jam_models.dart';
+import '../utils/app_links.dart';
 import 'jam_guest_service.dart';
 import 'jam_clock.dart';
 import 'jam_history.dart';
@@ -271,7 +272,7 @@ class JamController extends _JamBase
     final url = _settings?.jamServerUrl;
     if (url != null) {
       final ep = JamServerEndpoint.parse(url);
-      if (ep.isValid) _navidrome.lobbyBaseUrl = ep.httpBase;
+      _navidrome.lobbyBaseUrl = ep.isValid ? ep.httpBase : null;
     }
     if (url != null && url != _remoteService.endpoint) {
       _remoteService.setEndpoint(url);
@@ -329,7 +330,7 @@ class JamController extends _JamBase
     if (pin != null && _remoteService.isConnected && ep.isValid) {
       final server = ep.port == 443 ? ep.host : '${ep.host}:${ep.port}';
       return Uri(
-        scheme: 'scrotify',
+        scheme: kAppLinkScheme,
         host: 'join',
         queryParameters: {'code': pin, 'server': server},
       ).toString();
@@ -387,15 +388,15 @@ class JamController extends _JamBase
 
   /// Crea en Navidrome una playlist con lo que añadió este invitado.
   Future<int> saveMyContributionsAsPlaylist() =>
-      _savePlaylist(myContributions, 'Mis aportaciones a la Jam');
+      _savePlaylist(myContributions, 'Mis aportaciones al CrotoLink');
 
-  /// Crea en Navidrome una playlist "Jam {fecha}" con el historial (opcionalmente
+  /// Crea en Navidrome una playlist "CrotoLink {fecha}" con el historial (opcionalmente
   /// solo las pistas de [participantId]). Devuelve cuántas pistas guardó.
   Future<int> saveHistoryAsPlaylist({String? participantId}) {
     final entries = participantId == null
         ? _history.entries
         : _history.byParticipant(participantId);
-    return _savePlaylist(entries, 'Jam');
+    return _savePlaylist(entries, 'CrotoLink');
   }
 
   Future<int> _savePlaylist(
@@ -469,7 +470,7 @@ class JamController extends _JamBase
           'playNext': playNext,
         });
       } else {
-        _reportActionError('No hay conexión activa con el anfitrión Jam.');
+        _reportActionError('No hay conexión activa con el anfitrión CrotoLink.');
       }
     }
   }
@@ -488,7 +489,7 @@ class JamController extends _JamBase
           'queueItemId': queueItemId,
         });
       } else {
-        _reportActionError('No hay conexión activa con el anfitrión Jam.');
+        _reportActionError('No hay conexión activa con el anfitrión CrotoLink.');
       }
     }
   }
@@ -508,7 +509,7 @@ class JamController extends _JamBase
           'newIndex': newIndex,
         });
       } else {
-        _reportActionError('No hay conexión activa con el anfitrión Jam.');
+        _reportActionError('No hay conexión activa con el anfitrión CrotoLink.');
       }
     }
   }
@@ -531,7 +532,7 @@ class JamController extends _JamBase
           'position': position?.inMilliseconds,
         });
       } else {
-        _reportActionError('No hay conexión activa con el anfitrión Jam.');
+        _reportActionError('No hay conexión activa con el anfitrión CrotoLink.');
       }
     }
   }

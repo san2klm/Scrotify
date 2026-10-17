@@ -1,13 +1,14 @@
 services:
-  scrotify-jam:
+  crotolink:
     build: .
-    container_name: scrotify-jam
+    container_name: crotolink
     restart: unless-stopped
     environment:
       PORT: 8080
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}   # solo para el primer arranque; luego se guarda el hash
       PUBLIC_URL: ${PUBLIC_URL:-}
       TRUST_PROXY: ${TRUST_PROXY:-none}     # none | cloudflare | forwarded
+      SOURCE_URL: ${SOURCE_URL:-}           # código de TU versión si la modificás (AGPL §13)
     volumes:
       - ./data:/data
     ports:
