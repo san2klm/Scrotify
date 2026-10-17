@@ -15,7 +15,13 @@ skip+='|libGL|libGLX|libGLdispatch|libEGL|libGLESv2|libOpenGL|libdrm.*|libgbm'
 skip+='|libX.*|libxcb.*|libxkbcommon.*|libwayland.*'
 skip+='|libgtk-3|libgdk-3|libgdk_pixbuf-2.0|libpango.*|libcairo.*|libatk.*|libatspi|libglib-2.0|libgobject-2.0'
 skip+='|libgio-2.0|libgmodule-2.0|libepoxy|libcloudproviders|libdbus-1|libsystemd|libmount|libblkid|libselinux'
-skip+='|libpipewire-0.3|libspa.*|libpulse.*|libasound|libjvm|libglycin.*)\.so'
+skip+='|libpipewire-0.3|libspa.*|libpulse.*|libasound|libjvm|libglycin.*'
+# Todo lo que la pila GTK/Pango del sistema enlaza (texto, imágenes, regex) y el
+# runtime de C++: si viaja una copia más vieja (Debian 12) tapa a la del sistema y
+# Pango/GLib fallan con «undefined symbol» en distros nuevas (Arch, Fedora…).
+skip+='|libharfbuzz.*|libfreetype|libfontconfig|libfribidi|libpcre2.*|libgraphite2'
+skip+='|libdatrie|libthai|libpixman.*|libpng16|libtiff|libexpat|libffi'
+skip+='|libstdc\+\+|libgcc_s|libssl|libcrypto)\.so'
 # libmpv enlaza directo libjack, libsndio, librsvg, libvulkan, libva, libdecor…:
 # si faltan en la PC destino, libmpv no carga. Por eso viajan dentro.
 
