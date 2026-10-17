@@ -86,3 +86,11 @@ test('DELETE borra un documento y la bóveda entera', async () => {
   await call(server, 'DELETE', vault);
   assert.equal((await call(server, 'GET', vault)).status, 404);
 });
+
+test('sync: el límite de peticiones por IP es configurable', async () => {
+  const server = await startServer({ syncRateMax: 10 });
+  const statuses = [];
+  for (let i = 0; i < 12; i += 1) statuses.push((await call(server, 'GET', vault)).status);
+  assert.equal(statuses.slice(0, 10).includes(429), false);
+  assert.equal(statuses[11], 429);
+});

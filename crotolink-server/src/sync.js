@@ -52,7 +52,7 @@ export function createSyncHandler({ store, limits, guard, clientIp, trustProxy }
     if (!limits.syncEnabled) return reply(403, { error: 'La sincronización está desactivada en este servidor.' });
     const ip = clientIp(request, trustProxy);
     if (store.isBlockedIp(ip)) return reply(403, { error: 'Acceso denegado.' });
-    const gate = guard.attempt(`sync:${ip}`, { max: 120, windowMs: 60_000 });
+    const gate = guard.attempt(`sync:${ip}`, { max: limits.syncRateMax, windowMs: 60_000 });
     if (!gate.ok) return reply(429, { error: 'Demasiadas peticiones.' });
 
     const path = request.url.split('?')[0];
