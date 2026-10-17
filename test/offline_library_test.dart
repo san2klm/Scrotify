@@ -44,6 +44,7 @@ void main() {
   late OfflineCacheService cache;
   late NavidromeService nav;
   late bool network;
+  String? failPath; // petición concreta que falla aunque el servidor responda
   late int requests;
   const url = 'https://musica.test';
   const user = 'ana';
@@ -89,6 +90,9 @@ void main() {
     final client = MockClient((request) async {
       requests++;
       if (!network) throw const SocketException('Sin red');
+      if (request.url.path == failPath) {
+        throw const SocketException('Conexión cortada');
+      }
       final data = <String, dynamic>{'status': 'ok'};
       switch (request.url.path) {
         case '/rest/getPlaylists.view':
@@ -156,6 +160,7 @@ void main() {
     temp =
         await Directory.systemTemp.createTemp('crotowave-biblioteca-offline-');
     network = true;
+    failPath = null;
     requests = 0;
     cache = newCache();
     music = newMusic();
@@ -192,6 +197,17 @@ void main() {
     expect((await nav.getStarred()).map((track) => track.id), ['1']);
     expect((await nav.getTracks()).map((track) => track.id), ['1', '2']);
     expect((await nav.getRecentlyAddedTracks()).length, 2);
+  });
+
+  test('Una petición cortada con el servidor vivo no deja la app sin conexión',
+      () async {
+    await seed(songs[0]);
+    await saveOnline();
+    failPath = '/rest/getPlaylists.view';
+    final playlists = await nav.getPlaylists();
+    expect(playlists.single.name, 'Rock'); // sale de lo guardado
+    expect(nav.offlineMode, isFalse);
+    expect(nav.connected, isTrue);
   });
 
   test(

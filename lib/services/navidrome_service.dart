@@ -540,14 +540,18 @@ class NavidromeService extends _NavidromeBase
     _reconnectTimer = null;
   }
 
-  Future<void> _tryAutoReconnect() async {
-    if (!_offlineMode || _url == null || _user == null || _pass == null) {
-      _stopAutoReconnect();
-      return;
-    }
-    if (_autoReconnecting) return;
-    _autoReconnecting = true;
-    final session = currentSessionKey;
+  Future<bool>? _serverProbe;
+
+  /// `true` si el servidor responde a `ping` ahora mismo. Usa un cliente nuevo
+  /// (no las conexiones que pudieron quedar colgadas) y comparte la sonda entre
+  /// llamadas simultáneas.
+  Future<bool> _pingServer() {
+    final running = _serverProbe;
+    if (running != null) return running;
+    return _serverProbe = _pingOnce().whenComplete(() => _serverProbe = null);
+  }
+
+  Future<bool> _pingOnce() async {
     try {
       final salt = _randomSalt();
       final uri = Uri.parse('$_url/rest/ping.view').replace(queryParameters: {
@@ -562,10 +566,25 @@ class NavidromeService extends _NavidromeBase
       try {
         final response =
             await probe.get(uri).timeout(const Duration(seconds: 6));
-        if (response.statusCode != 200) return;
+        return response.statusCode == 200;
       } finally {
         if (_injectedClient == null) probe.close();
       }
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<void> _tryAutoReconnect() async {
+    if (!_offlineMode || _url == null || _user == null || _pass == null) {
+      _stopAutoReconnect();
+      return;
+    }
+    if (_autoReconnecting) return;
+    _autoReconnecting = true;
+    final session = currentSessionKey;
+    try {
+      if (!await _pingServer()) return;
       if (!_offlineMode || currentSessionKey != session) return;
       await reconnect();
       debugPrint('Conexión con el servidor restablecida automáticamente.');
@@ -606,7 +625,13 @@ class NavidromeService extends _NavidromeBase
       data = await fetch().timeout(const Duration(seconds: 8));
     } catch (error) {
       if (currentSessionKey != session) rethrow;
-      if (isNetworkFailure(error)) {
+      // Una petición lenta o cortada no es una caída: solo se pasa a «sin
+      // conexión» si el servidor tampoco responde a un ping. Si no, cada
+      // lentitud puntual tiraba a toda la app y la reconexión recargaba todo.
+      if (isNetworkFailure(error) &&
+          !await _pingServer() &&
+          currentSessionKey == session &&
+          _connected) {
         _connected = false;
         _offlineMode = true;
         _startAutoReconnect();
