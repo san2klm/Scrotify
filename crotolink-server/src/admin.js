@@ -108,7 +108,11 @@ export function createAdmin({ store, adminPassword, getStatus, loginMaxFailures 
         chunks.push(c);
       });
       request.on('end', () => {
-        try { resolve(chunks.length ? JSON.parse(Buffer.concat(chunks).toString()) : {}); }
+        try {
+          const body = chunks.length ? JSON.parse(Buffer.concat(chunks).toString()) : {};
+          // `null`, números o listas no son un cuerpo válido: se tratan como vacío.
+          resolve(body && typeof body === 'object' && !Array.isArray(body) ? body : {});
+        }
         catch { reject(new Error('JSON inválido')); }
       });
       request.on('error', reject);
@@ -155,6 +159,8 @@ export function createAdmin({ store, adminPassword, getStatus, loginMaxFailures 
             return json(response, 429, { error: 'Demasiados intentos. Prueba más tarde.' }), true;
           }
           if (!checkPassword(body.password)) {
+            // Tope de memoria: con muchas IPs distintas se olvida la más antigua.
+            if (failures.size >= 10_000 && !failures.has(clientIp)) failures.delete(failures.keys().next().value);
             failures.set(clientIp, [...recentFailures(clientIp), Date.now()]);
             logs?.push('Intento de login de admin fallido');
             return json(response, 401, { error: 'Credenciales inválidas' }), true;
