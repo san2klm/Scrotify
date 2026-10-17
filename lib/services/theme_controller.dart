@@ -18,9 +18,6 @@ import 'theme_validation.dart';
 ///   Cada zip se valida antes de aceptarse (manifest + CSS seguro).
 /// - Persiste todo en `themes.json` (versión 2, con migración).
 class ThemeController extends ChangeNotifier {
-  /// Ruta de desarrollo que versiones anteriores guardaban como valor por
-  /// defecto; hoy se trata como "sin elegir".
-  static const _legacyThemesDir = '/home/pc/Proyectos/themes/pc-web';
   static const _configVersion = 2;
 
   static Set<String> get fixedIds =>
@@ -140,7 +137,7 @@ class ThemeController extends ChangeNotifier {
 
   void _applyConfig(Map<String, dynamic> data) {
     final dir = data['themesDir'] as String?;
-    _themesDir = dir == null || dir == _legacyThemesDir ? '' : dir;
+    _themesDir = dir ?? '';
     _selectedId = data['selectedId'] as String?;
     _coverAccentEnabled = data['coverAccent'] as bool? ?? false;
   }

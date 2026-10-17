@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:crotowave/models/crotolink_models.dart' show sanitizeArtUrl;
 import 'package:crotowave/services/connect/track_codec.dart';
 import 'package:crotowave/services/crotolink_guest_service.dart';
 import 'package:crotowave/services/navidrome_service.dart';
@@ -28,6 +29,25 @@ void main() {
     expectNoCredentials(
         CrotoLinkGuestService.addToQueueTrackJson(track)['albumArtUrl']
             as String?);
+  });
+
+  test('una carátula guardada sin credenciales se vuelve a firmar al cargar',
+      () {
+    final nav = NavidromeService()
+      ..setConnectedForTesting(
+          url: 'https://musica.example.invalid',
+          username: 'ana',
+          password: 'clave');
+    final stored = sanitizeArtUrl(track.albumArtUrl);
+    expectNoCredentials(stored);
+    final signed = Uri.parse(nav.authorizeCoverArtUrl(stored)!);
+    expect(signed.queryParameters['id'], 'al-1');
+    expect(signed.queryParameters['u'], 'ana');
+    expect(signed.queryParameters['t'], isNotEmpty);
+    // Una URL de otro servidor no recibe nuestras credenciales.
+    const foreign = 'https://otro.example.invalid/rest/getCoverArt.view?id=x';
+    expect(nav.authorizeCoverArtUrl(foreign), foreign);
+    nav.dispose();
   });
 
   test('el codec de Connect no envía u, s ni t', () {

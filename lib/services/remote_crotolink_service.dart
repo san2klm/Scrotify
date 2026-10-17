@@ -252,7 +252,7 @@ class RemoteCrotoLinkService {
               timeoutTimer?.cancel();
               if (!completer.isCompleted) completer.complete(true);
               debugPrint(
-                  'RemoteCrotoLinkService: Sala creada exitosamente en $targetEndpoint con PIN $normalizedPin');
+                  'RemoteCrotoLinkService: Sala creada exitosamente en $targetEndpoint');
               return;
             }
 

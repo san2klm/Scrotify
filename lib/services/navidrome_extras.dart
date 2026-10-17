@@ -45,7 +45,7 @@ mixin _NavidromeExtras on _NavidromeBase {
       's': salt,
       't': token,
       'v': '1.16.1',
-      'c': 'Psysonic',
+      'c': _clientName,
       'f': 'json',
       'id': songId,
     });
@@ -190,7 +190,7 @@ mixin _NavidromeExtras on _NavidromeBase {
         's': salt,
         't': token,
         'v': '1.16.1',
-        'c': 'Psysonic',
+        'c': _clientName,
         'f': 'json',
         'songCount': (limit * 2).toString(),
         'albumCount': '0',
@@ -247,7 +247,7 @@ mixin _NavidromeExtras on _NavidromeBase {
         's': salt,
         't': token,
         'v': '1.16.1',
-        'c': 'Psysonic',
+        'c': _clientName,
         'f': 'json',
       });
 
@@ -308,7 +308,7 @@ mixin _NavidromeExtras on _NavidromeBase {
       's': salt,
       't': token,
       'v': '1.16.1',
-      'c': 'Psysonic',
+      'c': _clientName,
       'f': 'json',
     });
 
@@ -390,7 +390,7 @@ mixin _NavidromeExtras on _NavidromeBase {
       's': salt,
       't': token,
       'v': '1.16.1',
-      'c': 'Psysonic',
+      'c': _clientName,
       'f': 'json',
       if (since != null) 'since': since.toString(),
     };
@@ -426,7 +426,7 @@ mixin _NavidromeExtras on _NavidromeBase {
       's': salt,
       't': token,
       'v': '1.16.1',
-      'c': 'Psysonic',
+      'c': _clientName,
       'f': 'json',
       'message': message.trim(),
     });
@@ -460,7 +460,8 @@ mixin _NavidromeExtras on _NavidromeBase {
         'title': 'CrotoLink de ${session.hostName}',
         'trackTitle': session.currentTrack?.title,
         'trackArtist': session.currentTrack?.artist,
-        'albumArtUrl': session.currentTrack?.albumArtUrl,
+        // Anuncio público: nunca con las credenciales Subsonic del anfitrión.
+        'albumArtUrl': sanitizeArtUrl(session.currentTrack?.albumArtUrl),
         'mode': session.mode.name,
         'participantCount': session.participants.length,
         'isPublic': session.isPublic,

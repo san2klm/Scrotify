@@ -318,7 +318,7 @@ class CrotoLinkHostService extends _CrotoLinkHostBase
     _hostIp = _allLocalIps.isNotEmpty ? _allLocalIps.first : '127.0.0.1';
 
     debugPrint(
-        'CrotoLinkHostService: Server listening on $_hostIp:$_port (code: ${_pinCode?.value}, mode: $_mode)');
+        'CrotoLinkHostService: Server listening on $_hostIp:$_port (mode: $_mode)');
 
     _server!.listen(_handleHttpRequest);
 
@@ -382,7 +382,10 @@ class CrotoLinkHostService extends _CrotoLinkHostBase
     try {
       if (path == '/crotolink/ws') {
         if (WebSocketTransformer.isUpgradeRequest(req)) {
-          final socket = await WebSocketTransformer.upgrade(req);
+          // Sin permessage-deflate: el límite de tamaño se mide después de
+          // descomprimir, y un mensaje pequeño podía inflarse hasta agotar memoria.
+          final socket = await WebSocketTransformer.upgrade(req,
+              compression: CompressionOptions.compressionOff);
           _handleWebSocketClient(
               socket, req.connectionInfo?.remoteAddress.address ?? '?');
         } else {

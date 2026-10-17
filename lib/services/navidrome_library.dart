@@ -117,7 +117,7 @@ mixin _NavidromeLibrary on _NavidromeBase {
       's': salt,
       't': token,
       'v': '1.16.1',
-      'c': 'Psysonic',
+      'c': _clientName,
       'f': 'json',
       'songCount': limit.toString(),
       'songOffset': offset.toString(),
@@ -170,7 +170,7 @@ mixin _NavidromeLibrary on _NavidromeBase {
       's': salt,
       't': token,
       'v': '1.16.1',
-      'c': 'Psysonic',
+      'c': _clientName,
       'f': 'json',
       'id': albumId,
     });
@@ -201,7 +201,7 @@ mixin _NavidromeLibrary on _NavidromeBase {
       's': salt,
       't': token,
       'v': '1.16.1',
-      'c': 'Psysonic',
+      'c': _clientName,
       'f': 'json',
       'type': type,
       'size': limit.toString(),
@@ -234,7 +234,7 @@ mixin _NavidromeLibrary on _NavidromeBase {
       's': salt,
       't': token,
       'v': '1.16.1',
-      'c': 'Psysonic',
+      'c': _clientName,
       'f': 'json',
       'id': albumId,
     });
@@ -265,7 +265,7 @@ mixin _NavidromeLibrary on _NavidromeBase {
         's': salt,
         't': token,
         'v': '1.16.1',
-        'c': 'Psysonic',
+        'c': _clientName,
         'f': 'json',
         'id': artistId,
       });
@@ -296,7 +296,7 @@ mixin _NavidromeLibrary on _NavidromeBase {
       's': salt,
       't': token,
       'v': '1.16.1',
-      'c': 'Psysonic',
+      'c': _clientName,
       'f': 'json',
       'id': artistId,
     });
@@ -324,7 +324,7 @@ mixin _NavidromeLibrary on _NavidromeBase {
       's': salt,
       't': token,
       'v': '1.16.1',
-      'c': 'Psysonic',
+      'c': _clientName,
       'f': 'json',
       'id': artistId,
     });
@@ -342,7 +342,7 @@ mixin _NavidromeLibrary on _NavidromeBase {
       's': salt,
       't': token,
       'v': '1.16.1',
-      'c': 'Psysonic',
+      'c': _clientName,
       'f': 'json',
       'query': artistName,
       'songCount': '50',
@@ -376,7 +376,7 @@ mixin _NavidromeLibrary on _NavidromeBase {
     final token = _md5('$_pass$salt');
     var url = '$_url/rest/stream.view'
         '?u=${Uri.encodeQueryComponent(_user!)}'
-        '&s=$salt&t=$token&v=1.16.1&c=Psysonic'
+        '&s=$salt&t=$token&v=1.16.1&c=$_clientName'
         '&id=${Uri.encodeQueryComponent(trackId)}';
     // Sin pérdida = sin parámetros (el servidor manda el archivo original).
     // Con bitrate definido, Navidrome transcodifica a MP3.

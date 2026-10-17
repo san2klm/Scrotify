@@ -66,8 +66,9 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Recomendados para ti'), findsOneWidget);
     final titleCenter = tester.getCenter(find.text('Recomendados para ti')).dy;
-    final refreshCenter =
-        tester.getCenter(find.widgetWithIcon(IconButton, Icons.refresh_rounded)).dy;
+    final refreshCenter = tester
+        .getCenter(find.widgetWithIcon(IconButton, Icons.refresh_rounded))
+        .dy;
     final previous =
         find.widgetWithIcon(IconButton, Icons.chevron_left_rounded);
     final next = find.widgetWithIcon(IconButton, Icons.chevron_right_rounded);
@@ -134,8 +135,9 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Recomendados para ti'), findsOneWidget);
     final titleCenter = tester.getCenter(find.text('Recomendados para ti')).dy;
-    final refreshCenter =
-        tester.getCenter(find.widgetWithIcon(IconButton, Icons.refresh_rounded)).dy;
+    final refreshCenter = tester
+        .getCenter(find.widgetWithIcon(IconButton, Icons.refresh_rounded))
+        .dy;
     expect(refreshCenter, closeTo(titleCenter, 1.0));
     expect(find.byType(ChoiceChip), findsNothing);
     expect(find.text('Álbumes'), findsNothing);
