@@ -565,6 +565,9 @@ class NavidromeService extends _NavidromeBase
   /// responde, se vuelve a conectar sin intervención del usuario.
   static const _reconnectEvery = 5;
 
+  /// Plazo de una consulta de catálogo; cada petición HTTP ya tiene el suyo (20 s).
+  static const _libraryTimeout = Duration(seconds: 25);
+
   void _startAutoReconnect() {
     _reconnectTimer ??= Timer.periodic(const Duration(seconds: _reconnectEvery),
         (_) => unawaited(_tryAutoReconnect()));
@@ -657,7 +660,21 @@ class NavidromeService extends _NavidromeBase
     final session = currentSessionKey;
     T data;
     try {
-      data = await fetch().timeout(const Duration(seconds: 8));
+      try {
+        data = await fetch().timeout(_libraryTimeout);
+      } catch (error) {
+        // Un enlace saturado hace tardar la primera petición; si el servidor
+        // responde al ping se reintenta una vez antes de caer al respaldo local
+        // (que puede estar vacío y Home no lo vuelve a pedir).
+        if (!isNetworkFailure(error) ||
+            currentSessionKey != session ||
+            !await _pingServer()) {
+          rethrow;
+        }
+        debugPrint(
+            'Biblioteca lenta (${error.runtimeType}); se reintenta una vez.');
+        data = await fetch().timeout(_libraryTimeout);
+      }
     } catch (error) {
       if (currentSessionKey != session) rethrow;
       // Una petición lenta o cortada no es una caída: solo se pasa a «sin
@@ -903,6 +920,7 @@ class NavidromeService extends _NavidromeBase
   static const recoveryCatalogTtl = Duration(minutes: 3);
 
   void disconnect() {
+    _connectGen++; // un login en curso no debe reconectar tras cerrar sesión
     _stopAutoReconnect();
     _connected = false;
     _offlineMode = false;
