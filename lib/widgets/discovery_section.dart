@@ -100,24 +100,24 @@ class _DiscoverySectionState extends State<DiscoverySection> {
           crossAxisAlignment: CrossAxisAlignment.center,
           mainAxisAlignment: MainAxisAlignment.end,
           children: [
-        Expanded(child: title),
-        IconButton(
-            tooltip: 'Actualizar recomendaciones',
-            onPressed:
-                service.loading ? null : () => unawaited(service.refresh()),
-            icon: const Icon(Icons.refresh_rounded, size: 20),
-            color: context.textSecondary),
-        if (items.length > 1) ...[
-          IconButton(
-              tooltip: 'Recomendaciones anteriores',
-              onPressed: _canPrevious ? () => _move(-1) : null,
-              icon: const Icon(Icons.chevron_left_rounded)),
-          IconButton(
-              tooltip: 'Más recomendaciones',
-              onPressed: _canNext ? () => _move(1) : null,
-              icon: const Icon(Icons.chevron_right_rounded)),
-        ],
-      ]),
+            Expanded(child: title),
+            IconButton(
+                tooltip: 'Actualizar recomendaciones',
+                onPressed:
+                    service.loading ? null : () => unawaited(service.refresh()),
+                icon: const Icon(Icons.refresh_rounded, size: 20),
+                color: context.textSecondary),
+            if (items.length > 1) ...[
+              IconButton(
+                  tooltip: 'Recomendaciones anteriores',
+                  onPressed: _canPrevious ? () => _move(-1) : null,
+                  icon: const Icon(Icons.chevron_left_rounded)),
+              IconButton(
+                  tooltip: 'Más recomendaciones',
+                  onPressed: _canNext ? () => _move(1) : null,
+                  icon: const Icon(Icons.chevron_right_rounded)),
+            ],
+          ]),
       const SizedBox(height: 12),
       if (service.loading) const LinearProgressIndicator(minHeight: 2),
       if (service.error != null)

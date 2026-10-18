@@ -64,8 +64,7 @@ mixin _PlayerTransitions on _PlayerBase {
     if (_karaokeMode && _karaokePlayer != null) {
       final t = currentTrack;
       if (t != null) {
-        final url = _service.getPlaybackStreamUrl(t.id,
-            quality: _settings.effectiveQuality);
+        final url = _mediaLocationFor(t);
         unawaited(_applyKaraokeVolume());
         unawaited(_karaokePlayer!.open(mk.Media(url), play: true));
         _recordRecent(t);

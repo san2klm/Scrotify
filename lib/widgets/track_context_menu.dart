@@ -461,14 +461,8 @@ class TrackContextMenu extends StatelessWidget {
                         context.read<ThemeController>().active.bgElevated;
                     Navigator.of(context).pop();
                     try {
-                      // Obtener las pistas de la playlist y encontrar el índice
-                      final tracks = await nav.getPlaylistTracks(playlistId!);
-                      final index = tracks.indexWhere((t) => t.id == track.id);
-                      if (index >= 0) {
-                        await nav.updatePlaylist(
-                          playlistId: playlistId!,
-                          songIndexesToRemove: [index],
-                        );
+                      if (await nav.removeTrackFromPlaylist(
+                          playlistId: playlistId!, trackId: track.id)) {
                         if (messenger.mounted) {
                           messenger.showSnackBar(SnackBar(
                             content: Text(

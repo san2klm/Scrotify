@@ -79,7 +79,12 @@ class LocalMusicService extends ChangeNotifier {
   String _key(String scope, String id) =>
       '${OfflineCacheService.safeScopeSegment(scope)}:$id';
 
-  Future<void> initialize() => _initializing ??= _initialize();
+  /// Un fallo puntual no queda guardado: la siguiente llamada lo reintenta.
+  Future<void> initialize() => _initializing ??=
+          _initialize().catchError((Object error, StackTrace stack) {
+        _initializing = null;
+        Error.throwWithStackTrace(error, stack);
+      });
 
   /// Espera a que termine la inicialización y el reescaneo en segundo plano que
   /// lanza, sin empezar otro. Útil antes de borrar la carpeta que usa el servicio.

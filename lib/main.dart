@@ -224,7 +224,7 @@ class MyApp extends StatelessWidget {
         ),
         ChangeNotifierProvider(
           create: (ctx) => DiscoveryService(
-            ctx.read<NavidromeService>(), ctx.read<ListeningStatsService>()),
+              ctx.read<NavidromeService>(), ctx.read<ListeningStatsService>()),
         ),
         Provider<OfflineCacheService>(
           create: (_) => OfflineCacheService(

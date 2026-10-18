@@ -19,7 +19,7 @@ mixin _NavidromePlaylists on _NavidromeBase {
       's': salt,
       't': token,
       'v': '1.16.1',
-      'c': 'Psysonic',
+      'c': _clientName,
       'f': 'json',
     });
 
@@ -63,7 +63,7 @@ mixin _NavidromePlaylists on _NavidromeBase {
       's': salt,
       't': token,
       'v': '1.16.1',
-      'c': 'Psysonic',
+      'c': _clientName,
       'f': 'json',
       'name': cleanName,
     });
@@ -185,7 +185,7 @@ mixin _NavidromePlaylists on _NavidromeBase {
     // que la URL se construye manualmente.
     final buffer = StringBuffer('$_url/rest/updatePlaylist.view');
     buffer.write('?u=${Uri.encodeQueryComponent(_user!)}');
-    buffer.write('&s=$salt&t=$token&v=1.16.1&c=Psysonic&f=json');
+    buffer.write('&s=$salt&t=$token&v=1.16.1&c=$_clientName&f=json');
     buffer.write('&playlistId=${Uri.encodeQueryComponent(playlistId)}');
     if (name != null && name.isNotEmpty) {
       buffer.write('&name=${Uri.encodeQueryComponent(name)}');
@@ -213,16 +213,51 @@ mixin _NavidromePlaylists on _NavidromeBase {
   }) async {
     if (orderedSongIds.length < 2) return;
     if (!_connected) throw Exception('Not connected');
+    // `createPlaylist` reemplaza la lista entera: si la pantalla mostraba una
+    // copia parcial (p. ej. solo lo descargado tras un timeout), reordenarla
+    // borraría del servidor las canciones que no se veían.
+    if (!_sameSongs(await _fetchPlaylistTracks(playlistId), orderedSongIds)) {
+      throw Exception('La playlist cambió o no se cargó completa. '
+          'Recárgala antes de reordenar.');
+    }
     final (salt, token) = _auth();
     final buffer = StringBuffer('$_url/rest/createPlaylist.view');
     buffer.write('?u=${Uri.encodeQueryComponent(_user!)}');
-    buffer.write('&s=$salt&t=$token&v=1.16.1&c=Psysonic&f=json');
+    buffer.write('&s=$salt&t=$token&v=1.16.1&c=$_clientName&f=json');
     buffer.write('&playlistId=${Uri.encodeQueryComponent(playlistId)}');
     for (final id in orderedSongIds) {
       buffer.write('&songId=${Uri.encodeQueryComponent(id)}');
     }
     _playlistResponse(await _get(Uri.parse(buffer.toString())));
     bumpPlaylists();
+  }
+
+  static bool _sameSongs(List<Track> server, List<String> ids) {
+    if (server.length != ids.length) return false;
+    final counts = <String, int>{};
+    for (final track in server) {
+      counts[track.id] = (counts[track.id] ?? 0) + 1;
+    }
+    for (final id in ids) {
+      final left = (counts[id] ?? 0) - 1;
+      if (left < 0) return false;
+      counts[id] = left;
+    }
+    return true;
+  }
+
+  /// Quita la primera aparición de [trackId] de la playlist. El índice se
+  /// calcula sobre la lista real del servidor, nunca sobre una copia local
+  /// que podría estar incompleta y apuntar a otra canción.
+  Future<bool> removeTrackFromPlaylist({
+    required String playlistId,
+    required String trackId,
+  }) async {
+    final index = (await _fetchPlaylistTracks(playlistId))
+        .indexWhere((track) => track.id == trackId);
+    if (index < 0) return false;
+    await updatePlaylist(playlistId: playlistId, songIndexesToRemove: [index]);
+    return true;
   }
 
   Future<void> deletePlaylist(String playlistId) async {
@@ -234,7 +269,7 @@ mixin _NavidromePlaylists on _NavidromeBase {
       's': salt,
       't': token,
       'v': '1.16.1',
-      'c': 'Psysonic',
+      'c': _clientName,
       'f': 'json',
       'id': playlistId,
     });
@@ -259,7 +294,7 @@ mixin _NavidromePlaylists on _NavidromeBase {
       's': salt,
       't': token,
       'v': '1.16.1',
-      'c': 'Psysonic',
+      'c': _clientName,
       'f': 'json',
       'id': playlistId,
     });
@@ -287,7 +322,7 @@ mixin _NavidromePlaylists on _NavidromeBase {
       's': salt,
       't': token,
       'v': '1.16.1',
-      'c': 'Psysonic',
+      'c': _clientName,
       'f': 'json',
       'id': playlistId,
     });

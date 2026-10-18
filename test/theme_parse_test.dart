@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:archive/archive.dart';
 import 'package:flutter/material.dart';
@@ -17,20 +16,6 @@ List<int> _zip(Map<String, String> files) {
 
 void main() {
   group('AppTheme rango extendido', () {
-    test('Zip real AMOLED parsea núcleo + acentos', () {
-      final f = File('/home/pc/Proyectos/themes/pc-web/amoled-black-pure.zip');
-      if (!f.existsSync()) return; // solo en la máquina de desarrollo
-      final t = AppTheme.fromZipBytes(f.readAsBytesSync());
-      expect(t, isNotNull);
-      expect(t!.id, 'amoled-black-pure');
-      expect(t.accent, const Color(0xFFFFFFFF));
-      expect(t.bgApp, const Color(0xFF000000));
-      // Derivados aunque el zip no los defina todos
-      expect(t.waveformPlayed, t.accent);
-      expect(t.playerTitle, t.textPrimary);
-      expect(t.bgSidebar, t.bgApp);
-    });
-
     test('Resuelve var(--x) y usa waveform/player/sidebar', () {
       final bytes = _zip({
         't/manifest.json': jsonEncode({

@@ -11,6 +11,7 @@ import 'package:media_kit/media_kit.dart' as mk;
 import 'diagnostics_log.dart' show redactSecrets;
 import 'hifi/hifi_native.dart';
 import 'hifi/hifi_profiles.dart';
+import '../models/crotolink_models.dart' show sanitizeArtUrl;
 import 'navidrome_service.dart';
 import 'remote_playback.dart';
 import 'settings_controller.dart';
@@ -777,13 +778,14 @@ class PlayerController extends _PlayerBase
           'playlist': {
             'id': item.playlist!.id,
             'name': item.playlist!.name,
-            'coverArtUrl': item.playlist!.coverArtUrl,
+            'coverArtUrl': sanitizeArtUrl(item.playlist!.coverArtUrl),
             'songCount': item.playlist!.songCount,
             'duration': item.playlist!.duration,
           },
       };
 
-  static MostPlayedItem? _mostPlayedFromJson(Map<String, dynamic> json) {
+  static MostPlayedItem? _mostPlayedFromJson(Map<String, dynamic> json,
+      {String? Function(String?) art = _sameUrl}) {
     final type = json['type'];
     final id = json['id'] as String? ?? '';
     if (id.isEmpty) return null;
@@ -794,7 +796,8 @@ class PlayerController extends _PlayerBase
 
     if (type == MostPlayedItemType.track.name && json['track'] is Map) {
       return MostPlayedItem.track(
-        _trackFromJson(Map<String, dynamic>.from(json['track'] as Map)),
+        _trackFromJson(Map<String, dynamic>.from(json['track'] as Map),
+            art: art),
         playCount: count,
         lastPlayedAt: lastPlayedAt,
       );
@@ -805,7 +808,7 @@ class PlayerController extends _PlayerBase
         Playlist(
           id: playlist['id'] as String? ?? id,
           name: playlist['name'] as String? ?? 'Playlist',
-          coverArtUrl: playlist['coverArtUrl'] as String?,
+          coverArtUrl: art(playlist['coverArtUrl'] as String?),
           songCount: (playlist['songCount'] as num?)?.toInt() ?? 0,
           duration: (playlist['duration'] as num?)?.toInt() ?? 0,
         ),
@@ -822,20 +825,26 @@ class PlayerController extends _PlayerBase
         'artist': t.artist,
         'album': t.album,
         'duration': t.duration,
-        'albumArtUrl': t.albumArtUrl,
+        // Sin `u`/`s`/`t`: el token no caduca y estos JSON quedan en disco
+        // (en iOS, visibles desde Archivos). Se vuelve a firmar al cargar.
+        'albumArtUrl': sanitizeArtUrl(t.albumArtUrl),
         'playCount': t.playCount,
         if (t.artistId != null) 'artistId': t.artistId,
         if (t.albumId != null) 'albumId': t.albumId,
         if (t.replayGain != null) 'replayGain': t.replayGain!.toJson(),
       };
 
-  static Track _trackFromJson(Map<String, dynamic> j) => Track(
+  static String? _sameUrl(String? url) => url;
+
+  static Track _trackFromJson(Map<String, dynamic> j,
+          {String? Function(String?) art = _sameUrl}) =>
+      Track(
         id: (j['id'] as String?) ?? '',
         title: (j['title'] as String?) ?? 'Unknown',
         artist: (j['artist'] as String?) ?? 'Unknown',
         album: (j['album'] as String?) ?? 'Unknown',
         duration: (j['duration'] as String?) ?? '',
-        albumArtUrl: j['albumArtUrl'] as String?,
+        albumArtUrl: art(j['albumArtUrl'] as String?),
         playCount: (j['playCount'] as num?)?.toInt() ?? 0,
         artistId: j['artistId'] as String?,
         albumId: j['albumId'] as String?,
@@ -1072,8 +1081,7 @@ class PlayerController extends _PlayerBase
       if (_karaokeMode && _karaokePlayer != null) {
         final t = currentTrack;
         if (t != null) {
-          final url = _service.getPlaybackStreamUrl(t.id,
-              quality: _settings.effectiveQuality);
+          final url = _mediaLocationFor(t);
           await _applyKaraokeVolume();
           await _karaokePlayer!.open(mk.Media(url), play: true);
           _recordRecent(t);

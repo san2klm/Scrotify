@@ -76,3 +76,6 @@ installer/stage/
 /dist/
 temp/
 resultados.txt
+
+# Cobertura de flutter test --coverage
+/coverage/

@@ -1,6 +1,8 @@
 import crypto from 'node:crypto';
 import { mkdirSync } from 'node:fs';
 import http from 'node:http';
+import net from 'node:net';
+import { pathToFileURL } from 'node:url';
 import { WebSocketServer, WebSocket } from 'ws';
 
 import { createAdmin } from './admin.js';
@@ -19,6 +21,12 @@ const LICENSE_ID = 'AGPL-3.0-or-later';
 const UPSTREAM_SOURCE_URL = 'https://github.com/Dante0Q/CrotoWave';
 const MAX_FRAME_BYTES = 128 * 1024;
 const MAX_NAME_LENGTH = 48;
+// Salas abiertas a la vez por IP y cubeta de mensajes por conexión
+// (fichas por segundo y ráfaga): el cliente manda ~1 mensaje cada 3 s y
+// ráfagas cortas al cambiar de canción.
+const MAX_ROOMS_PER_IP = 10;
+const MESSAGE_RATE = 20;
+const MESSAGE_BURST = 60;
 const REACTIONS = new Set(['👍', '❤️', '🔥', '😂', '🎉', '👏', '😮', '🎶']);
 const MAX_CHAT_LENGTH = 280;
 const QUEUE_MODES = new Set(['free', 'fairTurns', 'voting', 'approval']);
@@ -171,16 +179,39 @@ function createLogBuffer(max = 200) {
   };
 }
 
+/// `true` si [address] es loopback o de red privada (donde vive el proxy).
+function isPrivateAddress(address) {
+  const ip = address?.startsWith('::ffff:') ? address.slice(7) : address;
+  if (net.isIPv4(ip)) {
+    const [a, b] = ip.split('.').map(Number);
+    return a === 127 || a === 10 || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168);
+  }
+  if (net.isIPv6(ip)) {
+    const lower = ip.toLowerCase();
+    return lower === '::1' || lower.startsWith('fc') || lower.startsWith('fd') || lower.startsWith('fe80:');
+  }
+  return false;
+}
+
 /// IP del cliente. Las cabeceras de proxy solo se respetan si `trustProxy`
-/// lo indica explícitamente (`cloudflare` | `forwarded`), nunca por defecto.
-function clientIp(request, trustProxy) {
-  const header = (name) => {
+/// lo indica explícitamente (`cloudflare` | `forwarded`), nunca por defecto,
+/// y solo si la conexión llega desde loopback o red privada (el túnel o el
+/// proxy): si el puerto queda expuesto, nadie puede inventarse la IP.
+export function clientIp(request, trustProxy) {
+  const peer = request.socket.remoteAddress ?? 'unknown';
+  if (trustProxy === 'none' || !isPrivateAddress(peer)) return peer;
+  const header = (name, pick) => {
     const v = request.headers[name];
-    return typeof v === 'string' ? v.split(',')[0].trim() : null;
+    if (typeof v !== 'string') return null;
+    const parts = v.split(',').map((x) => x.trim()).filter(Boolean);
+    const ip = pick(parts);
+    return ip && net.isIP(ip) ? ip : null;
   };
-  if (trustProxy === 'cloudflare') return header('cf-connecting-ip') ?? request.socket.remoteAddress ?? 'unknown';
-  if (trustProxy === 'forwarded') return header('x-forwarded-for') ?? request.socket.remoteAddress ?? 'unknown';
-  return request.socket.remoteAddress ?? 'unknown';
+  // X-Forwarded-For: el último valor es el que añadió nuestro proxy; los
+  // anteriores los pudo escribir el propio cliente.
+  if (trustProxy === 'cloudflare') return header('cf-connecting-ip', (p) => p[0]) ?? peer;
+  if (trustProxy === 'forwarded') return header('x-forwarded-for', (p) => p.at(-1)) ?? peer;
+  return peer;
 }
 
 export function createCrotoLinkServer({
@@ -392,6 +423,7 @@ export function createCrotoLinkServer({
         if (size > 8192) return reply(413, { error: 'Mensaje demasiado grande.' });
         let body;
         try { body = JSON.parse(Buffer.concat(chunks).toString()); } catch { return reply(400, { error: 'JSON inválido.' }); }
+        if (!body || typeof body !== 'object' || Array.isArray(body)) return reply(400, { error: 'Datos de mensaje inválidos.' });
         const gate = guard.attempt(`lobby-write:${ip}`, { max: 10, windowMs: 10_000 });
         if (!gate.ok) return reply(429, { error: 'Vas demasiado rápido.' });
         const username = normalizeName(body.username, limits.maxNameLength);
@@ -559,6 +591,14 @@ export function createCrotoLinkServer({
       return serverError(socket, 'Ese PIN ya está en uso.');
     }
     if (rooms.size >= limits.maxRooms) return serverError(socket, 'El servidor alcanzó el límite de salas.');
+    const ip = socketIps.get(socket) ?? 'unknown';
+    // Una sola IP no puede acaparar todas las salas del servidor.
+    let ownRooms = 0;
+    for (const r of rooms.values()) if (socketIps.get(r.host) === ip) ownRooms += 1;
+    if (ownRooms >= MAX_ROOMS_PER_IP) return serverError(socket, 'Demasiadas salas abiertas desde tu red.');
+    if (!guard.attempt(`create:${ip}`, { max: 20, windowMs: 60_000 }).ok) {
+      return serverError(socket, 'Demasiadas salas creadas seguidas. Prueba más tarde.');
+    }
     let password = null;
     if (message.roomPassword !== undefined && message.roomPassword !== null && message.roomPassword !== '') {
       if (typeof message.roomPassword !== 'string' || message.roomPassword.length < 4 || message.roomPassword.length > 128) {
@@ -659,6 +699,20 @@ export function createCrotoLinkServer({
       failAttempt(socket);
       return serverError(socket, 'Sala no encontrada o PIN inválido.');
     }
+    // Sin nombres repetidos: los eventos llevan `from` por nombre y un
+    // invitado no debe poder hacerse pasar por el anfitrión ni por otro.
+    // Mismo nombre desde la misma IP = el invitado que vuelve tras un corte
+    // antes de que caduque su conexión vieja: se sustituye.
+    const taken = (name) => name.toLowerCase() === guestName.toLowerCase();
+    const ip = socketIps.get(socket) ?? 'unknown';
+    if (taken(room.hostName)) return serverError(socket, 'Ya hay alguien con ese nombre en la sala.');
+    for (const g of [...room.guests]) {
+      if (!taken(g.name)) continue;
+      if (socketIps.get(g.socket) !== ip) return serverError(socket, 'Ya hay alguien con ese nombre en la sala.');
+      room.guests.delete(g);
+      socketRooms.delete(g.socket);
+      g.socket.close(1000, 'Replaced by reconnect');
+    }
     if (room.guests.size + 1 >= limits.maxParticipants) return serverError(socket, 'La sala alcanzó el límite de participantes.');
     guard.success(socketIps.get(socket) ?? 'unknown');
     const guest = { socket, name: guestName, id: crypto.randomBytes(6).toString('hex'), joinedAt: Date.now() };
@@ -712,14 +766,13 @@ export function createCrotoLinkServer({
     if (!guestName) return serverError(socket, 'Nombre de invitado inválido.');
     let found = false;
     room.banned.add(guestName.toLowerCase());
-    for (const guest of room.guests) {
-      if (guest.name === guestName) {
+    for (const guest of [...room.guests]) {
+      if (guest.name.toLowerCase() === guestName.toLowerCase()) {
         found = true;
         send(guest.socket, { event: 'kicked', message: 'Has sido expulsado de la sala por el anfitrión.' });
         guest.socket.close(1000, 'Kicked by host');
         room.guests.delete(guest);
         room.updatedAt = Date.now();
-        break;
       }
     }
     if (found) {
@@ -790,6 +843,8 @@ export function createCrotoLinkServer({
       return send(socket, { status: 'not_found', pin });
     }
     const unlocked = checkRoomPassword(room, message.roomPassword);
+    // Probar contraseñas por `check_room` cuenta igual que por `join_room`.
+    if (!unlocked && room.password && message.roomPassword) failAttempt(socket);
     return send(socket, {
       status: 'room_found',
       pin: room.pin,
@@ -804,7 +859,20 @@ export function createCrotoLinkServer({
     socketIps.set(socket, clientIp(request, trustProxy));
     socket.isAlive = true;
     socket.on('pong', () => { socket.isAlive = true; });
+    const bucket = { tokens: MESSAGE_BURST, last: Date.now() };
     socket.on('message', (raw, isBinary) => {
+      // Cubeta de fichas por conexión: cada mensaje se reenvía a toda la
+      // sala, así que un cliente no puede inundarla.
+      const t = Date.now();
+      bucket.tokens = Math.min(MESSAGE_BURST, bucket.tokens + ((t - bucket.last) / 1000) * MESSAGE_RATE);
+      bucket.last = t;
+      if (bucket.tokens < 1) {
+        if (!socket.rateWarned) serverError(socket, 'Demasiados mensajes. Ve más despacio.');
+        socket.rateWarned = true;
+        return;
+      }
+      bucket.tokens -= 1;
+      socket.rateWarned = false;
       if (isBinary) return serverError(socket, 'Sólo se aceptan mensajes JSON.');
       let message;
       try {
@@ -895,7 +963,7 @@ export function createCrotoLinkServer({
   };
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const envInt = (name) => {
     const parsed = Number.parseInt(process.env[name] ?? '', 10);
     return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : undefined;

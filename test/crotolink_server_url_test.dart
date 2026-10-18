@@ -39,6 +39,12 @@ void main() {
           isFalse);
       expect(CrotoLinkServerEndpoint.parse('ws://8.8.8.8').isValid, isFalse);
       expect(CrotoLinkServerEndpoint.parse('ws://172.32.0.1').isValid, isFalse);
+      // Un dominio público que empieza como un prefijo IPv6 privado no cuela.
+      expect(CrotoLinkServerEndpoint.parse('ws://fdx.atacante.example').isValid,
+          isFalse);
+      expect(CrotoLinkServerEndpoint.isPrivateHost('fd12::1'), isTrue);
+      expect(CrotoLinkServerEndpoint.isPrivateHost('fe80::1'), isTrue);
+      expect(CrotoLinkServerEndpoint.isPrivateHost('fcdn.example'), isFalse);
     });
 
     test('rejects empty, garbage and foreign schemes', () {

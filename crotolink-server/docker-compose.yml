@@ -11,6 +11,14 @@ services:
       SOURCE_URL: ${SOURCE_URL:-}           # código de TU versión si la modificás (AGPL §13)
     volumes:
       - ./data:/data
+    # Endurecimiento: sin privilegios extra ni capacidades del kernel.
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    # Si el túnel/proxy corre en este mismo equipo, publica solo en loopback:
+    # "127.0.0.1:8080:8080". Las cabeceras de proxy solo se aceptan desde
+    # loopback o red privada.
     ports:
       - "8080:8080"
     healthcheck:

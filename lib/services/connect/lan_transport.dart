@@ -218,7 +218,8 @@ class LanTransport implements ConnectTransport {
       return;
     }
     try {
-      final socket = await WebSocketTransformer.upgrade(request);
+      final socket = await WebSocketTransformer.upgrade(request,
+          compression: CompressionOptions.compressionOff);
       _adopt(socket, outgoing: false);
     } catch (_) {}
   }
@@ -226,9 +227,10 @@ class LanTransport implements ConnectTransport {
   Future<void> _dial(InternetAddress address, int port, String id) async {
     _dialing.add(id);
     try {
-      final socket =
-          await WebSocket.connect('ws://${address.address}:$port/connect')
-              .timeout(const Duration(seconds: 5));
+      final socket = await WebSocket.connect(
+              'ws://${address.address}:$port/connect',
+              compression: CompressionOptions.compressionOff)
+          .timeout(const Duration(seconds: 5));
       if (!_running) {
         await socket.close();
         return;

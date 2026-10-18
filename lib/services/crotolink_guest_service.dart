@@ -485,7 +485,9 @@ class CrotoLinkGuestService {
         ..badCertificateCallback = (certificate, _, __) =>
             CrotoLinkTlsIdentity.fingerprintForDer(certificate.der) ==
             tlsFingerprint;
-      final ws = await WebSocket.connect(uri.toString(), customClient: client)
+      final ws = await WebSocket.connect(uri.toString(),
+              customClient: client,
+              compression: CompressionOptions.compressionOff)
           .timeout(const Duration(seconds: 5));
       _channel = IOWebSocketChannel(ws);
       _lastHostActivity = DateTime.now();

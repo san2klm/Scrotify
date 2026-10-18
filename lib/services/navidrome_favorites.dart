@@ -28,7 +28,7 @@ mixin _NavidromeFavorites on _NavidromeBase {
       's': salt,
       't': token,
       'v': '1.16.1',
-      'c': 'Psysonic',
+      'c': _clientName,
       'f': 'json',
     };
     if (id.isNotEmpty) params['id'] = id;
@@ -56,7 +56,7 @@ mixin _NavidromeFavorites on _NavidromeBase {
       's': salt,
       't': token,
       'v': '1.16.1',
-      'c': 'Psysonic',
+      'c': _clientName,
       'f': 'json',
     });
     final response = await _get(uri);
@@ -282,7 +282,7 @@ mixin _NavidromeFavorites on _NavidromeBase {
         's': salt,
         't': token,
         'v': '1.16.1',
-        'c': 'Psysonic',
+        'c': _clientName,
         'f': 'json',
         'id': trackId,
         'rating': clampedRating.toString(),

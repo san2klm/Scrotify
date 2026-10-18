@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { afterEach, test } from 'node:test';
 import { WebSocket } from 'ws';
 
-import { createCrotoLinkServer } from '../src/server.js';
+import { clientIp, createCrotoLinkServer } from '../src/server.js';
 
 const running = [];
 
@@ -976,4 +976,120 @@ test('private rooms are not listed and respect isPublic updates', async () => {
   await new Promise((r) => setTimeout(r, 100));
   assert.equal((await http(server, 'GET', '/rooms')).json.length, 1);
   host.close();
+});
+
+// --- Endurecimiento (auditoría 2026-10-17) ------------------------------------
+
+test('lobby: un cuerpo JSON que no es objeto responde 400 y no tumba el servidor', async () => {
+  const server = await startServer({ chatEnabled: true });
+  for (const raw of ['null', '42', '[]', '"x"']) {
+    const res = await fetch(`http://127.0.0.1:${server.port}/api/lobby/messages`, {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: raw,
+    });
+    assert.equal(res.status, 400, raw);
+  }
+  assert.equal((await http(server, 'GET', '/health')).status, 200);
+});
+
+test('admin: un login con cuerpo null es un fallo normal, no un error', async () => {
+  const server = await startServer({ adminPassword: 'supersecret1' });
+  const res = await fetch(`http://127.0.0.1:${server.port}/admin/api/login`, {
+    method: 'POST', headers: { 'content-type': 'application/json' }, body: 'null',
+  });
+  assert.equal(res.status, 401);
+  assert.equal((await http(server, 'GET', '/health')).status, 200);
+});
+
+test('clientIp solo cree las cabeceras de proxy si la conexión viene de red privada', () => {
+  const req = (remoteAddress, headers) => ({ socket: { remoteAddress }, headers });
+  const cf = { 'cf-connecting-ip': '203.0.113.7' };
+  assert.equal(clientIp(req('127.0.0.1', cf), 'cloudflare'), '203.0.113.7');
+  assert.equal(clientIp(req('192.168.1.30', cf), 'cloudflare'), '203.0.113.7');
+  assert.equal(clientIp(req('::ffff:10.0.0.2', cf), 'cloudflare'), '203.0.113.7');
+  // Puerto expuesto a internet: la cabecera la escribe el atacante.
+  assert.equal(clientIp(req('198.51.100.9', cf), 'cloudflare'), '198.51.100.9');
+  assert.equal(clientIp(req('127.0.0.1', cf), 'none'), '127.0.0.1');
+  assert.equal(clientIp(req('127.0.0.1', { 'cf-connecting-ip': 'no-es-ip' }), 'cloudflare'), '127.0.0.1');
+  // X-Forwarded-For: vale el último salto (el que añade nuestro proxy).
+  const xff = { 'x-forwarded-for': '1.1.1.1, 203.0.113.8' };
+  assert.equal(clientIp(req('127.0.0.1', xff), 'forwarded'), '203.0.113.8');
+});
+
+async function hostRoom(endpoint, pin, hostName = 'Anfitrión') {
+  const host = await connect(endpoint);
+  const created = nextMessage(host);
+  host.send(JSON.stringify({ action: 'create_room', pin, hostName, initialState }));
+  assert.equal((await created).status, 'room_created');
+  return host;
+}
+
+async function joinAs(endpoint, pin, guestName) {
+  const guest = await connect(endpoint);
+  const reply = nextMessage(guest);
+  guest.send(JSON.stringify({ action: 'join_room', pin, guestName }));
+  return { guest, reply: await reply };
+}
+
+test('join_room rechaza el nombre del anfitrión y trata el repetido desde la misma IP como reconexión', async () => {
+  const server = await startServer();
+  const endpoint = `ws://127.0.0.1:${server.port}`;
+  const host = await hostRoom(endpoint, 'NAM123', 'Lau');
+  assert.equal((await joinAs(endpoint, 'NAM123', 'lau')).reply.status, 'error');
+  const first = await joinAs(endpoint, 'NAM123', 'Ana');
+  assert.equal(first.reply.status, 'joined');
+  // Desde la misma IP cuenta como reconexión: sustituye a la conexión vieja.
+  const closed = new Promise((resolve) => first.guest.once('close', resolve));
+  const again = await joinAs(endpoint, 'NAM123', 'ANA');
+  assert.equal(again.reply.status, 'joined');
+  await closed;
+  host.close();
+  again.guest.close();
+});
+
+test('kick_guest expulsa aunque cambien las mayúsculas', async () => {
+  const server = await startServer();
+  const endpoint = `ws://127.0.0.1:${server.port}`;
+  const host = await hostRoom(endpoint, 'KIK123');
+  const hostJoined = nextMessage(host);
+  const { guest } = await joinAs(endpoint, 'KIK123', 'g2');
+  await hostJoined;
+  const kicked = nextMessage(guest);
+  const ack = nextMessage(host);
+  host.send(JSON.stringify({ action: 'kick_guest', pin: 'KIK123', guestName: 'G2' }));
+  assert.equal((await kicked).event, 'kicked');
+  assert.equal((await ack).status, 'guest_kicked');
+  host.close();
+});
+
+test('una IP no puede acaparar todas las salas', async () => {
+  const server = await startServer();
+  const endpoint = `ws://127.0.0.1:${server.port}`;
+  const hosts = [];
+  let rejected = null;
+  for (let i = 0; i < 12 && !rejected; i++) {
+    const host = await connect(endpoint);
+    hosts.push(host);
+    const reply = nextMessage(host);
+    host.send(JSON.stringify({ action: 'create_room', pin: `IP${String(i).padStart(4, '0')}`, hostName: 'H', initialState }));
+    const msg = await reply;
+    if (msg.status !== 'room_created') rejected = { i, msg };
+  }
+  assert.equal(rejected?.i, 10);
+  assert.match(rejected.msg.message, /Demasiadas salas/);
+  for (const h of hosts) h.close();
+});
+
+test('una conexión que inunda de mensajes recibe un aviso y se descartan', async () => {
+  const server = await startServer();
+  const endpoint = `ws://127.0.0.1:${server.port}`;
+  const socket = await connect(endpoint);
+  const replies = [];
+  socket.on('message', (data) => replies.push(JSON.parse(data.toString())));
+  for (let i = 0; i < 200; i++) socket.send(JSON.stringify({ action: 'time_ping', clientTime: i }));
+  await new Promise((r) => setTimeout(r, 300));
+  const pongs = replies.filter((m) => m.status !== 'error').length;
+  const warnings = replies.filter((m) => /Demasiados mensajes/.test(m.message ?? '')).length;
+  assert.ok(pongs <= 70, `respondió ${pongs}`);
+  assert.equal(warnings, 1);
+  socket.close();
 });

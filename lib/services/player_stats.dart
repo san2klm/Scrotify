@@ -138,8 +138,9 @@ mixin _PlayerStats on _PlayerBase {
         if (gen != _historyGen) return; // cambió el perfil mientras se leía
         final list = jsonDecode(content) as List;
         _recentlyPlayed = list
-            .map((j) =>
-                PlayerController._trackFromJson(j as Map<String, dynamic>))
+            .map((j) => PlayerController._trackFromJson(
+                j as Map<String, dynamic>,
+                art: _service.authorizeCoverArtUrl))
             .toList();
         notifyListeners();
       } else {
@@ -240,7 +241,8 @@ mixin _PlayerStats on _PlayerBase {
       final loaded = <String, MostPlayedItem>{};
       for (final value in values) {
         final data = value as Map<String, dynamic>;
-        final item = PlayerController._mostPlayedFromJson(data);
+        final item = PlayerController._mostPlayedFromJson(data,
+            art: _service.authorizeCoverArtUrl);
         if (item != null) {
           loaded[_mostPlayedKey(item.type, item.id)] = item;
         }

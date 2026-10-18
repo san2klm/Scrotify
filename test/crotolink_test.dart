@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
+import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:crotowave/models/crotolink_models.dart';
@@ -704,6 +705,18 @@ void main() {
       expect(queue.length, inInclusiveRange(1, 299));
       expect((queue.first as Map)['id'], 'item_0');
       expect((state['queue'] as List).length, 300);
+
+      // El estado se reenvía a menudo: el aviso de recorte sale una sola vez.
+      final logged = <String>[];
+      final previous = debugPrint;
+      debugPrint = (String? message, {int? wrapWidth}) {
+        if (message != null) logged.add(message);
+      };
+      addTearDown(() => debugPrint = previous);
+      RemoteCrotoLinkService.fitStateToMessageLimit(state);
+      RemoteCrotoLinkService.fitStateToMessageLimit(state);
+      expect(logged.where((line) => line.contains('cola recortada')),
+          isEmpty); // ya se avisó arriba con este mismo recorte
 
       final small = <String, dynamic>{
         ...state,

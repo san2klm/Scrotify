@@ -16,6 +16,8 @@ void main() {
   late bool rejectUpdate;
   List<String>? addedIds;
   List<String>? replacementIds;
+  List<String>? removedIndexes;
+  late List<String> serverEntries;
   late bool uploaded;
   String? uploadBody;
   String? uploadAuth;
@@ -31,6 +33,8 @@ void main() {
     rejectUpdate = false;
     addedIds = null;
     replacementIds = null;
+    removedIndexes = null;
+    serverEntries = ['primera', 'segunda', 'tercera'];
     uploaded = false;
     uploadBody = null;
     uploadAuth = null;
@@ -63,6 +67,7 @@ void main() {
         final data = <String, dynamic>{'status': 'ok'};
         if (path.endsWith('/updatePlaylist.view')) {
           addedIds = request.uri.queryParametersAll['songIdToAdd'];
+          removedIndexes = request.uri.queryParametersAll['songIndexToRemove'];
         }
         if (path.endsWith('/createPlaylist.view')) {
           replacementIds = request.uri.queryParametersAll['songId'];
@@ -73,7 +78,14 @@ void main() {
           data['error'] = {'code': 50, 'message': 'Permiso denegado'};
         } else if (path.endsWith('/createPlaylist.view') ||
             path.endsWith('/getPlaylist.view')) {
-          data['playlist'] = playlist;
+          data['playlist'] = {
+            ...playlist,
+            if (path.endsWith('/getPlaylist.view'))
+              'entry': [
+                for (final id in serverEntries)
+                  {'id': id, 'title': id, 'artist': 'A', 'album': 'B'}
+              ],
+          };
         }
         response.write(jsonEncode({'subsonic-response': data}));
       }
@@ -158,6 +170,28 @@ void main() {
       throwsA(predicate((e) => e.toString().contains('Permiso denegado'))),
     );
     expect(nav.playlistVersion, 0);
+  });
+
+  test('reordering refuses a partial copy instead of deleting songs', () async {
+    // La pantalla solo veía dos de las tres canciones (copia sin conexión).
+    await expectLater(
+      nav.reorderPlaylistTracks(
+        playlistId: 'playlist-1',
+        orderedSongIds: ['segunda', 'primera'],
+      ),
+      throwsA(predicate((e) => e.toString().contains('no se cargó completa'))),
+    );
+    expect(replacementIds, isNull);
+    expect(nav.playlistVersion, 0);
+  });
+
+  test('removing a track uses the server index, not a local copy', () async {
+    serverEntries = ['primera', 'segunda', 'tercera'];
+    expect(
+        await nav.removeTrackFromPlaylist(
+            playlistId: 'playlist-1', trackId: 'tercera'),
+        isTrue);
+    expect(removedIndexes, ['2']);
   });
 
   test('reordering a playlist replaces entries in the chosen order', () async {

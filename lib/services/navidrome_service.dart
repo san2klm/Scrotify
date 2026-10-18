@@ -28,6 +28,9 @@ part 'navidrome_library.dart';
 part 'navidrome_extras.dart';
 part 'navidrome_discovery.dart';
 
+/// Nombre con el que la app se identifica ante el servidor (`c=` de Subsonic).
+const _clientName = 'CrotoWave';
+
 /// Estado de [NavidromeService]. Vive en una clase base para que las áreas de la API
 /// (en archivos aparte) puedan ser mixins sobre el mismo estado.
 abstract class _NavidromeBase with ChangeNotifier {
@@ -201,7 +204,7 @@ class NavidromeService extends _NavidromeBase
     // When active profile changes, reconnect with new credentials
     final activeProfile = _profilesController?.activeProfile;
     if (activeProfile != null &&
-        (activeProfile.url != _url ||
+        (normalizeServerUrl(activeProfile.url) != _url ||
             activeProfile.username != _user ||
             activeProfile.password != _pass)) {
       debugPrint(
@@ -395,43 +398,67 @@ class NavidromeService extends _NavidromeBase
     _coverToken ??= _md5('$_pass$_coverSalt');
     return '$_url/rest/getCoverArt.view'
         '?u=${Uri.encodeQueryComponent(_user!)}'
-        '&s=$_coverSalt&t=$_coverToken&v=1.16.1&c=Psysonic'
+        '&s=$_coverSalt&t=$_coverToken&v=1.16.1&c=$_clientName'
         '&id=${Uri.encodeQueryComponent(coverArtId.toString())}'
         '&size=${size ?? _coverArtSize}';
   }
 
-  Future<void> connectByUrl(String url, String user, String pass) async {
-    var processedUrl =
-        url.endsWith('/') ? url.substring(0, url.length - 1) : url;
-
-    if (!processedUrl.startsWith('http://') &&
-        !processedUrl.startsWith('https://')) {
-      processedUrl = 'https://$processedUrl';
+  /// Vuelve a firmar con la sesión actual una carátula de este servidor que
+  /// se guardó sin credenciales (`sanitizeArtUrl`). Otras URLs no cambian.
+  String? authorizeCoverArtUrl(String? url) {
+    if (url == null || _url == null || _user == null || _pass == null) {
+      return url;
     }
+    if (!url.startsWith('$_url/rest/getCoverArt.view')) return url;
+    final query = Uri.tryParse(url)?.queryParameters;
+    final id = query?['id'];
+    if (query == null || id == null || query.containsKey('t')) return url;
+    return _coverArtUrl(id, '', '', size: int.tryParse(query['size'] ?? ''));
+  }
 
-    _url = processedUrl;
-    _user = user;
-    _pass = pass;
-    _resetCoverAuth();
+  /// URL tal como la usa la sesión: con esquema y sin `/` final.
+  static String normalizeServerUrl(String url) {
+    var normalized = url.endsWith('/') ? url.substring(0, url.length - 1) : url;
+    if (!normalized.startsWith('http://') &&
+        !normalized.startsWith('https://')) {
+      normalized = 'https://$normalized';
+    }
+    return normalized;
+  }
 
-    debugPrint('Connecting to $_url');
+  /// Generación de la última conexión pedida: una respuesta de una conexión
+  /// anterior (más lenta) no debe pisar a la más reciente.
+  int _connectGen = 0;
 
-    _client = _injectedClient ?? http.Client();
+  Future<void> connectByUrl(String url, String user, String pass) async {
+    final processedUrl = normalizeServerUrl(url);
+    final gen = ++_connectGen;
+
+    debugPrint('Connecting to $processedUrl');
+
+    // Las credenciales nuevas solo se aplican si el servidor las acepta: un
+    // intento fallido no deja la sesión actual apuntando a otro perfil.
+    final client = _injectedClient ?? http.Client();
+    void dropClient() {
+      if (_injectedClient == null) client.close();
+    }
 
     try {
       final salt = _randomSalt();
       final token = _md5('$pass$salt');
 
-      final uri = Uri.parse('$_url/rest/ping.view').replace(queryParameters: {
+      final uri =
+          Uri.parse('$processedUrl/rest/ping.view').replace(queryParameters: {
         'u': user,
         's': salt,
         't': token,
         'v': '1.16.1',
-        'c': 'Psysonic',
+        'c': _clientName,
         'f': 'json',
       });
 
-      final response = await _get(uri).timeout(const Duration(seconds: 8));
+      final response =
+          await client.get(uri).timeout(const Duration(seconds: 8));
 
       debugPrint('Auth response status: ${response.statusCode}');
 
@@ -441,40 +468,50 @@ class NavidromeService extends _NavidromeBase
             'Response: ${response.body.substring(0, min(50, response.body.length))}');
       }
 
+      final dynamic data;
       try {
-        final data = jsonDecode(response.body);
-
-        if (data['subsonic-response']['status'] == 'ok') {
-          _connected = true;
-          _offlineMode = false;
-          _stopAutoReconnect();
-          unawaited(flushScrobbles());
-          _sessionVersion++;
-          _starredIds.clear();
-          _starredSongOrder.clear();
-          _pinnedPlaylistIds.clear();
-          _followedArtistIds.clear();
-          _excludedArtistIds.clear();
-          _artistCache.clear();
-          _trackRatings.clear();
-          _cachedGenres = null;
-          await _loadPins();
-          await _loadStarredOrder();
-          await loadLastSelectedGenre();
-          notifyListeners();
-        } else {
-          throw Exception(
-              'Authentication failed: ${data['subsonic-response']['error']['message']}');
-        }
-      } catch (e) {
-        if (e.toString().contains('Unexpected character')) {
-          throw Exception('Invalid response from server. '
-              'The server may not be a Navidrome instance or the API endpoint is incorrect. '
-              'Make sure you are using the correct Navidrome URL with /rest/ endpoints.');
-        }
-        rethrow;
+        data = jsonDecode(response.body);
+      } on FormatException {
+        throw Exception('Invalid response from server. '
+            'The server may not be a Navidrome instance or the API endpoint is incorrect. '
+            'Make sure you are using the correct Navidrome URL with /rest/ endpoints.');
       }
-    } catch (e) {
+      if (data['subsonic-response']['status'] != 'ok') {
+        throw Exception(
+            'Authentication failed: ${data['subsonic-response']['error']['message']}');
+      }
+      if (gen != _connectGen) {
+        throw StateError('Conexión reemplazada por otra más reciente.');
+      }
+
+      final previous = _client;
+      _client = client;
+      if (_injectedClient == null && !identical(previous, client)) {
+        previous.close();
+      }
+      _url = processedUrl;
+      _user = user;
+      _pass = pass;
+      _resetCoverAuth();
+      _connected = true;
+      _offlineMode = false;
+      _stopAutoReconnect();
+      unawaited(flushScrobbles());
+      _sessionVersion++;
+      _starredIds.clear();
+      _starredSongOrder.clear();
+      _pinnedPlaylistIds.clear();
+      _followedArtistIds.clear();
+      _excludedArtistIds.clear();
+      _artistCache.clear();
+      _trackRatings.clear();
+      _cachedGenres = null;
+      await _loadPins();
+      await _loadStarredOrder();
+      await loadLastSelectedGenre();
+      notifyListeners();
+    } catch (_) {
+      if (!identical(client, _client)) dropClient();
       rethrow;
     }
   }
@@ -490,11 +527,7 @@ class NavidromeService extends _NavidromeBase
     final music = localMusic;
     if (music == null) return false;
     await music.initialize();
-    var normalized = url.endsWith('/') ? url.substring(0, url.length - 1) : url;
-    if (!normalized.startsWith('http://') &&
-        !normalized.startsWith('https://')) {
-      normalized = 'https://$normalized';
-    }
+    final normalized = normalizeServerUrl(url);
     final scope = OfflineCacheService.safeScopeSegment(normalized);
     if (music.count(scope) == 0) return false;
     _url = normalized;
@@ -530,9 +563,14 @@ class NavidromeService extends _NavidromeBase
   /// Un fallo de red puntual no debe dejar la app en modo sin conexión para
   /// siempre: mientras esté offline se sondea el servidor y, en cuanto
   /// responde, se vuelve a conectar sin intervención del usuario.
+  static const _reconnectEvery = 5;
+
+  /// Plazo de una consulta de catálogo; cada petición HTTP ya tiene el suyo (20 s).
+  static const _libraryTimeout = Duration(seconds: 25);
+
   void _startAutoReconnect() {
-    _reconnectTimer ??= Timer.periodic(
-        const Duration(seconds: 15), (_) => unawaited(_tryAutoReconnect()));
+    _reconnectTimer ??= Timer.periodic(const Duration(seconds: _reconnectEvery),
+        (_) => unawaited(_tryAutoReconnect()));
   }
 
   void _stopAutoReconnect() {
@@ -559,7 +597,7 @@ class NavidromeService extends _NavidromeBase
         's': salt,
         't': _md5('$_pass$salt'),
         'v': '1.16.1',
-        'c': 'Psysonic',
+        'c': _clientName,
         'f': 'json',
       });
       final probe = _injectedClient ?? http.Client();
@@ -622,7 +660,21 @@ class NavidromeService extends _NavidromeBase
     final session = currentSessionKey;
     T data;
     try {
-      data = await fetch().timeout(const Duration(seconds: 8));
+      try {
+        data = await fetch().timeout(_libraryTimeout);
+      } catch (error) {
+        // Un enlace saturado hace tardar la primera petición; si el servidor
+        // responde al ping se reintenta una vez antes de caer al respaldo local
+        // (que puede estar vacío y Home no lo vuelve a pedir).
+        if (!isNetworkFailure(error) ||
+            currentSessionKey != session ||
+            !await _pingServer()) {
+          rethrow;
+        }
+        debugPrint(
+            'Biblioteca lenta (${error.runtimeType}); se reintenta una vez.');
+        data = await fetch().timeout(_libraryTimeout);
+      }
     } catch (error) {
       if (currentSessionKey != session) rethrow;
       // Una petición lenta o cortada no es una caída: solo se pasa a «sin
@@ -632,6 +684,8 @@ class NavidromeService extends _NavidromeBase
           !await _pingServer() &&
           currentSessionKey == session &&
           _connected) {
+        debugPrint('Sin conexión: ${error.runtimeType} y el servidor no '
+            'respondió al ping; se reintenta cada $_reconnectEvery s.');
         _connected = false;
         _offlineMode = true;
         _startAutoReconnect();
@@ -677,7 +731,7 @@ class NavidromeService extends _NavidromeBase
       's': salt,
       't': token,
       'v': '1.16.1',
-      'c': 'Psysonic',
+      'c': _clientName,
       'f': 'json',
     });
 
@@ -698,7 +752,7 @@ class NavidromeService extends _NavidromeBase
       's': salt,
       't': token,
       'v': '1.16.1',
-      'c': 'Psysonic',
+      'c': _clientName,
       'f': 'json',
     });
 
@@ -749,7 +803,7 @@ class NavidromeService extends _NavidromeBase
       's': salt,
       't': token,
       'v': '1.16.1',
-      'c': 'Psysonic',
+      'c': _clientName,
       'f': 'json',
     });
 
@@ -791,7 +845,7 @@ class NavidromeService extends _NavidromeBase
       's': salt,
       't': token,
       'v': '1.16.1',
-      'c': 'Psysonic',
+      'c': _clientName,
       'f': 'json',
     });
     final response = await _get(uri);
@@ -814,7 +868,7 @@ class NavidromeService extends _NavidromeBase
       's': salt,
       't': token,
       'v': '1.16.1',
-      'c': 'Psysonic',
+      'c': _clientName,
       'f': 'json',
       'songCount': '100',
       'albumCount': '24',
@@ -866,6 +920,7 @@ class NavidromeService extends _NavidromeBase
   static const recoveryCatalogTtl = Duration(minutes: 3);
 
   void disconnect() {
+    _connectGen++; // un login en curso no debe reconectar tras cerrar sesión
     _stopAutoReconnect();
     _connected = false;
     _offlineMode = false;

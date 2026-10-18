@@ -8,7 +8,7 @@ Servidor WebSocket en Node.js para salas CrotoLink remotas. Conserva las salas s
 |---|---|
 | `ADMIN_PASSWORD` | Contraseña inicial (≥ 8 car.). Solo se usa si aún no hay admin; se guarda su hash scrypt. Sin ella, el primer acceso a `/admin` abre un asistente de creación. |
 | `PUBLIC_URL` | Valor inicial de `publicUrl` (el panel lo sobrescribe). |
-| `TRUST_PROXY` | `none` (defecto) \| `cloudflare` (`CF-Connecting-IP`) \| `forwarded` (`X-Forwarded-For`). Solo así se confía en cabeceras de proxy para el rate limit del login. |
+| `TRUST_PROXY` | `none` (defecto) \| `cloudflare` (`CF-Connecting-IP`) \| `forwarded` (`X-Forwarded-For`). Solo así se confía en cabeceras de proxy para los límites por IP, y únicamente si la conexión llega desde loopback o red privada (el túnel o el proxy). |
 | `DATA_DIR` | Directorio de la base (defecto `/data`). |
 | `SOURCE_URL` | Dónde descargar el código de **tu** versión. Obligatorio si modificás el servidor y otros lo usan por red (AGPL §13, ver «Licencia»). Se publica en `GET /source`. |
 | `PORT`, `MAX_MESSAGE_BYTES`, `MAX_PARTICIPANTS`, `ROOM_IDLE_MS` | Valores iniciales de los límites. |

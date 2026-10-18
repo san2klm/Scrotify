@@ -1,3 +1,4 @@
+import 'dart:io' show InternetAddress, InternetAddressType;
 import 'dart:math';
 
 import 'package:flutter/foundation.dart' show debugPrint;
@@ -127,6 +128,9 @@ class CrotoLinkServerEndpoint {
             (o[0] == 169 && o[1] == 254);
       }
     }
+    // Solo direcciones IPv6 literales: `fdx.atacante.com` no es red local.
+    final ip = InternetAddress.tryParse(h);
+    if (ip == null || ip.type != InternetAddressType.IPv6) return false;
     return h.startsWith('fc') || h.startsWith('fd') || h.startsWith('fe80');
   }
 }

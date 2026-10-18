@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -44,6 +45,7 @@ void main() {
   late OfflineCacheService cache;
   late NavidromeService nav;
   late bool network;
+  int failOnce = 0; // peticiones de getPlaylists que fallan una sola vez
   String? failPath; // petición concreta que falla aunque el servidor responda
   late int requests;
   const url = 'https://musica.test';
@@ -90,6 +92,10 @@ void main() {
     final client = MockClient((request) async {
       requests++;
       if (!network) throw const SocketException('Sin red');
+      if (request.url.path == '/rest/getPlaylists.view' && failOnce > 0) {
+        failOnce--;
+        throw const SocketException('Conexión cortada');
+      }
       if (request.url.path == failPath) {
         throw const SocketException('Conexión cortada');
       }
@@ -161,6 +167,7 @@ void main() {
         await Directory.systemTemp.createTemp('crotowave-biblioteca-offline-');
     network = true;
     failPath = null;
+    failOnce = 0;
     requests = 0;
     cache = newCache();
     music = newMusic();
@@ -199,6 +206,22 @@ void main() {
     expect((await nav.getRecentlyAddedTracks()).length, 2);
   });
 
+  test('Al pasar a sin conexión deja en el registro el motivo', () async {
+    await seed(songs[0]);
+    await saveOnline();
+    network = false;
+    final logged = <String>[];
+    final previous = debugPrint;
+    debugPrint = (String? message, {int? wrapWidth}) {
+      if (message != null) logged.add(message);
+    };
+    addTearDown(() => debugPrint = previous);
+    await nav.getPlaylists();
+    expect(nav.offlineMode, isTrue);
+    expect(
+        logged.where((line) => line.startsWith('Sin conexión:')), hasLength(1));
+  });
+
   test('Una petición cortada con el servidor vivo no deja la app sin conexión',
       () async {
     await seed(songs[0]);
@@ -208,6 +231,36 @@ void main() {
     expect(playlists.single.name, 'Rock'); // sale de lo guardado
     expect(nav.offlineMode, isFalse);
     expect(nav.connected, isTrue);
+  });
+
+  test(
+      'Una petición lenta con el servidor vivo se reintenta y trae lo del servidor',
+      () async {
+    await seed(songs[0]);
+    await saveOnline();
+    failOnce = 1;
+    final playlists = await nav.getPlaylists();
+    expect(playlists.single.name, 'Rock');
+    expect(nav.connected, isTrue);
+    expect(nav.offlineMode, isFalse);
+  });
+
+  test('Cerrar sesión con un login en curso no reconecta al llegar el ping',
+      () async {
+    final gate = Completer<void>();
+    final slow = NavidromeService(httpClient: MockClient((request) async {
+      await gate.future;
+      return http.Response(
+          jsonEncode({
+            'subsonic-response': {'status': 'ok'}
+          }),
+          200);
+    }));
+    final pending = slow.connectByUrl(url, user, 'clave-de-prueba');
+    slow.disconnect();
+    gate.complete();
+    await expectLater(pending, throwsA(isA<StateError>()));
+    expect(slow.connected, isFalse);
   });
 
   test(
