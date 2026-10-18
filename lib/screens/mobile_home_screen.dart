@@ -59,6 +59,10 @@ abstract class _MobileHomeBase extends State<MobileHomeScreen> {
 
   late Future<List<Playlist>> _futurePlaylists;
 
+  late Future<List<Album>> _futureAlbums;
+
+  late Future<List<Artist>> _futureArtists;
+
   late Future<List<Track>> _futureRecentlyAdded;
 
   int _coverArtVersion = -1;
@@ -109,17 +113,26 @@ abstract class _MobileHomeBase extends State<MobileHomeScreen> {
 
 class _MobileHomeScreenState extends _MobileHomeBase
     with _MobileHomeTab, _MobileSearchLibraryTabs {
+  Future<List<Artist>> _loadArtists(NavidromeService nav) =>
+      nav.getArtists().then(
+            (raw) => raw
+                .map((e) => Artist.fromJson(e as Map<String, dynamic>))
+                .toList(),
+          );
+
   @override
   void initState() {
     super.initState();
-    _currentSessionKey = context.read<NavidromeService>().currentSessionKey;
+    final nav = context.read<NavidromeService>();
+    _currentSessionKey = nav.currentSessionKey;
     _homeNavigation = context.read<HomeNavigationController?>();
     _homeNavigation?.addListener(_openHomeDestination);
     _futureTracks = _loadTracks();
-    _futurePlaylists = context.read<NavidromeService>().getPlaylists();
-    _futureGenres = context.read<NavidromeService>().getGenres();
-    _futureRecentlyAdded =
-        context.read<NavidromeService>().getRecentlyAddedTracks();
+    _futurePlaylists = nav.getPlaylists();
+    _futureAlbums = nav.getAlbums();
+    _futureArtists = _loadArtists(nav);
+    _futureGenres = nav.getGenres();
+    _futureRecentlyAdded = nav.getRecentlyAddedTracks();
     _serverPlayCountTimer = Timer.periodic(
       const Duration(seconds: 30),
       (_) {
@@ -129,12 +142,12 @@ class _MobileHomeScreenState extends _MobileHomeBase
     _hourlyRefreshTimer = Timer.periodic(
       const Duration(hours: 1),
       (_) {
-        if (mounted) {
-          setState(() {
-            _futureRecentlyAdded =
-                context.read<NavidromeService>().getRecentlyAddedTracks();
-          });
-        }
+        if (!mounted) return;
+        final svc = context.read<NavidromeService>();
+        if (!svc.connected || svc.offlineMode) return;
+        setState(() {
+          _futureRecentlyAdded = svc.getRecentlyAddedTracks();
+        });
       },
     );
   }
@@ -149,9 +162,11 @@ class _MobileHomeScreenState extends _MobileHomeBase
 
   Future<void> _refreshServerPlayCounts() async {
     if (_refreshingPlayCounts || !mounted) return;
+    final nav = context.read<NavidromeService>();
+    if (!nav.connected || nav.offlineMode) return;
     _refreshingPlayCounts = true;
     try {
-      final tracks = await context.read<NavidromeService>().getTracks();
+      final tracks = await nav.getTracks();
       if (mounted) {
         context.read<PlayerController>().syncServerPlayCounts(tracks);
       }
@@ -362,6 +377,8 @@ class _MobileHomeScreenState extends _MobileHomeBase
       _playlistVersion = nav.playlistVersion;
       _futureTracks = _loadTracks();
       _futurePlaylists = nav.getPlaylists();
+      _futureAlbums = nav.getAlbums();
+      _futureArtists = _loadArtists(nav);
       _futureGenres = nav.getGenres();
       _futureRecentlyAdded = nav.getRecentlyAddedTracks();
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -385,6 +402,8 @@ class _MobileHomeScreenState extends _MobileHomeBase
           final svc = context.read<NavidromeService>();
           _futureTracks = _loadTracks();
           _futurePlaylists = svc.getPlaylists();
+          _futureAlbums = svc.getAlbums();
+          _futureArtists = _loadArtists(svc);
         });
       });
     }

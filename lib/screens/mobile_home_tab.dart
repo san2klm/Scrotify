@@ -407,9 +407,8 @@ mixin _MobileHomeTab on _MobileHomeBase {
   }
 
   Widget _albumsCarousel() {
-    final nav = context.read<NavidromeService>();
     return FutureBuilder<List<Album>>(
-      future: nav.getAlbums(),
+      future: _futureAlbums,
       builder: (context, snapshot) {
         final albums = snapshot.data ?? [];
         if (snapshot.connectionState == ConnectionState.waiting &&
@@ -495,13 +494,8 @@ mixin _MobileHomeTab on _MobileHomeBase {
   }
 
   Widget _artistsCarousel() {
-    final nav = context.read<NavidromeService>();
     return FutureBuilder<List<Artist>>(
-      future: nav.getArtists().then(
-            (raw) => raw
-                .map((e) => Artist.fromJson(e as Map<String, dynamic>))
-                .toList(),
-          ),
+      future: _futureArtists,
       builder: (context, snapshot) {
         final artists = snapshot.data ?? <Artist>[];
         if (snapshot.connectionState == ConnectionState.waiting &&

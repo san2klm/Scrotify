@@ -67,14 +67,21 @@ mixin _NavidromeLibrary on _NavidromeBase {
 
   Future<List<Track>> _downloadRecoveryCatalog(String? session) async {
     final tracks = <Track>[];
-    for (var offset = 0;; offset += 500) {
+    final seenIds = <String>{};
+    for (var offset = 0; offset < 5000; offset += 500) {
       final page = await _fetchTracks(limit: 500, offset: offset)
           .timeout(const Duration(seconds: 15));
       if (session != currentSessionKey || !connected || offlineMode) {
         throw StateError('La sesión cambió durante el escaneo.');
       }
-      tracks.addAll(page);
-      if (page.length < 500) break;
+      var added = 0;
+      for (final track in page) {
+        if (seenIds.add(track.id)) {
+          tracks.add(track);
+          added++;
+        }
+      }
+      if (page.length < 500 || added == 0) break;
     }
     final frozen = List<Track>.unmodifiable(tracks);
     _recoveryCatalog = (session: session, at: recoveryClock(), tracks: frozen);
@@ -190,6 +197,49 @@ mixin _NavidromeLibrary on _NavidromeBase {
     String type = 'newest',
     int limit = 50,
     int offset = 0,
+  }) =>
+      _readLibrary(
+        () => _fetchAlbums(type: type, limit: limit, offset: offset),
+        (music, scope, _) {
+          final byAlbum = <String, Album>{};
+          final counts = <String, int>{};
+          final tracks = music.downloadedTracks(scope);
+          for (final track in tracks) {
+            final title = track.album.trim().isEmpty
+                ? 'Álbum sin título'
+                : track.album.trim();
+            final id = (track.albumId?.isNotEmpty == true)
+                ? track.albumId!
+                : 'local-album:${track.artist.toLowerCase()}|${title.toLowerCase()}';
+            counts[id] = (counts[id] ?? 0) + 1;
+          }
+          for (final track in tracks) {
+            final title = track.album.trim().isEmpty
+                ? 'Álbum sin título'
+                : track.album.trim();
+            final id = (track.albumId?.isNotEmpty == true)
+                ? track.albumId!
+                : 'local-album:${track.artist.toLowerCase()}|${title.toLowerCase()}';
+            byAlbum.putIfAbsent(
+              id,
+              () => Album(
+                id: id,
+                title: title,
+                artist: track.artist,
+                coverArtUrl: track.albumArtUrl,
+                trackCount: counts[id] ?? 1,
+                year: track.year ?? 0,
+              ),
+            );
+          }
+          return byAlbum.values.skip(offset).take(limit).toList();
+        },
+      );
+
+  Future<List<Album>> _fetchAlbums({
+    String type = 'newest',
+    int limit = 50,
+    int offset = 0,
   }) async {
     if (!_connected) throw Exception('Not connected');
     final salt = _randomSalt();
@@ -226,7 +276,23 @@ mixin _NavidromeLibrary on _NavidromeBase {
 
   /// Devuelve las canciones de un álbum (getAlbum.view).
   @override
-  Future<List<Track>> getAlbumTracks(String albumId) async {
+  Future<List<Track>> getAlbumTracks(String albumId) => _readLibrary(
+        () => _fetchAlbumTracks(albumId),
+        (music, scope, _) => music
+            .downloadedTracks(scope)
+            .where((track) {
+              if (track.albumId == albumId) return true;
+              final title = track.album.trim().isEmpty
+                  ? 'Álbum sin título'
+                  : track.album.trim();
+              final fallbackId =
+                  'local-album:${track.artist.toLowerCase()}|${title.toLowerCase()}';
+              return fallbackId == albumId;
+            })
+            .toList(),
+      );
+
+  Future<List<Track>> _fetchAlbumTracks(String albumId) async {
     if (!_connected) throw Exception('Not connected');
     final (salt, token) = _auth();
     final uri = Uri.parse('$_url/rest/getAlbum.view').replace(queryParameters: {
@@ -256,7 +322,7 @@ mixin _NavidromeLibrary on _NavidromeBase {
     if (_artistCache.containsKey(artistId)) {
       return _artistCache[artistId];
     }
-    if (!_connected) return null;
+    if (!_connected || offlineMode) return null;
     try {
       final (salt, token) = _auth();
       final uri =

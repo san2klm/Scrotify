@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../services/navidrome_service.dart';
 import '../services/server_profiles_controller.dart';
 import '../models/server_profile.dart';
 import '../services/pairing_server.dart';
@@ -77,6 +78,7 @@ class _DesktopLoginScreenState extends State<DesktopLoginScreen> {
     try {
       // Use profiles system instead of direct credential storage
       final profilesCtrl = context.read<ServerProfilesController>();
+      final nav = context.read<NavidromeService?>();
 
       // Check if we already have a profile with this URL
       final existingProfiles = profilesCtrl.profiles.where((p) => p.url == url);
@@ -107,6 +109,14 @@ class _DesktopLoginScreenState extends State<DesktopLoginScreen> {
 
       // Set as active profile (this will trigger reconnection in NavidromeService via listener)
       await profilesCtrl.setActiveProfile(profileToUse.id);
+      if (nav != null) {
+        try {
+          await nav.connectByUrl(url, user, pass);
+        } catch (_) {
+          final openedOffline = await nav.openOfflineLibrary(url, user, pass);
+          if (!openedOffline) rethrow;
+        }
+      }
 
       if (mounted) {
         Navigator.pushReplacement(

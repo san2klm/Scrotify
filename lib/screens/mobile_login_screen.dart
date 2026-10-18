@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../models/pairing_models.dart';
 import '../models/server_profile.dart';
+import '../services/navidrome_service.dart';
 import '../services/server_profiles_controller.dart';
 import '../services/secure_storage.dart';
 import '../widgets/pairing_panel.dart';
@@ -144,6 +145,7 @@ class _MobileLoginScreenState extends State<MobileLoginScreen> {
     setState(() => _loading = true);
     try {
       final profilesCtrl = context.read<ServerProfilesController>();
+      final nav = context.read<NavidromeService?>();
 
       final existingProfiles = profilesCtrl.profiles.where((p) => p.url == url);
       final existingProfile =
@@ -163,6 +165,14 @@ class _MobileLoginScreenState extends State<MobileLoginScreen> {
         await profilesCtrl.addProfile(profileToUse);
       }
       await profilesCtrl.setActiveProfile(profileToUse.id);
+      if (nav != null) {
+        try {
+          await nav.connectByUrl(url, user, pass);
+        } catch (_) {
+          final openedOffline = await nav.openOfflineLibrary(url, user, pass);
+          if (!openedOffline) rethrow;
+        }
+      }
 
       if (mounted) {
         Navigator.pushReplacement(
