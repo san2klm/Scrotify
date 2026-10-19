@@ -84,22 +84,8 @@ mixin _NavidromePlaylists on _NavidromeBase {
   }
 
   @override
-  Map<String, dynamic> _playlistResponse(http.Response response) {
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw Exception('No se pudo actualizar o cargar la playlist '
-          '(HTTP ${response.statusCode}).');
-    }
-    final data = jsonDecode(response.body)['subsonic-response'];
-    if (data is! Map<String, dynamic>) {
-      throw Exception(
-          'El servidor devolvió una respuesta de playlist inválida.');
-    }
-    if (data['status'] != 'ok') {
-      throw Exception(data['error']?['message'] ??
-          'El servidor rechazó la operación de playlist.');
-    }
-    return data;
-  }
+  Map<String, dynamic> _playlistResponse(http.Response response) =>
+      parseSubsonicEnvelope(response, requireOk: true);
 
   MediaType _playlistCoverType(List<int> bytes) {
     if (bytes.length > 10 * 1024 * 1024) {
@@ -277,6 +263,7 @@ mixin _NavidromePlaylists on _NavidromeBase {
   }
 
   Future<Playlist?> getPlaylist(String playlistId) => _readLibrary(
+      key: 'playlist:$playlistId',
       () => _fetchPlaylist(playlistId),
       (music, scope, user) => music
           .offlinePlaylists(scope, user)
@@ -307,6 +294,7 @@ mixin _NavidromePlaylists on _NavidromeBase {
   }
 
   Future<List<Track>> getPlaylistTracks(String playlistId) => _readLibrary(
+      key: 'playlistTracks:$playlistId',
       () => _fetchPlaylistTracks(playlistId),
       (music, scope, user) =>
           music.offlinePlaylistTracks(scope, user, playlistId),

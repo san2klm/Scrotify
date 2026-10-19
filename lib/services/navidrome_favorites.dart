@@ -43,7 +43,9 @@ mixin _NavidromeFavorites on _NavidromeBase {
     }
   }
 
-  Future<List<Track>> getStarred() => _readLibrary(_fetchStarred,
+  Future<List<Track>> getStarred() => _readLibrary(
+      _fetchStarred,
+      key: 'starred',
       (music, scope, user) => _offlineStarred(music, scope, user),
       remember: (music, user, data) => music.rememberLikes(user, data));
 

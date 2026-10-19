@@ -17,13 +17,17 @@ class _OfflineConnectionBannerState extends State<OfflineConnectionBanner> {
 
   Future<void> _reconnect(NavidromeService nav) async {
     setState(() => _connecting = true);
+    final offline = nav.offlineMode;
     try {
-      await nav.reconnect();
+      // Degradado: repite las consultas que fallaron; solo si responden se
+      // reconecta y las pantallas recargan. Un ping correcto no basta.
+      await (offline ? nav.reconnect() : nav.retryDegraded());
     } catch (_) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text(
-                'El servidor sigue sin estar disponible. Puedes escuchar tus descargas.')));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(offline
+                ? 'El servidor sigue sin estar disponible. Puedes escuchar tus descargas.'
+                : 'El servidor sigue respondiendo con errores. Inténtalo de nuevo en un momento.')));
       }
     } finally {
       if (mounted) setState(() => _connecting = false);
@@ -33,25 +37,66 @@ class _OfflineConnectionBannerState extends State<OfflineConnectionBanner> {
   @override
   Widget build(BuildContext context) {
     final nav = context.watch<NavidromeService>();
-    if (!nav.offlineMode) return const SizedBox.shrink();
+    final offline = nav.offlineMode;
+    if (!offline && !nav.serverDegraded) return const SizedBox.shrink();
     return Padding(
         padding: const EdgeInsets.only(bottom: 16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            if (nav.offlineMode)
-              Wrap(
-                  spacing: 12,
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  children: [
-                    Text('Sin conexión · Música del dispositivo',
-                        style: TextStyle(color: context.textSecondary)),
-                    TextButton.icon(
-                        onPressed: _connecting ? null : () => _reconnect(nav),
-                        icon: const Icon(Icons.refresh_rounded, size: 18),
-                        label: Text(_connecting ? 'Conectando…' : 'Reconectar'))
-                  ]),
+            Wrap(
+                spacing: 12,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  Text(
+                      offline
+                          ? 'Sin conexión · Música del dispositivo'
+                          : 'El servidor responde con errores · Datos posiblemente incompletos',
+                      style: TextStyle(color: context.textSecondary)),
+                  TextButton.icon(
+                      onPressed: _connecting ? null : () => _reconnect(nav),
+                      icon: const Icon(Icons.refresh_rounded, size: 18),
+                      label: Text(_connecting
+                          ? 'Conectando…'
+                          : (offline ? 'Reconectar' : 'Reintentar')))
+                ]),
           ],
         ));
+  }
+}
+
+/// Estado de Inicio cuando el catálogo no se pudo cargar con el servidor vivo
+/// (5xx, credenciales rechazadas, respuesta ilegible): dice qué pasó y deja
+/// reintentar la carga, en vez de un vacío mudo.
+class LibraryLoadError extends StatelessWidget {
+  const LibraryLoadError({super.key, required this.error, this.onRetry});
+
+  final Object? error;
+  final VoidCallback? onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    // Solo las excepciones propias llevan texto seguro (sin datos del servidor).
+    final detail = error is SubsonicException
+        ? error.toString()
+        : 'No se pudo cargar el contenido.';
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(detail,
+                textAlign: TextAlign.center,
+                style: TextStyle(color: context.textSecondary)),
+            const SizedBox(height: 12),
+            TextButton.icon(
+                onPressed: onRetry,
+                icon: const Icon(Icons.refresh_rounded, size: 18),
+                label: const Text('Reintentar')),
+          ],
+        ),
+      ),
+    );
   }
 }

@@ -85,6 +85,7 @@ mixin _NavidromeLibrary on _NavidromeBase {
   Future<List<Track>> getTracks(
           {String? artist, String? album, int limit = 500, int offset = 0}) =>
       _readLibrary(
+          key: 'tracks',
           () => _fetchTracks(
               artist: artist,
               album: album,
@@ -123,26 +124,7 @@ mixin _NavidromeLibrary on _NavidromeBase {
       'songOffset': offset.toString(),
     });
 
-    final response = await _get(uri);
-    debugPrint('getTracks search3 status: ${response.statusCode}');
-
-    final String raw = response.body;
-    dynamic data;
-    try {
-      data = jsonDecode(raw);
-    } catch (e) {
-      throw Exception('No se pudo parsear la respuesta del servidor.\n'
-          'Status: ${response.statusCode}\n'
-          'Body (${raw.length} chars): ${raw.length > 200 ? raw.substring(0, 200) : raw}');
-    }
-
-    final subsonicResp = data['subsonic-response'];
-    if (subsonicResp == null) return [];
-
-    if (subsonicResp['status'] == 'failed') {
-      final err = subsonicResp['error'];
-      throw Exception('Server error: ${err?['message'] ?? err}');
-    }
+    final subsonicResp = await _getEnvelope(uri);
 
     final songsList =
         NavidromeService._asListOrNull(subsonicResp['searchResult3']?['song']);
@@ -175,9 +157,8 @@ mixin _NavidromeLibrary on _NavidromeBase {
       'id': albumId,
     });
 
-    final response = await _get(uri);
-    final data = jsonDecode(response.body);
-    final albumData = data['subsonic-response']?['album'];
+    final data = await _getEnvelope(uri);
+    final albumData = data['album'];
 
     if (albumData == null) throw Exception('Album not found');
     final map = albumData as Map<String, dynamic>;
@@ -208,10 +189,9 @@ mixin _NavidromeLibrary on _NavidromeBase {
       'offset': offset.toString(),
     });
 
-    final response = await _get(uri);
-    final data = jsonDecode(response.body);
-    final albumsList = NavidromeService._asListOrNull(
-        data['subsonic-response']?['albumList2']?['album']);
+    final data = await _getEnvelope(uri);
+    final albumsList =
+        NavidromeService._asListOrNull(data['albumList2']?['album']);
 
     if (albumsList == null) return [];
 
@@ -238,9 +218,8 @@ mixin _NavidromeLibrary on _NavidromeBase {
       'f': 'json',
       'id': albumId,
     });
-    final response = await _get(uri);
-    final data = jsonDecode(response.body);
-    final album = data['subsonic-response']?['album'] as Map<String, dynamic>?;
+    final data = await _getEnvelope(uri);
+    final album = data['album'] as Map<String, dynamic>?;
     if (album == null) return [];
     final entries =
         NavidromeService._asListOrNull(album['song'] ?? album['entry']);
@@ -282,10 +261,8 @@ mixin _NavidromeLibrary on _NavidromeBase {
         'f': 'json',
         'id': artistId,
       });
-      final response = await _get(uri);
-      final data = jsonDecode(response.body);
-      final artistJson =
-          data['subsonic-response']?['artist'] as Map<String, dynamic>?;
+      final data = await _getEnvelope(uri);
+      final artistJson = data['artist'] as Map<String, dynamic>?;
       if (artistJson == null) return null;
       final artist = Artist.fromJson(
         artistJson,
@@ -315,10 +292,8 @@ mixin _NavidromeLibrary on _NavidromeBase {
       'f': 'json',
       'id': artistId,
     });
-    final response = await _get(uri);
-    final data = jsonDecode(response.body);
-    final artist =
-        data['subsonic-response']?['artist'] as Map<String, dynamic>?;
+    final data = await _getEnvelope(uri);
+    final artist = data['artist'] as Map<String, dynamic>?;
     if (artist == null) return [];
     final list = NavidromeService._asListOrNull(artist['album']);
     if (list == null) return [];
@@ -343,10 +318,8 @@ mixin _NavidromeLibrary on _NavidromeBase {
       'f': 'json',
       'id': artistId,
     });
-    final response = await _get(uri);
-    final data = jsonDecode(response.body);
-    final artist =
-        data['subsonic-response']?['artist'] as Map<String, dynamic>?;
+    final data = await _getEnvelope(uri);
+    final artist = data['artist'] as Map<String, dynamic>?;
     if (artist == null) return [];
     final artistName = artist['name'] as String? ?? '';
 
@@ -364,10 +337,8 @@ mixin _NavidromeLibrary on _NavidromeBase {
       'albumCount': '0',
       'artistCount': '0',
     });
-    final searchResponse = await _get(searchUri);
-    final searchData = jsonDecode(searchResponse.body);
-    final result = searchData['subsonic-response']?['searchResult3']
-        as Map<String, dynamic>?;
+    final searchData = await _getEnvelope(searchUri);
+    final result = searchData['searchResult3'] as Map<String, dynamic>?;
     if (result == null) return [];
     final songs = NavidromeService._asList(result['song']);
     return songs
@@ -632,36 +603,70 @@ mixin _NavidromeLibrary on _NavidromeBase {
     } catch (_) {}
   }
 
-  /// Cola persistente por perfil (`scrobble_queue_<scope>.json`).
-  ScrobbleQueue? _scrobbleQueue;
-  String? _scrobbleQueueScope;
+  /// Colas persistentes por cuenta (`scrobble_queue_<scope>.json`). Se abren
+  /// una sola vez por cuenta aunque varias operaciones las pidan a la vez.
+  final Map<String, Future<ScrobbleQueue?>> _scrobbleQueues = {};
 
   /// Archivo de la cola en pruebas (sin path_provider).
   @visibleForTesting
   File? scrobbleQueueFileOverride;
 
-  Future<ScrobbleQueue?> _scrobbleQueueFor() async {
-    final scope = _scopedName('scrobble_queue.json');
-    if (_scrobbleQueue != null && _scrobbleQueueScope == scope) {
-      return _scrobbleQueue;
-    }
-    final file = scrobbleQueueFileOverride ??
-        await _resolveScopedFile('scrobble_queue.json');
-    if (file == null) return null;
-    _scrobbleQueueScope = scope;
-    return _scrobbleQueue = ScrobbleQueue(file);
+  /// Cuenta de una operación de scrobble, fijada al empezarla: lo que se
+  /// enviaba para A nunca sale con las credenciales de B.
+  _ScrobbleSession? _pinScrobbleSession() {
+    final url = _url, user = _user, pass = _pass;
+    if (url == null || user == null || pass == null) return null;
+    return (url: url, user: user, pass: pass);
   }
 
-  /// Envía una escucha con su hora original. `true` si el servidor la aceptó.
-  Future<bool> _sendScrobble(String trackId, int timeMs) async {
-    if (!_connected) return false;
+  bool _isCurrentScrobbleSession(_ScrobbleSession session) =>
+      _connected &&
+      _url == session.url &&
+      _user == session.user &&
+      _pass == session.pass;
+
+  Future<ScrobbleQueue?> _scrobbleQueueFor(_ScrobbleSession session) async {
+    final scope =
+        OfflineCacheService.safeScopeSegment('${session.url}|${session.user}');
+    final queue =
+        await (_scrobbleQueues[scope] ??= _openScrobbleQueue(session));
+    // Sin archivo (path_provider falló): no se recuerda el fallo, se reintenta.
+    if (queue == null) unawaited(_scrobbleQueues.remove(scope));
+    return queue;
+  }
+
+  /// Archivo de la cuenta de [session], no de la que esté activa al terminar la
+  /// espera de path_provider. Mismo criterio que [_resolveScopedFile].
+  Future<ScrobbleQueue?> _openScrobbleQueue(_ScrobbleSession session) async {
+    final override = scrobbleQueueFileOverride;
+    if (override != null) return ScrobbleQueue(override);
     try {
-      final (salt, token) = _auth();
-      final uri = Uri.parse('$_url/rest/scrobble.view').replace(
+      final dir = await getAppDataDirectory();
+      final userScope = OfflineCacheService.safeScopeSegment(
+          '${session.url}|${session.user}');
+      final byUser = File('${dir.path}/scrobble_queue_$userScope.json');
+      if (await byUser.exists()) return ScrobbleQueue(byUser);
+      final serverScope = OfflineCacheService.safeScopeSegment(session.url);
+      final legacy = File('${dir.path}/scrobble_queue_$serverScope.json');
+      return ScrobbleQueue(await legacy.exists() ? legacy : byUser);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Envía una escucha con su hora original usando la cuenta fijada en
+  /// [session]. `true` solo si el servidor respondió un envelope Subsonic con
+  /// `status=ok`: un HTTP 2xx con `status=failed` es un rechazo.
+  Future<bool> _sendScrobble(
+      _ScrobbleSession session, String trackId, int timeMs) async {
+    if (!_isCurrentScrobbleSession(session)) return false;
+    try {
+      final salt = _randomSalt();
+      final uri = Uri.parse('${session.url}/rest/scrobble.view').replace(
         queryParameters: {
-          'u': _user!,
+          'u': session.user,
           's': salt,
-          't': token,
+          't': _md5('${session.pass}$salt'),
           'v': '1.16.1',
           'c': 'CrotoWave',
           'f': 'json',
@@ -670,10 +675,12 @@ mixin _NavidromeLibrary on _NavidromeBase {
           'submission': 'true',
         },
       );
-      final response = await _get(uri).timeout(const Duration(seconds: 15));
-      return response.statusCode >= 200 && response.statusCode < 300;
+      final response = await _get(uri, timeout: const Duration(seconds: 15));
+      parseSubsonicEnvelope(response, requireOk: true);
+      return true;
     } catch (_) {
-      // Un fallo de red al informar una escucha no debe cortar el audio.
+      // Un fallo (de red o rechazado) al informar una escucha no debe cortar el
+      // audio; el evento se conserva en la cola.
       return false;
     }
   }
@@ -682,22 +689,33 @@ mixin _NavidromeLibrary on _NavidromeBase {
   /// al reconectar (con la hora en que ocurrió).
   Future<void> scrobble(String trackId) async {
     final timeMs = DateTime.now().millisecondsSinceEpoch;
-    final queue = await _scrobbleQueueFor();
-    if (queue != null && queue.length > 0) {
+    final session = _pinScrobbleSession();
+    if (session == null) return;
+    final queue = await _scrobbleQueueFor(session);
+    if (queue != null && await queue.pendingCount() > 0) {
       // Mantener el orden: primero lo pendiente.
       await queue.add(trackId, timeMs);
-      await flushScrobbles();
+      await _flushScrobbles(session, queue);
       return;
     }
-    if (await _sendScrobble(trackId, timeMs)) return;
+    if (await _sendScrobble(session, trackId, timeMs)) return;
     await queue?.add(trackId, timeMs);
   }
 
   /// Vacía la cola de scrobbles pendientes (al reconectar).
   Future<int> flushScrobbles() async {
     if (!_connected) return 0;
-    final queue = await _scrobbleQueueFor();
+    final session = _pinScrobbleSession();
+    if (session == null) return 0;
+    final queue = await _scrobbleQueueFor(session);
     if (queue == null) return 0;
-    return queue.flush((item) => _sendScrobble(item.trackId, item.timeMs));
+    return _flushScrobbles(session, queue);
   }
+
+  /// Si la cuenta cambia a mitad del vaciado, el siguiente envío devuelve
+  /// `false` y la cola se detiene con lo pendiente intacto.
+  Future<int> _flushScrobbles(_ScrobbleSession session, ScrobbleQueue queue) =>
+      queue.flush((item) => _sendScrobble(session, item.trackId, item.timeMs));
 }
+
+typedef _ScrobbleSession = ({String url, String user, String pass});

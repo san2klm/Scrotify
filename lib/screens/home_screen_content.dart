@@ -23,9 +23,12 @@ mixin _HomeMainContent on _HomeStateBase, _HomeLibraryPanel {
                 );
               }
               if (snapshot.hasError || !snapshot.hasData) {
-                return Center(
-                  child: Text('Error al cargar contenido',
-                      style: TextStyle(color: context.textMuted)),
+                return LibraryLoadError(
+                  error: snapshot.error,
+                  onRetry: () => setState(() {
+                    _futureTracks =
+                        context.read<NavidromeService>().getTracks();
+                  }),
                 );
               }
               final tracks = snapshot.data!;
@@ -76,122 +79,134 @@ mixin _HomeMainContent on _HomeStateBase, _HomeLibraryPanel {
     final albums = results.albums;
     final artists = results.artists;
 
-    return ListView(
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-      children: [
-        if (results.songs.isNotEmpty) ...[
-          const _SectionLabel('Canciones'),
-          TrackFilterBar(
-            filter: _trackFilter,
-            tracks: results.songs,
-            onChanged: (f) => setState(() => _trackFilter = f),
-          ),
-          if (songs.isEmpty)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              child: Text('Ninguna canción cumple los filtros.',
-                  style: TextStyle(color: context.textMuted, fontSize: 12.5)),
-            ),
-          for (final track in songs)
-            ListTile(
-              dense: true,
-              leading: CoverArt(
-                url: track.albumArtUrl,
-                artist: track.artist,
-                album: track.album,
-                title: track.title,
-                width: 40,
-                height: 40,
-                borderRadius: 4,
-                fallbackIcon: Icons.music_note,
-                fallbackIconSize: 20,
-                fallbackColor: context.bgCard,
+    // Los ListTile pintan fondo y salpicadura sobre el Material más cercano;
+    // sin uno propio, el ColoredBox del panel los ocultaba.
+    return Material(
+        type: MaterialType.transparency,
+        child: ListView(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+          children: [
+            if (results.songs.isNotEmpty) ...[
+              const _SectionLabel('Canciones'),
+              TrackFilterBar(
+                filter: _trackFilter,
+                tracks: results.songs,
+                onChanged: (f) => setState(() => _trackFilter = f),
               ),
-              title: Text(track.title,
-                  style: TextStyle(color: context.textPrimary, fontSize: 13.5)),
-              subtitle: Text('${track.artist} · ${track.album}',
-                  style: TextStyle(color: context.textMuted, fontSize: 11.5)),
-              trailing: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  LocalDownloadButton(tracks: [track], compact: true),
-                  IconButton(
-                    tooltip: 'Más opciones',
-                    icon: Icon(Icons.more_horiz, color: context.textMuted),
-                    onPressed: () => TrackContextMenu.show(context, track),
+              if (songs.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  child: Text('Ninguna canción cumple los filtros.',
+                      style:
+                          TextStyle(color: context.textMuted, fontSize: 12.5)),
+                ),
+              for (final track in songs)
+                ListTile(
+                  dense: true,
+                  leading: CoverArt(
+                    url: track.albumArtUrl,
+                    artist: track.artist,
+                    album: track.album,
+                    title: track.title,
+                    width: 40,
+                    height: 40,
+                    borderRadius: 4,
+                    fallbackIcon: Icons.music_note,
+                    fallbackIconSize: 20,
+                    fallbackColor: context.bgCard,
                   ),
-                  Text(
-                    _formatDuration(track.duration),
-                    style: TextStyle(color: context.textMuted, fontSize: 11.5),
+                  title: Text(track.title,
+                      style: TextStyle(
+                          color: context.textPrimary, fontSize: 13.5)),
+                  subtitle: Text('${track.artist} · ${track.album}',
+                      style:
+                          TextStyle(color: context.textMuted, fontSize: 11.5)),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      LocalDownloadButton(tracks: [track], compact: true),
+                      IconButton(
+                        tooltip: 'Más opciones',
+                        icon: Icon(Icons.more_horiz, color: context.textMuted),
+                        onPressed: () => TrackContextMenu.show(context, track),
+                      ),
+                      Text(
+                        _formatDuration(track.duration),
+                        style:
+                            TextStyle(color: context.textMuted, fontSize: 11.5),
+                      ),
+                    ],
                   ),
-                ],
-              ),
-              onTap: () {
-                context
-                    .read<PlayerController>()
-                    .playQueue([track], startIndex: 0);
-              },
-            ),
-        ],
-        if (albums.isNotEmpty) ...[
-          const SizedBox(height: 16),
-          const _SectionLabel('Álbumes'),
-          for (final album in albums)
-            ListTile(
-              dense: true,
-              leading: CoverArt(
-                url: album.coverArtUrl,
-                width: 40,
-                height: 40,
-                borderRadius: 4,
-                fallbackIcon: Icons.album,
-                fallbackIconSize: 20,
-                fallbackColor: context.bgCard,
-              ),
-              title: Text(album.title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(color: context.textPrimary, fontSize: 13.5)),
-              subtitle: InteractiveArtistText(
-                  artistString: album.artist,
-                  fontSize: 11.5,
-                  color: context.textMuted),
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                    builder: (_) => AlbumDetailScreen(album: album)),
-              ),
-            ),
-        ],
-        if (artists.isNotEmpty) ...[
-          const SizedBox(height: 16),
-          const _SectionLabel('Artistas'),
-          for (final artist in artists)
-            ListTile(
-              dense: true,
-              leading: CoverArt(
-                url: artist.coverArtUrl,
-                width: 40,
-                height: 40,
-                circle: true,
-                fallbackIcon: Icons.person,
-                fallbackIconSize: 20,
-                fallbackColor: context.bgCard,
-              ),
-              title: Text(artist.name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(color: context.textPrimary, fontSize: 13.5)),
-              subtitle: Text('Artista',
-                  style: TextStyle(color: context.textMuted, fontSize: 11.5)),
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => ArtistScreen(artist: artist)),
-              ),
-            ),
-        ],
-      ],
-    );
+                  onTap: () {
+                    context
+                        .read<PlayerController>()
+                        .playQueue([track], startIndex: 0);
+                  },
+                ),
+            ],
+            if (albums.isNotEmpty) ...[
+              const SizedBox(height: 16),
+              const _SectionLabel('Álbumes'),
+              for (final album in albums)
+                ListTile(
+                  dense: true,
+                  leading: CoverArt(
+                    url: album.coverArtUrl,
+                    width: 40,
+                    height: 40,
+                    borderRadius: 4,
+                    fallbackIcon: Icons.album,
+                    fallbackIconSize: 20,
+                    fallbackColor: context.bgCard,
+                  ),
+                  title: Text(album.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                          color: context.textPrimary, fontSize: 13.5)),
+                  subtitle: InteractiveArtistText(
+                      artistString: album.artist,
+                      fontSize: 11.5,
+                      color: context.textMuted),
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                        builder: (_) => AlbumDetailScreen(album: album)),
+                  ),
+                ),
+            ],
+            if (artists.isNotEmpty) ...[
+              const SizedBox(height: 16),
+              const _SectionLabel('Artistas'),
+              for (final artist in artists)
+                ListTile(
+                  dense: true,
+                  leading: CoverArt(
+                    url: artist.coverArtUrl,
+                    width: 40,
+                    height: 40,
+                    circle: true,
+                    fallbackIcon: Icons.person,
+                    fallbackIconSize: 20,
+                    fallbackColor: context.bgCard,
+                  ),
+                  title: Text(artist.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                          color: context.textPrimary, fontSize: 13.5)),
+                  subtitle: Text('Artista',
+                      style:
+                          TextStyle(color: context.textMuted, fontSize: 11.5)),
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                        builder: (_) => ArtistScreen(artist: artist)),
+                  ),
+                ),
+            ],
+          ],
+        ));
   }
 
   double _metadataExtraHeight() {

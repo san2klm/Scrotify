@@ -18,8 +18,10 @@ import 'replay_gain.dart';
 import 'scrobble_queue.dart';
 import 'server_profiles_controller.dart';
 import 'settings_controller.dart';
+import 'subsonic_response.dart';
 
 export 'replay_gain.dart';
+export 'subsonic_response.dart';
 
 part 'navidrome_models.dart';
 part 'navidrome_playlists.dart';
@@ -38,6 +40,23 @@ abstract class _NavidromeBase with ChangeNotifier {
   Future<http.Response> _get(Uri uri,
           {Duration timeout = const Duration(seconds: 20)}) =>
       _client.get(uri).timeout(timeout);
+
+  /// GET que devuelve el contenido de `subsonic-response` ya validado: un HTTP
+  /// no 2xx, un cuerpo ilegible o `status=failed` lanzan un [SubsonicException]
+  /// en vez de pasar por un catálogo vacío.
+  Future<Map<String, dynamic>> _getEnvelope(Uri uri,
+          {Duration timeout = const Duration(seconds: 20)}) async =>
+      parseSubsonicEnvelope(await _get(uri, timeout: timeout));
+
+  /// El servidor responde al ping pero las consultas de catálogo siguen
+  /// fallando (5xx o corte de transporte tras el reintento). No es «sin
+  /// conexión»: la UI puede ofrecer reintentar. Va ligado a la sesión, así que
+  /// cerrar sesión, reconectar o cambiar de cuenta lo descarta solo.
+  String? _degradedSession;
+
+  bool _disposed = false;
+
+  String? _lastProbeNote;
 
   ServerProfilesController? _profilesController;
 
@@ -151,6 +170,7 @@ abstract class _NavidromeBase with ChangeNotifier {
     T Function(LocalMusicService music, String scope, String user) fallback, {
     Future<void> Function(LocalMusicService music, String user, T data)?
         remember,
+    String? key,
   });
   Future<File?> _resolveScopedFile(String name);
   String _scopedName(String name);
@@ -572,12 +592,17 @@ class NavidromeService extends _NavidromeBase
   /// responde, se vuelve a conectar sin intervención del usuario.
   static const _reconnectEvery = 5;
 
+  /// Cadencia del sondeo de reconexión (sustituible en tests).
+  @visibleForTesting
+  Duration reconnectInterval = const Duration(seconds: _reconnectEvery);
+
   /// Plazo de una consulta de catálogo; cada petición HTTP ya tiene el suyo (20 s).
   static const _libraryTimeout = Duration(seconds: 25);
 
   void _startAutoReconnect() {
-    _reconnectTimer ??= Timer.periodic(const Duration(seconds: _reconnectEvery),
-        (_) => unawaited(_tryAutoReconnect()));
+    if (_disposed) return;
+    _reconnectTimer ??= Timer.periodic(
+        reconnectInterval, (_) => unawaited(_tryAutoReconnect()));
   }
 
   void _stopAutoReconnect() {
@@ -587,22 +612,69 @@ class NavidromeService extends _NavidromeBase
 
   Future<bool>? _serverProbe;
 
-  /// `true` si el servidor responde a `ping` ahora mismo. Usa un cliente nuevo
-  /// (no las conexiones que pudieron quedar colgadas) y comparte la sonda entre
-  /// llamadas simultáneas.
-  Future<bool> _pingServer() {
-    final running = _serverProbe;
-    if (running != null) return running;
-    return _serverProbe = _pingOnce().whenComplete(() => _serverProbe = null);
+  String? _serverProbeSession;
+
+  /// El servidor responde al ping pero las consultas de catálogo fallan.
+  bool get serverDegraded =>
+      _degradedProbes.isNotEmpty &&
+      _degradedSession != null &&
+      _degradedSession == currentSessionKey;
+
+  /// Consultas de catálogo que siguen fallando con el servidor vivo, por
+  /// endpoint, para poder repetirlas tal cual en un reintento manual.
+  final Map<String, Future<void> Function()> _degradedProbes = {};
+
+  /// Reintento manual desde la UI: repite las consultas que fallaron. Si alguna
+  /// sigue fallando lanza su error y el aviso se mantiene; solo cuando todas
+  /// responden se reconecta (la sesión nueva hace que las pantallas recarguen).
+  Future<void> retryDegraded() async {
+    if (!serverDegraded) return;
+    final session = currentSessionKey;
+    for (final probe in List.of(_degradedProbes.values)) {
+      if (_disposed || currentSessionKey != session) return;
+      await probe();
+    }
+    if (_disposed || currentSessionKey != session) return;
+    _degradedProbes.clear();
+    _degradedSession = null;
+    await reconnect();
   }
 
-  Future<bool> _pingOnce() async {
+  /// `true` si el servidor responde a `ping` con un envelope Subsonic `ok` y la
+  /// sesión sigue siendo la misma que la que lo pidió. Usa un cliente nuevo (no
+  /// las conexiones que pudieron quedar colgadas) y comparte la sonda solo
+  /// entre llamadas simultáneas de la misma sesión: un ping de la cuenta
+  /// anterior no puede dar por viva a la nueva.
+  Future<bool> _pingServer() {
+    final session = currentSessionKey;
+    final running = _serverProbe;
+    if (running != null && _serverProbeSession == session) return running;
+    late final Future<bool> tracked;
+    tracked = _pingOnce(session).whenComplete(() {
+      if (identical(_serverProbe, tracked)) {
+        _serverProbe = null;
+        _serverProbeSession = null;
+      }
+    });
+    _serverProbeSession = session;
+    return _serverProbe = tracked;
+  }
+
+  /// Motivo de un fallo sin credenciales ni cuerpos de respuesta.
+  String _safeReason(Object error) =>
+      error is SubsonicException ? error.toString() : '${error.runtimeType}';
+
+  Future<bool> _pingOnce(String? session) async {
+    final url = _url, user = _user, pass = _pass;
+    if (session == null || url == null || user == null || pass == null) {
+      return false;
+    }
     try {
       final salt = _randomSalt();
-      final uri = Uri.parse('$_url/rest/ping.view').replace(queryParameters: {
-        'u': _user!,
+      final uri = Uri.parse('$url/rest/ping.view').replace(queryParameters: {
+        'u': user,
         's': salt,
-        't': _md5('$_pass$salt'),
+        't': _md5('$pass$salt'),
         'v': '1.16.1',
         'c': _clientName,
         'f': 'json',
@@ -611,17 +683,30 @@ class NavidromeService extends _NavidromeBase
       try {
         final response =
             await probe.get(uri).timeout(const Duration(seconds: 6));
-        return response.statusCode == 200;
+        parseSubsonicEnvelope(response, requireOk: true);
       } finally {
         if (_injectedClient == null) probe.close();
       }
-    } catch (_) {
+    } catch (error) {
+      final reason = _safeReason(error);
+      if (reason != _lastProbeNote) {
+        _lastProbeNote = reason;
+        debugPrint('El servidor no pasó el ping: $reason');
+      }
       return false;
     }
+    _lastProbeNote = null;
+    return currentSessionKey == session;
   }
 
+  String? _lastReconnectNote;
+
   Future<void> _tryAutoReconnect() async {
-    if (!_offlineMode || _url == null || _user == null || _pass == null) {
+    if (_disposed ||
+        !_offlineMode ||
+        _url == null ||
+        _user == null ||
+        _pass == null) {
       _stopAutoReconnect();
       return;
     }
@@ -630,11 +715,18 @@ class NavidromeService extends _NavidromeBase
     final session = currentSessionKey;
     try {
       if (!await _pingServer()) return;
-      if (!_offlineMode || currentSessionKey != session) return;
+      if (_disposed || !_offlineMode || currentSessionKey != session) return;
       await reconnect();
+      _lastReconnectNote = null;
       debugPrint('Conexión con el servidor restablecida automáticamente.');
-    } catch (_) {
-      // Sigue sin red: se reintenta en el próximo ciclo.
+    } catch (error) {
+      // Se reintenta en el próximo ciclo; el motivo se registra una vez por
+      // cambio para no inundar el log cada 5 s.
+      final reason = _safeReason(error);
+      if (reason != _lastReconnectNote) {
+        _lastReconnectNote = reason;
+        debugPrint('Reconexión automática fallida: $reason');
+      }
     } finally {
       _autoReconnecting = false;
     }
@@ -642,6 +734,8 @@ class NavidromeService extends _NavidromeBase
 
   @override
   void dispose() {
+    _disposed = true;
+    _connectGen++; // una conexión en curso no debe revivir la sesión
     _stopAutoReconnect();
     super.dispose();
   }
@@ -651,7 +745,9 @@ class NavidromeService extends _NavidromeBase
   Future<T> _readLibrary<T>(Future<T> Function() fetch,
       T Function(LocalMusicService music, String scope, String user) fallback,
       {Future<void> Function(LocalMusicService music, String user, T data)?
-          remember}) async {
+          remember,
+      String? key}) async {
+    final endpoint = key ?? '$T';
     final music = localMusic;
     final scope = serverScope;
     final user = userScope;
@@ -666,6 +762,10 @@ class NavidromeService extends _NavidromeBase
     if (!_connected || _offlineMode) return fallback(music, scope, user);
     final session = currentSessionKey;
     T data;
+    // Transporte = corte de red o 5xx. Credenciales rechazadas, 4xx o cuerpos
+    // ilegibles no se reintentan ni se esconden tras el respaldo local.
+    bool isTransport(Object error) =>
+        isNetworkFailure(error) || isTransientServerError(error);
     try {
       try {
         data = await fetch().timeout(_libraryTimeout);
@@ -673,32 +773,56 @@ class NavidromeService extends _NavidromeBase
         // Un enlace saturado hace tardar la primera petición; si el servidor
         // responde al ping se reintenta una vez antes de caer al respaldo local
         // (que puede estar vacío y Home no lo vuelve a pedir).
-        if (!isNetworkFailure(error) ||
+        if (!isTransport(error) ||
             currentSessionKey != session ||
             !await _pingServer()) {
           rethrow;
         }
         debugPrint(
-            'Biblioteca lenta (${error.runtimeType}); se reintenta una vez.');
+            'Biblioteca lenta (${_safeReason(error)}); se reintenta una vez.');
         data = await fetch().timeout(_libraryTimeout);
       }
+      // Solo este endpoint deja de estar degradado: que otro responda bien no
+      // borra el aviso de uno que sigue fallando.
+      if (_degradedSession == session &&
+          _degradedProbes.remove(endpoint) != null) {
+        if (_degradedProbes.isEmpty) _degradedSession = null;
+        if (!_disposed) notifyListeners();
+      }
     } catch (error) {
-      if (currentSessionKey != session) rethrow;
+      if (currentSessionKey != session || !isTransport(error)) rethrow;
       // Una petición lenta o cortada no es una caída: solo se pasa a «sin
       // conexión» si el servidor tampoco responde a un ping. Si no, cada
       // lentitud puntual tiraba a toda la app y la reconexión recargaba todo.
-      if (isNetworkFailure(error) &&
-          !await _pingServer() &&
-          currentSessionKey == session &&
-          _connected) {
-        debugPrint('Sin conexión: ${error.runtimeType} y el servidor no '
-            'respondió al ping; se reintenta cada $_reconnectEvery s.');
-        _connected = false;
-        _offlineMode = true;
-        _startAutoReconnect();
-        notifyListeners();
+      final alive = await _pingServer();
+      if (currentSessionKey != session) rethrow;
+      if (!alive) {
+        if (_connected) {
+          debugPrint('Sin conexión: ${_safeReason(error)} y el servidor no '
+              'respondió al ping; se reintenta cada $_reconnectEvery s.');
+          _connected = false;
+          _offlineMode = true;
+          _startAutoReconnect();
+          if (!_disposed) notifyListeners();
+        }
+        return fallback(music, scope, user);
       }
-      return fallback(music, scope, user);
+      // El servidor está vivo pero la consulta sigue fallando: no se presenta
+      // un respaldo vacío como si fuera el catálogo. Con respaldo útil se
+      // muestra y se marca la degradación; sin él, el error llega a la UI.
+      debugPrint(
+          'Consulta fallida con el servidor vivo: ${_safeReason(error)}');
+      if (_degradedSession != session) {
+        _degradedProbes.clear();
+        _degradedSession = session;
+      }
+      final firstFailure = !_degradedProbes.containsKey(endpoint);
+      _degradedProbes[endpoint] =
+          () async => await fetch().timeout(_libraryTimeout);
+      if (firstFailure && !_disposed) notifyListeners();
+      final stored = fallback(music, scope, user);
+      if (stored == null || (stored is Iterable && stored.isEmpty)) rethrow;
+      return stored;
     }
     // Una respuesta atrasada no debe guardarse bajo una cuenta nueva.
     if (currentSessionKey == session && remember != null) {
@@ -742,9 +866,8 @@ class NavidromeService extends _NavidromeBase
       'f': 'json',
     });
 
-    final response = await _get(uri);
-    final data = jsonDecode(response.body);
-    final folders = _asListOrNull(data['subsonic-response']['musicFolder']);
+    final data = await _getEnvelope(uri);
+    final folders = _asListOrNull(data['musicFolder']);
     return folders ?? [];
   }
 
@@ -763,10 +886,9 @@ class NavidromeService extends _NavidromeBase
       'f': 'json',
     });
 
-    final response = await _get(uri);
-    final data = jsonDecode(response.body);
+    final data = await _getEnvelope(uri);
 
-    dynamic indexes = data['subsonic-response']['artists']?['index'];
+    dynamic indexes = data['artists']?['index'];
 
     if (indexes == null) {
       return [];
@@ -814,10 +936,9 @@ class NavidromeService extends _NavidromeBase
       'f': 'json',
     });
 
-    final response = await _get(uri);
-    final data = jsonDecode(response.body);
+    final data = await _getEnvelope(uri);
 
-    dynamic indexes = data['subsonic-response']['indexes'];
+    dynamic indexes = data['indexes'];
 
     if (indexes == null) {
       return [];
@@ -884,10 +1005,8 @@ class NavidromeService extends _NavidromeBase
     final uri =
         Uri.parse('$_url/rest/search3.view').replace(queryParameters: params);
 
-    final response = await _get(uri);
-    final data = jsonDecode(response.body);
-    final result =
-        data['subsonic-response']?['searchResult3'] as Map<String, dynamic>?;
+    final data = await _getEnvelope(uri);
+    final result = data['searchResult3'] as Map<String, dynamic>?;
     if (result == null) {
       return SearchResults(songs: [], albums: [], artists: []);
     }
