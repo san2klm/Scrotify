@@ -48,6 +48,12 @@ class MainActivity : AudioServiceFragmentActivity() {
         // Salida bit-perfect por USB (Android 14+) para los modos de alta fidelidad.
         HifiAudioPlugin(applicationContext)
             .register(flutterEngine.dartExecutor.binaryMessenger)
+        // Waveform real (MediaExtractor/MediaCodec). El plugin pertenece al
+        // FlutterEngine (compartido con audio_service), no a la Activity: una sola
+        // instancia, liberada al desregistrar/destruir el engine.
+        if (!flutterEngine.plugins.has(AndroidWaveformPlugin::class.java)) {
+            AndroidWaveformPlugin().register(flutterEngine)
+        }
         // ¿Corre en un Android TV? La UI usa navegación con control remoto.
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "crotowave/device")
             .setMethodCallHandler { call, result ->
