@@ -437,3 +437,11 @@ El mismo APK sirve para teléfono y tele. En una tele se activa un modo con la i
 - [x] Reproductor ampliado: portada firmada/caché de resolución por sesión y tinte neutro; waveform desde archivo local o MP3 96 kbps, análisis fuera de UI, coalescing y estados visibles. Sin decodificador comprimido en Android/iOS se informa indisponibilidad, no se inventa una onda.
 - [x] Verificación integral: `flutter analyze --no-pub` sin issues; suite Flutter con 1088 aprobadas, 3 omitidas y 0 fallidas; build Linux debug aprobado. Dos warnings C++ previos de `hotkey_manager_linux`. Render de widgets con portada y WAV locales inspeccionado en tema claro/oscuro. Especificación y límites: `docs/session-connectivity-player-fixes.md`.
 - [x] Paquetes actualizados en `dist/`: APK release teléfono arm64 firmado (versionCode 12247) y AppImage x86_64 portable compilado en Debian 12, con FFmpeg/ffprobe incluidos y probados. Checksums verificados; retirados APK TV/Chromecast, bundle antiguo y firma minisign anterior. No se generó una nueva firma minisign.
+
+## Waveform nativa Android
+
+- [x] Contrato y fuentes oficiales en `docs/android-native-waveform.md`; sin dependencias adicionales ni FFmpeg CLI móvil.
+- [x] Decoder Kotlin MediaExtractor/MediaCodec en worker acotado, RMS/picos por bloques y limpieza/cancelación; FlutterPlugin vinculado al engine de audio, no a la Activity.
+- [x] Integración Dart para archivos locales/stream de análisis, descargas abortables, coalescing y caché con publicación atómica; cancelación antes de resolver origen, al cambiar pista/vaciar cola/dispose y antes del commit de caché.
+- [x] Análisis sin issues; 47 tests dirigidos y suite de 1106 aprobados/3 omitidos/0 fallidos; Linux debug aprobado. Veinte checks JVM de PCM y 12 checks reales Android 14, incluidos MP3/FLAC 16/24 bits, archivo >30 MB, reproducción/onda sin Activity y cierre del engine sin crash.
+- [x] APK release teléfono ARM64 actualizado en `dist/` (versionCode 12251), misma firma verificada, entrypoint normal y checksums comprobados. AppImage anterior preservado. Pendiente prueba en teléfono físico. Detalles: `docs/android-native-waveform.md`.
