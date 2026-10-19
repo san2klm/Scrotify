@@ -427,3 +427,13 @@ El mismo APK sirve para teléfono y tele. En una tele se activa un modo con la i
 - [x] Verificado con prueba de widgets que el centro vertical del título (`tester.getCenter(find.text('Recomendados para ti')).dy`) coincide con el de los botones (`Icons.refresh_rounded`, `Icons.chevron_left_rounded`, `Icons.chevron_right_rounded`) (`closeTo(..., 1.0)`) y que el título aparece exactamente una vez (`findsOneWidget`).
 - [x] Pruebas (`flutter test test/discovery_section_test.dart`) PASS y `flutter analyze` sin errores ni warnings nuevos.
 - [x] Bundle de Windows Release AOT y assets compilados, y portable completo empaquetado en `D:\gemini\.exes\` con `CrotoWave.exe` y `data/app.so` actualizados.
+
+## Correcciones de sesión, conexión y reproductor (Claude Code)
+
+- [x] Scrobbles: validar aceptación Subsonic, fijar cuenta durante flush y compartir carga inicial de cola; regresiones de rechazo y cambio de cuenta.
+- [x] Sync: cambio de identidad, suspensión de cuenta al logout, migración segura de claves anteriores, persistencia serializada y aislamiento de archivos por cuenta.
+- [x] Home desktop/móvil: invalidar búsquedas antiguas y mostrar errores de catálogo con reintento; corregir Material de resultados sin silenciar errores de Flutter.
+- [x] Conectividad: validar respuestas/ping, retry acotado de 5xx, recuperación offline y estado degradado por consulta sin ocultarlo como lista vacía.
+- [x] Reproductor ampliado: portada firmada/caché de resolución por sesión y tinte neutro; waveform desde archivo local o MP3 96 kbps, análisis fuera de UI, coalescing y estados visibles. Sin decodificador comprimido en Android/iOS se informa indisponibilidad, no se inventa una onda.
+- [x] Verificación integral: `flutter analyze --no-pub` sin issues; suite Flutter con 1088 aprobadas, 3 omitidas y 0 fallidas; build Linux debug aprobado. Dos warnings C++ previos de `hotkey_manager_linux`. Render de widgets con portada y WAV locales inspeccionado en tema claro/oscuro. Especificación y límites: `docs/session-connectivity-player-fixes.md`.
+- [x] Paquetes actualizados en `dist/`: APK release teléfono arm64 firmado (versionCode 12247) y AppImage x86_64 portable compilado en Debian 12, con FFmpeg/ffprobe incluidos y probados. Checksums verificados; retirados APK TV/Chromecast, bundle antiguo y firma minisign anterior. No se generó una nueva firma minisign.
