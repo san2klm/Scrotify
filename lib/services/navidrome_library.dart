@@ -257,6 +257,19 @@ mixin _NavidromeLibrary on _NavidromeBase {
       return _artistCache[artistId];
     }
     if (!_connected) return null;
+    final failed = _artistFailedAt[artistId];
+    if (failed != null &&
+        DateTime.now().difference(failed) < const Duration(seconds: 30)) {
+      return null;
+    }
+    return _artistInFlight[artistId] ??=
+        _fetchArtist(artistId).whenComplete(() {
+      // Bloque con llaves: devolver el Future quitado haría que se esperara a sí mismo.
+      _artistInFlight.remove(artistId);
+    });
+  }
+
+  Future<Artist?> _fetchArtist(String artistId) async {
     try {
       final (salt, token) = _auth();
       final uri =
@@ -279,9 +292,11 @@ mixin _NavidromeLibrary on _NavidromeBase {
         coverArtUrl: _coverArtUrl(artistJson['coverArt'], salt, token),
       );
       _artistCache[artistId] = artist;
+      _artistFailedAt.remove(artistId);
       return artist;
     } catch (e) {
       debugPrint('NavidromeService.getArtist error: $e');
+      _artistFailedAt[artistId] = DateTime.now();
       return null;
     }
   }

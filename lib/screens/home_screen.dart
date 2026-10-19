@@ -91,8 +91,10 @@ class _HomeScreenState extends _HomeStateBase
     _futureGenres = context.read<NavidromeService>().getGenres();
     _futureRecentlyAdded =
         context.read<NavidromeService>().getRecentlyAddedTracks();
+    // Cada pasada baja 500 canciones: con un enlace que se atasca, pedirlas
+    // cada 30 s competía con lo que el usuario está abriendo.
     _serverPlayCountTimer = Timer.periodic(
-      const Duration(seconds: 30),
+      const Duration(minutes: 3),
       (_) {
         if (isAppVisible) _refreshServerPlayCounts();
       },
@@ -120,6 +122,8 @@ class _HomeScreenState extends _HomeStateBase
 
   Future<void> _refreshServerPlayCounts() async {
     if (_refreshingPlayCounts || !mounted) return;
+    final nav = context.read<NavidromeService>();
+    if (!nav.connected || nav.offlineMode) return;
     _refreshingPlayCounts = true;
     try {
       final tracks = await context.read<NavidromeService>().getTracks();

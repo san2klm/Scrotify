@@ -96,6 +96,10 @@ abstract class _NavidromeBase with ChangeNotifier {
   final Set<String> _excludedArtistIds = {};
 
   final Map<String, Artist> _artistCache = {};
+  // Una sola petición por artista a la vez y sin repetir un fallo reciente:
+  // las listas reconstruyen sus FutureBuilder y cada build lanzaba otra.
+  final Map<String, Future<Artist?>> _artistInFlight = {};
+  final Map<String, DateTime> _artistFailedAt = {};
 
   // ---------------------------------------------------------------------------
   // Rating 1-5 estrellas (Fase 8)
@@ -345,6 +349,7 @@ class NavidromeService extends _NavidromeBase
     _followedArtistIds.clear();
     _excludedArtistIds.clear();
     _artistCache.clear();
+    _artistFailedAt.clear();
     _trackRatings.clear();
     _cachedGenres = null;
     if (client != null) {
@@ -504,6 +509,7 @@ class NavidromeService extends _NavidromeBase
       _followedArtistIds.clear();
       _excludedArtistIds.clear();
       _artistCache.clear();
+      _artistFailedAt.clear();
       _trackRatings.clear();
       _cachedGenres = null;
       await _loadPins();
@@ -544,6 +550,7 @@ class NavidromeService extends _NavidromeBase
     _followedArtistIds.clear();
     _excludedArtistIds.clear();
     _artistCache.clear();
+    _artistFailedAt.clear();
     _trackRatings.clear();
     _cachedGenres = null;
     await music.bindLegacyCollections(scope, userScope!);
@@ -938,6 +945,7 @@ class NavidromeService extends _NavidromeBase
     _followedArtistIds.clear();
     _excludedArtistIds.clear();
     _artistCache.clear();
+    _artistFailedAt.clear();
     _trackRatings.clear();
     _cachedGenres = null;
 
