@@ -10,6 +10,7 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:path/path.dart' as p;
 
+import '../offline_cache_service.dart';
 import '../secure_storage.dart';
 import 'sync_crypto.dart';
 
@@ -32,8 +33,19 @@ class SyncService extends ChangeNotifier {
     Future<void> Function(String?)? writeKey,
     Future<bool> Function()? readOptOut,
     Future<void> Function(bool)? writeOptOut,
+    Future<bool> Function()? readAccountBound,
+    Future<void> Function(bool)? writeAccountBound,
+    Future<bool> Function()? readManualLinked,
+    Future<void> Function(bool)? writeManualLinked,
+    Future<void> Function(String)? writeLegacyKey,
+    this.requestTimeout = const Duration(seconds: 30),
   })  : _readOptOut = readOptOut ?? _defaultReadOptOut,
         _writeOptOut = writeOptOut ?? _defaultWriteOptOut,
+        _readAccountBound = readAccountBound ?? _defaultReadBound,
+        _writeAccountBound = writeAccountBound ?? _defaultWriteBound,
+        _readManualLinked = readManualLinked ?? _defaultReadManual,
+        _writeManualLinked = writeManualLinked ?? _defaultWriteManual,
+        _writeLegacyKey = writeLegacyKey ?? _defaultWriteLegacyKey,
         _client = client ?? http.Client(),
         _now = now ?? DateTime.now,
         _readKey = readKey ?? (() => SecureStorage.secureRead(_keyName)),
@@ -41,6 +53,12 @@ class SyncService extends ChangeNotifier {
 
   static const _keyName = 'crotowave.sync_key';
   static const _optOutName = 'crotowave.sync_opt_out';
+  static const _boundName = 'crotowave.sync_account_bound';
+  static const _manualName = 'crotowave.sync_manual_linked';
+  static const _legacyKeyName = 'crotowave.sync_key_legacy';
+  static const _legacyNote =
+      'Hay una clave de sincronización anterior sin cuenta asociada. Inicia '
+      'sesión para confirmarla o vuelve a vincularla con su clave.';
   static const _stateFile = 'sync_state.json';
 
   /// Documentos JSON de la app que se sincronizan (con o sin sufijo de servidor).
@@ -82,6 +100,14 @@ class SyncService extends ChangeNotifier {
   final Future<void> Function(String?) _writeKey;
   final Future<bool> Function() _readOptOut;
   final Future<void> Function(bool) _writeOptOut;
+  final Future<bool> Function() _readAccountBound;
+  final Future<void> Function(bool) _writeAccountBound;
+  final Future<bool> Function() _readManualLinked;
+  final Future<void> Function(bool) _writeManualLinked;
+  final Future<void> Function(String) _writeLegacyKey;
+
+  /// Plazo de cada petición completa (cabeceras y cuerpo).
+  final Duration requestTimeout;
 
   /// Se llama tras escribir archivos traídos de otro dispositivo, con sus
   /// nombres, para que los controladores recarguen lo que puedan.
@@ -97,7 +123,37 @@ class SyncService extends ChangeNotifier {
   Timer? _timer;
   Map<String, Map<String, dynamic>> _state = {};
 
+  /// Sube con cada cambio de identidad (vincular, desactivar, suspender,
+  /// cambiar de cuenta). Una activación que empezó con otro valor se abandona.
+  int _lifecycle = 0;
+
+  /// Activación en curso: su ticket, si es de cuenta (`bound`) y la huella de
+  /// la cuenta (nunca la contraseña).
+  ({int ticket, bool bound, String? fingerprint})? _activation;
+
+  /// La clave activa se derivó de la cuenta Navidrome (no la vinculó el
+  /// usuario a mano) y [_boundFingerprint] es la cuenta a la que corresponde.
+  bool _accountBound = false;
+  String? _boundFingerprint;
+
+  /// Cuenta ya comparada con una clave manual: evita repetir el PBKDF2.
+  String? _manualChecked;
+
+  /// Clave de cuenta conservada mientras la sincronización está suspendida (o
+  /// restaurada sin confirmar la cuenta actual), para retomarla si vuelve la
+  /// misma cuenta.
+  Uint8List? _heldSecret;
+  bool _suspended = false;
+
+  /// La clave retenida no tiene procedencia conocida (guardada antes de que se
+  /// recordara): solo se retoma si coincide con la cuenta actual.
+  bool _heldLegacy = false;
+
   bool get enabled => _enabled;
+
+  /// Suspendida porque no hay cuenta (cerrar sesión), sin que el usuario la
+  /// haya desactivado: vuelve sola al iniciar sesión.
+  bool get suspended => _suspended;
 
   /// Claves derivadas de la clave de sincronización (para Connect).
   SyncCrypto? get crypto => _crypto;
@@ -115,6 +171,23 @@ class SyncService extends ChangeNotifier {
       ? SecureStorage.secureWrite(_optOutName, '1')
       : SecureStorage.secureDelete(_optOutName);
 
+  static Future<bool> _defaultReadBound() async =>
+      await SecureStorage.secureRead(_boundName) == '1';
+
+  static Future<void> _defaultWriteBound(bool value) => value
+      ? SecureStorage.secureWrite(_boundName, '1')
+      : SecureStorage.secureDelete(_boundName);
+
+  static Future<bool> _defaultReadManual() async =>
+      await SecureStorage.secureRead(_manualName) == '1';
+
+  static Future<void> _defaultWriteManual(bool value) => value
+      ? SecureStorage.secureWrite(_manualName, '1')
+      : SecureStorage.secureDelete(_manualName);
+
+  static Future<void> _defaultWriteLegacyKey(String value) =>
+      SecureStorage.secureWrite(_legacyKeyName, value);
+
   static Future<void> _defaultWriteKey(String? value) => value == null
       ? SecureStorage.secureDelete(_keyName)
       : SecureStorage.secureWrite(_keyName, value);
@@ -123,36 +196,168 @@ class SyncService extends ChangeNotifier {
   // Ciclo de vida
   // ---------------------------------------------------------------------------
 
-  /// Reanuda la sincronización si ya había una clave guardada.
+  /// Reanuda la sincronización si ya había una clave guardada. Una clave que
+  /// salió de una cuenta no se usa hasta que [enableForAccount] confirme que
+  /// la cuenta actual es la misma: podría haberse cerrado sesión o cambiado de
+  /// usuario con la app cerrada.
   Future<void> initialize() async {
+    final ticket = ++_lifecycle;
     final stored = await _readKey();
     final secret = stored == null ? null : SyncKey.parse(stored);
-    if (secret == null) return;
-    await _useSecret(secret);
-    await _loadState();
-    _start();
+    if (secret == null || ticket != _lifecycle) return;
+    final bound = await _readBound();
+    final manual = bound ? false : await _readManual();
+    if (ticket != _lifecycle) return;
+    if (manual) {
+      // Vinculada a propósito por el usuario: no depende de la cuenta.
+      await _activate(secret,
+          bound: false, resume: true, ticket: ticket, persist: false);
+      return;
+    }
+    // De cuenta, o de origen desconocido (guardada antes de recordarlo): no se
+    // usa hasta confirmar la cuenta. Una clave desconocida nunca se da por
+    // manual, y no se borra: si no coincide con la cuenta se guarda aparte.
+    _heldSecret = secret;
+    _heldLegacy = !bound;
+    _suspended = true;
+    _error = _heldLegacy ? _legacyNote : null;
+    notifyListeners();
   }
-
-  bool _autoEnabling = false;
 
   /// Sincronización automática: la clave sale de la propia cuenta de
   /// Navidrome, así que todos los dispositivos con la misma cuenta comparten
-  /// datos sin copiar ninguna clave. No hace nada si ya hay sincronización o si
-  /// el usuario la desactivó a propósito.
+  /// datos sin copiar ninguna clave. Si la cuenta cambia, pasa a la bóveda de
+  /// la nueva. No hace nada si el usuario la desactivó a propósito ni sobre
+  /// una clave vinculada a mano.
   Future<void> enableForAccount({
     required String url,
     required String username,
     required String password,
   }) async {
-    if (_enabled || _autoEnabling) return;
-    _autoEnabling = true;
+    final fingerprint = _fingerprint(url, username, password);
+    if (_enabled && _accountBound && _boundFingerprint == fingerprint) return;
+    if (_enabled && !_accountBound && _manualChecked == fingerprint) return;
+    final running = _activation;
+    if (running != null &&
+        (!running.bound ||
+            (running.fingerprint == fingerprint &&
+                running.ticket == _lifecycle))) {
+      return; // una vinculación manual manda; la misma cuenta ya se está activando
+    }
+    final ticket = ++_lifecycle;
+    _activation = (ticket: ticket, bound: true, fingerprint: fingerprint);
     try {
-      if (await _readOptOut()) return;
+      if (await _readOptOut() || ticket != _lifecycle) return;
       final secret = await deriveAccountSecret(url, username, password);
-      if (_enabled) return;
-      await link(SyncKey.format(secret));
+      if (ticket != _lifecycle) return;
+      final current = _secret;
+      if (_enabled && current != null && listEquals(current, secret)) {
+        // La misma bóveda: una clave derivada antes de que se recordara su
+        // origen, o la misma cuenta escrita de otra forma.
+        _boundFingerprint = fingerprint;
+        _accountScopes = _scopesOf(url, username);
+        if (!_accountBound) {
+          _accountBound = true;
+          await _persist(ticket, () async {
+            await _writeBound(true);
+            await _writeManual(false);
+          });
+        }
+        return;
+      }
+      if (_enabled && !_accountBound) {
+        _manualChecked = fingerprint; // clave manual explícita: se respeta
+        return;
+      }
+      final held = _heldSecret;
+      final same = held != null && listEquals(held, secret);
+      await _activate(secret,
+          bound: true,
+          fingerprint: fingerprint,
+          resume: same,
+          ticket: ticket,
+          scopes: _scopesOf(url, username),
+          legacyBackup: _heldLegacy && !same ? held : null);
     } finally {
-      _autoEnabling = false;
+      if (_activation?.ticket == ticket) _activation = null;
+    }
+  }
+
+  /// Cierra la sesión de la cuenta: detiene la sincronización de una clave de
+  /// cuenta sin desactivarla ni borrar nada (no es un opt-out). Una clave
+  /// vinculada a mano no depende de la cuenta y sigue activa. Los ciclos y
+  /// activaciones en curso dejan de aplicar y de subir datos.
+  Future<void> suspendForLogout() async {
+    final running = _activation;
+    if (running != null && !running.bound) return;
+    if (_enabled && !_accountBound) return;
+    _lifecycle++;
+    _activation = null;
+    final secret = _secret ?? _heldSecret;
+    _teardown();
+    _heldSecret = secret;
+    _suspended = secret != null;
+    _boundFingerprint = null;
+    _manualChecked = null;
+    if (_heldLegacy) _error = _legacyNote;
+    notifyListeners();
+  }
+
+  // Marcadores de procedencia de la clave guardada. Sin ninguno (instalaciones
+  // anteriores) el origen es desconocido, no «manual».
+  Future<bool> _readManual() async {
+    try {
+      return await _readManualLinked();
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<void> _writeManual(bool value) async {
+    try {
+      await _writeManualLinked(value);
+    } catch (error) {
+      debugPrint('sync: no se pudo recordar la vinculación manual: $error');
+    }
+  }
+
+  /// Escrituras de configuración persistente, en orden de llegada y cada una
+  /// validada contra la generación ANTES de ejecutarse: si mientras esperaba
+  /// turno hubo una intención más reciente, no se ejecuta. Así la última
+  /// intención gana aunque una escritura anterior tarde más en terminar.
+  Future<void> _persistQueue = Future.value();
+
+  Future<bool> _persist(int ticket, Future<void> Function() write) {
+    final run = _persistQueue.then((_) async {
+      if (ticket != _lifecycle) return false;
+      await write();
+      return true;
+    });
+    _persistQueue = run.then<void>((_) {}, onError: (_) {});
+    return run;
+  }
+
+  /// Huella de la cuenta: identifica «esta cuenta» sin guardar la contraseña.
+  static String _fingerprint(String url, String username, String password) {
+    final server = url.trim().toLowerCase().replaceAll(RegExp(r'/+$'), '');
+    return sha256
+        .convert(utf8.encode('$server\n$username\n$password'))
+        .toString();
+  }
+
+  Future<bool> _readBound() async {
+    try {
+      return await _readAccountBound();
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<void> _writeBound(bool value) async {
+    try {
+      await _writeAccountBound(value);
+    } catch (error) {
+      debugPrint('sync: no se pudo recordar el origen de la clave: $error');
     }
   }
 
@@ -186,19 +391,49 @@ class SyncService extends ChangeNotifier {
   Future<bool> link(String keyText) async {
     final secret = SyncKey.parse(keyText);
     if (secret == null) return false;
-    await _writeOptOut(false);
-    await _useSecret(secret);
-    await _writeKey(SyncKey.format(secret));
-    _state = {};
-    await _saveState();
-    _start();
-    unawaited(syncNow());
-    return true;
+    final ticket = ++_lifecycle;
+    _activation = (ticket: ticket, bound: false, fingerprint: null);
+    try {
+      return await _activate(secret,
+          bound: false, resume: false, ticket: ticket);
+    } finally {
+      if (_activation?.ticket == ticket) _activation = null;
+    }
   }
 
   /// Deja de sincronizar en este dispositivo (los datos del servidor y de los
   /// demás dispositivos no se tocan).
   Future<void> disable() async {
+    final ticket = ++_lifecycle;
+    _activation = null;
+    _teardown();
+    _heldSecret = null;
+    _heldLegacy = false;
+    _suspended = false;
+    _accountBound = false;
+    _boundFingerprint = null;
+    _manualChecked = null;
+    // Si antes de que le toque turno se vincula otra clave, esa intención
+    // posterior gana y esta limpieza no se ejecuta.
+    await _persist(ticket, () async {
+      await _writeOptOut(true);
+      await _writeKey(null);
+      await _writeBound(false);
+      await _writeManual(false);
+      try {
+        final file = File(p.join((await dataDir()).path, _stateFile));
+        if (await file.exists()) await file.delete();
+      } catch (e) {
+        debugPrint(
+            'SyncService: no se pudo borrar el estado local de sincronización: $e');
+      }
+    });
+    notifyListeners();
+  }
+
+  /// Detiene la sincronización en memoria. Quitar [_crypto] basta para que los
+  /// ciclos en vuelo se abandonen en su siguiente paso (ver [_ensureLive]).
+  void _teardown() {
     _timer?.cancel();
     _timer = null;
     _enabled = false;
@@ -206,23 +441,88 @@ class SyncService extends ChangeNotifier {
     _secret = null;
     _error = null;
     _state = {};
-    await _writeOptOut(true);
-    await _writeKey(null);
-    try {
-      final file = File(p.join((await dataDir()).path, _stateFile));
-      if (await file.exists()) await file.delete();
-    } catch (e) {
-      debugPrint(
-          'SyncService: no se pudo borrar el estado local de sincronización: $e');
-    }
-    notifyListeners();
+    _accountScopes = null;
   }
 
-  Future<void> _useSecret(Uint8List secret) async {
+  /// Segmentos (`srv_…`) de los archivos por cuenta que pertenecen a la cuenta
+  /// de la bóveda activa; `null` con una clave manual (sin cuenta, sin filtro).
+  Set<String>? _accountScopes;
+
+  static Set<String> _scopesOf(String url, String username) {
+    var server = url.trim();
+    if (server.endsWith('/')) server = server.substring(0, server.length - 1);
+    if (!server.startsWith('http://') && !server.startsWith('https://')) {
+      server = 'https://$server';
+    }
+    return {
+      OfflineCacheService.safeScopeSegment('$server|$username'),
+      OfflineCacheService.safeScopeSegment(
+          server), // nombre anterior, por servidor
+    };
+  }
+
+  /// Los ajustes, temas y demás documentos globales viajan siempre; los
+  /// archivos con sufijo de cuenta (`followed_artists_srv_….json`) solo si
+  /// son de la cuenta activa: en la misma carpeta conviven los de otras
+  /// cuentas, que no deben subirse a esta bóveda ni recibirse de ella.
+  bool _belongsHere(String name) {
+    final scopes = _accountScopes;
+    if (scopes == null) return true;
+    final suffix = syncedFile.firstMatch(name)?.group(2);
+    return suffix == null || scopes.any((s) => suffix == '_$s');
+  }
+
+  /// Pasa a la bóveda de [secret]. Cada espera comprueba el [ticket]: si
+  /// mientras tanto se suspendió, desactivó o eligió otra cuenta, se abandona
+  /// sin guardar ni activar nada.
+  Future<bool> _activate(
+    Uint8List secret, {
+    required bool bound,
+    String? fingerprint,
+    required bool resume,
+    required int ticket,
+    bool persist = true,
+    Set<String>? scopes,
+    Uint8List? legacyBackup,
+  }) async {
+    bool stale() => ticket != _lifecycle;
+    _teardown();
+    final crypto = await SyncCrypto.fromSecret(secret);
+    if (stale()) return false;
+    if (persist) {
+      // Un solo bloque en la cola: o se ejecuta entero o, si ya hay una
+      // intención posterior, no se ejecuta.
+      final done = await _persist(ticket, () async {
+        if (legacyBackup != null) {
+          // La clave desconocida que se va a reemplazar no se pierde.
+          await _writeLegacyKey(SyncKey.format(legacyBackup));
+        }
+        await _writeOptOut(false);
+        await _writeKey(SyncKey.format(secret));
+        await _writeBound(bound);
+        await _writeManual(!bound);
+        if (!resume) await _saveState();
+      });
+      if (!done || stale()) return false;
+    }
+    if (resume) {
+      final loaded = await _readState();
+      if (stale()) return false;
+      _state = loaded;
+    }
     _secret = secret;
-    _crypto = await SyncCrypto.fromSecret(secret);
+    _crypto = crypto;
     _enabled = true;
+    _suspended = false;
+    _heldSecret = null;
+    _heldLegacy = false;
+    _accountBound = bound;
+    _boundFingerprint = fingerprint;
+    _manualChecked = null;
+    _accountScopes = scopes;
     notifyListeners();
+    _start();
+    return true;
   }
 
   void _start() {
@@ -231,9 +531,20 @@ class SyncService extends ChangeNotifier {
     unawaited(syncNow());
   }
 
+  bool _disposed = false;
+
+  /// Tras `dispose` un ciclo o activación en vuelo ya no avisa a nadie.
+  @override
+  void notifyListeners() {
+    if (!_disposed) super.notifyListeners();
+  }
+
   @override
   void dispose() {
-    _timer?.cancel();
+    _disposed = true;
+    _lifecycle++; // activaciones en curso se abandonan
+    _activation = null;
+    _teardown(); // los ciclos en vuelo dejan de ser vigentes
     _client.close();
     super.dispose();
   }
@@ -253,20 +564,37 @@ class SyncService extends ChangeNotifier {
     _syncing = true;
     _error = null;
     notifyListeners();
+    var superseded = false;
     try {
       final applied = await _cycle(crypto, base);
+      _ensureLive(crypto);
       _error = _cycleNote; // aviso no fatal del ciclo (p. ej. borrados masivos)
       _lastSync = _now();
       if (applied.isNotEmpty) onApplied?.call(applied);
+    } on _Superseded {
+      superseded = true; // otra cuenta o suspensión: nada de este ciclo vale
     } on _SyncFailure catch (failure) {
-      _error = failure.message;
+      if (_isLive(crypto)) _error = failure.message;
     } catch (error) {
       debugPrint('sync: $error');
-      _error = 'No se pudo sincronizar. Se reintentará en unos minutos.';
+      if (_isLive(crypto)) {
+        _error = 'No se pudo sincronizar. Se reintentará en unos minutos.';
+      }
     } finally {
       _syncing = false;
       notifyListeners();
     }
+    // La bóveda nueva no pudo arrancar mientras este ciclo seguía en curso.
+    if (superseded && _enabled) unawaited(syncNow());
+  }
+
+  bool _isLive(SyncCrypto crypto) => _enabled && identical(crypto, _crypto);
+
+  /// Cada activación crea un [SyncCrypto] nuevo, así que seguir siendo el
+  /// vigente identifica al ciclo de la identidad actual. Se llama tras cada
+  /// espera antes de aplicar, subir o guardar algo.
+  void _ensureLive(SyncCrypto crypto) {
+    if (!_isLive(crypto)) throw const _Superseded();
   }
 
   void _fail(String message) {
@@ -277,6 +605,7 @@ class SyncService extends ChangeNotifier {
   Future<Set<String>> _cycle(SyncCrypto crypto, Uri base) async {
     final remote = await _listRemote(crypto, base);
     final listing = await _localDocs(crypto);
+    _ensureLive(crypto);
     final local = listing.docs;
     final applied = <String>{};
     final nowMs = _now().millisecondsSinceEpoch;
@@ -310,6 +639,7 @@ class SyncService extends ChangeNotifier {
     }
 
     for (final key in docKeys) {
+      _ensureLive(crypto);
       final l = local[key];
       final r = remote[key];
       final t = tombstoneOf(key);
@@ -329,7 +659,9 @@ class SyncService extends ChangeNotifier {
         case _Action.deleteLocal:
           if (await _tombstoneAuthentic(
               crypto, base, tombstoneKey(key), l!.name)) {
-            await _moveToTrash(await _targetFile(l.name));
+            final target = await _targetFile(l.name);
+            _ensureLive(crypto);
+            await _moveToTrash(target, crypto);
             _state.remove(key);
             applied.add(l.name);
           }
@@ -348,7 +680,7 @@ class SyncService extends ChangeNotifier {
     }
     await _pruneTombstones(crypto, base, remote, nowMs);
     await _purgeTrash(nowMs);
-    await _saveState();
+    await _saveState(crypto);
     return applied;
   }
 
@@ -468,10 +800,11 @@ class SyncService extends ChangeNotifier {
   }
 
   /// Mueve [file] a la papelera local en vez de borrarlo.
-  Future<void> _moveToTrash(File? file) async {
+  Future<void> _moveToTrash(File? file, SyncCrypto crypto) async {
     if (file == null || !await file.exists()) return;
     final dir = Directory(p.join((await dataDir()).path, trashDir));
     await dir.create(recursive: true);
+    _ensureLive(crypto);
     final target = File(p.join(
         dir.path, '${_now().millisecondsSinceEpoch}_${p.basename(file.path)}'));
     try {
@@ -518,19 +851,32 @@ class SyncService extends ChangeNotifier {
     if (response.statusCode == 404) return null;
     final doc = jsonDecode(response.body) as Map<String, dynamic>;
     final plain = await crypto.decrypt(doc['blob'] as String, docKey: key);
+    _ensureLive(crypto);
     final envelope = jsonDecode(utf8.decode(plain)) as Map<String, dynamic>;
     final name = envelope['name'] as String;
+    if (!_belongsHere(name)) return null; // archivo por cuenta de otra cuenta
     final bytes = base64.decode(envelope['data'] as String);
     final file = await _targetFile(name);
     if (file == null) return null; // Nombre no permitido: se ignora.
     final merged =
         name == 'settings.json' ? await _mergeSettings(file, bytes) : bytes;
+    _ensureLive(crypto);
     await file.parent.create(recursive: true);
+    _ensureLive(crypto);
     final tmp = File('${file.path}.sync-tmp');
     await tmp.writeAsBytes(merged, flush: true);
+    if (!_isLive(crypto)) {
+      // Cambió la identidad mientras se escribía: no se instala lo de otra bóveda.
+      try {
+        await tmp.delete();
+      } catch (_) {}
+      throw const _Superseded();
+    }
     await tmp.rename(file.path);
+    final hash = _hash(await _normalized(name, file));
+    _ensureLive(crypto);
     _state[key] = {
-      'hash': _hash(await _normalized(name, file)),
+      'hash': hash,
       'updatedAt': remote.updatedAt,
       'name': name,
     };
@@ -563,7 +909,7 @@ class SyncService extends ChangeNotifier {
       await for (final entity in dir.list(followLinks: false)) {
         final name = p.basename(entity.path);
         if (entity is! File || !syncedFile.hasMatch(name)) continue;
-        if (name.length > 64) continue;
+        if (name.length > 64 || !_belongsHere(name)) continue;
         docs[await crypto.docKey(name)] = await _readDoc(name, entity);
       }
     }
@@ -641,12 +987,20 @@ class SyncService extends ChangeNotifier {
 
   Future<http.Response> _send(String method, Uri uri, SyncCrypto crypto,
       {String? body}) async {
+    // Ni antes ni después de la red: una identidad anterior no envía ni
+    // interpreta respuestas.
+    _ensureLive(crypto);
     final request = http.Request(method, uri)
       ..headers['authorization'] = 'Bearer ${crypto.authToken}'
       ..headers['content-type'] = 'application/json';
     if (body != null) request.body = body;
-    final response = await http.Response.fromStream(
-        await _client.send(request).timeout(const Duration(seconds: 30)));
+    // El plazo cubre la petición entera: un cuerpo que se queda a medias no
+    // puede dejar el ciclo (y con él `syncing`) colgado para siempre.
+    final response = await (() async {
+      return http.Response.fromStream(await _client.send(request));
+    })()
+        .timeout(requestTimeout);
+    _ensureLive(crypto);
     final code = response.statusCode;
     if (code == 403) {
       throw const _SyncFailure(
@@ -682,25 +1036,30 @@ class SyncService extends ChangeNotifier {
     }
   }
 
-  Future<void> _loadState() async {
+  Future<Map<String, Map<String, dynamic>>> _readState() async {
     try {
       final file = File(p.join((await dataDir()).path, _stateFile));
-      if (!await file.exists()) return;
+      if (!await file.exists()) return {};
       final data =
           jsonDecode(await file.readAsString()) as Map<String, dynamic>;
-      _state = {
+      return {
         for (final e in data.entries)
           e.key: Map<String, dynamic>.from(e.value as Map),
       };
     } catch (_) {
-      _state = {};
+      return {};
     }
   }
 
-  Future<void> _saveState() async {
+  /// Guarda el estado de la bóveda activa. Con [crypto], un ciclo de una
+  /// identidad anterior no pisa el estado de la actual.
+  Future<void> _saveState([SyncCrypto? crypto]) async {
     try {
       final file = File(p.join((await dataDir()).path, _stateFile));
+      if (crypto != null) _ensureLive(crypto);
       await file.writeAsString(jsonEncode(_state));
+    } on _Superseded {
+      rethrow;
     } catch (error) {
       debugPrint('sync: no se pudo guardar el estado: $error');
     }
@@ -734,4 +1093,10 @@ class _RemoteDoc {
 class _SyncFailure implements Exception {
   const _SyncFailure(this.message);
   final String message;
+}
+
+/// El ciclo pertenece a una identidad que ya no es la vigente. Es un
+/// [_SyncFailure] para atravesar los `rethrow` de los pasos tolerantes a fallos.
+class _Superseded extends _SyncFailure {
+  const _Superseded() : super('');
 }

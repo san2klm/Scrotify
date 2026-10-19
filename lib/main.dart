@@ -202,7 +202,12 @@ class MyApp extends StatelessWidget {
             final profiles = ctx.read<ServerProfilesController>();
             void autoEnable() {
               final profile = profiles.activeProfile;
-              if (profile == null) return;
+              if (profile == null) {
+                // Sin cuenta no hay bóveda de cuenta: se suspende (sin ser un
+                // opt-out) para no sincronizar los datos de la anterior.
+                unawaited(sync.suspendForLogout());
+                return;
+              }
               unawaited(sync.enableForAccount(
                   url: profile.url,
                   username: profile.username,
