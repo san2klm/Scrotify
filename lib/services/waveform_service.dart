@@ -47,7 +47,14 @@ class WaveformData {
 }
 
 /// Causa de un [WaveformDecodeException], para explicarla sin filtrar detalles.
-enum WaveformFailure { unsupported, tooLarge, network, timeout, unknown }
+enum WaveformFailure {
+  unsupported,
+  tooLarge,
+  network,
+  timeout,
+  cancelled,
+  unknown,
+}
 
 /// Error lanzado cuando la waveform no puede extraerse del audio real.
 ///
@@ -66,6 +73,7 @@ class WaveformDecodeException implements Exception {
         WaveformFailure.tooLarge => 'el archivo es demasiado grande',
         WaveformFailure.network => 'no se pudo descargar el audio',
         WaveformFailure.timeout => 'se agotó el tiempo de espera',
+        WaveformFailure.cancelled => 'se canceló el análisis del audio',
         WaveformFailure.unknown => 'no se pudo analizar el audio',
       };
 
@@ -85,4 +93,13 @@ abstract class WaveformService {
   /// Si no, descarga/decodifica el audio REAL, lo analiza y lo guarda en caché.
   Future<WaveformData> getWaveform(
       String trackId, String streamUrl, Duration duration);
+}
+
+/// Extensión opcional de [WaveformService] para cancelar trabajo en curso
+/// cuando deja de ser necesario (cambio de pista, vaciado de cola o `dispose`).
+///
+/// Separada de [WaveformService] para no romper dobles de prueba existentes.
+abstract class CancelableWaveformService implements WaveformService {
+  /// Cancela el análisis en curso para [trackId] (o todos si [trackId] es null).
+  Future<void> cancelWaveform([String? trackId]);
 }
