@@ -191,7 +191,10 @@ mixin _PlayerQueue on _PlayerBase {
     if (_karaokePlayer != null) {
       unawaited(_karaokePlayer!.pause());
     }
+    _waveformGen++; // una carga de waveform en curso ya no debe aplicarse
     _waveformData = null;
+    _waveformError = null;
+    _waveformLoadingId = null;
     _isWaveformLoading = false;
     notifyListeners();
   }

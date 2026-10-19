@@ -82,7 +82,11 @@ class MostPlayedItem {
 abstract class _PlayerBase extends ChangeNotifier {
   String? Function(String trackId)? localFileResolver;
 
-  final WaveformService _waveformService = AudioWaveformService();
+  WaveformService _waveformService = AudioWaveformService();
+
+  @visibleForTesting
+  set waveformServiceForTesting(WaveformService service) =>
+      _waveformService = service;
 
   String? _currentlyTrackedId;
 
@@ -93,6 +97,10 @@ abstract class _PlayerBase extends ChangeNotifier {
   bool _isWaveformLoading = false; // Loading state
 
   int _waveformGen = 0; // token anti race-condition por cambio rápido
+
+  String? _waveformLoadingId; // pista cuya waveform se está cargando
+
+  String? _waveformError; // motivo seguro si no hay waveform (para la UI)
 
   // Última calidad efectiva aplicada, para recargar la canción en curso solo
   // cuando la calidad realmente cambió (p. ej. al pasar de WiFi a móvil).
@@ -505,6 +513,10 @@ class PlayerController extends _PlayerBase
 
   bool get isWaveformLoading => _isWaveformLoading;
 
+  /// Por qué no hay forma de onda para la pista actual (texto seguro para la
+  /// UI), o null si está cargando o ya existe.
+  String? get waveformError => _waveformError;
+
   /// Load waveform for the current track from the REAL audio.
   ///
   /// Descarga el stream real (vía NavidromeService.getStreamUrl), lo
@@ -515,27 +527,52 @@ class PlayerController extends _PlayerBase
   Future<void> _loadCurrentTrackWaveform() async {
     final track = currentTrack;
     if (track == null) return;
+    // Ya cargada o cargándose (repetir pista, handoff tras precarga, espejo):
+    // no repetir descarga ni análisis.
+    if (_waveformData?.trackId == track.id || _waveformLoadingId == track.id) {
+      return;
+    }
 
     final gen = ++_waveformGen;
+    // La onda (y el fallo) de la pista anterior no representan a esta.
+    _waveformData = null;
+    _waveformError = null;
+    _waveformLoadingId = track.id;
     _isWaveformLoading = true;
     notifyListeners();
 
+    // Sin forma de onda: deja el motivo (seguro) para que la UI no quede en
+    // una línea indistinguible de "cargando". Nunca se inventa una onda.
+    void unavailable(String reason) {
+      if (gen == _waveformGen && currentTrack?.id == track.id) {
+        _waveformData = null;
+        _waveformError = 'Forma de onda no disponible: $reason';
+      }
+    }
+
     try {
+      // Radio por internet: stream continuo, no hay archivo que analizar (y
+      // descargarlo no terminaría nunca).
+      if (_directStreams.containsKey(track.id)) {
+        unavailable('radio en directo');
+        return;
+      }
       final duration = _trackDuration(track) ?? _lead.duration ?? Duration.zero;
       if (duration.inMilliseconds <= 0) {
-        if (gen == _waveformGen && currentTrack?.id == track.id) {
-          _waveformData = null;
-        }
+        unavailable('duración desconocida');
         return;
       }
       String streamUrl;
       try {
-        // Descargada: analizar el archivo local, sin red ni token.
+        // Descargada: analizar el archivo local, sin red ni token. Si no, un
+        // stream liviano: la envolvente no necesita el lossless de reproducción
+        // (cientos de MB y por encima del tope de análisis).
         streamUrl = localFileResolver?.call(track.id) ??
-            _service.getStreamUrl(track.id,
-                quality: _settings.effectiveQuality);
+            _service.getStreamUrl(track.id, quality: AudioQuality.low96);
       } catch (_) {
-        return; // Sin URL (offline): sin waveform, nunca sintética.
+        // Sin URL (offline): sin waveform, nunca sintética.
+        unavailable('sin conexión con el servidor');
+        return;
       }
       final data =
           await _waveformService.getWaveform(track.id, streamUrl, duration);
@@ -550,10 +587,13 @@ class PlayerController extends _PlayerBase
       if (kDebugMode) {
         debugPrint('Error loading real waveform: ${redactSecrets('$e')}');
       }
-      if (gen == _waveformGen && currentTrack?.id == track.id) {
-        _waveformData = null; // Sin datos: estado neutro, nunca sintético.
-      }
+      // Sin datos: estado neutro, nunca sintético. El motivo sale del tipo de
+      // fallo; el detalle de la excepción (URLs, credenciales) no se muestra.
+      unavailable(e is WaveformDecodeException
+          ? e.userMessage
+          : 'no se pudo analizar el audio');
     } finally {
+      if (gen == _waveformGen) _waveformLoadingId = null;
       if (gen == _waveformGen && currentTrack?.id == track.id) {
         _isWaveformLoading = false;
         notifyListeners();

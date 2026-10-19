@@ -81,6 +81,8 @@ class IdlePlayer extends ChangeNotifier implements PlayerController {
   @override
   bool get isWaveformLoading => false;
   @override
+  String? get waveformError => null;
+  @override
   bool get gapless => false;
 
   @override

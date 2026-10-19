@@ -41,7 +41,18 @@ class FfmpegWaveformDecoder {
   static Future<List<double>> decodeFileToMonoFloat32(
     String inputPath, {
     int sampleRate = decodeSampleRate,
-    Duration timeout = const Duration(seconds: 60),
+    Duration timeout = const Duration(seconds: 120),
+  }) async {
+    return pcmBytesToFloat32(await decodeFileToPcmBytes(inputPath,
+        sampleRate: sampleRate, timeout: timeout));
+  }
+
+  /// Como [decodeFileToMonoFloat32] pero devuelve el PCM crudo (float32 LE).
+  /// Así la conversión y el análisis pueden hacerse en otro isolate.
+  static Future<Uint8List> decodeFileToPcmBytes(
+    String inputPath, {
+    int sampleRate = decodeSampleRate,
+    Duration timeout = const Duration(seconds: 120),
   }) async {
     final file = File(inputPath);
     if (!await file.exists()) {
@@ -54,6 +65,7 @@ class FfmpegWaveformDecoder {
         'error',
         '-i',
         inputPath,
+        '-vn', // sin la carátula incrustada
         '-ac',
         '1',
         '-ar',
@@ -68,13 +80,13 @@ class FfmpegWaveformDecoder {
       throw StateError('ffmpeg binary not available: $e');
     }
 
-    final outBytes = <int>[];
+    final outBytes = BytesBuilder(copy: false);
     final errBuffer = StringBuffer();
     final outDone = Completer<void>();
     final errDone = Completer<void>();
 
     process.stdout.listen(
-      outBytes.addAll,
+      outBytes.add,
       onDone: () => outDone.complete(),
       onError: (Object e) => outDone.completeError(e),
       cancelOnError: true,
@@ -102,11 +114,21 @@ class FfmpegWaveformDecoder {
       throw StateError(
           'ffmpeg produced no PCM for $inputPath${err.isEmpty ? '' : ': $err'}');
     }
-    return _bytesToFloat32Mono(outBytes);
+    return outBytes.takeBytes();
   }
 
   /// Escribe [audioBytes] a un temporal y lo decodifica con ffmpeg.
   static Future<List<double>> decodeBytesToMonoFloat32(
+    List<int> audioBytes, {
+    String extensionHint = '.bin',
+    int sampleRate = decodeSampleRate,
+  }) async {
+    return pcmBytesToFloat32(await decodeBytesToPcmBytes(audioBytes,
+        extensionHint: extensionHint, sampleRate: sampleRate));
+  }
+
+  /// [decodeBytesToMonoFloat32] devolviendo el PCM crudo (float32 LE).
+  static Future<Uint8List> decodeBytesToPcmBytes(
     List<int> audioBytes, {
     String extensionHint = '.bin',
     int sampleRate = decodeSampleRate,
@@ -117,7 +139,7 @@ class FfmpegWaveformDecoder {
     final tmp = File('${tmpDir.path}/input$ext');
     try {
       await tmp.writeAsBytes(audioBytes, flush: true);
-      return await decodeFileToMonoFloat32(tmp.path, sampleRate: sampleRate);
+      return await decodeFileToPcmBytes(tmp.path, sampleRate: sampleRate);
     } finally {
       try {
         await tmpDir.delete(recursive: true);
@@ -125,15 +147,11 @@ class FfmpegWaveformDecoder {
     }
   }
 
-  static List<double> _bytesToFloat32Mono(List<int> bytes) {
+  /// Float32 little-endian → samples mono. Una sola copia (a memoria alineada)
+  /// en lugar de un `clamp` por muestra: el analizador ya acota -1..1.
+  static List<double> pcmBytesToFloat32(Uint8List bytes) {
     final usable = bytes.length - (bytes.length % 4);
-    final bd =
-        ByteData.sublistView(Uint8List.fromList(bytes.sublist(0, usable)));
-    final count = usable ~/ 4;
-    final out = List<double>.filled(count, 0.0);
-    for (var i = 0; i < count; i++) {
-      out[i] = bd.getFloat32(i * 4, Endian.little).clamp(-1.0, 1.0);
-    }
-    return out;
+    final aligned = Uint8List(usable)..setRange(0, usable, bytes);
+    return aligned.buffer.asFloat32List();
   }
 }
