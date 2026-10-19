@@ -36,8 +36,9 @@ class _Navidrome extends FakeNavidrome {
 
 /// Servicio de waveform que registra qué se le pidió y qué pistas quedan
 /// pendientes de resolver.
-class _RecordingWaveform implements WaveformService {
+class _RecordingWaveform implements CancelableWaveformService {
   final requests = <({String trackId, String source})>[];
+  final cancelled = <String?>[];
   final pending = <String, Completer<WaveformData>>{};
   final holdTracks = <String>{};
   Object? failWith;
@@ -53,6 +54,11 @@ class _RecordingWaveform implements WaveformService {
     }
     return Future.value(WaveformData(
         trackId: trackId, duration: duration, amplitudes: const [0.2, 0.9]));
+  }
+
+  @override
+  Future<void> cancelWaveform([String? trackId]) async {
+    cancelled.add(trackId);
   }
 }
 
@@ -317,10 +323,37 @@ void main() {
       player.clearQueue();
       expect(player.isWaveformLoading, isFalse);
       expect(player.waveformError, isNull);
+      expect(waveform.cancelled, ['1']);
 
       await player.playQueue([_t('1')]);
       await waitFor(() => waveform.requests.length == 2,
           reason: 'la carga anulada no debe bloquear la misma pista');
+    });
+
+    test(
+        'cambiar de pista cancela la carga anterior en curso pero no la misma pista repetida',
+        () async {
+      waveform.holdTracks.addAll(['1', '2']);
+      await player.playQueue([_t('1'), _t('2')]);
+      await waitFor(() => waveform.requests.length == 1);
+      expect(waveform.cancelled, isEmpty);
+
+      await player.skipNext();
+      await waitFor(() => waveform.requests.length == 2);
+      expect(waveform.cancelled, ['1']);
+    });
+
+    test('dispose cancela la carga de waveform pendiente', () async {
+      final localWaveform = _RecordingWaveform()..holdTracks.add('1');
+      final localPlayer = PlayerController(_Navidrome(), SettingsController(),
+          playerA: FakeAudioPlayer('la'), playerB: FakeAudioPlayer('lb'))
+        ..waveformServiceForTesting = localWaveform;
+
+      await localPlayer.playQueue([_t('1')]);
+      await waitFor(() => localWaveform.requests.length == 1);
+
+      localPlayer.dispose();
+      expect(localWaveform.cancelled, ['1']);
     });
 
     test('una radio en directo no se descarga y explica por qué', () async {

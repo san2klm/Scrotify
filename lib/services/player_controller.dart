@@ -88,6 +88,17 @@ abstract class _PlayerBase extends ChangeNotifier {
   set waveformServiceForTesting(WaveformService service) =>
       _waveformService = service;
 
+  /// Cancela el trabajo de waveform obsoleto de [trackId] si el servicio lo
+  /// admite (interfaz opcional: los dobles que solo implementan
+  /// [WaveformService] siguen valiendo). Nunca lanza ni deja Futures sin manejar.
+  void _cancelWaveformWork(String? trackId) {
+    if (trackId == null) return;
+    final service = _waveformService;
+    if (service is CancelableWaveformService) {
+      unawaited(service.cancelWaveform(trackId).catchError((_) {}));
+    }
+  }
+
   String? _currentlyTrackedId;
 
   bool _currentTrackPlayCounted = false;
@@ -534,6 +545,10 @@ class PlayerController extends _PlayerBase
     }
 
     final gen = ++_waveformGen;
+    // Cambio de pista: el análisis de la anterior ya no sirve; se detiene en
+    // lugar de solo ignorar su resultado. (La misma pista ya salió arriba, así
+    // que una carga repetida nunca se cancela a sí misma.)
+    _cancelWaveformWork(_waveformLoadingId);
     // La onda (y el fallo) de la pista anterior no representan a esta.
     _waveformData = null;
     _waveformError = null;
@@ -1172,6 +1187,10 @@ class PlayerController extends _PlayerBase
 
   @override
   void dispose() {
+    // Invalida la carga en curso (su `finally` ya no notifica a un controlador
+    // liberado) y detiene el trabajo de decodificación pendiente.
+    _waveformGen++;
+    _cancelWaveformWork(_waveformLoadingId);
     _remote?.removeListener(_onRemoteChanged);
     _audioHandler?.detachPlayerController();
     _audioHandler = null;
