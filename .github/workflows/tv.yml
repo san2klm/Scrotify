@@ -66,11 +66,12 @@ jobs:
           ls -lh CrotoWave-TV.apk
 
       - name: Subir como artefacto
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: CrotoWave-TV
           path: CrotoWave-TV.apk
-          retention-days: 30
+          retention-days: 1
 
       - name: Publicar en la release tv-latest
         env:

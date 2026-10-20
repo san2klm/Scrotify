@@ -65,11 +65,12 @@ jobs:
           Get-Item "CrotoWave-Windows-x64.zip" | Select-Object Name, Length
 
       - name: Subir como artefacto
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: CrotoWave-Windows
           path: CrotoWave-Windows-x64.zip
-          retention-days: 30
+          retention-days: 1
 
       - name: Publicar en la release windows-latest
         env:

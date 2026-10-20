@@ -64,11 +64,12 @@ jobs:
           ls -lh CrotoWave-Linux-x64.tar.gz
 
       - name: Subir como artefacto
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: CrotoWave-Linux
           path: CrotoWave-Linux-x64.tar.gz
-          retention-days: 30
+          retention-days: 1
 
       - name: Publicar en la release linux-latest
         env:

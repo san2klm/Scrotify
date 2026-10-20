@@ -66,11 +66,12 @@ jobs:
           ls -lh CrotoWave-Android.apk
 
       - name: Subir como artefacto
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: CrotoWave-Android
           path: CrotoWave-Android.apk
-          retention-days: 30
+          retention-days: 1
 
       - name: Publicar en la release android-latest
         env:
