@@ -263,8 +263,54 @@ class CrotoWaveAudioHandler extends BaseAudioHandler with SeekHandler {
     if (player != null) syncFromPlayer(player);
   }
 
+  /// Pasos del volumen expuesto al sistema (botones físicos con la app en
+  /// segundo plano o la pantalla apagada): 20 pasos de 5 %.
+  static const int _volumeSteps = 20;
+
+  /// Publica la sesión de medios con volumen "remoto": así Android manda los
+  /// botones de volumen a [androidAdjustRemoteVolume] (volumen de la app)
+  /// también con la app en segundo plano. En bit-perfect el volumen de la
+  /// app está fijo, así que se vuelve al volumen local del sistema.
+  void _syncVolumeInfo(PlayerController player) {
+    final AndroidPlaybackInfo info;
+    if (player.volumeLocked && !player.isMirroring) {
+      info = LocalAndroidPlaybackInfo();
+    } else {
+      info = RemoteAndroidPlaybackInfo(
+        volumeControlType: AndroidVolumeControlType.absolute,
+        maxVolume: _volumeSteps,
+        volume: (player.volume * _volumeSteps).round().clamp(0, _volumeSteps),
+      );
+    }
+    final current = androidPlaybackInfo.valueOrNull;
+    if (current?.toString() != info.toString()) androidPlaybackInfo.add(info);
+  }
+
+  @override
+  Future<void> androidAdjustRemoteVolume(
+      AndroidVolumeDirection direction) async {
+    final p = _player;
+    if (p == null) return;
+    final step = direction == AndroidVolumeDirection.raise
+        ? 1
+        : direction == AndroidVolumeDirection.lower
+            ? -1
+            : 0;
+    if (step == 0) return;
+    final index = (p.volume * _volumeSteps).round() + step;
+    await p.setVolume(index.clamp(0, _volumeSteps) / _volumeSteps);
+  }
+
+  @override
+  Future<void> androidSetRemoteVolume(int volumeIndex) async {
+    await _player?.setVolume(volumeIndex.clamp(0, _volumeSteps) / _volumeSteps);
+  }
+
   /// Sincroniza metadatos, estado de reproducción y cola desde [player].
   void syncFromPlayer(PlayerController player) {
+    if (defaultTargetPlatform == TargetPlatform.android && !kIsWeb) {
+      _syncVolumeInfo(player);
+    }
     final track = player.currentTrack;
 
     if (track == null) {

@@ -59,6 +59,7 @@ import 'screens/login_screen.dart';
 import 'widgets/cover_accent_sync.dart';
 import 'widgets/discord_presence_sync.dart';
 import 'widgets/desktop_window_frame.dart';
+import 'widgets/android_volume_keys.dart';
 
 /// Lee el tema guardado ANTES de runApp (equiv. startupThemeAppearance de
 /// Psysonic): el primer frame ya usa el tema correcto, sin flash.
@@ -484,7 +485,7 @@ class MyApp extends StatelessWidget {
               );
               return TvMode.isTv
                   ? TvFocusRing(child: TvTextFieldNavigation(child: background))
-                  : background;
+                  : AndroidVolumeKeys(child: background);
             },
             home: const LoginScreen(),
           );
