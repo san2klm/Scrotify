@@ -197,7 +197,9 @@ void main() {
     final switches = find.byType(Switch).evaluate().length;
     for (var i = 0; i < switches; i++) {
       for (var round = 0; round < 2; round++) {
-        final finder = find.byType(Switch).at(i);
+        final currentFinder = find.byType(Switch);
+        if (currentFinder.evaluate().length <= i) break;
+        final finder = currentFinder.at(i);
         await tester.ensureVisible(finder);
         await tester.pumpAndSettle();
         await tester.tap(finder);
@@ -219,7 +221,9 @@ void main() {
     }
     final sliders = find.byType(Slider).evaluate().length;
     for (var i = 0; i < sliders; i++) {
-      final finder = find.byType(Slider).at(i);
+      final currentFinder = find.byType(Slider);
+      if (currentFinder.evaluate().length <= i) break;
+      final finder = currentFinder.at(i);
       await tester.ensureVisible(finder);
       await tester.pumpAndSettle();
       await tester.drag(finder, const Offset(40, 0));

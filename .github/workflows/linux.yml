@@ -3,7 +3,7 @@ name: Linux (x64)
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches: [main, santi]
     paths:
       - 'lib/**'
       - 'linux/**'
@@ -31,7 +31,7 @@ jobs:
       - name: Instalar dependencias de compilación Linux
         run: |
           sudo apt-get update
-          sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev libmpv-dev libsecret-1-dev libjsoncpp-dev
+          sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev libmpv-dev libsecret-1-dev libjsoncpp-dev libkeybinder-3.0-dev libayatana-appindicator3-dev
 
       - name: Setup Flutter
         uses: subosito/flutter-action@v2

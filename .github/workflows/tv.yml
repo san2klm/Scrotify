@@ -3,7 +3,7 @@ name: Android TV (APK)
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches: [main, santi]
     paths:
       - 'lib/**'
       - 'android/**'
@@ -53,8 +53,11 @@ jobs:
           sed -i 's/minSdk = flutter.minSdkVersion/minSdk = 23/g' android/app/build.gradle 2>/dev/null || true
           echo "org.gradle.jvmargs=-Xmx4096m -XX:MaxMetaspaceSize=1024m" >> android/gradle.properties
           echo "org.gradle.parallel=true" >> android/gradle.properties
+          echo "allowDebugSigning=true" >> android/gradle.properties
 
       - name: Build Android TV APK
+        env:
+          ORG_GRADLE_PROJECT_allowDebugSigning: "true"
         run: flutter build apk --release --no-tree-shake-icons
 
       - name: Preparar instalador TV

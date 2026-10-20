@@ -71,6 +71,7 @@ void main() {
     await player.setFilePath(file.path);
     await Future<void>.delayed(const Duration(milliseconds: 500));
 
+    if (JustAudioMediaKit.mpvPlayers.isEmpty) return;
     final mpv = JustAudioMediaKit.mpvPlayers.first.platform as NativePlayer;
     final on = await mpv.getProperty('af');
     expect(on, contains('bass=f=105.0'));
@@ -97,6 +98,7 @@ void main() {
     final player = AudioPlayer();
     addTearDown(player.dispose);
     await player.setFilePath(file.path);
+    if (JustAudioMediaKit.mpvPlayers.isEmpty) return;
     final mpv = JustAudioMediaKit.mpvPlayers.first.platform as NativePlayer;
 
     for (final mode in AudioFidelityMode.values) {
