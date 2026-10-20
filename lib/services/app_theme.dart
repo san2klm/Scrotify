@@ -1,3 +1,4 @@
+import 'theme_names.dart';
 import 'dart:convert';
 
 import 'package:archive/archive.dart';
@@ -261,7 +262,8 @@ class AppTheme {
 
       return AppTheme(
         id: (manifest['id'] ?? manifest['name'] ?? 'tema').toString(),
-        name: (manifest['name'] ?? manifest['id'] ?? 'Tema').toString(),
+        name: bundledThemeNames[manifest['id']] ??
+            (manifest['name'] ?? manifest['id'] ?? 'Tema').toString(),
         author: (manifest['author'] ?? '').toString(),
         version: (manifest['version'] ?? '').toString(),
         description: (manifest['description'] ?? '').toString(),
@@ -466,19 +468,8 @@ class AppTheme {
   /// `FIXED_THEMES` de Psysonic.
   static final List<AppTheme> fixedThemes = [
     AppTheme.fixed(
-      id: 'mocha',
-      name: 'Catppuccin Mocha',
-      author: 'Psysonic',
-      description: 'Oscuro cálido, el clásico.',
-      accent: const Color(0xFFCBA6F7),
-      accent2: const Color(0xFF89B4FA),
-      bgApp: const Color(0xFF1E1E2E),
-      bgCard: const Color(0xFF313244),
-      textPrimary: const Color(0xFFCDD6F4),
-    ),
-    AppTheme.fixed(
       id: 'latte',
-      name: 'Catppuccin Latte',
+      name: 'Crema',
       author: 'Psysonic',
       mode: 'light',
       description: 'Claro cálido para el día.',
@@ -489,7 +480,7 @@ class AppTheme {
     ),
     AppTheme.fixed(
       id: 'kanagawa-wave',
-      name: 'Kanagawa Wave',
+      name: 'Ola',
       author: 'Psysonic',
       description: 'Azules tormenta japoneses.',
       accent: const Color(0xFF7E9CD8),
@@ -499,7 +490,7 @@ class AppTheme {
     ),
     AppTheme.fixed(
       id: 'stark-hud',
-      name: 'Stark HUD',
+      name: 'Neón celeste',
       author: 'Psysonic',
       description: 'Neón cian estilo HUD.',
       accent: const Color(0xFF00F2FF),
@@ -509,7 +500,7 @@ class AppTheme {
     ),
     AppTheme.fixed(
       id: 'vision-dark',
-      name: 'Vision Dark',
+      name: 'Noche dorada',
       author: 'Psysonic',
       description: 'Dorado sobre negro, seguro para daltonismo.',
       tags: const ['cvd-safe'],
@@ -520,7 +511,7 @@ class AppTheme {
     ),
     AppTheme.fixed(
       id: 'vision-navy',
-      name: 'Vision Navy',
+      name: 'Marino dorado',
       author: 'Psysonic',
       description: 'Dorado sobre azul marino, seguro para daltonismo.',
       tags: const ['cvd-safe'],

@@ -49,6 +49,12 @@ HERE="$(dirname "$(readlink -f "$0")")"
 # Librerías y ffmpeg/ffprobe viajan dentro del AppImage.
 export LD_LIBRARY_PATH="$HERE/usr/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 export PATH="$HERE/usr/bin:$PATH"
+# El controlador SVGA3D de VMware puede corromper glifos y geometría de
+# Impeller. Usar Mesa por CPU en esa VM; respetar una elección explícita.
+if [ -z "${LIBGL_ALWAYS_SOFTWARE+x}" ] &&
+   grep -qi 'VMware' /sys/class/dmi/id/sys_vendor 2>/dev/null; then
+  export LIBGL_ALWAYS_SOFTWARE=1
+fi
 exec "$HERE/usr/bin/crotowave" "$@"
 APPRUN
 chmod +x "$appdir/AppRun"

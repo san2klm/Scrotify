@@ -32,6 +32,7 @@ class FlutterWindow : public Win32Window {
 
  private:
   void InitTaskbarToolbar();
+  HRESULT ApplyWindowEffects(bool transparent, bool blur, bool dark);
 
   // The project to run.
   flutter::DartProject project_;
@@ -41,6 +42,10 @@ class FlutterWindow : public Win32Window {
 
   // Channel to notify Flutter about global mouse hotkeys and taskbar events.
   std::unique_ptr<flutter::MethodChannel<flutter::EncodableValue>> mouse_channel_;
+  std::unique_ptr<flutter::MethodChannel<flutter::EncodableValue>> effects_channel_;
+  bool effects_transparent_ = false;
+  bool effects_blur_ = false;
+  bool effects_dark_ = true;
 
   ITaskbarList3* taskbar_list_ = nullptr;
   UINT taskbar_button_created_msg_ = 0;

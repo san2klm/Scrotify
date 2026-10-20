@@ -9,6 +9,7 @@ import 'package:path_provider/path_provider.dart';
 
 import 'app_theme.dart';
 import 'theme_validation.dart';
+import 'theme_names.dart';
 
 /// Gestiona temas fijos bundleados + temas `.zip` estilo Psysonic.
 ///
@@ -19,9 +20,25 @@ import 'theme_validation.dart';
 /// - Persiste todo en `themes.json` (versión 2, con migración).
 class ThemeController extends ChangeNotifier {
   static const _configVersion = 2;
+  static const customThemeId = 'crotowave-custom';
+  Color _customBackground = const Color(0xFF121212);
+  Color _customAccent = const Color(0xFFA855F7);
+  Color _customAccent2 = const Color(0xFF38BDF8);
+  double _customTransparency = 0;
+
+  double get customTransparency => _customTransparency;
+  bool get hasSurfaceEffects =>
+      _selectedId == customThemeId && _customTransparency > 0;
+  Color get pageBackground =>
+      hasSurfaceEffects ? const Color(0x00000000) : active.bgApp;
+  double get surfaceTransparency =>
+      _selectedId == customThemeId ? _customTransparency : 0;
+
+  Color surfaceColor(Color color) =>
+      color.withValues(alpha: color.a * (1 - surfaceTransparency));
 
   static Set<String> get fixedIds =>
-      AppTheme.fixedThemes.map((t) => t.id).toSet();
+      {...AppTheme.fixedThemes.map((t) => t.id), customThemeId};
 
   String _themesDir = '';
   String? _selectedId;
@@ -48,7 +65,37 @@ class ThemeController extends ChangeNotifier {
   String get themesDir => _themesDir;
 
   /// Fijos primero, luego instalados.
-  List<AppTheme> get themes => [...AppTheme.fixedThemes, ..._installed];
+  List<AppTheme> get themes =>
+      [...AppTheme.fixedThemes, ..._installed, customTheme];
+
+  AppTheme get customTheme {
+    final light = _customBackground.computeLuminance() > 0.45;
+    return AppTheme.fixed(
+      id: customThemeId,
+      name: 'Personalizado',
+      mode: light ? 'light' : 'dark',
+      accent: _customAccent,
+      accent2: _customAccent2,
+      bgApp: _customBackground,
+      bgCard: _customBackground,
+    );
+  }
+
+  Future<void> saveCustomTheme({
+    required Color background,
+    required Color accent,
+    required Color accent2,
+    double transparency = 0,
+  }) async {
+    _customBackground = background;
+    _customAccent = accent;
+    _customAccent2 = accent2;
+    _customTransparency = transparency.isFinite ? transparency.clamp(0, 1) : 0;
+    _selectedId = customThemeId;
+    notifyListeners();
+    await _saveConfig();
+  }
+
   List<AppTheme> get installedThemes => _installed;
   List<AppTheme> get fixedThemeList => AppTheme.fixedThemes;
 
@@ -82,7 +129,7 @@ class ThemeController extends ChangeNotifier {
   }
 
   AppTheme get _baseTheme {
-    final id = _selectedId ?? 'mocha';
+    final id = _selectedId ?? 'latte';
     for (final t in themes) {
       if (t.id == id) return t;
     }
@@ -140,6 +187,27 @@ class ThemeController extends ChangeNotifier {
     _themesDir = dir ?? '';
     _selectedId = data['selectedId'] as String?;
     _coverAccentEnabled = data['coverAccent'] as bool? ?? false;
+    final custom = data['customColors'];
+    if (custom is Map) {
+      Color readColor(String key, Color fallback) {
+        final value = custom[key];
+        return value is int && value >= 0 && value <= 0xFFFFFFFF
+            ? Color(value | 0xFF000000)
+            : fallback;
+      }
+
+      double readEffect(String key, double max) {
+        final value = custom[key];
+        return value is num && value.isFinite
+            ? value.toDouble().clamp(0, max)
+            : 0;
+      }
+
+      _customTransparency = readEffect('transparency', 1);
+      _customBackground = readColor('background', _customBackground);
+      _customAccent = readColor('accent', _customAccent);
+      _customAccent2 = readColor('accent2', _customAccent2);
+    }
   }
 
   Future<Directory> _thumbDir() async {
@@ -284,6 +352,12 @@ class ThemeController extends ChangeNotifier {
         'themesDir': _themesDir,
         'selectedId': _selectedId,
         'coverAccent': _coverAccentEnabled,
+        'customColors': {
+          'transparency': _customTransparency,
+          'background': _customBackground.toARGB32(),
+          'accent': _customAccent.toARGB32(),
+          'accent2': _customAccent2.toARGB32(),
+        },
       }));
     } catch (err) {
       debugPrint('theme_controller:170 ignorado: $err');
@@ -339,6 +413,7 @@ class ThemeController extends ChangeNotifier {
             thumbnailPath: thumbPath,
           );
           if (theme != null) {
+            if (retiredBundledThemeIds.contains(theme.id)) continue;
             if (seenThemeIds.add(theme.id)) {
               loaded.add(theme);
             }
@@ -350,6 +425,21 @@ class ThemeController extends ChangeNotifier {
         }
       }
 
+      // Los temas fijos conservan su orden; el resto se ordena por nombre.
+      String sortKey(String name) {
+        const accents = 'áéíóúü';
+        const plain = 'aeiouu';
+        var key = name.toLowerCase();
+        for (var i = 0; i < accents.length; i++) {
+          key = key.replaceAll(accents[i], plain[i]);
+        }
+        return key;
+      }
+
+      loaded.sort((a, b) {
+        final order = sortKey(a.name).compareTo(sortKey(b.name));
+        return order != 0 ? order : a.id.compareTo(b.id);
+      });
       _installed = loaded;
       // Si algún slot apunta a un id inexistente, caer con aviso.
       if (_selectedId != null && !_knownId(_selectedId)) {

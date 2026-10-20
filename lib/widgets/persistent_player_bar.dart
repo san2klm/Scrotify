@@ -16,8 +16,6 @@ import 'crotolink_dialog.dart';
 import 'connect_panel.dart';
 import 'track_context_menu.dart';
 import 'interactive_artist_text.dart';
-import '../services/mini_player_controller.dart';
-import '../services/window_controls.dart';
 import '../utils/app_colors.dart';
 import '../utils/playback_time.dart';
 
@@ -223,17 +221,6 @@ class PersistentPlayerBar extends StatelessWidget {
               if (showFull) ...[
                 const SizedBox(width: 8),
                 _openFullButton(context),
-              ],
-              if (WindowControls.isDesktop) ...[
-                const SizedBox(width: 4),
-                IconButton(
-                  icon: const Icon(Icons.picture_in_picture_alt_rounded,
-                      size: 18),
-                  color: context.textSecondary,
-                  tooltip: 'Widget / Mini reproductor',
-                  onPressed: () =>
-                      context.read<MiniPlayerController>().toggle(),
-                ),
               ],
               const SizedBox(width: 4),
               _threeDotsMenu(context, track),

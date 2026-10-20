@@ -1,3 +1,5 @@
+import 'widgets/windows_window_effects_sync.dart';
+import 'widgets/app_theme_background.dart';
 import 'widgets/app_error_box.dart';
 import 'widgets/crotolink_deep_link_listener.dart';
 import 'dart:async' show unawaited;
@@ -451,13 +453,17 @@ class MyApp extends StatelessWidget {
       child: Consumer<ThemeController>(
         builder: (context, themes, _) {
           final appTheme = themes.active;
+          final materialTheme = appTheme.toThemeData().copyWith(
+                scaffoldBackgroundColor: themes.pageBackground,
+                canvasColor: themes.surfaceColor(appTheme.bgCard),
+              );
           return MaterialApp(
             title: 'CrotoWave',
             debugShowCheckedModeBanner: false,
             navigatorKey: rootNavigatorKey,
             theme: TvMode.isTv
-                ? _tvTheme(appTheme.toThemeData(), appTheme.accent)
-                : appTheme.toThemeData(),
+                ? _tvTheme(materialTheme, appTheme.accent)
+                : materialTheme,
             // El botón A de los mandos de juego también "pulsa" (Enter/OK ya
             // lo hace Flutter por defecto).
             shortcuts: TvMode.isTv
@@ -478,9 +484,12 @@ class MyApp extends StatelessWidget {
                   ),
                 ),
               );
+              final background = WindowsWindowEffectsSync(
+                child: AppThemeBackground(child: app),
+              );
               return TvMode.isTv
-                  ? TvFocusRing(child: TvTextFieldNavigation(child: app))
-                  : app;
+                  ? TvFocusRing(child: TvTextFieldNavigation(child: background))
+                  : background;
             },
             home: const LoginScreen(),
           );

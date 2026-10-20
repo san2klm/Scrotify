@@ -6,14 +6,16 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../services/app_theme.dart';
+import '../services/custom_theme_code.dart';
 import '../services/theme_controller.dart';
 import '../utils/app_colors.dart';
 import 'material_surface.dart';
+import 'theme_color_preview.dart';
 
 /// Selector Material de temas para Ajustes → Interfaz.
 ///
 /// Muestra los `.zip` de la carpeta de temas como tarjetas con vista previa
-/// bicolor, nombre, versión y distintivo CVD-safe. Permite cambiar la carpeta,
+/// bicolor y nombre. Personalizado aparece al final con su editor. Permite cambiar la carpeta,
 /// reescanear, importar un `.zip` y borrar temas.
 class ThemesSection extends StatefulWidget {
   const ThemesSection({super.key});
@@ -33,6 +35,22 @@ class _ThemesSectionState extends State<ThemesSection> {
   void dispose() {
     _scroll.dispose();
     super.dispose();
+  }
+
+  Future<void> _editCustomTheme(ThemeController themes) async {
+    final colors = await showDialog<_CustomThemeResult>(
+      context: context,
+      builder: (_) => _CustomThemeDialog(
+        theme: themes.customTheme,
+        transparency: themes.customTransparency,
+      ),
+    );
+    if (colors == null || !mounted) return;
+    await themes.saveCustomTheme(
+        background: colors.colors[0],
+        accent: colors.colors[1],
+        accent2: colors.colors[2],
+        transparency: colors.transparency);
   }
 
   /// Lleva el scroll hasta el tema activo la primera vez que aparece.
@@ -60,7 +78,7 @@ class _ThemesSectionState extends State<ThemesSection> {
         _centerOnSelected(themes);
         final scaler = MediaQuery.textScalerOf(context);
         final extraHeight =
-            (scaler.scale(13) - 13).clamp(0.0, double.infinity) * 5;
+            (scaler.scale(13) - 13).clamp(0.0, double.infinity) * 2;
         return MaterialSurface(
           padding: const EdgeInsets.all(16),
           child: Column(
@@ -108,7 +126,7 @@ class _ThemesSectionState extends State<ThemesSection> {
                   style: TextStyle(color: context.textSecondary, fontSize: 13)),
               const SizedBox(height: 12),
               SizedBox(
-                height: 244 + extraHeight,
+                height: 180 + extraHeight,
                 child: Scrollbar(
                   controller: _scroll,
                   thumbVisibility: true,
@@ -125,6 +143,9 @@ class _ThemesSectionState extends State<ThemesSection> {
                         theme: t,
                         selected: t.id == themes.activeId,
                         onTap: () => themes.selectTheme(t.id),
+                        onEdit: t.id == ThemeController.customThemeId
+                            ? () => _editCustomTheme(themes)
+                            : null,
                         onDelete: t.sourceZipPath.isEmpty
                             ? null
                             : () => _confirmDelete(context, themes, t),
@@ -191,9 +212,11 @@ class _ThemesSectionState extends State<ThemesSection> {
                               count > 0
                                   ? '$count temas incluidos listos'
                                   : 'Todos los temas incluidos ya están listos',
-                              style: TextStyle(color: context.textPrimary),
+                              style:
+                                  TextStyle(color: themes.active.textPrimary),
                             ),
-                            backgroundColor: context.bgCard,
+                            backgroundColor:
+                                themes.surfaceColor(themes.active.bgCard),
                             behavior: SnackBarBehavior.floating,
                           ),
                         );
@@ -401,12 +424,14 @@ class _ThemeCard extends StatelessWidget {
   final bool selected;
   final VoidCallback onTap;
   final VoidCallback? onDelete;
+  final VoidCallback? onEdit;
 
   const _ThemeCard({
     required this.theme,
     required this.selected,
     required this.onTap,
     this.onDelete,
+    this.onEdit,
   });
 
   @override
@@ -443,38 +468,41 @@ class _ThemeCard extends StatelessWidget {
                   ]),
                 ),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 8),
               Expanded(
-                  child: Tooltip(
-                message: theme.name,
-                child: Text(theme.name,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                        color: context.textPrimary,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600)),
-              )),
-              Row(children: [
-                Expanded(
-                    child: Text(
-                  theme.isCvdSafe
-                      ? 'CVD-safe'
-                      : theme.version.isNotEmpty
-                          ? 'v${theme.version}'
-                          : '',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(color: context.textSecondary, fontSize: 12),
-                )),
-                if (onDelete != null)
-                  IconButton(
-                    tooltip: 'Borrar ${theme.name}',
-                    onPressed: onDelete,
-                    icon: Icon(Icons.delete_outline_rounded,
-                        size: 20, color: context.textSecondary),
-                  ),
-              ]),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Tooltip(
+                        message: theme.name,
+                        child: Text(theme.name,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                                color: context.textPrimary,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600)),
+                      ),
+                    ),
+                    if (onDelete != null || onEdit != null)
+                      IconButton(
+                        tooltip: onEdit != null
+                            ? 'Editar colores'
+                            : 'Borrar ${theme.name}',
+                        onPressed: onEdit ?? onDelete,
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints.tightFor(
+                            width: 32, height: 36),
+                        icon: Icon(
+                            onEdit != null
+                                ? Icons.palette_outlined
+                                : Icons.delete_outline_rounded,
+                            size: 18,
+                            color: context.textSecondary),
+                      ),
+                  ],
+                ),
+              ),
             ],
           ),
         ),
@@ -483,22 +511,7 @@ class _ThemeCard extends StatelessWidget {
   }
 
   Widget _preview() {
-    // Si hay thumbnail, mostrarlo; si no, vista bicolor.
-    if (theme.thumbnailPath != null) {
-      final f = File(theme.thumbnailPath!);
-      return Image.file(
-        f,
-        fit: BoxFit.cover,
-        width: double.infinity,
-        height: double.infinity,
-        errorBuilder: (_, __, ___) => _fallbackPreview(),
-      );
-    }
-    return _fallbackPreview();
-  }
-
-  Widget _fallbackPreview() {
-    // Sin thumbnail: muestra el rango del tema (fondo + acentos).
+    // Mostrar los colores del tema, incluso si hay miniaturas instaladas.
     return Column(
       children: [
         Expanded(flex: 5, child: Container(color: theme.previewTop)),
@@ -550,6 +563,266 @@ class _FolderButton extends StatelessWidget {
           side: BorderSide(color: context.themeBorder),
           minimumSize: const Size(64, 48),
           shape: shape),
+    );
+  }
+}
+
+class _CustomThemeResult {
+  final List<Color> colors;
+  final double transparency;
+  const _CustomThemeResult(this.colors, this.transparency);
+}
+
+class _CustomThemeDialog extends StatefulWidget {
+  final AppTheme theme;
+  final double transparency;
+  const _CustomThemeDialog({required this.theme, required this.transparency});
+
+  @override
+  State<_CustomThemeDialog> createState() => _CustomThemeDialogState();
+}
+
+class _CustomThemeDialogState extends State<_CustomThemeDialog> {
+  late final List<HSLColor> _colors;
+  int _selected = 0;
+  late double _transparency;
+  final _codeInput = TextEditingController();
+  String? _codeError;
+  String? _codeStatus;
+
+  CustomThemeCode get _themeCode => CustomThemeCode(
+      background: _colors[0].toColor(),
+      accent: _colors[1].toColor(),
+      accent2: _colors[2].toColor(),
+      transparency: _transparency);
+
+  @override
+  void dispose() {
+    _codeInput.dispose();
+    super.dispose();
+  }
+
+  void _loadThemeCode() {
+    try {
+      final imported = CustomThemeCode.decode(_codeInput.text);
+      setState(() {
+        _colors[0] = HSLColor.fromColor(imported.background);
+        _colors[1] = HSLColor.fromColor(imported.accent);
+        _colors[2] = HSLColor.fromColor(imported.accent2);
+        _transparency = imported.transparency;
+        _selected = 0;
+        _codeError = null;
+        _codeStatus = 'Tema cargado en la vista previa';
+      });
+    } on FormatException catch (error) {
+      setState(() {
+        _codeError = error.message;
+        _codeStatus = null;
+      });
+    }
+  }
+
+  Future<void> _copyThemeCode() async {
+    try {
+      await Clipboard.setData(ClipboardData(text: _themeCode.encode()));
+      if (mounted) setState(() => _codeStatus = 'Código copiado');
+    } on PlatformException {
+      if (mounted) setState(() => _codeStatus = 'No se pudo copiar el código');
+    }
+  }
+
+  Future<void> _pasteThemeCode() async {
+    try {
+      final clipboard = await Clipboard.getData(Clipboard.kTextPlain);
+      if (!mounted) return;
+      if (clipboard?.text == null || clipboard!.text!.trim().isEmpty) {
+        setState(() => _codeError = 'El portapapeles no contiene un código');
+        return;
+      }
+      setState(() {
+        _codeInput.text = clipboard.text!;
+        _codeError = null;
+        _codeStatus = null;
+      });
+    } on PlatformException {
+      if (mounted) {
+        setState(() => _codeError = 'No se pudo leer el portapapeles');
+      }
+    }
+  }
+
+  static const _labels = ['Fondo', 'Acento principal', 'Acento secundario'];
+
+  @override
+  void initState() {
+    super.initState();
+    _transparency = widget.transparency;
+    _colors = [widget.theme.bgApp, widget.theme.accent, widget.theme.accent2]
+        .map(HSLColor.fromColor)
+        .toList();
+  }
+
+  Widget _slider(String label, double value, double max,
+          ValueChanged<double> onChanged,
+          {Color? color, String? unit}) =>
+      Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(children: [
+            Expanded(child: Text(label)),
+            Text('${value.round()}${unit ?? ''}'),
+          ]),
+          Slider(
+            semanticFormatterCallback: (v) =>
+                '$label ${v.round()}${unit ?? ''}',
+            value: value.clamp(0, max),
+            max: max,
+            activeColor: color,
+            onChanged: onChanged,
+          ),
+        ],
+      );
+
+  @override
+  Widget build(BuildContext context) {
+    final current = _colors[_selected];
+    return AlertDialog(
+      title: const Text('Personalizado'),
+      content: SizedBox(
+        width: 360,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              ThemeColorPreview(
+                background: _colors[0].toColor(),
+                accent: _colors[1].toColor(),
+                accent2: _colors[2].toColor(),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: List.generate(
+                    3,
+                    (i) => Expanded(
+                          child: Semantics(
+                            selected: _selected == i,
+                            child: InkWell(
+                              borderRadius: BorderRadius.circular(8),
+                              onTap: () => setState(() => _selected = i),
+                              child: Column(children: [
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Text('${i + 1}.'),
+                                    Checkbox(
+                                      value: _selected == i,
+                                      onChanged: (_) =>
+                                          setState(() => _selected = i),
+                                    ),
+                                  ],
+                                ),
+                                Text(_labels[i],
+                                    textAlign: TextAlign.center,
+                                    style: const TextStyle(fontSize: 12)),
+                              ]),
+                            ),
+                          ),
+                        )),
+              ),
+              const SizedBox(height: 20),
+              _slider(
+                  'Color',
+                  current.hue,
+                  360,
+                  (v) =>
+                      setState(() => _colors[_selected] = current.withHue(v)),
+                  color: HSLColor.fromAHSL(1, current.hue, 1, 0.5).toColor(),
+                  unit: '°'),
+              _slider(
+                  'Tonalidad',
+                  current.saturation * 100,
+                  100,
+                  (v) => setState(() =>
+                      _colors[_selected] = current.withSaturation(v / 100)),
+                  unit: '%'),
+              _slider(
+                  'Luz',
+                  current.lightness * 100,
+                  100,
+                  (v) => setState(() =>
+                      _colors[_selected] = current.withLightness(v / 100)),
+                  unit: '%'),
+              _slider('Transparencia', _transparency * 100, 100,
+                  (v) => setState(() => _transparency = v / 100),
+                  unit: '%'),
+              const SizedBox(height: 8),
+              ExpansionTile(
+                title: const Text('Código del tema'),
+                tilePadding: EdgeInsets.zero,
+                childrenPadding: const EdgeInsets.only(bottom: 8),
+                children: [
+                  SelectableText(_themeCode.encode(),
+                      key: const ValueKey('custom-theme-code'),
+                      style: const TextStyle(fontSize: 13)),
+                  const SizedBox(height: 8),
+                  TextButton.icon(
+                    onPressed: _copyThemeCode,
+                    icon: const Icon(Icons.copy_rounded),
+                    label: const Text('Copiar código'),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    key: const ValueKey('custom-theme-code-input'),
+                    controller: _codeInput,
+                    minLines: 1,
+                    maxLines: 3,
+                    maxLength: 128,
+                    autocorrect: false,
+                    enableSuggestions: false,
+                    decoration: InputDecoration(
+                      labelText: 'Pegar código de tema',
+                      errorText: _codeError,
+                      errorMaxLines: 3,
+                      suffixIcon: IconButton(
+                        tooltip: 'Pegar del portapapeles',
+                        onPressed: _pasteThemeCode,
+                        icon: const Icon(Icons.content_paste_rounded),
+                      ),
+                    ),
+                    onChanged: (_) => setState(() {
+                      _codeError = null;
+                      _codeStatus = null;
+                    }),
+                    onSubmitted: (_) => _loadThemeCode(),
+                  ),
+                  const SizedBox(height: 8),
+                  OutlinedButton.icon(
+                    onPressed: _loadThemeCode,
+                    icon: const Icon(Icons.download_rounded),
+                    label: const Text('Cargar código'),
+                  ),
+                  if (_codeStatus != null) ...[
+                    const SizedBox(height: 8),
+                    Text(_codeStatus!, textAlign: TextAlign.center),
+                  ],
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancelar')),
+        FilledButton(
+          onPressed: () => Navigator.of(context).pop(_CustomThemeResult(
+              _colors.map((c) => c.toColor()).toList(), _transparency)),
+          child: const Text('Guardar y aplicar'),
+        ),
+      ],
     );
   }
 }

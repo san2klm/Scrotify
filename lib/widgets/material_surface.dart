@@ -19,15 +19,19 @@ class MaterialSurface extends StatelessWidget {
       this.radius = 16});
 
   @override
-  Widget build(BuildContext context) => Material(
-        color: color ?? context.bgCard,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(radius),
-          side: BorderSide(color: borderColor ?? context.borderSubtle),
-        ),
-        clipBehavior: Clip.antiAlias,
-        child: Padding(padding: padding, child: child),
-      );
+  Widget build(BuildContext context) {
+    final baseColor = color ?? context.bgCard;
+    final surface = Material(
+      color: baseColor,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(radius),
+        side: BorderSide(color: borderColor ?? context.borderSubtle),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Padding(padding: padding, child: child),
+    );
+    return surface;
+  }
 }
 
 /// Tarjeta interactiva con estados de foco, mouse y pulsación del tema activo.

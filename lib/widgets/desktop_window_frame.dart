@@ -1,3 +1,4 @@
+import '../utils/app_colors.dart';
 import 'dart:io' show Platform;
 
 import 'package:flutter/gestures.dart';
@@ -116,7 +117,7 @@ class _DesktopWindowFrameState extends State<DesktopWindowFrame>
             },
             onDoubleTap: mini.enabled ? null : WindowControls.toggleMaximize,
             child: Material(
-              color: colors.surface,
+              color: context.bgSidebar,
               child: DecoratedBox(
                 decoration: BoxDecoration(
                   border:
