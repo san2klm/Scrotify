@@ -303,19 +303,24 @@ class LocalMusicService extends ChangeNotifier {
       path = await _artwork!.cache(safeScope, 'track:${track.id}', fallback);
     }
     if (path != null && !_disposed) {
-      _artworkMetadata[_artworkKey(scope, track)] = path;
-      _notify();
+      final key = _artworkKey(scope, track);
+      if (_artworkMetadata[key] != path) {
+        _artworkMetadata[key] = path;
+        _notify();
+      }
     }
   }
 
   Future<void> cacheDownloadedArtwork(String scope, List<Track> tracks) async {
+    var changed = false;
     for (final track in tracks) {
       if (_disposed) return;
       if (localPath(scope, track.id) == null) continue;
       _trackDetails[_key(scope, track.id)] = _trackJson(track);
+      changed = true;
       await cacheTrackArtwork(scope, track);
     }
-    if (!_disposed) await _save();
+    if (changed && !_disposed) await _save();
   }
 
   Future<void> cachePlaylistArtwork(String scope, Playlist playlist) async {

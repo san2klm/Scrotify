@@ -10,8 +10,30 @@ class DiscoveryCandidate {
   final String reason;
 }
 
+final Map<String, String> _textCache = <String, String>{};
+final Map<String, String> _titleCache = <String, String>{};
+final Map<String, String> _artistCache = <String, String>{};
+
+final RegExp _diacriticsRe = RegExp(r'[\u0300-\u036f]');
+final RegExp _apostropheRe = RegExp("['’]");
+final RegExp _nonAlnumUnicodeRe = RegExp(r'[^\p{L}\p{N}]+', unicode: true);
+final RegExp _remasterBracketRe = RegExp(
+    r'[\(\[][^\)\]]*(?:remaster|deluxe|anniversary|bonus|radio edit|album version)[^\)\]]*[\)\]]');
+final RegExp _remasterDashRe = RegExp(
+    r'\s*[-–—:]\s*(?:\d{4}\s+)?(?:remaster|deluxe|anniversary|radio edit|album version).*$');
+final RegExp _remasterWordRe =
+    RegExp(r'\b(?:remastered?|remastering)\b(?:\s+\d{4})?');
+final RegExp _featBracketRe =
+    RegExp(r'[\(\[]\s*(?:feat\.?|ft\.?|featuring)\s+[^\)\]]*[\)\]]');
+final RegExp _featSuffixRe =
+    RegExp(r'\s+(?:feat\.?|ft\.?|featuring)\s+.*$', caseSensitive: false);
+final RegExp _nonAlnumAsciiRe = RegExp('[^A-Z0-9]');
+
 String discoveryText(String value) {
-  var text = value.toLowerCase().replaceAll(RegExp(r'[\u0300-\u036f]'), '');
+  final cached = _textCache[value];
+  if (cached != null) return cached;
+  if (_textCache.length > 4096) _textCache.clear();
+  var text = value.toLowerCase().replaceAll(_diacriticsRe, '');
   const groups = {
     'a': 'áàäâãåā',
     'e': 'éèëêē',
@@ -23,44 +45,45 @@ String discoveryText(String value) {
     'y': 'ýÿ',
   };
   groups.forEach((replacement, letters) {
-    for (final letter in letters.split('')) {
-      text = text.replaceAll(letter, replacement);
+    for (var i = 0; i < letters.length; i++) {
+      text = text.replaceAll(letters[i], replacement);
     }
   });
-  return text
+  final result = text
       .replaceAll('ß', 'ss')
-      .replaceAll(RegExp("['’]"), '')
+      .replaceAll(_apostropheRe, '')
       .replaceAll('&', ' and ')
-      .replaceAll(RegExp(r'[^\p{L}\p{N}]+', unicode: true), ' ')
+      .replaceAll(_nonAlnumUnicodeRe, ' ')
       .trim();
+  return _textCache[value] = result;
 }
 
 String discoveryTitle(String value) {
+  final cached = _titleCache[value];
+  if (cached != null) return cached;
+  if (_titleCache.length > 4096) _titleCache.clear();
   var title = value.toLowerCase();
   // Treat rereleases and remasters as the same song, retaining meaningful
   // parentheticals (e.g. part numbers) instead of stripping every suffix.
-  title = title.replaceAll(
-      RegExp(
-          r'[\(\[][^\)\]]*(?:remaster|deluxe|anniversary|bonus|radio edit|album version)[^\)\]]*[\)\]]'),
-      '');
-  title = title.replaceAll(
-      RegExp(
-          r'\s*[-–—:]\s*(?:\d{4}\s+)?(?:remaster|deluxe|anniversary|radio edit|album version).*$'),
-      '');
-  title = title.replaceAll(
-      RegExp(r'\b(?:remastered?|remastering)\b(?:\s+\d{4})?'), '');
-  title = title.replaceAll(
-      RegExp(r'[\(\[]\s*(?:feat\.?|ft\.?|featuring)\s+[^\)\]]*[\)\]]'), '');
-  return discoveryText(title);
+  title = title.replaceAll(_remasterBracketRe, '');
+  title = title.replaceAll(_remasterDashRe, '');
+  title = title.replaceAll(_remasterWordRe, '');
+  title = title.replaceAll(_featBracketRe, '');
+  return _titleCache[value] = discoveryText(title);
 }
 
-String discoveryArtist(String value) => discoveryText(value.replaceAll(
-    RegExp(r'\s+(?:feat\.?|ft\.?|featuring)\s+.*$', caseSensitive: false), ''));
+String discoveryArtist(String value) {
+  final cached = _artistCache[value];
+  if (cached != null) return cached;
+  if (_artistCache.length > 4096) _artistCache.clear();
+  return _artistCache[value] =
+      discoveryText(value.replaceAll(_featSuffixRe, ''));
+}
 
 String _recordingKey(Track track) =>
     '${discoveryArtist(track.artist)}|${discoveryTitle(track.title)}';
 String _isrc(String value) =>
-    value.toUpperCase().replaceAll(RegExp('[^A-Z0-9]'), '');
+    value.toUpperCase().replaceAll(_nonAlnumAsciiRe, '');
 
 class DiscoveryLibraryIndex {
   DiscoveryLibraryIndex(Iterable<Track> tracks) {

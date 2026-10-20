@@ -158,7 +158,7 @@ mixin _NavidromeExtras on _NavidromeBase {
       final albums = await getAlbums(type: 'newest', limit: limit);
       final tracks = <Track>[];
       for (final album in albums) {
-        if (tracks.length >= limit) break;
+        if (tracks.length >= limit || !_connected || _offlineMode) break;
         final albumTracks = await getAlbumTracks(album.id);
         tracks.addAll(albumTracks.take(limit - tracks.length));
       }

@@ -7,9 +7,12 @@
 #include <flutter/standard_method_codec.h>
 #include <flutter/encodable_value.h>
 
+#include <atomic>
 #include <memory>
 #include <string>
+#include <thread>
 #include <shobjidl.h>
+#include <shellapi.h>
 
 #include "win32_window.h"
 
@@ -22,6 +25,8 @@ class FlutterWindow : public Win32Window {
 
   void SendMouseHotkey(const std::string& action);
   void UpdateTaskbarPlayPause(bool is_playing);
+  void HideToTray();
+  void RestoreFromTray();
 
  protected:
   // Win32Window:
@@ -33,6 +38,11 @@ class FlutterWindow : public Win32Window {
  private:
   void InitTaskbarToolbar();
   HRESULT ApplyWindowEffects(bool transparent, bool blur, bool dark);
+  void InitTrayIcon();
+  void RemoveTrayIcon();
+  void ShowTrayContextMenu();
+  void StartHookThread();
+  void StopHookThread();
 
   // The project to run.
   flutter::DartProject project_;
@@ -54,6 +64,15 @@ class FlutterWindow : public Win32Window {
   HICON icon_play_ = nullptr;
   HICON icon_pause_ = nullptr;
   HICON icon_next_ = nullptr;
+
+  NOTIFYICONDATAW nid_ = {};
+  bool tray_icon_added_ = false;
+  bool tray_balloon_shown_ = false;
+  bool force_quit_ = false;
+
+  std::thread hook_thread_;
+  DWORD hook_thread_id_ = 0;
+  std::atomic<bool> hook_thread_running_{false};
 };
 
 #endif  // RUNNER_FLUTTER_WINDOW_H_

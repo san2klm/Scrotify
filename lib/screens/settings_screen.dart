@@ -1,6 +1,8 @@
 import 'dart:io' show Platform;
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../models/crotolink_models.dart';
@@ -13,6 +15,7 @@ import '../services/hifi/hifi_profiles.dart';
 import '../services/player_controller.dart';
 import '../services/theme_controller.dart';
 import '../services/settings_controller.dart';
+import '../services/window_controls.dart';
 import '../widgets/diagnostics_panel.dart';
 import '../widgets/pairing_panel.dart';
 import '../widgets/sync_settings.dart';
@@ -453,6 +456,94 @@ class _SettingsScreenState extends State<SettingsScreen> {
             onChanged: settings.setSmartMixEnabled,
           ),
         ]),
+        if (WindowControls.isDesktop) ...[
+          _sectionTitle('Atajos'),
+          _card(children: [
+            _switchTile(
+              title: 'Seguir en segundo plano al cerrar la ventana',
+              subtitle:
+                  'Al tocar la X, CrotoWave queda en la bandeja del sistema reproduciendo música y respondiendo a los atajos',
+              value: settings.closeToTray,
+              onChanged: settings.setCloseToTray,
+            ),
+            _switchTile(
+              title: 'Activar atajos de reproducción',
+              subtitle:
+                  'Permite controlar la reproducción con botones del mouse o teclas del teclado',
+              value: settings.mouseControlsEnabled,
+              onChanged: settings.setMouseControlsEnabled,
+            ),
+            if (settings.mouseControlsEnabled) ...[
+              _switchTile(
+                title: 'Atajos globales (en el escritorio y fuera de la app)',
+                subtitle:
+                    'Controla la reproducción aunque cierres la ventana, minimices o estés en el escritorio/juegos',
+                value: settings.mouseGlobalEnabled,
+                onChanged: settings.setMouseGlobalEnabled,
+              ),
+              _switchTile(
+                title: 'Pausar con clic de la rueda (botón central)',
+                subtitle:
+                    'Funciona en CrotoWave, en el escritorio y en otros programas (en navegadores usa doble clic de rueda o Alt + Rueda para no cerrar pestañas)',
+                value: settings.mouseMiddleClickEnabled,
+                onChanged: settings.setMouseMiddleClickEnabled,
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'Personalizar botones del mouse o teclas',
+                style: TextStyle(
+                  color: context.textSecondary,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 8),
+              _ShortcutBindingTile(
+                title: 'Reproducir / Pausar tema',
+                subtitle:
+                    'Elegí qué botón del mouse o tecla usar para pausar y reanudar (doble clic rápido en botón lateral = tema anterior)',
+                icon: Icons.play_arrow_rounded,
+                binding: settings.playPauseBinding,
+                onChange: (newRaw) => settings.setPlayPauseShortcut(newRaw),
+              ),
+              const SizedBox(height: 8),
+              _ShortcutBindingTile(
+                title: 'Siguiente tema',
+                subtitle:
+                    'Elegí qué botón del mouse o tecla usar para pasar a la siguiente canción',
+                icon: Icons.skip_next_rounded,
+                binding: settings.nextTrackBinding,
+                onChange: (newRaw) => settings.setNextTrackShortcut(newRaw),
+              ),
+              if (settings.playPauseShortcut !=
+                      ShortcutBinding.mouseXButton1.raw ||
+                  settings.nextTrackShortcut !=
+                      ShortcutBinding.mouseXButton2.raw) ...[
+                const SizedBox(height: 8),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton.icon(
+                    onPressed: settings.resetShortcutsToDefault,
+                    icon: Icon(Icons.restore_rounded,
+                        size: 18, color: context.textSecondary),
+                    label: Text(
+                      'Restaurar atajos por defecto',
+                      style:
+                          TextStyle(color: context.textSecondary, fontSize: 13),
+                    ),
+                  ),
+                ),
+              ],
+              const SizedBox(height: 8),
+              _InfoText(
+                'Atajos activos actualmente:\n'
+                '• Reproducir / Pausar tema: ${settings.playPauseBinding.label}\n'
+                '• Siguiente tema: ${settings.nextTrackBinding.label}\n'
+                '• Alt + Rueda arriba/abajo: Subir o bajar volumen desde cualquier lugar',
+              ),
+            ],
+          ]),
+        ],
       ];
 
   List<Widget> _appearancePage(SettingsController settings) => [
@@ -1130,6 +1221,445 @@ class _AlsaOutputPickerState extends State<_AlsaOutputPicker> {
           ]),
         );
       },
+    );
+  }
+}
+
+/// Fila interactiva que muestra el atajo asignado a una acción (ej. Reproducir
+/// o Siguiente tema) y permite modificarlo o detectar cualquier botón/tecla.
+class _ShortcutBindingTile extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  final IconData icon;
+  final ShortcutBinding binding;
+  final ValueChanged<String> onChange;
+
+  const _ShortcutBindingTile({
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+    required this.binding,
+    required this.onChange,
+  });
+
+  IconData get _bindingIcon {
+    if (binding.isMouse) return Icons.mouse_rounded;
+    if (binding.isKey) return Icons.keyboard_rounded;
+    return Icons.block_rounded;
+  }
+
+  Future<void> _openCaptureDialog(BuildContext context) async {
+    final settings = context.read<SettingsController>();
+    try {
+      await showDialog<void>(
+        context: context,
+        builder: (ctx) => _ShortcutCaptureDialog(
+          actionTitle: title,
+          initialBinding: binding,
+          onSaveBinding: onChange,
+        ),
+      );
+    } finally {
+      settings.stopShortcutCapture();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialSurface(
+      color: context.bgElevated,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      child: Row(
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: context.accent.withValues(alpha: 0.14),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(icon, color: context.accent, size: 20),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: TextStyle(
+                    color: context.textPrimary,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  subtitle,
+                  style: TextStyle(
+                    color: context.textSecondary,
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          OutlinedButton.icon(
+            onPressed: () => _openCaptureDialog(context),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: context.textPrimary,
+              side: BorderSide(color: context.accent.withValues(alpha: 0.6)),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            ),
+            icon: Icon(_bindingIcon, size: 17, color: context.accent),
+            label: Text(
+              binding.shortLabel,
+              style: TextStyle(
+                color: context.textPrimary,
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Diálogo modal con la lista de hasta 3 opciones guardadas y el botón
+/// "Seleccionar botón a usar" que detecta cualquier botón del mouse o tecla,
+/// lo asigna a la función y lo guarda en la lista de 3 opciones.
+class _ShortcutCaptureDialog extends StatefulWidget {
+  final String actionTitle;
+  final ShortcutBinding initialBinding;
+  final ValueChanged<String> onSaveBinding;
+
+  const _ShortcutCaptureDialog({
+    required this.actionTitle,
+    required this.initialBinding,
+    required this.onSaveBinding,
+  });
+
+  @override
+  State<_ShortcutCaptureDialog> createState() => _ShortcutCaptureDialogState();
+}
+
+class _ShortcutCaptureDialogState extends State<_ShortcutCaptureDialog> {
+  late String _selectedRaw = widget.initialBinding.raw;
+  final FocusNode _focusNode = FocusNode();
+  bool _listening = false;
+  bool _justCaptured = false;
+  SettingsController? _settings;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _settings ??= context.read<SettingsController>();
+  }
+
+  @override
+  void dispose() {
+    _settings?.stopShortcutCapture();
+    _focusNode.dispose();
+    super.dispose();
+  }
+
+  void _startListening() {
+    setState(() {
+      _listening = true;
+      _justCaptured = false;
+    });
+    _settings?.startShortcutCapture((capturedRaw) {
+      if (!mounted) return;
+      _applyBinding(capturedRaw, fromCapture: true);
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _focusNode.requestFocus();
+    });
+  }
+
+  void _stopListening() {
+    _settings?.stopShortcutCapture();
+    if (mounted && _listening) {
+      setState(() {
+        _listening = false;
+      });
+    }
+  }
+
+  void _applyBinding(String raw, {required bool fromCapture}) {
+    if (raw.isEmpty || raw == 'cancel') {
+      _stopListening();
+      return;
+    }
+    _settings?.stopShortcutCapture();
+    widget.onSaveBinding(raw);
+    if (!mounted) return;
+    setState(() {
+      _selectedRaw = raw;
+      _listening = false;
+      _justCaptured = fromCapture;
+    });
+  }
+
+  KeyEventResult _handleKeyEvent(FocusNode node, KeyEvent event) {
+    if (event is! KeyDownEvent) return KeyEventResult.ignored;
+    if (event.logicalKey == LogicalKeyboardKey.escape) {
+      if (_listening) {
+        _stopListening();
+      } else {
+        Navigator.of(context).pop();
+      }
+      return KeyEventResult.handled;
+    }
+    if (!_listening) return KeyEventResult.ignored;
+    final bound = ShortcutBinding.fromLogicalKey(event.logicalKey);
+    if (bound != null) {
+      _applyBinding(bound.raw, fromCapture: true);
+      return KeyEventResult.handled;
+    }
+    return KeyEventResult.ignored;
+  }
+
+  void _handlePointerDown(PointerDownEvent event) {
+    if (!_listening) return;
+    if ((event.buttons & kBackMouseButton) != 0) {
+      _applyBinding(ShortcutBinding.mouseXButton1.raw, fromCapture: true);
+    } else if ((event.buttons & kForwardMouseButton) != 0) {
+      _applyBinding(ShortcutBinding.mouseXButton2.raw, fromCapture: true);
+    } else if ((event.buttons & kMiddleMouseButton) != 0) {
+      _applyBinding(ShortcutBinding.mouseMiddle.raw, fromCapture: true);
+    } else if ((event.buttons & kSecondaryMouseButton) != 0) {
+      _applyBinding(ShortcutBinding.mouseRight.raw, fromCapture: true);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final settings = context.watch<SettingsController>();
+    final savedOptions = settings.shortcutSavedOptions.take(3).toList();
+    final current = ShortcutBinding(_selectedRaw);
+
+    return Focus(
+      focusNode: _focusNode,
+      autofocus: true,
+      onKeyEvent: _handleKeyEvent,
+      child: Listener(
+        behavior: HitTestBehavior.translucent,
+        onPointerDown: _handlePointerDown,
+        child: AlertDialog(
+          backgroundColor: context.bgCard,
+          title: Text(
+            'Atajo: ${widget.actionTitle}',
+            style: TextStyle(
+              color: context.textPrimary,
+              fontSize: 17,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          content: SizedBox(
+            width: 460,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // Botón "Seleccionar botón a usar"
+                InkWell(
+                  borderRadius: BorderRadius.circular(10),
+                  onTap: _listening ? _stopListening : _startListening,
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 160),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 14),
+                    decoration: BoxDecoration(
+                      color: _listening
+                          ? context.accent.withValues(alpha: 0.16)
+                          : context.bgElevated,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                        color: _listening
+                            ? context.accent
+                            : (_justCaptured
+                                ? context.accent.withValues(alpha: 0.8)
+                                : context.accent.withValues(alpha: 0.45)),
+                        width: _listening ? 2.0 : 1.3,
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 40,
+                          height: 40,
+                          decoration: BoxDecoration(
+                            color: _listening
+                                ? context.accent
+                                : context.accent.withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Icon(
+                            _listening
+                                ? Icons.sensors_rounded
+                                : Icons.ads_click_rounded,
+                            color: _listening ? Colors.black : context.accent,
+                            size: 22,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                _listening
+                                    ? 'Esperando... Presioná cualquier botón o tecla'
+                                    : 'Seleccionar botón a usar',
+                                style: TextStyle(
+                                  color: _listening
+                                      ? context.accent
+                                      : context.textPrimary,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              const SizedBox(height: 3),
+                              Text(
+                                _listening
+                                    ? 'Apretá ahora el botón del mouse o tecla que quieras usar y se guardará automáticamente.'
+                                    : 'Tocá acá y apretá cualquier botón del mouse o tecla para detectarlo y guardarlo en la lista.',
+                                style: TextStyle(
+                                  color: context.textSecondary,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                if (_justCaptured && !_listening) ...[
+                  const SizedBox(height: 10),
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: context.accent.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.check_circle_rounded,
+                            color: context.accent, size: 18),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'Guardado para esta función: ${current.label}',
+                            style: TextStyle(
+                              color: context.textPrimary,
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 14),
+                Text(
+                  'Opciones guardadas (máx. 3):',
+                  style: TextStyle(
+                    color: context.textSecondary,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                MaterialSurface(
+                  color: context.bgElevated,
+                  child: Column(
+                    children: [
+                      for (final opt in savedOptions)
+                        InkWell(
+                          onTap: () => _applyBinding(opt.raw, fromCapture: false),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 10),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  _selectedRaw == opt.raw
+                                      ? Icons.radio_button_checked
+                                      : Icons.radio_button_off,
+                                  color: _selectedRaw == opt.raw
+                                      ? context.accent
+                                      : context.themeBorder,
+                                  size: 19,
+                                ),
+                                const SizedBox(width: 10),
+                                Icon(
+                                  opt.isKey
+                                      ? Icons.keyboard_rounded
+                                      : Icons.mouse_rounded,
+                                  size: 18,
+                                  color: _selectedRaw == opt.raw
+                                      ? context.accent
+                                      : context.textSecondary,
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        opt.label,
+                                        style: TextStyle(
+                                          color: context.textPrimary,
+                                          fontSize: 13,
+                                          fontWeight: _selectedRaw == opt.raw
+                                              ? FontWeight.w700
+                                              : FontWeight.w500,
+                                        ),
+                                      ),
+                                      Text(
+                                        opt.subtitle,
+                                        style: TextStyle(
+                                          color: context.textSecondary,
+                                          fontSize: 11.5,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(),
+              style: FilledButton.styleFrom(
+                backgroundColor: context.accent,
+                foregroundColor: Colors.black,
+              ),
+              child: const Text(
+                'Listo',
+                style: TextStyle(fontWeight: FontWeight.w600),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

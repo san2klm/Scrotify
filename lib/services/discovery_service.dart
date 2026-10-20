@@ -10,6 +10,7 @@ class DiscoveryService extends ChangeNotifier {
   DiscoveryService(this.nav, this.stats,
       {this.debounce = const Duration(seconds: 2)}) {
     _session = nav.currentSessionKey;
+    _wasAvailable = available;
     nav.addListener(_onNav);
     stats.addListener(_onStats);
   }
@@ -17,6 +18,7 @@ class DiscoveryService extends ChangeNotifier {
   final ListeningStatsService stats;
   final Duration debounce;
   String? _session;
+  bool _wasAvailable = false;
   int _generation = 0;
   bool _disposed = false;
   bool _started = false;
@@ -42,8 +44,10 @@ class DiscoveryService extends ChangeNotifier {
 
   void _onNav() {
     final next = nav.currentSessionKey;
-    if (_session != next || !available) {
+    final nowAvailable = available;
+    if (_session != next || !nowAvailable) {
       _session = next;
+      _wasAvailable = nowAvailable;
       _generation++;
       _library = null;
       _libraryAt = null;
@@ -52,8 +56,13 @@ class DiscoveryService extends ChangeNotifier {
       error = null;
       _debouncer?.cancel();
       notifyListeners();
+      if (_started && nowAvailable) _schedule();
+      return;
     }
-    if (_started && available) _schedule();
+    if (!_wasAvailable && nowAvailable) {
+      _wasAvailable = true;
+      if (_started) _schedule();
+    }
   }
 
   void _onStats() {

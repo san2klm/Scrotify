@@ -227,13 +227,19 @@ class NavidromeService extends _NavidromeBase
   void _onActiveProfileChanged() {
     // When active profile changes, reconnect with new credentials
     final activeProfile = _profilesController?.activeProfile;
-    if (activeProfile != null &&
-        (normalizeServerUrl(activeProfile.url) != _url ||
-            activeProfile.username != _user ||
-            activeProfile.password != _pass)) {
-      debugPrint(
-          'Active profile changed, reconnecting to ${activeProfile.url} as ${activeProfile.username}');
-      unawaited(_disconnectAndReconnect(activeProfile));
+    if (activeProfile != null) {
+      final normalizedUrl = normalizeServerUrl(activeProfile.url);
+      final targetKey =
+          '$normalizedUrl|${activeProfile.username}|${activeProfile.password}';
+      final alreadyActive = (_connected || _offlineMode) &&
+          _url == normalizedUrl &&
+          _user == activeProfile.username &&
+          _pass == activeProfile.password;
+      if (!alreadyActive && _connectingKey != targetKey) {
+        debugPrint(
+            'Active profile changed, reconnecting to ${activeProfile.url} as ${activeProfile.username}');
+        unawaited(_disconnectAndReconnect(activeProfile));
+      }
     } else if (activeProfile == null && (_connected || _offlineMode)) {
       // No active profile, disconnect
       debugPrint('No active profile, disconnecting');
@@ -244,6 +250,16 @@ class NavidromeService extends _NavidromeBase
   void _loadInitialProfile() {
     final activeProfile = _profilesController?.activeProfile;
     if (activeProfile != null) {
+      final normalizedUrl = normalizeServerUrl(activeProfile.url);
+      final targetKey =
+          '$normalizedUrl|${activeProfile.username}|${activeProfile.password}';
+      if ((_connected || _offlineMode) &&
+          _url == normalizedUrl &&
+          _user == activeProfile.username &&
+          _pass == activeProfile.password) {
+        return;
+      }
+      if (_connectingKey == targetKey) return;
       debugPrint('Loading initial profile: ${activeProfile.url}');
       connectByUrl(
               activeProfile.url, activeProfile.username, activeProfile.password)
@@ -252,9 +268,6 @@ class NavidromeService extends _NavidromeBase
   }
 
   Future<void> _disconnectAndReconnect(ServerProfile profile) async {
-    if (_connected || _offlineMode) {
-      disconnect();
-    }
     try {
       await connectByUrl(profile.url, profile.username, profile.password);
     } catch (e) {
@@ -454,18 +467,43 @@ class NavidromeService extends _NavidromeBase
   /// Generación de la última conexión pedida: una respuesta de una conexión
   /// anterior (más lenta) no debe pisar a la más reciente.
   int _connectGen = 0;
+  String? _connectingKey;
+  Future<void>? _connectingFuture;
 
-  Future<void> connectByUrl(String url, String user, String pass) async {
+  Future<void> connectByUrl(String url, String user, String pass) {
     final processedUrl = normalizeServerUrl(url);
+    final targetKey = '$processedUrl|$user|$pass';
+    if (_connectingFuture != null && _connectingKey == targetKey) {
+      return _connectingFuture!;
+    }
     final gen = ++_connectGen;
+    _connectingKey = targetKey;
+    late final Future<void> future;
+    future = _performConnectByUrl(processedUrl, user, pass, gen).whenComplete(
+      () {
+        if (identical(_connectingFuture, future)) {
+          _connectingFuture = null;
+          _connectingKey = null;
+        }
+      },
+    );
+    _connectingFuture = future;
+    return future;
+  }
 
+  Future<void> _performConnectByUrl(
+    String processedUrl,
+    String user,
+    String pass,
+    int gen,
+  ) async {
     debugPrint('Connecting to $processedUrl');
 
     // Las credenciales nuevas solo se aplican si el servidor las acepta: un
     // intento fallido no deja la sesión actual apuntando a otro perfil.
-    final client = _injectedClient ?? http.Client();
-    void dropClient() {
-      if (_injectedClient == null) client.close();
+    final probe = _injectedClient ?? http.Client();
+    void dropProbe() {
+      if (_injectedClient == null) probe.close();
     }
 
     try {
@@ -483,7 +521,7 @@ class NavidromeService extends _NavidromeBase
       });
 
       final response =
-          await client.get(uri).timeout(const Duration(seconds: 8));
+          await probe.get(uri).timeout(const Duration(seconds: 8));
 
       debugPrint('Auth response status: ${response.statusCode}');
 
@@ -509,11 +547,8 @@ class NavidromeService extends _NavidromeBase
         throw StateError('Conexión reemplazada por otra más reciente.');
       }
 
-      final previous = _client;
-      _client = client;
-      if (_injectedClient == null && !identical(previous, client)) {
-        previous.close();
-      }
+      final sameAccount =
+          _url == processedUrl && _user == user && _pass == pass;
       _url = processedUrl;
       _user = user;
       _pass = pass;
@@ -523,22 +558,23 @@ class NavidromeService extends _NavidromeBase
       _stopAutoReconnect();
       unawaited(flushScrobbles());
       _sessionVersion++;
-      _starredIds.clear();
-      _starredSongOrder.clear();
-      _pinnedPlaylistIds.clear();
-      _followedArtistIds.clear();
-      _excludedArtistIds.clear();
-      _artistCache.clear();
+      if (!sameAccount) {
+        _starredIds.clear();
+        _starredSongOrder.clear();
+        _pinnedPlaylistIds.clear();
+        _followedArtistIds.clear();
+        _excludedArtistIds.clear();
+        _artistCache.clear();
+        _trackRatings.clear();
+        _cachedGenres = null;
+      }
       _artistFailedAt.clear();
-      _trackRatings.clear();
-      _cachedGenres = null;
       await _loadPins();
       await _loadStarredOrder();
       await loadLastSelectedGenre();
       notifyListeners();
-    } catch (_) {
-      if (!identical(client, _client)) dropClient();
-      rethrow;
+    } finally {
+      dropProbe();
     }
   }
 
@@ -871,7 +907,39 @@ class NavidromeService extends _NavidromeBase
     return folders ?? [];
   }
 
-  Future<List<dynamic>> getArtists() async {
+  Future<List<dynamic>> getArtists() => _readLibrary(
+        _fetchArtists,
+        (music, scope, _) {
+          final seen = <String>{};
+          final result = <Map<String, dynamic>>[];
+          for (final track in music.downloadedTracks(scope)) {
+            final name = track.artist.trim();
+            if (name.isEmpty) continue;
+            final id = (track.artistId?.isNotEmpty == true)
+                ? track.artistId!
+                : 'local-artist:${name.toLowerCase()}';
+            if (seen.add(id)) {
+              final map = <String, dynamic>{
+                'id': id,
+                'name': name,
+                'coverArt': track.albumArtUrl,
+              };
+              result.add(map);
+              _artistCache.putIfAbsent(
+                id,
+                () => Artist(
+                  id: id,
+                  name: name,
+                  coverArtUrl: track.albumArtUrl,
+                ),
+              );
+            }
+          }
+          return result;
+        },
+      );
+
+  Future<List<dynamic>> _fetchArtists() async {
     if (!_connected) throw Exception('Not connected');
     final salt = _randomSalt();
     final token = _md5('$_pass$salt');
@@ -1047,6 +1115,8 @@ class NavidromeService extends _NavidromeBase
 
   void disconnect() {
     _connectGen++; // un login en curso no debe reconectar tras cerrar sesión
+    _connectingKey = null;
+    _connectingFuture = null;
     _stopAutoReconnect();
     _connected = false;
     _offlineMode = false;
@@ -1054,8 +1124,10 @@ class NavidromeService extends _NavidromeBase
     _user = null;
     _pass = null;
     _resetCoverAuth();
-    _client.close();
-    _client = _injectedClient ?? http.Client();
+    if (_injectedClient == null) {
+      _client.close();
+      _client = http.Client();
+    }
 
     // Clear state
     _starredIds.clear();

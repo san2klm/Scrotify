@@ -12,6 +12,7 @@ import '../services/connect/connect_service.dart';
 import '../services/crotolink_controller.dart';
 import '../services/mini_player_controller.dart';
 import '../services/player_controller.dart';
+import '../services/settings_controller.dart';
 import '../services/window_controls.dart';
 import 'mini_player_view.dart';
 
@@ -40,6 +41,8 @@ class _DesktopWindowFrameState extends State<DesktopWindowFrame>
 
   bool _maximized = false;
   bool _fullScreen = false;
+  PlayerController? _playerSub;
+  SettingsController? _settingsSub;
 
   @override
   void initState() {
@@ -50,12 +53,30 @@ class _DesktopWindowFrameState extends State<DesktopWindowFrame>
       if (Platform.isWindows) {
         _mouseChannel.setMethodCallHandler((call) async {
           if (!mounted) return;
-          if (call.method == 'togglePlayPause') {
-            _togglePlayPause(context);
-          } else if (call.method == 'skipNext') {
-            _skipNext(context);
-          } else if (call.method == 'skipPrevious') {
-            _skipPrevious(context);
+          switch (call.method) {
+            case 'togglePlayPause':
+              _togglePlayPause(context);
+              break;
+            case 'skipNext':
+              _skipNext(context);
+              break;
+            case 'skipPrevious':
+              _skipPrevious(context);
+              break;
+            case 'volumeUp':
+              _changeVolume(context, 0.04);
+              break;
+            case 'volumeDown':
+              _changeVolume(context, -0.04);
+              break;
+            case 'onShortcutCaptured':
+              final raw = call.arguments as String?;
+              if (raw == 'cancel') {
+                _settingsSub?.stopShortcutCapture();
+              } else if (raw != null && raw.isNotEmpty) {
+                _settingsSub?.handleCapturedShortcut(raw);
+              }
+              break;
           }
         });
       }
@@ -63,7 +84,52 @@ class _DesktopWindowFrameState extends State<DesktopWindowFrame>
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (WindowControls.isDesktop && Platform.isWindows) {
+      final player = context.read<PlayerController>();
+      if (_playerSub != player) {
+        _playerSub?.removeListener(_syncNativePlaybackState);
+        _playerSub = player;
+        _playerSub?.addListener(_syncNativePlaybackState);
+        _syncNativePlaybackState();
+      }
+      final settings = context.read<SettingsController>();
+      if (_settingsSub != settings) {
+        _settingsSub?.removeListener(_syncNativeMouseSettings);
+        _settingsSub = settings;
+        _settingsSub?.addListener(_syncNativeMouseSettings);
+        _syncNativeMouseSettings();
+      }
+    }
+  }
+
+  void _syncNativePlaybackState() {
+    final p = _playerSub;
+    if (p == null || !Platform.isWindows) return;
+    _mouseChannel.invokeMethod('setPlaying', p.playing).catchError((_) {});
+  }
+
+  void _syncNativeMouseSettings() {
+    final s = _settingsSub;
+    if (s == null || !Platform.isWindows) return;
+    _mouseChannel.invokeMethod('setMouseConfig', {
+      'enabled': s.mouseControlsEnabled && !s.isCapturingShortcut,
+      'capturing': s.isCapturingShortcut,
+      'global': s.mouseGlobalEnabled,
+      'middleClick': s.mouseMiddleClickEnabled,
+      'closeToTray': s.closeToTray,
+      'playPauseType': s.playPauseBinding.nativeType,
+      'playPauseVk': s.playPauseBinding.vkCode,
+      'nextTrackType': s.nextTrackBinding.nativeType,
+      'nextTrackVk': s.nextTrackBinding.vkCode,
+    }).catchError((_) {});
+  }
+
+  @override
   void dispose() {
+    _playerSub?.removeListener(_syncNativePlaybackState);
+    _settingsSub?.removeListener(_syncNativeMouseSettings);
     if (WindowControls.isDesktop) {
       windowManager.removeListener(this);
       _mouseChannel.setMethodCallHandler(null);
@@ -99,12 +165,7 @@ class _DesktopWindowFrameState extends State<DesktopWindowFrame>
     if (!WindowControls.isDesktop) return widget.child;
     final colors = Theme.of(context).colorScheme;
     final mini = context.watch<MiniPlayerController>();
-    final player = context.watch<PlayerController>();
-    if (Platform.isWindows) {
-      _mouseChannel
-          .invokeMethod('setPlaying', player.playing)
-          .catchError((_) {});
-    }
+    final settings = context.watch<SettingsController>();
 
     final content = Column(
       children: [
@@ -169,10 +230,20 @@ class _DesktopWindowFrameState extends State<DesktopWindowFrame>
                       ),
                     ],
                     _WindowButton(
-                      tooltip: 'Cerrar',
+                      tooltip: settings.closeToTray
+                          ? 'Minimizar a segundo plano (Bandeja)'
+                          : 'Cerrar',
                       icon: Icons.close_rounded,
                       danger: true,
-                      onPressed: windowManager.close,
+                      onPressed: () async {
+                        if (Platform.isWindows && settings.closeToTray) {
+                          try {
+                            await _mouseChannel.invokeMethod('hideToTray');
+                            return;
+                          } catch (_) {}
+                        }
+                        await windowManager.close();
+                      },
                     ),
                   ],
                 ),
@@ -246,11 +317,50 @@ class _DesktopWindowFrameState extends State<DesktopWindowFrame>
       },
       child: Focus(
         autofocus: true,
+        onKeyEvent: (node, event) {
+          if (event is! KeyDownEvent) return KeyEventResult.ignored;
+          final settings = context.read<SettingsController>();
+          if (!settings.mouseControlsEnabled || settings.isCapturingShortcut) {
+            return KeyEventResult.ignored;
+          }
+
+          final primaryFocus = FocusManager.instance.primaryFocus;
+          final isEditingText =
+              primaryFocus?.context?.widget is EditableText ||
+                  primaryFocus?.context
+                          ?.findAncestorWidgetOfExactType<EditableText>() !=
+                      null;
+
+          final keyId = event.logicalKey.keyId;
+          final isPrintableKey = (keyId >= 0x20 && keyId <= 0x7E);
+          if (isEditingText && isPrintableKey) {
+            return KeyEventResult.ignored;
+          }
+
+          final pressed = ShortcutBinding.fromLogicalKey(event.logicalKey);
+          final pressedVk = pressed?.vkCode ?? 0;
+
+          final playBind = settings.playPauseBinding;
+          if (playBind.isKey &&
+              ((playBind.logicalKeyId != 0 && keyId == playBind.logicalKeyId) ||
+                  (playBind.vkCode != 0 && playBind.vkCode == pressedVk))) {
+            _togglePlayPause(context);
+            return KeyEventResult.handled;
+          }
+
+          final nextBind = settings.nextTrackBinding;
+          if (nextBind.isKey &&
+              ((nextBind.logicalKeyId != 0 && keyId == nextBind.logicalKeyId) ||
+                  (nextBind.vkCode != 0 && nextBind.vkCode == pressedVk))) {
+            _skipNext(context);
+            return KeyEventResult.handled;
+          }
+
+          return KeyEventResult.ignored;
+        },
         child: Listener(
           behavior: HitTestBehavior.translucent,
           onPointerSignal: (event) {
-            // Atajo global con rueda del mouse: si se mantiene Alt o Ctrl pulsado
-            // en cualquier parte de la ventana, la rueda sube/baja volumen (+-4%).
             if (event is PointerScrollEvent && event.scrollDelta.dy != 0) {
               final isModifier = HardwareKeyboard.instance.isAltPressed ||
                   HardwareKeyboard.instance.isControlPressed;
@@ -261,13 +371,47 @@ class _DesktopWindowFrameState extends State<DesktopWindowFrame>
             }
           },
           onPointerDown: (event) {
-            // Botones laterales del mouse (XBUTTON1 y XBUTTON2):
-            // Back (0x08) -> alternar reproducir / pausar
-            // Forward (0x10) -> siguiente canción
+            final settings = context.read<SettingsController>();
+            if (!settings.mouseControlsEnabled ||
+                settings.isCapturingShortcut) {
+              return;
+            }
+
+            String? pressedMouseType;
             if ((event.buttons & kBackMouseButton) != 0) {
-              _togglePlayPause(context);
+              pressedMouseType = 'mouse_xb1';
             } else if ((event.buttons & kForwardMouseButton) != 0) {
+              pressedMouseType = 'mouse_xb2';
+            } else if ((event.buttons & kMiddleMouseButton) != 0) {
+              pressedMouseType = 'mouse_middle';
+            } else if ((event.buttons & kSecondaryMouseButton) != 0) {
+              pressedMouseType = 'mouse_right';
+            }
+            if (pressedMouseType == null) return;
+
+            final playType = settings.playPauseBinding.nativeType;
+            final nextType = settings.nextTrackBinding.nativeType;
+
+            if (pressedMouseType == playType) {
+              if (pressedMouseType == 'mouse_xb1' ||
+                  pressedMouseType == 'mouse_xb2') {
+                final now = DateTime.now();
+                if (_lastBackClickTime != null &&
+                    now.difference(_lastBackClickTime!).inMilliseconds < 380) {
+                  _lastBackClickTime = null;
+                  _skipPrevious(context);
+                } else {
+                  _lastBackClickTime = now;
+                  _togglePlayPause(context);
+                }
+              } else {
+                _togglePlayPause(context);
+              }
+            } else if (pressedMouseType == nextType) {
               _skipNext(context);
+            } else if (pressedMouseType == 'mouse_middle' &&
+                settings.mouseMiddleClickEnabled) {
+              _togglePlayPause(context);
             }
           },
           child: framed,
@@ -293,20 +437,22 @@ class _DesktopWindowFrameState extends State<DesktopWindowFrame>
     }
   }
 
-  DateTime? _lastSkipTime;
+  DateTime? _lastPlayPauseTime;
+  DateTime? _lastNextTime;
+  DateTime? _lastPrevTime;
+  DateTime? _lastBackClickTime;
 
-  bool _canSkip() {
+  bool _canTrigger(DateTime? last, [int cooldownMs = 200]) {
     final now = DateTime.now();
-    if (_lastSkipTime != null &&
-        now.difference(_lastSkipTime!).inMilliseconds < 250) {
+    if (last != null && now.difference(last).inMilliseconds < cooldownMs) {
       return false;
     }
-    _lastSkipTime = now;
     return true;
   }
 
   void _togglePlayPause(BuildContext context) {
-    if (!_canSkip()) return;
+    if (!_canTrigger(_lastPlayPauseTime, 200)) return;
+    _lastPlayPauseTime = DateTime.now();
     try {
       final connect = context.read<ConnectService>();
       if (connect.controlled != null) {
@@ -330,7 +476,8 @@ class _DesktopWindowFrameState extends State<DesktopWindowFrame>
   }
 
   void _skipNext(BuildContext context) {
-    if (!_canSkip()) return;
+    if (!_canTrigger(_lastNextTime, 200)) return;
+    _lastNextTime = DateTime.now();
     try {
       final connect = context.read<ConnectService>();
       if (connect.controlled != null) {
@@ -354,7 +501,8 @@ class _DesktopWindowFrameState extends State<DesktopWindowFrame>
   }
 
   void _skipPrevious(BuildContext context) {
-    if (!_canSkip()) return;
+    if (!_canTrigger(_lastPrevTime, 200)) return;
+    _lastPrevTime = DateTime.now();
     try {
       final connect = context.read<ConnectService>();
       if (connect.controlled != null) {
@@ -372,6 +520,9 @@ class _DesktopWindowFrameState extends State<DesktopWindowFrame>
       }
       final player = context.read<PlayerController>();
       player.skipPrevious();
+      if (!player.playing) {
+        player.play();
+      }
     } catch (e) {
       debugPrint('[DesktopWindowFrame] skipPrevious error: $e');
     }
@@ -394,9 +545,6 @@ class _WindowButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    // El frame vive por encima del Navigator para envolver toda la app; en
-    // ese nivel todavía no existe un Overlay donde Tooltip pueda mostrarse.
-    // Semantics conserva el nombre accesible sin introducir ese acoplamiento.
     return Semantics(
       button: true,
       label: tooltip,

@@ -83,20 +83,15 @@ Future<void> main() async {
 
   if (!kIsWeb && (Platform.isLinux || Platform.isWindows || Platform.isMacOS)) {
     await windowManager.ensureInitialized();
-    unawaited(windowManager.waitUntilReadyToShow(
-      const WindowOptions(
-        titleBarStyle: TitleBarStyle.hidden,
-        minimumSize: Size(400, 500),
-      ),
-      () async {
-        await windowManager.setAsFrameless();
-        // Sin decoración nativa hay que pedir explícitamente que se pueda
-        // redimensionar (los bordes arrastrables los aporta DesktopWindowFrame).
-        await windowManager.setResizable(true);
-        await windowManager.show();
-        await windowManager.focus();
-      },
-    ));
+    try {
+      await windowManager.setAsFrameless();
+      await windowManager.setResizable(true);
+      await windowManager.setMinimumSize(const Size(400, 500));
+      await windowManager.show();
+      await windowManager.focus();
+    } catch (e) {
+      debugPrint('windowManager init error: $e');
+    }
   }
   // Limpia caché de portadas externas por si quedó null de versión anterior.
   CoverFallbackService.instance.clearCache();
