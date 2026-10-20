@@ -19,6 +19,7 @@ import 'listening_stats_service.dart';
 import 'waveform_service.dart';
 import 'audio_waveform_service.dart';
 import 'crotowave_audio_handler.dart';
+import 'duplicate_detector.dart';
 
 part 'player_sleep_timer.dart';
 part 'player_gain.dart';

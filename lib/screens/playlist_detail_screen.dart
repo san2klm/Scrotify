@@ -13,6 +13,7 @@ import '../widgets/local_download_button.dart';
 import '../utils/app_colors.dart';
 import '../widgets/material_surface.dart';
 import '../widgets/tv_initial_focus.dart';
+import '../widgets/collection_filter_bar.dart';
 
 /// Pantalla que muestra las canciones de una playlist específica.
 /// Se abre desde la barra lateral (Tu Biblioteca) del escritorio.
@@ -30,12 +31,22 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
   late Playlist _playlist;
   bool _reordering = false;
   int _playlistVersion = -1;
+  final TextEditingController _searchController = TextEditingController();
+  String _searchQuery = '';
+  CollectionSort _currentSort = CollectionSort.defaultOrder;
+  String? _selectedGenre;
 
   @override
   void initState() {
     super.initState();
     _playlist = widget.playlist;
     _future = context.read<NavidromeService>().getPlaylistTracks(_playlist.id);
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
   Future<void> _reloadPlaylist() async {
@@ -218,7 +229,24 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
                       child: Text('No se pudo cargar la playlist.',
                           style: TextStyle(color: context.danger)));
                 }
-                final tracks = snapshot.data ?? <Track>[];
+                final allTracks = snapshot.data ?? <Track>[];
+                final availableGenres = allTracks
+                    .map((t) => t.genre?.trim())
+                    .where((g) => g != null && g.isNotEmpty)
+                    .cast<String>()
+                    .toSet()
+                    .toList()
+                  ..sort();
+
+                final filteredTracks = CollectionFilterHelper.filterAndSort(
+                  allTracks,
+                  query: _searchQuery,
+                  sort: _currentSort,
+                  genre: _selectedGenre,
+                );
+                final isManualOrder = _searchQuery.isEmpty &&
+                    _selectedGenre == null &&
+                    _currentSort == CollectionSort.defaultOrder;
                 final pinned = nav.isPinnedPlaylist(_playlist.id);
                 return Column(
                   children: [
@@ -249,7 +277,7 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
                                 fontWeight: FontWeight.bold),
                           ),
                           const SizedBox(height: 8),
-                          Text('${tracks.length} canciones',
+                          Text('${allTracks.length} canciones',
                               style: TextStyle(
                                   color: context.textSecondary, fontSize: 14)),
                           const SizedBox(height: 8),
@@ -278,7 +306,7 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
                                     overflow: TextOverflow.ellipsis),
                               ),
                               LocalDownloadButton(
-                                  tracks: tracks,
+                                  tracks: allTracks,
                                   collection: 'playlist(${_playlist.name})',
                                   playlist: _playlist),
                               IconButton(
@@ -286,7 +314,7 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
                                 tooltip: 'Acciones de playlist',
                                 icon: Icon(Icons.more_vert_rounded,
                                     color: context.textMuted, size: 20),
-                                onPressed: () => _showActionsPanel(tracks),
+                                onPressed: () => _showActionsPanel(allTracks),
                               ),
                             ],
                           ),
@@ -299,7 +327,7 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
                             icon: Icon(Icons.shuffle,
                                 color: context.accent, size: 24),
                             tooltip: 'Reproducir al azar',
-                            onPressed: () => _playShuffled(tracks),
+                            onPressed: () => _playShuffled(filteredTracks),
                           ),
                           IconButton(
                             tooltip: 'Reproducir',
@@ -307,7 +335,7 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
                                 color: context.accent, size: 48),
                             onPressed: () =>
                                 context.read<PlayerController>().playQueue(
-                                      tracks,
+                                      filteredTracks,
                                       startIndex: 0,
                                       sourcePlaylist: _playlist,
                                     ),
@@ -321,12 +349,36 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
                         ],
                       ),
                     ),
+                    if (allTracks.isNotEmpty)
+                      CollectionFilterBar(
+                        searchController: _searchController,
+                        onQueryChanged: (q) =>
+                            setState(() => _searchQuery = q),
+                        currentSort: _currentSort,
+                        onSortChanged: (s) =>
+                            setState(() => _currentSort = s),
+                        selectedGenre: _selectedGenre,
+                        onGenreChanged: (g) =>
+                            setState(() => _selectedGenre = g),
+                        availableGenres: availableGenres,
+                        totalCount: allTracks.length,
+                        filteredCount: filteredTracks.length,
+                      ),
                     Divider(color: context.themeBorder, height: 1),
-                    if (tracks.isEmpty)
+                    if (allTracks.isEmpty)
                       Expanded(
                         child: Center(
                           child: Text('Playlist vacía',
                               style: TextStyle(color: context.textMuted)),
+                        ),
+                      )
+                    else if (filteredTracks.isEmpty)
+                      Expanded(
+                        child: Center(
+                          child: Text(
+                            'No se encontraron canciones que coincidan con el filtro.',
+                            style: TextStyle(color: context.textMuted),
+                          ),
                         ),
                       )
                     else
@@ -334,16 +386,18 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
                         child: ReorderableListView.builder(
                           physics: const BouncingScrollPhysics(),
                           buildDefaultDragHandles: false,
-                          itemCount: tracks.length,
-                          onReorderItem: (oldIndex, newIndex) =>
-                              _reorderTracks(tracks, oldIndex, newIndex),
+                          itemCount: filteredTracks.length,
+                          onReorderItem: isManualOrder
+                              ? (oldIndex, newIndex) =>
+                                  _reorderTracks(allTracks, oldIndex, newIndex)
+                              : (_, __) {},
                           itemBuilder: (context, index) {
-                            final track = tracks[index];
+                            final track = filteredTracks[index];
                             return InkWell(
                               key: ValueKey('playlist-${track.id}'),
                               onTap: () =>
                                   context.read<PlayerController>().playQueue(
-                                        tracks,
+                                        filteredTracks,
                                         startIndex: index,
                                         sourcePlaylist: _playlist,
                                       ),

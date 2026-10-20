@@ -184,5 +184,37 @@ void main() {
       expect(stats.getTotalListeningDuration(serverScope: 'server_2'),
           const Duration(seconds: 150));
     });
+
+    test('getHistory returns events in reverse chronological order and clearHistory cleans scope',
+        () async {
+      final stats = ListeningStatsService();
+
+      await stats.recordPlay(
+        trackId: 'h1',
+        title: 'First Song',
+        artist: 'Artist 1',
+        album: 'Album 1',
+        durationSeconds: 120,
+        serverScope: 'my_server',
+      );
+
+      await stats.recordPlay(
+        trackId: 'h2',
+        title: 'Second Song',
+        artist: 'Artist 2',
+        album: 'Album 2',
+        durationSeconds: 200,
+        serverScope: 'my_server',
+      );
+
+      final history = stats.getHistory(serverScope: 'my_server');
+      expect(history.length, 2);
+      expect(history.first.trackId, 'h2');
+      expect(history.first.title, 'Second Song');
+      expect(history.last.trackId, 'h1');
+
+      await stats.clearHistory(serverScope: 'my_server');
+      expect(stats.getHistory(serverScope: 'my_server'), isEmpty);
+    });
   });
 }

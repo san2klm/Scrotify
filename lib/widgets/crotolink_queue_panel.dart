@@ -8,9 +8,10 @@ import '../services/player_controller.dart';
 import '../services/theme_controller.dart';
 import 'cover_art.dart';
 import '../utils/app_colors.dart';
+import '../services/listening_stats_service.dart';
 
 /// Panel / Modal de Cola Compartida para sesiones CrotoLink y reproducción general.
-class CrotoLinkQueuePanel extends StatelessWidget {
+class CrotoLinkQueuePanel extends StatefulWidget {
   const CrotoLinkQueuePanel({super.key});
 
   static void show(BuildContext context) {
@@ -29,6 +30,13 @@ class CrotoLinkQueuePanel extends StatelessWidget {
       ),
     );
   }
+
+  @override
+  State<CrotoLinkQueuePanel> createState() => _CrotoLinkQueuePanelState();
+}
+
+class _CrotoLinkQueuePanelState extends State<CrotoLinkQueuePanel> {
+  int _selectedTab = 0; // 0: Cola, 1: Historial reciente
 
   @override
   Widget build(BuildContext context) {
@@ -152,6 +160,22 @@ class CrotoLinkQueuePanel extends StatelessWidget {
                     ),
                   ],
                 ),
+              if (!inCrotoLink && queueItems.isNotEmpty)
+                TextButton(
+                  onPressed: () {
+                    final removed = player.removeDuplicatesFromQueue();
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(removed > 0
+                            ? '$removed canción(es) duplicada(s) eliminada(s) de la cola.'
+                            : 'No hay canciones duplicadas en la cola.'),
+                        duration: const Duration(seconds: 2),
+                      ),
+                    );
+                  },
+                  child: Text('Sin duplicados',
+                      style: TextStyle(color: context.textMuted, fontSize: 12)),
+                ),
               if (queueItems.isNotEmpty &&
                   (!inCrotoLink || canManageCrotoLinkQueue))
                 TextButton(
@@ -176,7 +200,34 @@ class CrotoLinkQueuePanel extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 12),
+
+          Row(
+            children: [
+              ChoiceChip(
+                label: Text('Cola (${queueItems.length})'),
+                selected: _selectedTab == 0,
+                onSelected: (val) {
+                  if (val) setState(() => _selectedTab = 0);
+                },
+                visualDensity: VisualDensity.compact,
+              ),
+              const SizedBox(width: 8),
+              ChoiceChip(
+                label: const Text('Historial reciente'),
+                selected: _selectedTab == 1,
+                onSelected: (val) {
+                  if (val) setState(() => _selectedTab = 1);
+                },
+                visualDensity: VisualDensity.compact,
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+
+          if (_selectedTab == 1)
+            Expanded(child: _buildHistoryTab(context, player))
+          else ...[
 
           if (inCrotoLink && crotoLink.lastError != null) ...[
             Container(
@@ -625,9 +676,171 @@ class CrotoLinkQueuePanel extends StatelessWidget {
                         },
                       ),
           ),
+          ],
         ],
       ),
     );
+  }
+
+  Widget _buildHistoryTab(BuildContext context, PlayerController player) {
+    final stats = context.watch<ListeningStatsService>();
+    final historyEvents = stats.getHistory(limit: 60);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              'REPRODUCIDAS RECIENTEMENTE',
+              style: TextStyle(
+                color: context.textMuted,
+                fontSize: 10,
+                fontWeight: FontWeight.bold,
+                letterSpacing: 1.1,
+              ),
+            ),
+            if (historyEvents.isNotEmpty)
+              TextButton(
+                onPressed: () => stats.clearHistory(),
+                child: Text(
+                  'Borrar historial',
+                  style: TextStyle(color: context.textMuted, fontSize: 11),
+                ),
+              ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Expanded(
+          child: historyEvents.isEmpty
+              ? Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.history_rounded,
+                          color: context.textPrimary.withValues(alpha: 0.15),
+                          size: 48),
+                      const SizedBox(height: 10),
+                      Text(
+                        'Sin reproducciones recientes',
+                        style: TextStyle(
+                          color: context.textSecondary,
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Las canciones que escuches aparecerán aquí',
+                        style: TextStyle(
+                            color: context.textMuted, fontSize: 12),
+                      ),
+                    ],
+                  ),
+                )
+              : ListView.builder(
+                  itemCount: historyEvents.length,
+                  itemBuilder: (context, i) {
+                    final item = historyEvents[i];
+                    final timeAgo = _formatTimeAgo(item.timestamp);
+                    final track = Track(
+                      id: item.trackId,
+                      title: item.title,
+                      artist: item.artist,
+                      album: item.album,
+                      duration: item.durationSeconds.toString(),
+                      genre: item.genre,
+                    );
+
+                    return Container(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: context.bgCard,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: context.bgElevated),
+                      ),
+                      child: Row(
+                        children: [
+                          CoverArt(
+                            url: null,
+                            artist: item.artist,
+                            album: item.album,
+                            title: item.title,
+                            width: 40,
+                            height: 40,
+                            borderRadius: 8,
+                            fallbackIcon: Icons.music_note,
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  item.title,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    color: context.textPrimary,
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                Text(
+                                  '${item.artist} • $timeAgo',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                      color: context.textMuted,
+                                      fontSize: 11),
+                                ),
+                              ],
+                            ),
+                          ),
+                          IconButton(
+                            tooltip: 'Añadir a la cola',
+                            visualDensity: VisualDensity.compact,
+                            icon: Icon(Icons.add_to_photos_rounded,
+                                color: context.textMuted, size: 18),
+                            onPressed: () {
+                              player.addToQueue(track);
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(
+                                      'Añadida a la cola: ${item.title}'),
+                                  duration: const Duration(seconds: 1),
+                                ),
+                              );
+                            },
+                          ),
+                          IconButton(
+                            tooltip: 'Reproducir ahora',
+                            visualDensity: VisualDensity.compact,
+                            icon: Icon(Icons.play_arrow_rounded,
+                                color: context.accent, size: 22),
+                            onPressed: () => player.playQueue([track]),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+        ),
+      ],
+    );
+  }
+
+  String _formatTimeAgo(DateTime dt) {
+    final diff = DateTime.now().difference(dt);
+    if (diff.inSeconds < 60) return 'Hace un momento';
+    if (diff.inMinutes < 60) return 'Hace ${diff.inMinutes} min';
+    if (diff.inHours < 24) return 'Hace ${diff.inHours} h';
+    if (diff.inDays == 1) return 'Ayer';
+    if (diff.inDays < 7) return 'Hace ${diff.inDays} días';
+    return '${dt.day}/${dt.month}/${dt.year}';
   }
 
   Widget _buildAddedByBadge(CrotoLinkParticipant participant) {

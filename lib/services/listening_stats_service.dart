@@ -214,6 +214,25 @@ class ListeningStatsService extends ChangeNotifier {
   // Consultas y Agregaciones
   // ---------------------------------------------------------------------------
 
+  /// Devuelve los eventos de escucha más recientes en orden cronológico inverso.
+  List<ListeningEvent> getHistory({int limit = 100, String? serverScope}) {
+    final events = _filteredEvents(serverScope);
+    if (events.isEmpty) return const [];
+    return events.reversed.take(limit).toList();
+  }
+
+  /// Limpia el historial de reproducciones registradas para el ámbito actual (o todas).
+  Future<void> clearHistory({String? serverScope}) async {
+    final targetScope = serverScope ?? _currentServerScope;
+    if (targetScope == null || targetScope.isEmpty) {
+      _events.removeWhere((e) => e.serverScope == null);
+    } else {
+      _events.removeWhere((e) => e.serverScope == targetScope);
+    }
+    await _save();
+    notifyListeners();
+  }
+
   /// Duración total de escucha registrada.
   Duration getTotalListeningDuration({String? serverScope}) {
     final events = _filteredEvents(serverScope);

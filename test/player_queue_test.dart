@@ -191,4 +191,21 @@ void main() {
     expect([...a.loaded, ...b.loaded],
         contains('https://radio.example.invalid/stream.mp3'));
   });
+
+  test('removeDuplicatesFromQueue removes duplicated upcoming tracks', () async {
+    final t1 = t('1');
+    final t2 = t('2');
+    final t1Dup = t('1');
+    final t3 = t('3');
+    final t2Dup = t('2');
+
+    await player.playQueue([t1, t2, t1Dup, t3, t2Dup]);
+    expect(player.orderedQueue.map((e) => e.id), ['1', '2', '1', '3', '2']);
+    expect(player.currentTrack?.id, '1');
+
+    final removed = player.removeDuplicatesFromQueue();
+    expect(removed, 2);
+    expect(player.orderedQueue.map((e) => e.id), ['1', '2', '3']);
+    expect(player.currentTrack?.id, '1');
+  });
 }

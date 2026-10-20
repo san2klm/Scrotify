@@ -177,6 +177,53 @@ mixin _PlayerQueue on _PlayerBase {
     notifyListeners();
   }
 
+  /// Elimina pistas duplicadas de la cola pendiente (posteriores a la pista
+  /// actual), conservando la primera aparición de cada una.
+  /// Devuelve la cantidad de pistas duplicadas que se eliminaron.
+  int removeDuplicatesFromQueue({bool matchMetadata = true}) {
+    if (_mirror) return 0;
+    if (_queue.isEmpty || _order.isEmpty) return 0;
+
+    final seen = <String>{};
+    if (_pos >= 0 && _pos < _order.length) {
+      final currentRealIdx = _order[_pos];
+      if (currentRealIdx >= 0 && currentRealIdx < _queue.length) {
+        final current = _queue[currentRealIdx];
+        seen.add(DuplicateDetector.canonicalKeyFor(current,
+            matchMetadata: matchMetadata));
+      }
+    }
+
+    final toRemoveOrderIndices = <int>[];
+    for (var i = _pos + 1; i < _order.length; i++) {
+      final realIdx = _order[i];
+      if (realIdx < 0 || realIdx >= _queue.length) continue;
+      final t = _queue[realIdx];
+      final key = DuplicateDetector.canonicalKeyFor(t,
+          matchMetadata: matchMetadata);
+      if (!seen.add(key)) {
+        toRemoveOrderIndices.add(i);
+      }
+    }
+
+    if (toRemoveOrderIndices.isEmpty) return 0;
+
+    // Eliminar de mayor a menor índice para no invalidar los índices de orden anteriores.
+    for (final orderIndex in toRemoveOrderIndices.reversed) {
+      if (orderIndex < 0 || orderIndex >= _order.length) continue;
+      final realIndex = _order.removeAt(orderIndex);
+      _queue.removeAt(realIndex);
+      for (var j = 0; j < _order.length; j++) {
+        if (_order[j] > realIndex) _order[j]--;
+      }
+    }
+
+    _cancelFade();
+    _prepareNextForSkip();
+    notifyListeners();
+    return toRemoveOrderIndices.length;
+  }
+
   /// Limpia la cola y detiene la reproducción.
   @override
   void clearQueue() {

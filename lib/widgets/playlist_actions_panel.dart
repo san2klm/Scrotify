@@ -8,6 +8,8 @@ import '../utils/app_colors.dart';
 import 'material_surface.dart';
 import 'add_playlist_tracks_dialog.dart';
 import 'edit_playlist_details_dialog.dart';
+import 'duplicate_tracks_dialog.dart';
+import '../services/duplicate_detector.dart';
 
 /// Panel de acciones compartido por las playlists y la colección de Likes.
 class PlaylistActionsPanel extends StatefulWidget {
@@ -260,6 +262,33 @@ class _PlaylistActionsPanelState extends State<PlaylistActionsPanel> {
     }
   }
 
+  Future<void> _detectDuplicates() async {
+    final nav = context.read<NavidromeService>();
+    final tracks = await _currentTracks();
+    if (!mounted || _playlist == null) return;
+    final duplicates = DuplicateDetector.findDuplicates(tracks);
+    if (duplicates.isEmpty) {
+      if (mounted) {
+        setState(() => _message = '¡No hay canciones duplicadas en $_name!');
+      }
+      return;
+    }
+
+    if (!mounted) return;
+    await DuplicateTracksDialog.show(
+      context,
+      playlistName: _name,
+      allTracks: tracks,
+      onRemoveDuplicates: (indicesToRemove) async {
+        await nav.updatePlaylist(
+          playlistId: _playlist!.id,
+          songIndexesToRemove: indicesToRemove,
+        );
+        widget.onChanged();
+      },
+    );
+  }
+
   Widget _action(IconData icon, String title, String subtitle,
           Future<void> Function() action) =>
       Padding(
@@ -359,12 +388,18 @@ class _PlaylistActionsPanelState extends State<PlaylistActionsPanel> {
                       'Descargar localmente',
                       'Guardar los archivos de audio en una carpeta',
                       _download),
-                  if (_playlist != null)
+                  if (_playlist != null) ...[
                     _action(
                         Icons.edit_rounded,
                         'Nombre y datos',
                         'Cambiar el nombre y la foto de la playlist',
                         _editDetails),
+                    _action(
+                        Icons.copy_all_rounded,
+                        'Detectar duplicados',
+                        'Buscar y limpiar canciones repetidas en la playlist',
+                        _detectDuplicates),
+                  ],
                 ])),
               ],
             ),

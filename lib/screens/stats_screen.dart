@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../services/listening_stats_service.dart';
+import '../services/navidrome_service.dart';
+import '../services/player_controller.dart';
 import '../utils/app_colors.dart';
 import '../utils/responsive.dart';
 import '../widgets/material_surface.dart';
@@ -136,6 +138,14 @@ class _StatsScreenState extends State<StatsScreen> {
                   _buildSectionTitle('Géneros favoritos'),
                   const SizedBox(height: 10),
                   _buildTopGenresCard(context, topGenres),
+                  const SizedBox(height: 24),
+
+                  // -------------------------------------------------------------
+                  // Historial cronológico de reproducciones
+                  // -------------------------------------------------------------
+                  _buildSectionTitle('Historial cronológico'),
+                  const SizedBox(height: 10),
+                  _buildHistorySection(context, stats),
                   const SizedBox(height: 32),
                 ],
               )),
@@ -580,5 +590,80 @@ class _StatsScreenState extends State<StatsScreen> {
         ],
       ),
     );
+  }
+
+  Widget _buildHistorySection(
+      BuildContext context, ListeningStatsService stats) {
+    final history = stats.getHistory(limit: 25);
+    if (history.isEmpty) {
+      return MaterialSurface(
+        padding: const EdgeInsets.all(16),
+        color: context.bgElevated,
+        child: Text(
+          'Sin reproducciones registradas aún',
+          style: TextStyle(color: context.textSecondary, fontSize: 13),
+        ),
+      );
+    }
+
+    return MaterialSurface(
+      color: context.bgElevated,
+      child: Column(
+        children: [
+          for (int i = 0; i < history.length; i++) ...[
+            ListTile(
+              leading: Icon(
+                Icons.history_rounded,
+                color: context.accent2,
+                size: 20,
+              ),
+              title: Text(
+                history[i].title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: context.textPrimary,
+                  fontSize: 13.5,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              subtitle: Text(
+                '${history[i].artist} • ${_formatTimeAgo(history[i].timestamp)}',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(color: context.textSecondary, fontSize: 11.5),
+              ),
+              trailing: IconButton(
+                tooltip: 'Reproducir ahora',
+                icon: Icon(Icons.play_arrow_rounded, color: context.accent),
+                onPressed: () {
+                  final track = Track(
+                    id: history[i].trackId,
+                    title: history[i].title,
+                    artist: history[i].artist,
+                    album: history[i].album,
+                    duration: history[i].durationSeconds.toString(),
+                    genre: history[i].genre,
+                  );
+                  context.read<PlayerController>().playQueue([track]);
+                },
+              ),
+            ),
+            if (i < history.length - 1)
+              Divider(height: 1, color: context.bgCard, indent: 48),
+          ],
+        ],
+      ),
+    );
+  }
+
+  String _formatTimeAgo(DateTime dt) {
+    final diff = DateTime.now().difference(dt);
+    if (diff.inSeconds < 60) return 'Hace un momento';
+    if (diff.inMinutes < 60) return 'Hace ${diff.inMinutes} min';
+    if (diff.inHours < 24) return 'Hace ${diff.inHours} h';
+    if (diff.inDays == 1) return 'Ayer';
+    if (diff.inDays < 7) return 'Hace ${diff.inDays} días';
+    return '${dt.day}/${dt.month}/${dt.year}';
   }
 }

@@ -13,6 +13,7 @@ import '../widgets/local_download_button.dart';
 import '../utils/app_colors.dart';
 import '../widgets/material_surface.dart';
 import '../widgets/tv_initial_focus.dart';
+import '../widgets/collection_filter_bar.dart';
 
 /// Pantalla que muestra las canciones marcadas como favoritas (me gusta).
 class LikedSongsScreen extends StatefulWidget {
@@ -25,12 +26,22 @@ class LikedSongsScreen extends StatefulWidget {
 class _LikedSongsScreenState extends State<LikedSongsScreen> {
   late Future<List<Track>> _future;
   String? _lastSessionKey;
+  final TextEditingController _searchController = TextEditingController();
+  String _searchQuery = '';
+  CollectionSort _currentSort = CollectionSort.defaultOrder;
+  String? _selectedGenre;
 
   @override
   void initState() {
     super.initState();
     _lastSessionKey = context.read<NavidromeService>().currentSessionKey;
     _future = context.read<NavidromeService>().getStarred();
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
   void _reorderTracks(List<Track> tracks, int oldIndex, int newIndex) {
@@ -96,7 +107,24 @@ class _LikedSongsScreenState extends State<LikedSongsScreen> {
                       child: CircularProgressIndicator(
                           color: context.textPrimary));
                 }
-                final tracks = snapshot.data ?? <Track>[];
+                final allTracks = snapshot.data ?? <Track>[];
+                final availableGenres = allTracks
+                    .map((t) => t.genre?.trim())
+                    .where((g) => g != null && g.isNotEmpty)
+                    .cast<String>()
+                    .toSet()
+                    .toList()
+                  ..sort();
+
+                final filteredTracks = CollectionFilterHelper.filterAndSort(
+                  allTracks,
+                  query: _searchQuery,
+                  sort: _currentSort,
+                  genre: _selectedGenre,
+                );
+                final isManualOrder = _searchQuery.isEmpty &&
+                    _selectedGenre == null &&
+                    _currentSort == CollectionSort.defaultOrder;
                 final pinned = nav.isPinnedPlaylist('__likes__');
                 return Column(
                   children: [
@@ -120,7 +148,7 @@ class _LikedSongsScreenState extends State<LikedSongsScreen> {
                                   fontSize: 22,
                                   fontWeight: FontWeight.bold)),
                           const SizedBox(height: 8),
-                          Text('${tracks.length} canciones',
+                          Text('${allTracks.length} canciones',
                               style: TextStyle(
                                   color: context.textSecondary, fontSize: 14)),
                           const SizedBox(height: 8),
@@ -149,13 +177,13 @@ class _LikedSongsScreenState extends State<LikedSongsScreen> {
                                     overflow: TextOverflow.ellipsis),
                               ),
                               LocalDownloadButton(
-                                  tracks: tracks, collection: 'likes'),
+                                  tracks: allTracks, collection: 'likes'),
                               IconButton(
                                 visualDensity: VisualDensity.compact,
                                 tooltip: 'Acciones de favoritos',
                                 icon: Icon(Icons.more_vert_rounded,
                                     color: context.textMuted, size: 20),
-                                onPressed: () => _showActionsPanel(tracks),
+                                onPressed: () => _showActionsPanel(allTracks),
                               ),
                             ],
                           ),
@@ -168,7 +196,7 @@ class _LikedSongsScreenState extends State<LikedSongsScreen> {
                           tooltip: 'Reproducir al azar',
                           onPressed: () => context
                               .read<PlayerController>()
-                              .playShuffledQueue(tracks),
+                              .playShuffledQueue(filteredTracks),
                         ),
                         IconButton(
                           tooltip: 'Reproducir',
@@ -176,33 +204,59 @@ class _LikedSongsScreenState extends State<LikedSongsScreen> {
                               color: context.accent, size: 48),
                           onPressed: () => context
                               .read<PlayerController>()
-                              .playQueue(tracks, startIndex: 0),
+                              .playQueue(filteredTracks, startIndex: 0),
                         )
                       ]),
                     ),
+                    if (allTracks.isNotEmpty)
+                      CollectionFilterBar(
+                        searchController: _searchController,
+                        onQueryChanged: (q) =>
+                            setState(() => _searchQuery = q),
+                        currentSort: _currentSort,
+                        onSortChanged: (s) =>
+                            setState(() => _currentSort = s),
+                        selectedGenre: _selectedGenre,
+                        onGenreChanged: (g) =>
+                            setState(() => _selectedGenre = g),
+                        availableGenres: availableGenres,
+                        totalCount: allTracks.length,
+                        filteredCount: filteredTracks.length,
+                      ),
                     Divider(color: context.themeBorder),
-                    if (tracks.isEmpty)
+                    if (allTracks.isEmpty)
                       Expanded(
                         child: Center(
                           child: Text('No tienes canciones favoritas',
                               style: TextStyle(color: context.textMuted)),
                         ),
                       )
+                    else if (filteredTracks.isEmpty)
+                      Expanded(
+                        child: Center(
+                          child: Text(
+                            'No se encontraron canciones que coincidan con el filtro.',
+                            style: TextStyle(color: context.textMuted),
+                          ),
+                        ),
+                      )
                     else
                       Expanded(
                         child: ReorderableListView.builder(
                           buildDefaultDragHandles: false,
-                          itemCount: tracks.length,
-                          onReorderItem: (oldIndex, newIndex) =>
-                              _reorderTracks(tracks, oldIndex, newIndex),
+                          itemCount: filteredTracks.length,
+                          onReorderItem: isManualOrder
+                              ? (oldIndex, newIndex) =>
+                                  _reorderTracks(allTracks, oldIndex, newIndex)
+                              : (_, __) {},
                           itemBuilder: (context, index) {
-                            final track = tracks[index];
+                            final track = filteredTracks[index];
                             final starred = nav.isStarred(track.id);
                             return InkWell(
                               key: ValueKey('liked-${track.id}'),
                               onTap: () => context
                                   .read<PlayerController>()
-                                  .playQueue(tracks, startIndex: index),
+                                  .playQueue(filteredTracks, startIndex: index),
                               child: Padding(
                                 padding: const EdgeInsets.symmetric(
                                     horizontal: 16, vertical: 8),
