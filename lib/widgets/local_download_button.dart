@@ -48,11 +48,15 @@ class _LocalDownloadButtonState extends State<LocalDownloadButton> {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
           content: Text(
               'Descargas añadidas. Se omiten las canciones que ya tienes.')));
-    } catch (_) {
+    } catch (e, st) {
+      debugPrint('Error al encolar descargas: $e\n$st');
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text(
-              'No se pudo descargar. Comprueba la conexión y los permisos de la carpeta.')));
+      final msg = e
+          .toString()
+          .replaceFirst('Exception: ', '')
+          .replaceFirst('FileSystemException: ', '');
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('No se pudo descargar: $msg')));
     } finally {
       if (mounted) setState(() => _adding = false);
     }

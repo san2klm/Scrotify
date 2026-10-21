@@ -145,6 +145,19 @@ class LocalMusicService extends ChangeNotifier {
         _root = null;
       }
     }
+    if (Platform.isIOS && defaultRoot == null) {
+      final docs = await getApplicationDocumentsDirectory();
+      final currentRoot = Directory(p.join(docs.path, 'Music', 'CrotoWave'));
+      final oldPath = _root?.path;
+      if (oldPath == null || !p.isWithin(docs.path, oldPath)) {
+        if (oldPath != null && oldPath != currentRoot.path) {
+          _migrateIosContainerPaths(oldPath, currentRoot.path);
+        }
+        _root = currentRoot;
+      }
+      _roots.removeWhere((r) =>
+          !p.isWithin(docs.path, r) && r.contains('/Documents/Music/CrotoWave'));
+    }
     for (final entry in _trackDetails.entries) {
       final scope = entry.key.substring(0, entry.key.indexOf(':'));
       final track = Track.fromJson(entry.value);
@@ -184,6 +197,37 @@ class LocalMusicService extends ChangeNotifier {
     unawaited(rescan(requestAccess: false).catchError((Object error) {
       debugPrint('No se pudo reescanear la música local: $error');
     }));
+  }
+
+  void _migrateIosContainerPaths(String oldRootPath, String newRootPath) {
+    const marker = '/Documents/Music/CrotoWave';
+    String remap(String path) {
+      if (path.contains(marker)) {
+        final sub = path.substring(path.indexOf(marker) + marker.length);
+        return p.join(
+            newRootPath, sub.startsWith('/') ? sub.substring(1) : sub);
+      }
+      if (path.startsWith(oldRootPath)) {
+        return path.replaceFirst(oldRootPath, newRootPath);
+      }
+      return path;
+    }
+
+    _roots.remove(oldRootPath);
+    _roots.add(newRootPath);
+
+    final updatedDestinations = <String, String>{};
+    for (final entry in _destinations.entries) {
+      updatedDestinations[entry.key] = remap(entry.value);
+    }
+    _destinations
+      ..clear()
+      ..addAll(updatedDestinations);
+
+    for (final record in _records.values) {
+      final paths = (record['paths'] as List? ?? []).cast<String>();
+      record['paths'] = paths.map(remap).toList();
+    }
   }
 
   static Future<Directory> _platformRoot() async {
@@ -396,25 +440,31 @@ class LocalMusicService extends ChangeNotifier {
   Future<void> rememberPlaylist(String userScope, Playlist playlist) async {
     await initialize();
     final library = _library(userScope);
-    final playlists = (library['playlists'] as List).toList();
-    playlists.removeWhere((item) => item['id'] == playlist.id);
+    final playlists = (library['playlists'] as List? ?? []).toList();
+    playlists.removeWhere((item) => (item is Map) && item['id'] == playlist.id);
     playlists.add(_playlistJson(playlist));
     library['playlists'] = playlists;
+    library['playlistsKnown'] = true;
     await _save();
   }
 
   Future<void> rememberPlaylistTracks(
       String userScope, String id, List<Track> tracks) async {
     await initialize();
-    (_library(userScope)['entries'] as Map)[id] =
-        tracks.map(_trackJson).toList();
+    final library = _library(userScope);
+    final entries = (library['entries'] as Map?) != null
+        ? Map<String, dynamic>.from(library['entries'] as Map)
+        : <String, dynamic>{};
+    entries[id] = tracks.map(_trackJson).toList();
+    library['entries'] = entries;
     await _save();
   }
 
   Future<void> rememberLikes(String userScope, List<Track> tracks) async {
     await initialize();
-    _library(userScope)['likes'] = tracks.map(_trackJson).toList();
-    _library(userScope)['likesKnown'] = true;
+    final library = _library(userScope);
+    library['likes'] = tracks.map(_trackJson).toList();
+    library['likesKnown'] = true;
     await _save();
   }
 
@@ -444,7 +494,7 @@ class LocalMusicService extends ChangeNotifier {
       if (record['scope'] != OfflineCacheService.safeScopeSegment(scope)) {
         continue;
       }
-      for (final path in (record['paths'] as List).cast<String>()) {
+      for (final path in (record['paths'] as List? ?? []).cast<String>()) {
         final folder = p.basename(p.dirname(path));
         if (folder.startsWith('playlist(') && folder.endsWith(')')) {
           folders.add(folder);
@@ -464,7 +514,7 @@ class LocalMusicService extends ChangeNotifier {
       // Si otro usuario ya tiene la misma colección identificada, no se la atribuimos a esta cuenta.
       final belongsToOther = _libraries.entries.any((entry) =>
           entry.key != userScope &&
-          (entry.value['playlists'] as List).any((playlist) =>
+          (entry.value['playlists'] as List? ?? []).any((playlist) =>
               safeName('playlist(${playlist['name']})') == folder));
       if (belongsToOther) continue;
       final tracks = _folderTracks(scope, folder);
@@ -508,7 +558,7 @@ class LocalMusicService extends ChangeNotifier {
     final entries = library?['entries'] as Map?;
     // Una lista vacía guardada es un dato válido, no una señal para reconstruirla.
     if (entries?.containsKey(id) == true) {
-      return _available(scope, entries![id] as List);
+      return _available(scope, (entries![id] as List? ?? []));
     }
     final saved = (library?['playlists'] as List? ?? []);
     for (final item in saved) {
@@ -524,8 +574,9 @@ class LocalMusicService extends ChangeNotifier {
       return _folderTracks(scope, safeName('playlist(${playlist.name})'));
     }
     for (final track in downloadedTracks(scope)) {
-      for (final path in (_records[_key(scope, track.id)]!['paths'] as List)
-          .cast<String>()) {
+      final paths = (_records[_key(scope, track.id)]?['paths'] as List? ?? [])
+          .cast<String>();
+      for (final path in paths) {
         final folder = p.basename(p.dirname(path));
         if (_folderPlaylistId(folder) == id) {
           return _folderTracks(scope, folder);
@@ -537,7 +588,7 @@ class LocalMusicService extends ChangeNotifier {
 
   List<Track> offlineLikes(String scope, String userScope) {
     if (_libraries[userScope]?.containsKey('likesKnown') == true) {
-      return _available(scope, _libraries[userScope]!['likes'] as List);
+      return _available(scope, (_libraries[userScope]!['likes'] as List? ?? []));
     }
     if (_legacyOwners[OfflineCacheService.safeScopeSegment(scope)] !=
         userScope) {
@@ -616,21 +667,50 @@ class LocalMusicService extends ChangeNotifier {
 
   Future<String> destination(DownloadTask task) async {
     await initialize();
-    final existing = _destinations[task.compoundKey];
+    var path = _destinations[task.compoundKey];
+    if (Platform.isIOS && path != null && !p.isWithin(_root!.path, path)) {
+      const marker = '/Documents/Music/CrotoWave';
+      if (path.contains(marker)) {
+        final sub = path.substring(path.indexOf(marker) + marker.length);
+        path = p.join(
+            _root!.path, sub.startsWith('/') ? sub.substring(1) : sub);
+        _destinations[task.compoundKey] = path;
+      }
+    }
     final tag = sha256
         .convert(utf8.encode(task.compoundKey))
         .toString()
         .substring(0, 12);
-    var path =
-        existing ?? p.join(_root!.path, '${safeName(task.title)} [$tag].audio');
+    path ??= p.join(_root!.path, '${safeName(task.title)} [$tag].audio');
     final parent = Directory(p.dirname(path));
     await parent.create(recursive: true);
-    final realParent = await parent.resolveSymbolicLinks();
-    final allowed = _roots.where((root) => p.isWithin(root, path)).toList();
+
     var safe = false;
-    for (final root in allowed) {
-      final realRoot = await Directory(root).resolveSymbolicLinks();
-      if (realParent == realRoot || p.isWithin(realRoot, realParent)) {
+    String realParent;
+    try {
+      realParent = await parent.resolveSymbolicLinks();
+    } catch (_) {
+      realParent = parent.absolute.path;
+    }
+
+    for (final root in _roots) {
+      String realRoot;
+      try {
+        realRoot = await Directory(root).resolveSymbolicLinks();
+      } catch (_) {
+        realRoot = Directory(root).absolute.path;
+      }
+      if (realParent == realRoot ||
+          p.isWithin(realRoot, realParent) ||
+          p.isWithin(root, path) ||
+          p.isWithin(p.canonicalize(root), p.canonicalize(path))) {
+        safe = true;
+        break;
+      }
+    }
+    if (!safe && Platform.isIOS) {
+      final docs = (await getApplicationDocumentsDirectory()).path;
+      if (p.isWithin(docs, path) || p.isWithin(docs, realParent)) {
         safe = true;
       }
     }
