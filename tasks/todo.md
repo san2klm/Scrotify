@@ -427,3 +427,99 @@ El mismo APK sirve para teléfono y tele. En una tele se activa un modo con la i
 - [x] Verificado con prueba de widgets que el centro vertical del título (`tester.getCenter(find.text('Recomendados para ti')).dy`) coincide con el de los botones (`Icons.refresh_rounded`, `Icons.chevron_left_rounded`, `Icons.chevron_right_rounded`) (`closeTo(..., 1.0)`) y que el título aparece exactamente una vez (`findsOneWidget`).
 - [x] Pruebas (`flutter test test/discovery_section_test.dart`) PASS y `flutter analyze` sin errores ni warnings nuevos.
 - [x] Bundle de Windows Release AOT y assets compilados, y portable completo empaquetado en `D:\gemini\.exes\` con `CrotoWave.exe` y `data/app.so` actualizados.
+
+## Correcciones de sesión, conexión y reproductor (Claude Code)
+
+- [x] Scrobbles: validar aceptación Subsonic, fijar cuenta durante flush y compartir carga inicial de cola; regresiones de rechazo y cambio de cuenta.
+- [x] Sync: cambio de identidad, suspensión de cuenta al logout, migración segura de claves anteriores, persistencia serializada y aislamiento de archivos por cuenta.
+- [x] Home desktop/móvil: invalidar búsquedas antiguas y mostrar errores de catálogo con reintento; corregir Material de resultados sin silenciar errores de Flutter.
+- [x] Conectividad: validar respuestas/ping, retry acotado de 5xx, recuperación offline y estado degradado por consulta sin ocultarlo como lista vacía.
+- [x] Reproductor ampliado: portada firmada/caché de resolución por sesión y tinte neutro; waveform desde archivo local o MP3 96 kbps, análisis fuera de UI, coalescing y estados visibles. Sin decodificador comprimido en Android/iOS se informa indisponibilidad, no se inventa una onda.
+- [x] Verificación integral: `flutter analyze --no-pub` sin issues; suite Flutter con 1088 aprobadas, 3 omitidas y 0 fallidas; build Linux debug aprobado. Dos warnings C++ previos de `hotkey_manager_linux`. Render de widgets con portada y WAV locales inspeccionado en tema claro/oscuro. Especificación y límites: `docs/session-connectivity-player-fixes.md`.
+- [x] Paquetes actualizados en `dist/`: APK release teléfono arm64 firmado (versionCode 12247) y AppImage x86_64 portable compilado en Debian 12, con FFmpeg/ffprobe incluidos y probados. Checksums verificados; retirados APK TV/Chromecast, bundle antiguo y firma minisign anterior. No se generó una nueva firma minisign.
+
+## Waveform nativa Android
+
+- [x] Contrato y fuentes oficiales en `docs/android-native-waveform.md`; sin dependencias adicionales ni FFmpeg CLI móvil.
+- [x] Decoder Kotlin MediaExtractor/MediaCodec en worker acotado, RMS/picos por bloques y limpieza/cancelación; FlutterPlugin vinculado al engine de audio, no a la Activity.
+- [x] Integración Dart para archivos locales/stream de análisis, descargas abortables, coalescing y caché con publicación atómica; cancelación antes de resolver origen, al cambiar pista/vaciar cola/dispose y antes del commit de caché.
+- [x] Análisis sin issues; 47 tests dirigidos y suite de 1106 aprobados/3 omitidos/0 fallidos; Linux debug aprobado. Veinte checks JVM de PCM y 12 checks reales Android 14, incluidos MP3/FLAC 16/24 bits, archivo >30 MB, reproducción/onda sin Activity y cierre del engine sin crash.
+- [x] APK release teléfono ARM64 actualizado en `dist/` (versionCode 12251), misma firma verificada, entrypoint normal y checksums comprobados. AppImage anterior preservado. Pendiente prueba en teléfono físico. Detalles: `docs/android-native-waveform.md`.
+
+## Vista previa de temas
+- Implementado: tarjetas con colores del tema, sin capturas de miniaturas instaladas; assets/themes verificado sin imágenes en los 122 ZIP. Pruebas de temas: 13 aprobadas. Análisis estático pendiente de terminar.
+
+## Nombres de temas en español
+- [x] Renombrados 122 temas empaquetados y 6 fijos según su paleta; IDs conservados. Alias visibles para copias previamente importadas, sin escribir datos del dispositivo.
+- [x] Verificados ZIP íntegros, nombres únicos y manifiestos coincidentes. 13 pruebas de temas aprobadas. Análisis: 11 avisos informativos de unawaited_futures en archivos ajenos al cambio; sin hallazgos en archivos modificados.
+
+## Orden del selector de temas
+- [x] Conservados los seis temas fijos al inicio en su orden actual; instalados ordenados por nombre, sin distinguir mayúsculas ni tildes vocálicas. Hot restart aplicado.
+- [x] 13 pruebas de temas aprobadas; análisis con los mismos 11 avisos informativos ajenos al cambio.
+
+## Primera selección de temas retirados
+- [x] Retirados Aurora suave, Estudio claro, Mostaza suave, Mostaza intensa, Arena clara y Arena suave del ZIP y fuentes temporales; copias antiguas omitidas en el selector sin borrar datos del dispositivo. Quedan 116 empaquetados más seis fijos. 13 pruebas aprobadas; hot restart solicitado.
+
+## Segunda selección de temas retirados
+- [x] Retirados Lavanda, Malva cálida (fijo), Malva, Acero naranja, Ámbar, Anochecer, Azul eléctrico, Azul lima, Azul medianoche, Azul retro, Chispa, Jardín rosa y Neón turquesa. Paquete con 104 temas y cinco fijos (109 total); copias antiguas filtradas. Predeterminado actualizado a Crema.
+- [x] ZIP íntegro, 13 pruebas aprobadas; hot restart aplicado. Análisis conserva los 11 avisos informativos ajenos a los cambios.
+
+## Tercera selección de temas retirados
+- [x] Retirados Terminal verde, Sol violeta, Verde láser, Verde urbano, Verde vivo, Vainilla azul, Ventana clara, Turquesa clásico, Turquesa digital y Turquesa retro del paquete y fuentes; copias antiguas filtradas. Quedan 94 empaquetados y cinco fijos (99 total).
+- [x] ZIP íntegro y 13 pruebas de temas aprobadas. Análisis mantiene los 11 avisos informativos previos; hot restart aplicado.
+
+## Tarjetas de temas compactas
+- [x] Tarjetas de 152 x 164 px a escala normal, con vista previa de 96 px, nombre y papelera a la derecha en la misma fila. Retiradas versión y etiqueta CVD del pie; indicador de selección conservado. Altura adaptable al tamaño de texto.
+
+## Tema personalizado
+- [x] Tarjeta Personalizado al final con icono de paleta en lugar de papelera. Editor con fondo y dos acentos, colores sugeridos, códigos hexadecimales validados, vista previa y Guardar y aplicar. Colores y selección persistidos en themes.json; contraste claro/oscuro según el fondo.
+- [x] 14 pruebas aprobadas, incluida persistencia/recarga de colores y posición final. Análisis sin hallazgos en cambios (11 avisos informativos previos en otros archivos).
+
+## Editor de colores por casillas y RGB
+- [x] Selector exclusivo 1 Fondo / 2 Acento principal / 3 Acento secundario; barras Color, Tonalidad y Luz, RGB visible y panel Ajustar RGB con canales de 0 a 255. Vista previa y colores independientes por casilla.
+- [x] 15 pruebas aprobadas, incluyendo interacción RGB, cambio de casilla, cancelación y persistencia. Análisis conserva 11 avisos informativos previos en archivos ajenos al cambio.
+
+## Blur y transparencia de Personalizado
+- [x] Retirado panel Ajustar RGB; agregadas barras Blur (0–30 px) y Transparencia (0–100 %). Vista previa con fondo de contraste y desenfoque. Efectos persistidos y aplicados a MaterialSurface cuando Personalizado está activo; demás temas sin efectos.
+- [x] 15 pruebas de temas aprobadas; verificadas persistencia, desactivación al cambiar de tema, BackdropFilter real y alfa de superficies. Análisis mantiene 11 avisos informativos previos en archivos ajenos. Hot restart aplicado.
+
+## Efectos del tema en toda la app
+- [x] Transparencia extendida a fondos de pantallas, biblioteca lateral, reproductor y superficies elevadas. Fondo global con los colores del tema y desenfoque propio, conservando texto y controles nítidos. ThemeData adaptado para pantallas que usan el fondo predeterminado. Corregida lectura reactiva fuera de build en aviso de Temas incluidos.
+- [x] Verificados alfa de fondo/barra lateral/reproductor, filtro global, persistencia y regreso a tema opaco. Archivos de la extensión analizados sin issues; 15 pruebas de temas aprobadas.
+
+## Transparencia del escritorio de Windows
+- [x] Aclarado alcance: escritorio detrás de la ventana. Eliminado fondo pintado en Windows; bgApp transparente para evitar capas opacas superpuestas y tinte global único. Marco y mini reproductor cubiertos por el fondo común.
+- [x] Canal nativo com.crotowave/window_effects en runner: DWM Desktop Acrylic, composición por ventana si EnableTransparency del sistema está apagado, restauración opaca y errores propagados. Sin modificar ajustes de Windows ni opacidad del texto. Sincronización serializada con tema; en Windows Blur es interruptor por radio fijo del SO.
+- [x] flutter run -d windows recompiló runner nativo y app abierta sin errores del canal. 16 pruebas aprobadas; archivos cambiados con análisis sin issues; diff --check sin errores. PrintWindow confirma interfaz renderizada; no se pudo verificar composición visual sobre escritorio porque otra aplicación ocupa el primer plano.
+
+## Simplificación del editor personalizado
+- [x] Quitados Blur (incluido efecto persistido/activo) y texto RGB. Transparencia inmediatamente debajo de Luz; se conservan las tres casillas y vista previa. Windows recibe siempre blur=false para limpiar el efecto previo y mantener transparencia simple.
+- [x] Análisis conserva los 11 avisos informativos previos en otros archivos; pruebas de persistencia/controles y protocolo nativo actualizadas para ausencia de blur y RGB.
+
+## Vista previa fiel de Personalizado
+- [x] Sustituido degradado de acentos y franja blanca por damero neutro. Fondo seleccionado con su transparencia; dos franjas inferiores reservadas a acentos. El negro no hereda el tono de los acentos.
+- [x] Tres pruebas de píxeles reales aprobadas (negro opaco, transparencia75% neutra y100% damero, franjas exactas) y dos pruebas del editor aprobadas. Captura renderizada inspeccionada; hot reload aplicado. Análisis conserva los 11 avisos informativos previos.
+
+## Vista previa igual a la tarjeta
+- [x] Por corrección del usuario: retirado damero. Vista previa opaca con fondo elegido y dos bandas de acento, idéntica a la tarjeta; el control Transparencia sigue aplicándose a la ventana.
+- [x] Tres pruebas de píxeles de colores sólidos y bandas, más dos pruebas del editor, aprobadas. Archivos de vista previa analizados sin issues. Hot reload aplicado.
+
+## Compartir e importar Personalizado por código
+- [x] Código CWT1 generado desde el borrador (fondo, dos acentos, transparencia), con Copiar código, pegar del portapapeles/entrada manual y Cargar código dentro del editor. Cargar valida y previsualiza; Guardar y aplicar persiste; cancelar y códigos inválidos conservan configuración anterior.
+- [x] Formato versionado documentado en docs/custom-theme-sharing.md, límite128 caracteres y validación estricta; sin datos de cuenta ni nuevas dependencias.
+- [x] 17 pruebas aprobadas (11 formato,1 flujo copiar/pegar/importar/error/cancelación,2 editor/persistencia,3 píxeles). Análisis de archivos modificados sin issues; análisis global conserva 11 avisos informativos previos. Hot reload aplicado.
+
+## Instalación SSH en CachyOS
+- [x] Acceso por clave a pc@192.168.1.78. Proyecto actual transferido y compilado con Flutter3.47.4 (versión CI), lockfile respetado; herramientas faltantes extraídas en usuario, sin sudo ni cambios de paquetes del sistema.
+- [x] AppImage de92MB instalado en ~/.local/opt/crotowave/CrotoWave.AppImage, lanzador ~/.local/bin/crotowave y entrada de menú validados. Servicio de usuario crotowave.service activo y arranque GTK/media_kit verificado. Log reporta dos atajos AudioNext/AudioPrev ocupados en KDE.
+- [x] Copia en outputs/CrotoWave-Linux-x64.AppImage de esta conversación. SHA256 BC084854A7AE30B733C3692F3A7CA91FE9482205CC01DBDD83F46B26E2C05EC1 coincide entre equipos. Sin WSL instalado en Windows: compilación realizada en CachyOS. Servidor HTTP temporal de claves cerrado y archivo SDK descargado retirado tras compilación.
+
+## Corrección de render en VMware
+- [x] Reproducida corrupción visual con SVGA3D de VMware e Impeller. Probado LIBGL_ALWAYS_SOFTWARE=1: Mesa llvmpipe dibuja textos/campos/botones completos, captura real inspeccionada.
+- [x] AppRun detecta VMware y usa Mesa por CPU solo si LIBGL_ALWAYS_SOFTWARE no fue definido explícitamente; resto de equipos conserva aceleración. AppImage recompilado/empaquetado, reinstalado y relanzado en VM. Verificada variable desde proceso real con lanzador normal sin override externo.
+- [x] AppImage y captura actualizados en outputs de la conversación. SHA256 5B62E7F540E237124714C642FB217501B483692C99344C7789B1276D8203C035 coincide entre equipos. Servicio activo y vista de login completa verificada.
+- Verificación final tras reinstalar y reabrir: captura de la ventana CrotoWave enfocada confirma formulario de login completo, tipografía y controles sin corrupción; imagen de outputs actualizada con esa captura.
+
+## Icono de widget en la barra inferior
+- [x] Retirado botón Widget / Mini reproductor de PersistentPlayerBar, junto con su separador e imports sin uso.
+- [x] 28 pruebas existentes aprobadas (playback_time, player_position_builder y waveform_progress_bar). Análisis sin errores ni warnings: conserva los 11 avisos informativos previos en otros archivos; diff --check sin errores.

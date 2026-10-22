@@ -1,3 +1,4 @@
+import 'dart:io' show File;
 import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
@@ -497,54 +498,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
     );
   }
 
-  Widget _buildAmbientBackground(Track track) {
-    return Positioned.fill(
-      child: FutureBuilder<String?>(
-        future: () async {
-          final nav = context.read<NavidromeService?>();
-          final local = context.read<LocalMusicService?>()?.artworkForMetadata(
-              nav?.serverScope,
-              artist: track.artist,
-              album: track.album,
-              title: track.title);
-          if (local != null) return Uri.file(local).toString();
-          if (nav?.offlineMode == true &&
-              Uri.tryParse(track.albumArtUrl ?? '')?.scheme != 'file') {
-            return null;
-          }
-          if (track.albumArtUrl != null && track.albumArtUrl!.isNotEmpty) {
-            return track.albumArtUrl;
-          }
-          return CoverFallbackService.instance.findCover(
-            artist: track.artist,
-            album: track.album,
-            title: track.title,
-            size: 300,
-          );
-        }(),
-        builder: (context, snapshot) {
-          final url = snapshot.data;
-          if (url == null || url.isEmpty) {
-            return const SizedBox.shrink();
-          }
-          // Con la imagen decodificada a baja resolución y aislada en su propia
-          // capa, el desenfoque (caro) se rasteriza una sola vez.
-          return RepaintBoundary(
-            child: ImageFiltered(
-              imageFilter: ImageFilter.blur(sigmaX: 60, sigmaY: 60),
-              child: Image(
-                image: ResizeImage(CoverArt.imageProvider(url), width: 128),
-                fit: BoxFit.cover,
-                filterQuality: FilterQuality.low,
-                color: context.textPrimary.withAlpha(70),
-                colorBlendMode: BlendMode.modulate,
-              ),
-            ),
-          );
-        },
-      ),
-    );
-  }
+  Widget _buildAmbientBackground(Track track) =>
+      PlayerAmbientBackground(track: track);
 
   Widget _buildProgressBar(
     BuildContext context,
@@ -583,6 +538,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
                         ignoring: !canControl,
                         child: WaveformProgressBar(
                           waveform: playerModel.waveformData,
+                          loading: playerModel.isWaveformLoading,
+                          unavailableMessage: playerModel.waveformError,
                           height: _waveformHeight(context),
                           playing: playerModel.playing,
                           position: effectivePosition,
@@ -818,6 +775,118 @@ class _PlayerVolumeBarState extends State<_PlayerVolumeBar> {
           ],
         );
       },
+    );
+  }
+}
+
+/// Fondo difuminado de la portada, a pantalla completa.
+class PlayerAmbientBackground extends StatefulWidget {
+  const PlayerAmbientBackground({super.key, required this.track});
+
+  final Track track;
+
+  @override
+  State<PlayerAmbientBackground> createState() =>
+      _PlayerAmbientBackgroundState();
+}
+
+class _PlayerAmbientBackgroundState extends State<PlayerAmbientBackground> {
+  Future<String?>? _cover;
+  Object? _identity;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _resolveIfChanged();
+  }
+
+  @override
+  void didUpdateWidget(PlayerAmbientBackground oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _resolveIfChanged();
+  }
+
+  /// El reproductor notifica varias veces por segundo: la portada solo se
+  /// vuelve a resolver si cambia la pista, su portada, el servidor o el modo
+  /// sin conexión.
+  void _resolveIfChanged() {
+    final track = widget.track;
+    // Escucha al servicio: la URL firmada depende de la sesión actual, y un
+    // cambio de usuario en el mismo servidor no cambia `serverScope`.
+    final nav = Provider.of<NavidromeService?>(context);
+    final identity = (
+      track.id,
+      track.albumArtUrl,
+      track.artist,
+      track.album,
+      track.title,
+      nav?.serverScope,
+      nav?.currentSessionKey,
+      nav?.coverArtVersion,
+      nav?.offlineMode,
+    );
+    if (identity == _identity) return;
+    _identity = identity;
+    _cover = _resolve(track, nav);
+  }
+
+  Future<String?> _resolve(Track track, NavidromeService? nav) async {
+    final music = context.read<LocalMusicService?>();
+    final scope = nav?.serverScope;
+    var local = scope == null ? null : music?.artworkForTrack(scope, track);
+    if (local != null && !await File(local).exists()) local = null;
+    local ??= music?.artworkForMetadata(scope,
+        artist: track.artist, album: track.album, title: track.title);
+    if (local != null) return Uri.file(local).toString();
+    final art = track.albumArtUrl;
+    if (nav?.offlineMode == true && Uri.tryParse(art ?? '')?.scheme != 'file') {
+      return null;
+    }
+    if (art != null && art.isNotEmpty) {
+      // Las portadas guardadas no llevan credenciales: firmarlas con la sesión.
+      return nav?.authorizeCoverArtUrl(art) ?? art;
+    }
+    return CoverFallbackService.instance.findCover(
+      artist: track.artist,
+      album: track.album,
+      title: track.title,
+      size: 300,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // Blanco translúcido: `modulate` con un color de texto (oscuro en temas
+    // claros) pintaba la portada de negro.
+    final tint = Colors.white.withAlpha(context.appTheme.isDark ? 90 : 130);
+    return Positioned.fill(
+      child: FutureBuilder<String?>(
+        // Otra identidad = otro State: no se arrastra la portada (ni el
+        // usuario) anterior mientras se resuelve la nueva.
+        key: ValueKey(_identity),
+        future: _cover,
+        builder: (context, snapshot) {
+          final url = snapshot.data;
+          if (url == null || url.isEmpty) {
+            return const SizedBox.shrink();
+          }
+          // Con la imagen decodificada a baja resolución y aislada en su propia
+          // capa, el desenfoque (caro) se rasteriza una sola vez.
+          return RepaintBoundary(
+            child: ImageFiltered(
+              imageFilter: ImageFilter.blur(sigmaX: 60, sigmaY: 60),
+              child: Image(
+                image: ResizeImage(CoverArt.imageProvider(url), width: 128),
+                fit: BoxFit.cover,
+                filterQuality: FilterQuality.low,
+                color: tint,
+                colorBlendMode: BlendMode.modulate,
+                errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+              ),
+            ),
+          );
+        },
+      ),
     );
   }
 }

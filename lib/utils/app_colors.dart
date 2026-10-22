@@ -14,18 +14,21 @@ import '../services/theme_controller.dart';
 extension AppColors on BuildContext {
   AppTheme get appTheme => watch<ThemeController>().active;
 
+  Color _surfaceColor(Color color) =>
+      watch<ThemeController>().surfaceColor(color);
+
   Color get accent => appTheme.accent;
   Color get accent2 => appTheme.accent2;
   Color get accentDim => appTheme.accentDim;
   Color get accentGlow => appTheme.accentGlow;
   Color get highlight => appTheme.highlight;
-  Color get bgApp => appTheme.bgApp;
-  Color get bgCard => appTheme.bgCard;
-  Color get bgElevated => appTheme.bgElevated;
-  Color get bgSidebar => appTheme.bgSidebar;
+  Color get bgApp => watch<ThemeController>().pageBackground;
+  Color get bgCard => _surfaceColor(appTheme.bgCard);
+  Color get bgElevated => _surfaceColor(appTheme.bgElevated);
+  Color get bgSidebar => _surfaceColor(appTheme.bgSidebar);
   Color get bgHover => appTheme.bgHover;
-  Color get bgPlayer => appTheme.bgPlayer;
-  Color get bgDeep => appTheme.bgDeep;
+  Color get bgPlayer => _surfaceColor(appTheme.bgPlayer);
+  Color get bgDeep => _surfaceColor(appTheme.bgDeep);
   Color get menuBg => appTheme.menuBg;
   Color get modalBg => appTheme.modalBg;
   Color get inputBg => appTheme.inputBg;

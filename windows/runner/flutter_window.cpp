@@ -1,5 +1,6 @@
 #include "flutter_window.h"
 
+#include <dwmapi.h>
 #include <mutex>
 #include <optional>
 #include <string>
@@ -8,6 +9,36 @@
 #include "resource.h"
 
 namespace {
+
+// window_manager uses the same per-window policy for transparent windows.
+// It also provides a blur fallback without changing system-wide settings.
+bool ApplyLegacyWindowAccent(HWND window, int state) {
+  struct AccentPolicy {
+    int state;
+    int flags;
+    int color;
+    int animation;
+  };
+  struct CompositionAttributeData {
+    int attribute;
+    PVOID data;
+    SIZE_T size;
+  };
+  using SetCompositionAttribute =
+      BOOL(WINAPI*)(HWND, CompositionAttributeData*);
+  const auto user32 = GetModuleHandleW(L"user32.dll");
+  if (!user32) return false;
+  const auto set_attribute = reinterpret_cast<SetCompositionAttribute>(
+      GetProcAddress(user32, "SetWindowCompositionAttribute"));
+  if (!set_attribute) {
+    SetLastError(ERROR_PROC_NOT_FOUND);
+    return false;
+  }
+  AccentPolicy policy = {state, 2, 0, 0};
+  CompositionAttributeData data = {19, &policy, sizeof(policy)};
+  SetLastError(ERROR_SUCCESS);
+  return set_attribute(window, &data) != FALSE;
+}
 
 constexpr UINT kWmCrotoWaveHotkey = WM_USER + 200;
 constexpr UINT kWmTrayIcon = WM_USER + 201;
@@ -762,6 +793,60 @@ void FlutterWindow::UpdateTaskbarPlayPause(bool is_playing) {
   taskbar_list_->ThumbBarUpdateButtons(hwnd, 1, &btn);
 }
 
+HRESULT FlutterWindow::ApplyWindowEffects(bool transparent, bool blur,
+                                        bool dark) {
+  const HWND window = GetHandle();
+  if (!window) return HRESULT_FROM_WIN32(ERROR_INVALID_WINDOW_HANDLE);
+
+  const BOOL dark_mode = dark ? TRUE : FALSE;
+  DwmSetWindowAttribute(window, 20, &dark_mode, sizeof(dark_mode));
+
+  // DWMWA_SYSTEMBACKDROP_TYPE (38) is supported from Windows 11 build 22621.
+  // Value 3 is Desktop Acrylic, which blurs content behind this window;
+  // value 1 disables the system backdrop. Numeric constants keep older SDKs
+  // buildable while the HRESULT reports runtime support to Dart.
+  DWORD transparency_enabled = 1;
+  DWORD value_size = sizeof(transparency_enabled);
+  const LSTATUS preference_result = RegGetValueW(
+      HKEY_CURRENT_USER,
+      L"Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize",
+      L"EnableTransparency", RRF_RT_REG_DWORD, nullptr,
+      &transparency_enabled, &value_size);
+  const bool legacy_blur = transparent && blur &&
+      preference_result == ERROR_SUCCESS && transparency_enabled == 0;
+  const int backdrop = transparent && blur && !legacy_blur ? 3 : 1;
+  if (transparent && blur && !legacy_blur &&
+      !ApplyLegacyWindowAccent(window, 0)) {
+    const DWORD error = GetLastError();
+    return error == ERROR_SUCCESS ? E_FAIL : HRESULT_FROM_WIN32(error);
+  }
+  const HRESULT backdrop_result =
+      DwmSetWindowAttribute(window, 38, &backdrop, sizeof(backdrop));
+  if (FAILED(backdrop_result) && transparent && blur && !legacy_blur) {
+    return backdrop_result;
+  }
+  // Desktop Acrylic falls back to an opaque fill when Windows transparency
+  // is disabled. Use blur on this HWND alone, leaving that preference intact.
+  if (legacy_blur && !ApplyLegacyWindowAccent(window, 3)) {
+    const DWORD error = GetLastError();
+    return error == ERROR_SUCCESS ? E_FAIL : HRESULT_FROM_WIN32(error);
+  }
+
+  // Windows 11 24H2 can explicitly preserve the alpha of redirected content.
+  // Older Windows versions do not expose this optional attribute.
+  const BOOL use_alpha = transparent ? TRUE : FALSE;
+  DwmSetWindowAttribute(window, 39, &use_alpha, sizeof(use_alpha));
+  const MARGINS margins = transparent ? MARGINS{-1, -1, -1, -1}
+                                     : MARGINS{0, 0, 0, 0};
+  const HRESULT frame_result = DwmExtendFrameIntoClientArea(window, &margins);
+  if (FAILED(frame_result)) return frame_result;
+
+  effects_transparent_ = transparent;
+  effects_blur_ = blur;
+  effects_dark_ = dark;
+  return S_OK;
+}
+
 bool FlutterWindow::OnCreate() {
   if (!Win32Window::OnCreate()) {
     return false;
@@ -856,6 +941,48 @@ bool FlutterWindow::OnCreate() {
         }
       });
 
+  effects_channel_ =
+      std::make_unique<flutter::MethodChannel<flutter::EncodableValue>>(
+          flutter_controller_->engine()->messenger(),
+          "com.crotowave/window_effects",
+          &flutter::StandardMethodCodec::GetInstance());
+  effects_channel_->SetMethodCallHandler(
+      [this](const flutter::MethodCall<flutter::EncodableValue>& call,
+             std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result) {
+        if (call.method_name() != "setEffects") {
+          result->NotImplemented();
+          return;
+        }
+        const auto* args =
+            std::get_if<flutter::EncodableMap>(call.arguments());
+        if (!args) {
+          result->Error("invalid_arguments", "Expected window effect options.");
+          return;
+        }
+        const auto transparent = args->find(flutter::EncodableValue("transparent"));
+        const auto blur = args->find(flutter::EncodableValue("blur"));
+        const auto dark = args->find(flutter::EncodableValue("dark"));
+        if (transparent == args->end() || blur == args->end() ||
+            dark == args->end() ||
+            !std::holds_alternative<bool>(transparent->second) ||
+            !std::holds_alternative<bool>(blur->second) ||
+            !std::holds_alternative<bool>(dark->second)) {
+          result->Error("invalid_arguments",
+                        "transparent, blur and dark must be booleans.");
+          return;
+        }
+        const HRESULT status = ApplyWindowEffects(
+            std::get<bool>(transparent->second), std::get<bool>(blur->second),
+            std::get<bool>(dark->second));
+        if (FAILED(status)) {
+          result->Error("window_effects_unavailable",
+                        "Windows could not apply the desktop backdrop.",
+                        flutter::EncodableValue(static_cast<int64_t>(status)));
+          return;
+        }
+        result->Success();
+      });
+
   g_main_hwnd = GetHandle();
   InitTrayIcon();
   StartHookThread();
@@ -873,6 +1000,10 @@ bool FlutterWindow::OnCreate() {
 }
 
 void FlutterWindow::OnDestroy() {
+  if (effects_channel_) {
+    effects_channel_->SetMethodCallHandler(nullptr);
+    effects_channel_ = nullptr;
+  }
   StopHookThread();
   RemoveTrayIcon();
 
@@ -1003,6 +1134,9 @@ FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
   }
 
   switch (message) {
+    case WM_DWMCOMPOSITIONCHANGED:
+      ApplyWindowEffects(effects_transparent_, effects_blur_, effects_dark_);
+      break;
     case WM_FONTCHANGE:
       flutter_controller_->engine()->ReloadSystemFonts();
       break;

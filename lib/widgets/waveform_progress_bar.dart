@@ -44,9 +44,17 @@ class WaveformProgressBar extends StatefulWidget {
   /// Salto de las flechas del teclado y de los gestos de accesibilidad.
   final Duration seekStep;
 
+  /// Sin [waveform]: se está analizando el audio.
+  final bool loading;
+
+  /// Sin [waveform]: motivo (texto seguro) por el que no estará disponible.
+  final String? unavailableMessage;
+
   const WaveformProgressBar({
     super.key,
     this.waveform,
+    this.loading = false,
+    this.unavailableMessage,
     required this.position,
     required this.duration,
     required this.onSeek,
@@ -352,30 +360,61 @@ class _WaveformProgressBarState extends State<WaveformProgressBar>
                 onHorizontalDragCancel: () => _drag.value = null,
                 onTapUp: (d) =>
                     _seekFraction(_fractionAt(d.localPosition.dx, width)),
-                child: RepaintBoundary(
-                  child: CustomPaint(
-                    size: Size(width, height),
-                    painter: _WaveformPainter(
-                      cache: _cache!,
-                      progress: _progress,
-                      drag: _drag,
-                      hover: _hover,
-                      reveal: _reveal,
-                      pulse: _pulse,
-                      activeColor: activeColor,
-                      inactiveColor: inactiveColor,
-                      durationMs: _durationMs,
-                      labelFor: _labelFor,
-                      labelColor: labelColor,
-                      labelBackground: labelBg,
-                    ),
-                  ),
-                ),
+                child: _withStatus(
+                    theme.colorScheme.onSurfaceVariant,
+                    RepaintBoundary(
+                      child: CustomPaint(
+                        size: Size(width, height),
+                        painter: _WaveformPainter(
+                          cache: _cache!,
+                          progress: _progress,
+                          drag: _drag,
+                          hover: _hover,
+                          reveal: _reveal,
+                          pulse: _pulse,
+                          activeColor: activeColor,
+                          inactiveColor: inactiveColor,
+                          durationMs: _durationMs,
+                          labelFor: _labelFor,
+                          labelColor: labelColor,
+                          labelBackground: labelBg,
+                        ),
+                      ),
+                    )),
               ),
             ),
           ),
         );
       },
+    );
+  }
+
+  /// Sin onda real, la línea neutra no distingue "analizando" de "no hay": un
+  /// texto pequeño lo dice. No se dibuja ninguna forma sintética.
+  Widget _withStatus(Color color, Widget bars) {
+    final message = widget.waveform != null
+        ? null
+        : widget.unavailableMessage ??
+            (widget.loading ? 'Analizando audio…' : null);
+    if (message == null) return bars;
+    return Stack(
+      children: [
+        bars,
+        Positioned.fill(
+          child: IgnorePointer(
+            child: Align(
+              alignment: Alignment.topCenter,
+              child: Text(
+                message,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                    color: color, fontSize: 11, fontWeight: FontWeight.w600),
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 

@@ -90,11 +90,11 @@ mixin _MobileHomeTab on _MobileHomeBase {
           );
         }
         if (snapshot.hasError || !snapshot.hasData) {
-          return Center(
-            child: Text(
-              'Sin contenido disponible',
-              style: TextStyle(color: context.textSecondary),
-            ),
+          return LibraryLoadError(
+            error: snapshot.error,
+            onRetry: () => setState(() {
+              _futureTracks = context.read<NavidromeService>().getTracks();
+            }),
           );
         }
         final tracks = snapshot.data!;

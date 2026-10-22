@@ -6,6 +6,8 @@ import android.content.Intent
 import android.app.UiModeManager
 import android.content.pm.PackageManager
 import android.content.res.Configuration
+import android.media.AudioManager
+import android.view.KeyEvent
 import android.net.Uri
 import android.os.Build
 import android.os.Environment
@@ -18,6 +20,21 @@ class MainActivity : AudioServiceFragmentActivity() {
     private val storageRequest = 30174
     private val notificationRequest = 30175
     private var pendingStorage: MethodChannel.Result? = null
+    private var volumeChannel: MethodChannel? = null
+    private var volumeKeysEnabled = false
+
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        val code = event.keyCode
+        if (volumeKeysEnabled &&
+            (code == KeyEvent.KEYCODE_VOLUME_UP || code == KeyEvent.KEYCODE_VOLUME_DOWN)
+        ) {
+            if (event.action == KeyEvent.ACTION_DOWN) {
+                volumeChannel?.invokeMethod("volumeKey", code == KeyEvent.KEYCODE_VOLUME_UP)
+            }
+            return true // consumida: no aparece el panel del sistema
+        }
+        return super.dispatchKeyEvent(event)
+    }
 
     private fun hasStorageAccess(): Boolean =
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
@@ -48,6 +65,35 @@ class MainActivity : AudioServiceFragmentActivity() {
         // Salida bit-perfect por USB (Android 14+) para los modos de alta fidelidad.
         HifiAudioPlugin(applicationContext)
             .register(flutterEngine.dartExecutor.binaryMessenger)
+        // Waveform real (MediaExtractor/MediaCodec). El plugin pertenece al
+        // FlutterEngine (compartido con audio_service), no a la Activity: una sola
+        // instancia, liberada al desregistrar/destruir el engine.
+        if (!flutterEngine.plugins.has(AndroidWaveformPlugin::class.java)) {
+            AndroidWaveformPlugin().register(flutterEngine)
+        }
+        // Botones físicos de volumen → volumen interno de la app (ver
+        // dispatchKeyEvent y lib/widgets/android_volume_keys.dart).
+        volumeChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "crotowave/volume_keys").also {
+            it.setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "setEnabled" -> {
+                        volumeKeysEnabled = call.arguments as? Boolean ?: false
+                        result.success(null)
+                    }
+                    // Fallback (p. ej. bit-perfect): mover el volumen del sistema.
+                    "adjustSystem" -> {
+                        val up = call.arguments as? Boolean ?: true
+                        (getSystemService(AUDIO_SERVICE) as AudioManager).adjustStreamVolume(
+                            AudioManager.STREAM_MUSIC,
+                            if (up) AudioManager.ADJUST_RAISE else AudioManager.ADJUST_LOWER,
+                            AudioManager.FLAG_SHOW_UI
+                        )
+                        result.success(null)
+                    }
+                    else -> result.notImplemented()
+                }
+            }
+        }
         // ¿Corre en un Android TV? La UI usa navegación con control remoto.
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "crotowave/device")
             .setMethodCallHandler { call, result ->

@@ -67,6 +67,51 @@ void main() {
       expect(requestCount, 1);
     });
 
+    test('peticiones simultáneas del mismo artista comparten una sola',
+        () async {
+      var requests = 0;
+      final nav = NavidromeService();
+      nav.setConnectedForTesting(
+        url: 'https://mock.navidrome.org',
+        username: 'testuser',
+        password: 'password',
+        client: MockClient((request) async {
+          requests++;
+          await Future<void>.delayed(const Duration(milliseconds: 20));
+          return http.Response(
+              jsonEncode({
+                'subsonic-response': {
+                  'status': 'ok',
+                  'artist': {'id': 'a', 'name': 'A', 'album': []}
+                }
+              }),
+              200);
+        }),
+      );
+      final results =
+          await Future.wait([for (var i = 0; i < 5; i++) nav.getArtist('a')]);
+      expect(results.every((artist) => artist?.name == 'A'), isTrue);
+      expect(requests, 1);
+    });
+
+    test('un artista que falló no se vuelve a pedir en cada reconstrucción',
+        () async {
+      var requests = 0;
+      final nav = NavidromeService();
+      nav.setConnectedForTesting(
+        url: 'https://mock.navidrome.org',
+        username: 'testuser',
+        password: 'password',
+        client: MockClient((request) async {
+          requests++;
+          return http.Response('Error', 503);
+        }),
+      );
+      expect(await nav.getArtist('x'), isNull);
+      expect(await nav.getArtist('x'), isNull);
+      expect(requests, 1);
+    });
+
     test('disconnect clears artist cache', () {
       final nav = NavidromeService();
       final artist = Artist(

@@ -1,3 +1,5 @@
+import 'widgets/windows_window_effects_sync.dart';
+import 'widgets/app_theme_background.dart';
 import 'widgets/app_error_box.dart';
 import 'widgets/crotolink_deep_link_listener.dart';
 import 'dart:async' show unawaited;
@@ -57,6 +59,7 @@ import 'screens/login_screen.dart';
 import 'widgets/cover_accent_sync.dart';
 import 'widgets/discord_presence_sync.dart';
 import 'widgets/desktop_window_frame.dart';
+import 'widgets/android_volume_keys.dart';
 
 /// Lee el tema guardado ANTES de runApp (equiv. startupThemeAppearance de
 /// Psysonic): el primer frame ya usa el tema correcto, sin flash.
@@ -197,7 +200,12 @@ class MyApp extends StatelessWidget {
             final profiles = ctx.read<ServerProfilesController>();
             void autoEnable() {
               final profile = profiles.activeProfile;
-              if (profile == null) return;
+              if (profile == null) {
+                // Sin cuenta no hay bóveda de cuenta: se suspende (sin ser un
+                // opt-out) para no sincronizar los datos de la anterior.
+                unawaited(sync.suspendForLogout());
+                return;
+              }
               unawaited(sync.enableForAccount(
                   url: profile.url,
                   username: profile.username,
@@ -441,13 +449,17 @@ class MyApp extends StatelessWidget {
       child: Consumer<ThemeController>(
         builder: (context, themes, _) {
           final appTheme = themes.active;
+          final materialTheme = appTheme.toThemeData().copyWith(
+                scaffoldBackgroundColor: themes.pageBackground,
+                canvasColor: themes.surfaceColor(appTheme.bgCard),
+              );
           return MaterialApp(
             title: 'CrotoWave',
             debugShowCheckedModeBanner: false,
             navigatorKey: rootNavigatorKey,
             theme: TvMode.isTv
-                ? _tvTheme(appTheme.toThemeData(), appTheme.accent)
-                : appTheme.toThemeData(),
+                ? _tvTheme(materialTheme, appTheme.accent)
+                : materialTheme,
             // El botón A de los mandos de juego también "pulsa" (Enter/OK ya
             // lo hace Flutter por defecto).
             shortcuts: TvMode.isTv
@@ -468,9 +480,12 @@ class MyApp extends StatelessWidget {
                   ),
                 ),
               );
+              final background = WindowsWindowEffectsSync(
+                child: AppThemeBackground(child: app),
+              );
               return TvMode.isTv
-                  ? TvFocusRing(child: TvTextFieldNavigation(child: app))
-                  : app;
+                  ? TvFocusRing(child: TvTextFieldNavigation(child: background))
+                  : AndroidVolumeKeys(child: background);
             },
             home: const LoginScreen(),
           );

@@ -102,8 +102,10 @@ class _HomeScreenState extends _HomeStateBase
     _futureArtists = _loadArtists(nav);
     _futureGenres = nav.getGenres();
     _futureRecentlyAdded = nav.getRecentlyAddedTracks();
+    // Cada pasada baja 500 canciones: con un enlace que se atasca, pedirlas
+    // cada 30 s competía con lo que el usuario está abriendo.
     _serverPlayCountTimer = Timer.periodic(
-      const Duration(seconds: 30),
+      const Duration(minutes: 3),
       (_) {
         if (isAppVisible) _refreshServerPlayCounts();
       },
@@ -163,17 +165,23 @@ class _HomeScreenState extends _HomeStateBase
       return;
     }
     setState(() => _searching = true);
+    final nav = context.read<NavidromeService>();
+    final session = nav.currentSessionKey;
+    // Un resultado o error tardío solo vale para la sesión que lo pidió.
+    bool current() =>
+        mounted &&
+        version == _searchVersion &&
+        session == nav.currentSessionKey;
     try {
-      final results =
-          await context.read<NavidromeService>().search(query.trim());
-      if (mounted && version == _searchVersion) {
+      final results = await nav.search(query.trim());
+      if (current()) {
         setState(() {
           _searchResults = results;
           _searching = false;
         });
       }
     } catch (_) {
-      if (mounted && version == _searchVersion) {
+      if (current()) {
         setState(() {
           _searchResults = null;
           _searching = false;
@@ -189,11 +197,16 @@ class _HomeScreenState extends _HomeStateBase
       _searching = true;
       _searchController.text = genre;
     });
+    final nav = context.read<NavidromeService>();
+    final session = nav.currentSessionKey;
+    bool current() =>
+        mounted &&
+        version == _searchVersion &&
+        session == nav.currentSessionKey;
     try {
-      final nav = context.read<NavidromeService>();
       unawaited(nav.saveLastSelectedGenre(genre));
       final tracks = await nav.searchByGenre(genre);
-      if (mounted && version == _searchVersion) {
+      if (current()) {
         setState(() {
           _searchResults = SearchResults(
             songs: tracks,
@@ -204,7 +217,7 @@ class _HomeScreenState extends _HomeStateBase
         });
       }
     } catch (_) {
-      if (mounted && version == _searchVersion) {
+      if (current()) {
         setState(() {
           _searchResults = SearchResults(songs: [], albums: [], artists: []);
           _searching = false;
@@ -237,6 +250,9 @@ class _HomeScreenState extends _HomeStateBase
       _futureArtists = _loadArtists(nav);
       _futureGenres = nav.getGenres();
       _futureRecentlyAdded = nav.getRecentlyAddedTracks();
+      // Antes del postFrame: una búsqueda de la cuenta anterior que responda
+      // entre este build y ese callback tampoco debe aplicarse.
+      _searchVersion++;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
         _searchController.clear();
