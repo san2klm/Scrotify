@@ -40,7 +40,7 @@ jobs:
         run: flutter pub get
 
       - name: Compilar (sin firma)
-        run: flutter build ios --release --no-codesign
+        run: flutter build ios --release --no-codesign || xcodebuild -workspace ios/Runner.xcworkspace -scheme Runner -configuration Release -destination 'generic/platform=iOS' CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY='' build
 
       - name: Empaquetar .ipa
         run: |
@@ -66,3 +66,4 @@ jobs:
             --target "$GITHUB_SHA" \
             --title "CrotoWave para iPhone (última compilación)" \
             --notes "IPA sin firmar compilado desde ${GITHUB_SHA::7}. Instalar con Sideloadly usando un Apple ID; con cuenta gratuita hay que reinstalar cada 7 días."
+
