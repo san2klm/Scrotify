@@ -110,6 +110,12 @@ class _AlbumDetailScreenState extends State<AlbumDetailScreen> {
                                   color: context.textMuted, fontSize: 13)),
                         ],
                       ),
+                      actions: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          LocalDownloadButton(tracks: tracks),
+                        ],
+                      ),
                     ),
                     Divider(color: context.themeBorder),
                     Expanded(
