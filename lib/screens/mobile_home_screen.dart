@@ -509,7 +509,7 @@ class _MobileHomeScreenState extends _MobileHomeBase
                   children: [
                     Text(
                       _tabIndex == 0
-                          ? 'Inicio'
+                          ? 'CrotoWave (Scrotify)'
                           : _tabIndex == 1
                               ? 'Buscar'
                               : 'Tu Biblioteca',

@@ -195,7 +195,7 @@ class _DesktopWindowFrameState extends State<DesktopWindowFrame>
                     ),
                     const SizedBox(width: 7),
                     Text(
-                      'CrotoWave',
+                      'CrotoWave (Scrotify)',
                       maxLines: 1,
                       softWrap: false,
                       overflow: TextOverflow.ellipsis,

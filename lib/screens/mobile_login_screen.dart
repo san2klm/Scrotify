@@ -337,10 +337,10 @@ class _MobileLoginScreenState extends State<MobileLoginScreen> {
         ),
         const SizedBox(height: 10),
         Text(
-          'CROTOWAVE',
+          'CROTOWAVE (SCROTIFY)',
           style: TextStyle(
             color: context.textPrimary,
-            fontSize: 22,
+            fontSize: 20,
             fontWeight: FontWeight.w900,
             letterSpacing: 2,
           ),

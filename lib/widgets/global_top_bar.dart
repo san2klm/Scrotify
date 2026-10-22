@@ -176,7 +176,7 @@ class _GlobalTopBarState extends State<GlobalTopBar> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
-                    widget.title ?? 'CrotoWave',
+                    widget.title ?? 'CrotoWave (Scrotify)',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(

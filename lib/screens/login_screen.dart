@@ -154,12 +154,12 @@ class _AmoledSplashScreen extends StatelessWidget {
             ),
             const SizedBox(height: 16),
             Text(
-              'CROTOWAVE',
+              'CROTOWAVE (SCROTIFY)',
               style: TextStyle(
                 color: context.textPrimary,
-                fontSize: 22,
+                fontSize: 20,
                 fontWeight: FontWeight.w900,
-                letterSpacing: 3,
+                letterSpacing: 2,
               ),
             ),
             const SizedBox(height: 32),

@@ -454,7 +454,7 @@ class MyApp extends StatelessWidget {
                 canvasColor: themes.surfaceColor(appTheme.bgCard),
               );
           return MaterialApp(
-            title: 'CrotoWave',
+            title: 'CrotoWave (Scrotify)',
             debugShowCheckedModeBanner: false,
             navigatorKey: rootNavigatorKey,
             theme: TvMode.isTv
