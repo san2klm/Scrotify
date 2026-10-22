@@ -712,15 +712,15 @@ class LocalMusicService extends ChangeNotifier {
         .convert(utf8.encode(task.compoundKey))
         .toString()
         .substring(0, 12);
-    path ??= p.join(_root!.path, '${safeName(task.title)} [$tag].audio');
-    final parent = Directory(p.dirname(path));
+    var currentPath = path ?? p.join(_root!.path, '${safeName(task.title)} [$tag].audio');
+    final parent = Directory(p.dirname(currentPath));
     await parent.create(recursive: true);
 
     var safe = false;
     final canonParent =
         OfflineCacheService.canonicalizePlatformPath(parent.path);
     final canonPath =
-        OfflineCacheService.canonicalizePlatformPath(path);
+        OfflineCacheService.canonicalizePlatformPath(currentPath);
 
     for (final root in _roots) {
       final canonRoot = OfflineCacheService.canonicalizePlatformPath(root);
@@ -745,15 +745,15 @@ class LocalMusicService extends ChangeNotifier {
     }
     // Si apareció un archivo después de encolar, no lo sobrescribimos.
     var counter = 2;
-    final original = path;
-    while (await FileSystemEntity.type(path, followLinks: false) !=
+    final original = currentPath;
+    while (await FileSystemEntity.type(currentPath, followLinks: false) !=
         FileSystemEntityType.notFound) {
-      path = p.join(parent.path,
+      currentPath = p.join(parent.path,
           '${p.basenameWithoutExtension(original)} [${counter++}]${p.extension(original)}');
     }
-    _destinations[task.compoundKey] = path;
+    _destinations[task.compoundKey] = currentPath;
     await _save();
-    return path;
+    return currentPath;
   }
 
   /// SHA-256 del archivo. Se reutiliza el hash guardado mientras la ruta, el
