@@ -757,5 +757,18 @@ void main() {
       expect(entries.length, 1);
       expect(entries.first.sourceVersion, safeMarker);
     });
+
+    test('canonicalizePlatformPath normalizes iOS /private/var and /private/tmp paths', () {
+      expect(
+        OfflineCacheService.canonicalizePlatformPath('/var/mobile/Containers/Data/Application/123/Documents'),
+        p.canonicalize('/var/mobile/Containers/Data/Application/123/Documents'),
+      );
+      if (Platform.isIOS || Platform.isMacOS) {
+        expect(
+          OfflineCacheService.canonicalizePlatformPath('/private/var/mobile/Containers/Data/Application/123/Documents'),
+          '/var/mobile/Containers/Data/Application/123/Documents',
+        );
+      }
+    });
   });
 }

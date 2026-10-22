@@ -472,18 +472,95 @@ class OfflineCacheService {
   // Solo se autorizan raíces elegidas y comprobadas por Música local.
   final List<Directory> _musicRoots = [];
 
+  static String canonicalizePlatformPath(String path) {
+    var canonical = p.canonicalize(p.absolute(path));
+    if (Platform.isIOS || Platform.isMacOS) {
+      if (canonical.startsWith('/private/var/')) {
+        canonical = canonical.substring(8);
+      } else if (canonical.startsWith('/private/tmp/')) {
+        canonical = canonical.substring(8);
+      }
+    }
+    return canonical;
+  }
+
   void allowMusicRoot(Directory root) {
-    if (!_musicRoots.any((item) => item.absolute.path == root.absolute.path)) {
+    if (!_musicRoots.any((item) =>
+        canonicalizePlatformPath(item.absolute.path) ==
+        canonicalizePlatformPath(root.absolute.path))) {
       _musicRoots.add(root.absolute);
     }
   }
 
   Directory _rootForPath(String path, Directory fallback) {
-    final absolute = p.canonicalize(p.absolute(path));
+    final absolute = canonicalizePlatformPath(path);
     for (final root in _musicRoots) {
-      if (p.isWithin(p.canonicalize(root.path), absolute)) return root;
+      final rootCanonical = canonicalizePlatformPath(root.path);
+      if (p.isWithin(rootCanonical, absolute) || rootCanonical == absolute) {
+        return root;
+      }
     }
     return fallback;
+  }
+
+  Future<String> _remapIosPathIfNeeded(String currentPath) async {
+    if (!Platform.isIOS) return currentPath;
+
+    try {
+      if (FileSystemEntity.typeSync(currentPath, followLinks: false) ==
+              FileSystemEntityType.file &&
+          File(currentPath).lengthSync() > 0) {
+        return currentPath;
+      }
+    } catch (_) {}
+
+    const docMarker = '/Documents/';
+    const supportMarker = '/Library/Application Support/';
+    const cachesMarker = '/Library/Caches/';
+
+    if (currentPath.contains(docMarker)) {
+      try {
+        final docs = (await getApplicationDocumentsDirectory()).path;
+        final sub = currentPath
+            .substring(currentPath.indexOf(docMarker) + docMarker.length);
+        final candidate = p.join(docs, sub);
+        if (FileSystemEntity.typeSync(candidate, followLinks: false) ==
+                FileSystemEntityType.file &&
+            File(candidate).lengthSync() > 0) {
+          return candidate;
+        }
+      } catch (_) {}
+    }
+
+    if (currentPath.contains(supportMarker)) {
+      try {
+        final support = (await getApplicationSupportDirectory()).path;
+        final sub = currentPath.substring(
+            currentPath.indexOf(supportMarker) + supportMarker.length);
+        final candidate = p.join(support, sub);
+        if (FileSystemEntity.typeSync(candidate, followLinks: false) ==
+                FileSystemEntityType.file &&
+            File(candidate).lengthSync() > 0) {
+          return candidate;
+        }
+      } catch (_) {}
+    }
+
+    if (currentPath.contains(cachesMarker)) {
+      try {
+        final caches = (await getTemporaryDirectory()).path;
+        final sub = currentPath.substring(
+            currentPath.indexOf(cachesMarker) + cachesMarker.length);
+        final candidate = p.join(caches, sub);
+        if (FileSystemEntity.typeSync(candidate, followLinks: false) ==
+                FileSystemEntityType.file &&
+            File(candidate).lengthSync() > 0) {
+          return candidate;
+        }
+      } catch (_) {}
+    }
+
+    return currentPath;
   }
 
   Future<Directory> getCacheRootDir() async {
@@ -503,6 +580,13 @@ class OfflineCacheService {
   Future<void> initialize() async {
     if (_initialized) return;
     await getCacheRootDir();
+    if (Platform.isIOS) {
+      try {
+        final docs = await getApplicationDocumentsDirectory();
+        allowMusicRoot(docs);
+        allowMusicRoot(Directory(p.join(docs.path, 'Music', 'CrotoWave')));
+      } catch (_) {}
+    }
     await _metadataStore.init();
     _initialized = true;
     await _purgeStaleEntries();
@@ -517,7 +601,14 @@ class OfflineCacheService {
   Future<void> _purgeStaleEntries() async {
     final root = await getCacheRootDir();
     final allEntries = await _metadataStore.getAllEntries();
-    for (final entry in allEntries) {
+    for (var entry in allEntries) {
+      if (Platform.isIOS) {
+        final remapped = await _remapIosPathIfNeeded(entry.localPath);
+        if (remapped != entry.localPath) {
+          entry = entry.copyWith(localPath: remapped);
+          await _metadataStore.saveEntry(entry);
+        }
+      }
       if (!await _isPathValidAndWithinRoot(
           entry.localPath, _rootForPath(entry.localPath, root))) {
         await _metadataStore.deleteEntry(entry.serverScope, entry.trackId);
@@ -628,8 +719,8 @@ class OfflineCacheService {
 
   /// Ensures that [targetPath] resolves strictly inside [rootDir] lexically.
   void _validatePathWithinRoot(String targetPath, Directory rootDir) {
-    final canonicalTarget = p.canonicalize(p.absolute(targetPath));
-    final canonicalRoot = p.canonicalize(p.absolute(rootDir.path));
+    final canonicalTarget = canonicalizePlatformPath(targetPath);
+    final canonicalRoot = canonicalizePlatformPath(rootDir.path);
     if (!p.isWithin(canonicalRoot, canonicalTarget) &&
         canonicalTarget != canonicalRoot) {
       throw ArgumentError('Path is outside cache root: $targetPath');
@@ -658,8 +749,8 @@ class OfflineCacheService {
     final file = File(localPath);
     final resolvedPath = await file.resolveSymbolicLinks();
     final resolvedRoot = await rootDir.resolveSymbolicLinks();
-    final canonicalResolved = p.canonicalize(p.absolute(resolvedPath));
-    final canonicalResolvedRoot = p.canonicalize(p.absolute(resolvedRoot));
+    final canonicalResolved = canonicalizePlatformPath(resolvedPath);
+    final canonicalResolvedRoot = canonicalizePlatformPath(resolvedRoot);
     if (!p.isWithin(canonicalResolvedRoot, canonicalResolved) &&
         canonicalResolved != canonicalResolvedRoot) {
       throw ArgumentError('Path is outside cache root: $localPath');
@@ -675,8 +766,8 @@ class OfflineCacheService {
 
   Future<bool> _isPathValidAndWithinRoot(String path, Directory rootDir) async {
     try {
-      final canonicalTarget = p.canonicalize(p.absolute(path));
-      final canonicalRoot = p.canonicalize(p.absolute(rootDir.path));
+      final canonicalTarget = canonicalizePlatformPath(path);
+      final canonicalRoot = canonicalizePlatformPath(rootDir.path);
       if (!p.isWithin(canonicalRoot, canonicalTarget) &&
           canonicalTarget != canonicalRoot) {
         return false;
@@ -690,8 +781,8 @@ class OfflineCacheService {
       final file = File(path);
       final resolvedPath = file.resolveSymbolicLinksSync();
       final resolvedRoot = rootDir.resolveSymbolicLinksSync();
-      final canonicalResolved = p.canonicalize(p.absolute(resolvedPath));
-      final canonicalResolvedRoot = p.canonicalize(p.absolute(resolvedRoot));
+      final canonicalResolved = canonicalizePlatformPath(resolvedPath);
+      final canonicalResolvedRoot = canonicalizePlatformPath(resolvedRoot);
       if (!p.isWithin(canonicalResolvedRoot, canonicalResolved) &&
           canonicalResolved != canonicalResolvedRoot) {
         return false;
@@ -830,8 +921,16 @@ class OfflineCacheService {
   Future<OfflineCacheEntry?> lookup(String serverScope, String trackId) async {
     await _ensureInitialized();
     final canonicalScope = safeScopeSegment(serverScope);
-    final entry = await _metadataStore.getEntry(canonicalScope, trackId);
+    var entry = await _metadataStore.getEntry(canonicalScope, trackId);
     if (entry == null) return null;
+
+    if (Platform.isIOS) {
+      final remapped = await _remapIosPathIfNeeded(entry.localPath);
+      if (remapped != entry.localPath) {
+        entry = entry.copyWith(localPath: remapped);
+        await _metadataStore.saveEntry(entry);
+      }
+    }
 
     final root = await getCacheRootDir();
     final valid = await _isPathValidAndWithinRoot(
@@ -876,10 +975,16 @@ class OfflineCacheService {
     await _ensureInitialized();
     final canonicalScope = safeScopeSegment(serverScope);
     final root = await getCacheRootDir();
-    final entry = await _metadataStore.getEntry(canonicalScope, trackId);
+    var entry = await _metadataStore.getEntry(canonicalScope, trackId);
     bool fileRemoved = false;
 
     if (entry != null) {
+      if (Platform.isIOS) {
+        final remapped = await _remapIosPathIfNeeded(entry.localPath);
+        if (remapped != entry.localPath) {
+          entry = entry.copyWith(localPath: remapped);
+        }
+      }
       try {
         if (await _isPathValidAndWithinRoot(
             entry.localPath, _rootForPath(entry.localPath, root))) {
@@ -954,7 +1059,14 @@ class OfflineCacheService {
     final entries =
         await _metadataStore.getAllEntries(serverScope: canonicalScope);
     final valid = <OfflineCacheEntry>[];
-    for (final entry in entries) {
+    for (var entry in entries) {
+      if (Platform.isIOS) {
+        final remapped = await _remapIosPathIfNeeded(entry.localPath);
+        if (remapped != entry.localPath) {
+          entry = entry.copyWith(localPath: remapped);
+          await _metadataStore.saveEntry(entry);
+        }
+      }
       if (await _isPathValidAndWithinRoot(
           entry.localPath, _rootForPath(entry.localPath, root))) {
         valid.add(entry);

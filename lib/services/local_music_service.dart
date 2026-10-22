@@ -149,14 +149,21 @@ class LocalMusicService extends ChangeNotifier {
       final docs = await getApplicationDocumentsDirectory();
       final currentRoot = Directory(p.join(docs.path, 'Music', 'CrotoWave'));
       final oldPath = _root?.path;
-      if (oldPath == null || !p.isWithin(docs.path, oldPath)) {
+      final canonDocs = OfflineCacheService.canonicalizePlatformPath(docs.path);
+      final canonOld = oldPath != null
+          ? OfflineCacheService.canonicalizePlatformPath(oldPath)
+          : null;
+      if (canonOld == null || !p.isWithin(canonDocs, canonOld)) {
         if (oldPath != null && oldPath != currentRoot.path) {
           _migrateIosContainerPaths(oldPath, currentRoot.path);
         }
         _root = currentRoot;
       }
-      _roots.removeWhere((r) =>
-          !p.isWithin(docs.path, r) && r.contains('/Documents/Music/CrotoWave'));
+      _roots.removeWhere((r) {
+        final canonR = OfflineCacheService.canonicalizePlatformPath(r);
+        return !p.isWithin(canonDocs, canonR) &&
+            canonR.contains('/Documents/Music/CrotoWave');
+      });
     }
     for (final entry in _trackDetails.entries) {
       final scope = entry.key.substring(0, entry.key.indexOf(':'));
@@ -215,6 +222,7 @@ class LocalMusicService extends ChangeNotifier {
 
     _roots.remove(oldRootPath);
     _roots.add(newRootPath);
+    cache.allowMusicRoot(Directory(newRootPath));
 
     final updatedDestinations = <String, String>{};
     for (final entry in _destinations.entries) {
@@ -277,10 +285,27 @@ class LocalMusicService extends ChangeNotifier {
     final paths =
         (_records[_key(scope, id)]?['paths'] as List? ?? []).cast<String>();
     for (final path in paths) {
-      if (FileSystemEntity.typeSync(path, followLinks: false) ==
-              FileSystemEntityType.file &&
-          File(path).lengthSync() > 0) {
-        return path;
+      try {
+        if (FileSystemEntity.typeSync(path, followLinks: false) ==
+                FileSystemEntityType.file &&
+            File(path).lengthSync() > 0) {
+          return path;
+        }
+      } catch (_) {}
+      if (Platform.isIOS && _root != null) {
+        const marker = '/Documents/Music/CrotoWave';
+        if (path.contains(marker)) {
+          final sub = path.substring(path.indexOf(marker) + marker.length);
+          final candidate =
+              p.join(_root!.path, sub.startsWith('/') ? sub.substring(1) : sub);
+          try {
+            if (FileSystemEntity.typeSync(candidate, followLinks: false) ==
+                    FileSystemEntityType.file &&
+                File(candidate).lengthSync() > 0) {
+              return candidate;
+            }
+          } catch (_) {}
+        }
       }
     }
     return null;
@@ -668,13 +693,19 @@ class LocalMusicService extends ChangeNotifier {
   Future<String> destination(DownloadTask task) async {
     await initialize();
     var path = _destinations[task.compoundKey];
-    if (Platform.isIOS && path != null && !p.isWithin(_root!.path, path)) {
-      const marker = '/Documents/Music/CrotoWave';
-      if (path.contains(marker)) {
-        final sub = path.substring(path.indexOf(marker) + marker.length);
-        path = p.join(
-            _root!.path, sub.startsWith('/') ? sub.substring(1) : sub);
-        _destinations[task.compoundKey] = path;
+    if (Platform.isIOS && path != null) {
+      final canonRoot =
+          OfflineCacheService.canonicalizePlatformPath(_root!.path);
+      final canonPath =
+          OfflineCacheService.canonicalizePlatformPath(path);
+      if (!p.isWithin(canonRoot, canonPath)) {
+        const marker = '/Documents/Music/CrotoWave';
+        if (path.contains(marker)) {
+          final sub = path.substring(path.indexOf(marker) + marker.length);
+          path = p.join(
+              _root!.path, sub.startsWith('/') ? sub.substring(1) : sub);
+          _destinations[task.compoundKey] = path;
+        }
       }
     }
     final tag = sha256
@@ -686,31 +717,25 @@ class LocalMusicService extends ChangeNotifier {
     await parent.create(recursive: true);
 
     var safe = false;
-    String realParent;
-    try {
-      realParent = await parent.resolveSymbolicLinks();
-    } catch (_) {
-      realParent = parent.absolute.path;
-    }
+    final canonParent =
+        OfflineCacheService.canonicalizePlatformPath(parent.path);
+    final canonPath =
+        OfflineCacheService.canonicalizePlatformPath(path);
 
     for (final root in _roots) {
-      String realRoot;
-      try {
-        realRoot = await Directory(root).resolveSymbolicLinks();
-      } catch (_) {
-        realRoot = Directory(root).absolute.path;
-      }
-      if (realParent == realRoot ||
-          p.isWithin(realRoot, realParent) ||
-          p.isWithin(root, path) ||
-          p.isWithin(p.canonicalize(root), p.canonicalize(path))) {
+      final canonRoot = OfflineCacheService.canonicalizePlatformPath(root);
+      if (canonParent == canonRoot ||
+          p.isWithin(canonRoot, canonParent) ||
+          p.isWithin(canonRoot, canonPath)) {
         safe = true;
         break;
       }
     }
     if (!safe && Platform.isIOS) {
       final docs = (await getApplicationDocumentsDirectory()).path;
-      if (p.isWithin(docs, path) || p.isWithin(docs, realParent)) {
+      final canonDocs = OfflineCacheService.canonicalizePlatformPath(docs);
+      if (p.isWithin(canonDocs, canonPath) ||
+          p.isWithin(canonDocs, canonParent)) {
         safe = true;
       }
     }
